@@ -1,0 +1,25 @@
+{
+	"background": {
+		"scripts": ["/src/background.js"]
+	},
+
+	"description": "Personal Firefox and webpage modification experiments.",
+
+	"icons": {
+		"48": "/icons/firemod48.png",
+		"96": "/icons/firemod96.png"
+	},
+
+	"manifest_version": 2,
+
+	"name": "FireMod",
+
+	"permissions": [
+		"history",
+		"webNavigation",
+		"cookies",
+		"<all_urls>"
+	],
+	
+	"version": "1.0"
+}
