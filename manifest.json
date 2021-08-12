@@ -1,6 +1,6 @@
 {
 	"background": {
-		"scripts": ["/src/background.js"]
+		"scripts": ["/dist/background.js"]
 	},
 
 	"description": "Personal Firefox and webpage modification experiments.",

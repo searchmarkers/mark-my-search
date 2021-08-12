@@ -1,3 +1,6 @@
 /.vscode
+/dist
+/node_modules
 /web-ext-artifacts
 /.web-extension-id
+*.js
