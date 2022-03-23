@@ -3,7 +3,7 @@
 		"scripts": ["/dist/background.js"]
 	},
 
-	"description": "Personal Firefox and webpage modification experiments.",
+	"description": "A WebExtension for improving online research efficiency.",
 
 	"icons": {
 		"48": "/icons/firemod48.png",
@@ -12,7 +12,7 @@
 
 	"manifest_version": 2,
 
-	"name": "FireMod",
+	"name": "Research Optimiser",
 
 	"permissions": [
 		"history",
