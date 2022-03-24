@@ -36,7 +36,7 @@ const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPref
 	browser.webNavigation.onDOMContentLoaded.addListener(details =>
 		isTabSearchPage(searchPrefixes, details.url, details.tabId) || isTabResearchPage(researchIds, details.tabId)
 		? browser.tabs.get(details.tabId).then(tab =>
-			new URL(tab.url).hostname === new URL(tab.url).hostname
+			new URL(details.url).hostname === new URL(tab.url).hostname && !details.url.includes(".html") // TODO: Exclude better.
 			? browser.tabs.executeScript(tab.id, {file: script}).then(() =>
 				browser.tabs.sendMessage(tab.id, isTabSearchPage(searchPrefixes, tab.url, tab.id)
 					? getSearchDetailsNew(stoplist, researchIds, new URL(tab.url), tab.id)
@@ -47,7 +47,7 @@ const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPref
 	)
 ;
 
-const continueResearchOnTabCreated = (researchIds: ResearchIds) =>
+const extendResearchOnTabCreated = (researchIds: ResearchIds) =>
 	browser.tabs.onCreated.addListener(tab => tab.openerTabId in researchIds
 		? researchIds[tab.id] = researchIds[tab.openerTabId]
 		: undefined
@@ -240,7 +240,7 @@ const continueResearchOnTabCreated = (researchIds: ResearchIds) =>
 	];
 	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};
 	injectScriptOnNavigation(stoplist, searchPrefixes, researchIds, "/dist/term-highlight.js");
-	continueResearchOnTabCreated(researchIds);
+	extendResearchOnTabCreated(researchIds);
 }
 
 // HISTORY CLEANING //

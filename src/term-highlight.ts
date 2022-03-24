@@ -1,5 +1,56 @@
-const addControls = (highlightRoot: Element, terms: Array<string>, elementHighlights: Set<HTMLElement>) => {
-	let elementIndex = -1;
+class ElementSelect {
+	elements: Set<HTMLElement>;
+	length: number;
+	index: number;
+
+	constructor(elements: Array<HTMLElement> = []) {
+		this.elements = new Set(elements);
+		this.length = elements.length;
+		this.index = -1;
+	}
+
+	addElement(element: HTMLElement) {
+		if (this.elements.has(element)) return;
+		this.elements.add(element);
+		this.length += 1;
+	}
+
+	currentElement() {
+		this.index %= this.length;
+		return Array.from(this.elements)[this.index];
+	}
+
+	nextElement(filter = element => true) {
+		this.index += 1;
+		return filter(this.currentElement())
+			? this.currentElement()
+			: this.nextElement(filter)
+		;
+	}
+}
+
+const createButton = (focus: ElementSelect, term: string, color: Array<number>) => {
+	const button = document.createElement("button");
+	button.style.all = "revert";
+	button.classList.add("highlight-search-control");
+	button.textContent = term;
+	button.onclick = () => {
+		if (focus.length === 0) return;
+		if (focus.currentElement())
+			focus.currentElement().classList.remove("highlight-search-focus")
+		;
+		const pattern = new RegExp(term.replace(/(.)/g,"$1(\-?)"), "gi");
+		const element = focus.nextElement(
+			element => element && element.offsetParent !== null && element.textContent.match(pattern)
+		);
+		element.scrollIntoView({behavior: "smooth", block: "center"});
+		element.classList.add("highlight-search-focus");
+	};
+	button.style.backgroundColor = "#" + color.map(channel => channel === 255 ? "f" : "7").join("");
+	return button;
+}
+
+const addControls = (highlightRoot: Element, terms: Array<string>, focus: ElementSelect) => {
 	const colors = [
 		[255, 255, 0],
 		[0, 255, 0],
@@ -10,6 +61,10 @@ const addControls = (highlightRoot: Element, terms: Array<string>, elementHighli
 	];
 
 	const style = document.createElement("style");
+	style.textContent = `
+@keyframes fadeOut { 0% { background-color: rgba(128,128,128,0.6) } 100% { background-color: rgba(128,128,128,0) } }
+.highlight-search-focus { animation-name: fadeOut; animation-duration: 1s }
+.highlight-search-control { border-width: 2px; border-block-color: #000 }`
 	document.head.appendChild(style);
 	highlightRoot.classList.add("highlight-search-all");
 	
@@ -32,40 +87,18 @@ const addControls = (highlightRoot: Element, terms: Array<string>, elementHighli
 	checkbox.style.marginRight = "10px";
 	controls.appendChild(checkbox);
 	
-	style.textContent += ".highlight-search-control" + "{border-width:2px;border-block-color:#000}";
-	style.textContent += ".highlight-search-focus {animation-name:fadeOut;animation-duration:1s;}" + " @keyframes fadeOut {0% {background-color:rgba(255,255,255,0.6);}100% {background-color:rgba(255,255,255,0);}}";
-
 	for (let i = 0; i < terms.length; i++) {
 		const term = terms[i];
 		const color = colors[i % colors.length];
-		style.textContent += `.highlight-search-all .highlight-search-term-${term}` + `{background:rgba(${color.join(",")},0.4);}`;
-		
-		const button = document.createElement("button");
-		button.style.all = "revert";
-		button.classList.add("highlight-search-control");
-		button.textContent = term;
-		button.onclick = () => {
-			const elementHighlightsArray = Array.from(elementHighlights);
-			if (elementIndex >=  0) elementHighlightsArray[elementIndex].classList.remove("highlight-search-focus");
-			while (elementIndex < elementHighlightsArray.length) {
-				elementIndex += 1;
-				const elementHighlight = elementHighlightsArray[elementIndex];
-				if (elementHighlight && elementHighlight.textContent.match(new RegExp(term.replace(/(.)/g,"$1(\-?)"), "gi"))) {
-					elementHighlight.scrollIntoView({behavior: "smooth", block: "center"});
-					elementHighlight.classList.add("highlight-search-focus");
-					return;
-				}
-			}
-			elementIndex = -1;
-		};
-		button.style.backgroundColor = "#" + color.map(channel => channel === 255 ? "f" : "7").join("");
-		controls.appendChild(button);
+		style.textContent += `.highlight-search-all .highlight-search-term-${term} { background: rgba(${color.join(",")},0.4) }`;
+		controls.appendChild(createButton(focus, term, color));
 	}
 
 	const cancel = document.createElement("input");
 	cancel.style.all = "revert";
 	cancel.type = "checkbox";
 	cancel.onclick = () => {
+		// TODO: Unlink research for the page.
 		controls.remove();
 	};
 	cancel.style.marginLeft = "10px";
@@ -73,7 +106,7 @@ const addControls = (highlightRoot: Element, terms: Array<string>, elementHighli
 	controls.appendChild(cancel);
 };
 
-const highlightInNodes = (textNodes: Array<Node>, pattern: RegExp, elementHighlights: Set<HTMLElement>) => {
+const highlightInNodes = (textNodes: Array<Node>, pattern: RegExp, focus: ElementSelect) => {
 	textNodes.forEach(textNode => {
 		const element = document.createElement("span");
 		element.innerHTML = textNode.textContent.replace(pattern,
@@ -81,7 +114,7 @@ const highlightInNodes = (textNodes: Array<Node>, pattern: RegExp, elementHighli
 		);
 		textNode.parentNode.insertBefore(element, textNode);
 		textNode.parentNode.removeChild(textNode);
-		elementHighlights.add(element.parentElement);
+		focus.addElement(element.parentElement);
 		element.outerHTML = element.innerHTML;
 	});
 };
@@ -94,24 +127,29 @@ const getNodesToHighlight = (rootNode: Node, pattern: RegExp, excludeHighlighted
 	let textNode;
 	do {
 		textNode = walk.nextNode();
-		if (textNode && textNode.parentNode && textNode.nodeType === 3 && textNode.textContent.search(pattern) !== -1 && (!excludeHighlighted || textNode.parentElement !== textNode.parentNode || Array.from(textNode.parentElement.classList).every((className: string) => !className.includes("highlight-search-term-"))) && textNode.parentElement.tagName !== "NOSCRIPT" && textNode.parentElement.tagName !== "SCRIPT" && textNode.parentElement["tagName"] !== "META" && textNode.parentElement["tagName"] !== "STYLE") textNodes.push(textNode);
+		if (textNode && textNode.parentNode && textNode.nodeType === 3 && textNode.textContent.search(pattern) !== -1
+			&& (!excludeHighlighted || textNode.parentElement !== textNode.parentNode
+				|| Array.from(textNode.parentElement.classList).every((className: string) => !className.includes("highlight-search-term-"))
+			) && textNode.parentElement.tagName !== "NOSCRIPT" && textNode.parentElement.tagName !== "SCRIPT"
+			&& textNode.parentElement.tagName !== "META" && textNode.parentElement.tagName !== "STYLE"
+		) textNodes.push(textNode);
 	} while (textNode);
 	return textNodes;
 }
 
-const highlightNodeAdditions = (elementHighlights: Set<HTMLElement>, regex: RegExp) => new MutationObserver(
+const highlightNodeAdditions = (focus: ElementSelect, pattern: RegExp) => new MutationObserver(
 	mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(
-		textNode => highlightInNodes(getNodesToHighlight(textNode, regex), regex, elementHighlights)))).observe(
-			document.getElementsByClassName("results")[0], {childList: true})
+		textNode => highlightInNodes(getNodesToHighlight(textNode, pattern), pattern, focus)
+	))).observe(document.getElementsByClassName("results")[0], {childList: true})
 ;
 
 const receiveSearchDetails = details => {
 	browser.runtime.onMessage.removeListener(receiveSearchDetails);
-	const elementHighlights: Set<HTMLElement> = new Set();
-	const regex = new RegExp(`((${details["terms"].map(term => term.replace(/(.)/g,"$1(\-?)")).join(")|(")}))`, "gi");
-	highlightInNodes(getNodesToHighlight(document.body, regex), regex, elementHighlights);
-	addControls(document.body, details["terms"], elementHighlights);
-	if (details["engine"] === "duckduckgo.com") highlightNodeAdditions(elementHighlights, regex);
+	const focus = new ElementSelect();
+	const pattern = new RegExp(`((${details["terms"].map(term => term.replace(/(.)/g,"$1(\-?)")).join(")|(")}))`, "gi");
+	highlightInNodes(getNodesToHighlight(document.body, pattern), pattern, focus);
+	addControls(document.body, details["terms"], focus);
+	if (details["engine"] === "duckduckgo.com") highlightNodeAdditions(focus, pattern);
 };
 
 browser.runtime.onMessage.addListener(receiveSearchDetails);
