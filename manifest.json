@@ -18,6 +18,7 @@
 		"history",
 		"webNavigation",
 		"cookies",
+		"contextMenus",
 		"<all_urls>"
 	],
 	

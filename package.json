@@ -16,7 +16,9 @@
     "url": "https://github.com/ator-dev/research-optimiser/issues"
   },
   "homepage": "https://github.com/ator-dev/research-optimiser#readme",
-  "dependencies": {},
+  "dependencies": {
+    "pluralize": "^8.0.0"
+  },
   "devDependencies": {
     "@types/download": "^8.0.1",
     "@types/firefox-webext-browser": "^82.0.1",
