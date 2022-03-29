@@ -25,14 +25,19 @@ class ElementSelect {
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	nextElement(filter = element => true) {
+	nextElement(predicate = (element: HTMLElement) => true): HTMLElement {
 		console.log(this.#index);
 		console.log(this.#length);
 		this.#index += 1;
-		return filter(this.currentElement())
+		return predicate(this.currentElement())
 			? this.currentElement()
-			: this.nextElement(filter)
+			: this.nextElement(predicate)
 		;
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	getElementCount(predicate = (element: HTMLElement) => true) {
+		return Array.from(this.#elements).filter(predicate).length;
 	}
 }
 
@@ -57,16 +62,21 @@ const getSelector = (element: ElementId | ElementClass, term = "") =>
 	term === "" ? ["highlight-search", element].join("-") : ["highlight-search", element, term].join("-") // TODO: Fix.
 ;
 
-const STYLE_MAIN =
-`@keyframes flash { 0% { background-color: rgba(160,160,160,1); } 100% { background-color: rgba(160,160,160,0); }; }
-.${getSelector(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
-.${getSelector(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
-.${getSelector(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; display: inline; border: none; border-top-style: groove; border-left-style: groove; border-left-width: thick; }
-.${getSelector(ElementClass.CONTROL_BUTTON)} { all: revert; display: inline; border-width: 2px; border-block-color: #000; margin: 0 0 0 0; }
-.${getSelector(ElementClass.OPTION_LIST)} { all: revert; position: absolute; display: inline; margin-top: 20px; padding-left: inherit; }
-.${getSelector(ElementClass.OPTION)} { all: revert; border-style: none; border-bottom-style: groove; border-left-style: groove; border-left-width: thick; translate: 2px; display: block; }
-#${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: 10000; width: 100%; }
-#${getSelector(ElementId.TOGGLE)} { all: revert; left-margin: 10px; right-margin: 10px; }`;
+const STYLE_MAIN = `
+	@keyframes flash { 0% { background-color: rgba(160,160,160,1); } 100% { background-color: rgba(160,160,160,0); }; }
+	.${getSelector(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
+	.${getSelector(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
+	.${getSelector(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; display: inline;
+		border: none; border-left-style: groove; border-left-width: thick; padding-top: 3px; padding-bottom: 3px; }
+	.${getSelector(ElementClass.CONTROL_BUTTON)} { all: revert; display: inline;
+		border-width: 2px; border-block-color: #000; margin: 0 0 0 0; }
+	.${getSelector(ElementClass.OPTION_LIST)} { all: revert; position: absolute; display: inline;
+		margin-top: 20px; padding-left: inherit; }
+	.${getSelector(ElementClass.OPTION)} { all: revert; display: block;
+		border-style: none; border-bottom-style: groove; border-left-style: groove; border-left-width: thick; translate: 2px; }
+	#${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: 1000000000000000; width: 100%; }
+	#${getSelector(ElementId.TOGGLE)} { all: revert; }
+`;
 
 const BUTTON_COLORS: ReadonlyArray<ReadonlyArray<number>> = [
 	[255, 255, 0],
@@ -84,20 +94,29 @@ const createOption = (title: string) => {
 	return option;
 };
 
+const getTermPredicate = (term: string) => {
+	const pattern = new RegExp(term.replace(/(.)/g,"$1-?"), "gi");
+	return (element: HTMLElement) =>
+		element && element.offsetParent !== null && element.textContent.match(pattern) !== null;
+};
+
 const createButton = (focus: ElementSelect, term: string, COLOR: ReadonlyArray<number>) => {
 	const button = document.createElement("button");
 	button.classList.add(getSelector(ElementClass.CONTROL_BUTTON));
-	button.style.backgroundColor = "#" + COLOR.map(channel => channel === 255 ? "f" : "7").join("");
+	if (focus.getElementCount(getTermPredicate(term)) !== 0) {
+		button.style.backgroundColor = "#" + COLOR.map(channel => channel === 255 ? "f" : "7").join("");
+	} else {
+		button.style.color = "#ddd";
+		button.disabled = true;
+	}
 	button.textContent = term;
 	button.title = "TODO: count tooltip";
 	button.onclick = () => {
 		if (focus.isEmpty()) return;
-		if (focus.currentElement())
+		if (focus.currentElement()) {
 			focus.currentElement().classList.remove(getSelector(ElementClass.FOCUS));
-		const pattern = new RegExp(term.replace(/(.)/g,"$1-?"), "gi");
-		const element = focus.nextElement(
-			element => element && element.offsetParent !== null && element.textContent.match(pattern)
-		);
+		}
+		const element = focus.nextElement(getTermPredicate(term));
 		element.scrollIntoView({behavior: "smooth", block: "center"});
 		element.classList.add(getSelector(ElementClass.FOCUS));
 	};
@@ -121,12 +140,14 @@ const createButton = (focus: ElementSelect, term: string, COLOR: ReadonlyArray<n
 	return div;
 };
 
-const addControls = (highlightRoot: Element, terms: Array<string>, focus: ElementSelect) => {
+const addControls = (focus: ElementSelect, termButtons: Array<HTMLElement>, terms: Array<string>) => {
+	// TODO: Gap on websites like this: https://codesource.io/how-to-disable-button-in-javascript/.
+	// TODO: Issue due to dark theme on Github.
 	const style = document.createElement("style");
 	style.id = getSelector(ElementId.STYLE);
 	style.textContent = STYLE_MAIN;
 	document.head.appendChild(style);
-	highlightRoot.classList.add(getSelector(ElementClass.ALL));
+	document.body.classList.add(getSelector(ElementClass.ALL));
 	
 	const bar = document.createElement("div");
 	bar.id = getSelector(ElementId.BAR);
@@ -136,17 +157,18 @@ const addControls = (highlightRoot: Element, terms: Array<string>, focus: Elemen
 	checkbox.id = getSelector(ElementId.TOGGLE);
 	checkbox.type = "checkbox";
 	checkbox.checked = true;
-	checkbox.oninput = () =>
-		highlightRoot.classList[checkbox.checked ? "add" : "remove"](getSelector(ElementClass.ALL));
-	checkbox.style.marginLeft = "10px";
-	checkbox.style.marginRight = "10px";
+	checkbox.oninput = () => {
+		document.body.classList[checkbox.checked ? "add" : "remove"](getSelector(ElementClass.ALL));
+	};
 	bar.appendChild(checkbox);
 	
 	for (let i = 0; i < terms.length; i++) {
-		const term = terms[i];
 		const color = BUTTON_COLORS[i % BUTTON_COLORS.length];
-		style.textContent += `.${getSelector(ElementClass.ALL)} .${getSelector(ElementClass.TERM, term)} { background: rgba(${color.join(",")},0.4) }`;
-		bar.appendChild(createButton(focus, term, color));
+		style.textContent += `.${getSelector(ElementClass.ALL)} .${getSelector(ElementClass.TERM, terms[i])}
+			{ background: rgba(${color.join(",")},0.4) }`;
+		const button = createButton(focus, terms[i], color);
+		bar.appendChild(button);
+		termButtons.push(button);
 	}
 };
 
@@ -155,15 +177,16 @@ const removeControls = () => {
 	document.getElementById(getSelector(ElementId.STYLE)).remove();
 };
 
-const highlightInNodes = (textNodes: Array<Node>, pattern: RegExp, focus: ElementSelect) => {
-	textNodes.forEach(textNode => {
+const highlightInNodes = (nodes: Array<Node>, pattern: RegExp, focus: ElementSelect) => {
+	nodes.forEach(node => {
 		const element = document.createElement("span");
-		element.innerHTML = textNode.textContent.replace(pattern,
+		element.innerHTML = node.textContent.replace(pattern,
 			match => `<span class='${getSelector(ElementClass.TERM, match.replace("-","").toLowerCase())}'>${match}</span>`
 		);
-		textNode.parentNode.insertBefore(element, textNode);
-		textNode.parentNode.removeChild(textNode);
-		focus.addElement(element.parentElement.tagName === "P" || element.parentElement.parentElement.tagName !== "P" ? element.parentElement : element.parentElement.parentElement);
+		node.parentNode.insertBefore(element, node);
+		node.parentNode.removeChild(node);
+		focus.addElement(element.parentElement.tagName === "P" || element.parentElement.parentElement.tagName !== "P"
+			? element.parentElement : element.parentElement.parentElement);
 		element.outerHTML = element.innerHTML;
 	});
 };
@@ -173,38 +196,40 @@ const getNodesToHighlight = (rootNode: Node, pattern: RegExp, excludeHighlighted
 		((!("tagName" in node)) || (node.parentElement.tagName !== "SCRIPT" && node["tagName"] !== "META"
 		&& node["tagName"] !== "STYLE" && node.parentElement.tagName !== "NOSCRIPT"))
 			? NodeFilter.FILTER_ACCEPT :  NodeFilter.FILTER_SKIP});
-	const textNodes: Array<Node> = [];
-	let textNode;
+	const nodes: Array<Node> = [];
+	let node: Node;
 	do {
-		textNode = walk.nextNode();
-		if (textNode && textNode.parentNode && textNode.nodeType === Node.TEXT_NODE && textNode.textContent.search(pattern) !== -1
-			&& (!excludeHighlighted || textNode.parentElement !== textNode.parentNode
-				|| Array.from(textNode.parentElement.classList).every((className: string) => !className.includes("highlight-search-term-"))
-			) && textNode.parentElement.tagName !== "NOSCRIPT" && textNode.parentElement.tagName !== "SCRIPT"
-			&& textNode.parentElement.tagName !== "META" && textNode.parentElement.tagName !== "STYLE"
-		) textNodes.push(textNode);
-	} while (textNode);
-	return textNodes;
+		node = walk.nextNode();
+		if (node && node.parentNode && node.nodeType === Node.TEXT_NODE && node.textContent.search(pattern) !== -1
+			&& (!excludeHighlighted || node.parentElement !== node.parentNode
+				|| Array.from(node.parentElement.classList).every((className: string) => !className.includes("highlight-search-term-"))
+				// TODO: Replace static string and improve concatenation in function.
+			) && node.parentElement.tagName !== "NOSCRIPT" && node.parentElement.tagName !== "SCRIPT"
+			&& node.parentElement.tagName !== "META" && node.parentElement.tagName !== "STYLE"
+		) nodes.push(node);
+	} while (node);
+	return nodes;
 };
 
-const highlightNodeAdditions = (focus: ElementSelect, pattern: RegExp) => new MutationObserver(mutations =>
-	mutations.forEach(mutation => mutation.addedNodes.forEach(textNode =>
-		highlightInNodes(getNodesToHighlight(textNode, pattern), pattern, focus)
+const highlightNodeAdditions = (focus: ElementSelect, termButtons: Array<HTMLElement>, pattern: RegExp) =>
+	new MutationObserver(mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(node =>
+		highlightInNodes(getNodesToHighlight(node, pattern), pattern, focus)
 	))).observe(document.body, {childList: true, subtree: true})
 ;
 
-const receiveSearchDetails = details => {
-	if (details["terms"].length === 0 && details["engine"] === "") {
+const receiveSearchDetails = (details: ResearchId) => {
+	if (details.terms.length === 0 && details.engine === "") {
 		removeControls();
 		return;
 	}
 	const focus = new ElementSelect();
-	if (details["terms"].length !== 0) {
-		const pattern = new RegExp(`((${details["terms"].map(term => term.replace(/(.)/g,"$1-?")).join(")|(")}))`, "gi");
+	const termButtons: Array<HTMLElement> = [];
+	if (details.terms.length !== 0) {
+		const pattern = new RegExp(`((${details.terms.map(term => term.replace(/(.)/g,"$1-?")).join(")|(")}))`, "gi");
 		highlightInNodes(getNodesToHighlight(document.body, pattern), pattern, focus);
-		highlightNodeAdditions(focus, pattern);
+		highlightNodeAdditions(focus, termButtons, pattern);
 	}
-	addControls(document.body, details["terms"], focus);
+	addControls(focus, termButtons, details.terms);
 };
 
 browser.runtime.onMessage.addListener(receiveSearchDetails);

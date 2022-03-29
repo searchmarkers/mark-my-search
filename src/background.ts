@@ -24,6 +24,7 @@ const isTabResearchPage = (researchIds: ResearchIds, tabId: number) =>
 	tabId in researchIds
 ;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const updateUrlActive = (activate: boolean, pagesActive: Pages, pagesInactive: Pages, url: string) => {
 	/*const [pagesFrom, pagesTo] = activate ? [pagesInactive, pagesActive] : [pagesActive, pagesInactive];
 	pagesFrom.splice(pagesFrom.indexOf(url), 1);
@@ -47,7 +48,7 @@ const getCachedSearchDetails = (researchIds: ResearchIds,
 
 const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes, researchIds: ResearchIds,
 	pagesActive: Pages, pagesInactive: Pages, script: string) =>
-	browser.webNavigation.onDOMContentLoaded.addListener(details =>
+	browser.webNavigation.onCommitted.addListener(details => // TODO: Could use earlier event?
 		isTabSearchPage(searchPrefixes, details.url) || isTabResearchPage(researchIds, details.tabId)
 			? browser.tabs.get(details.tabId).then(tab =>
 				details.frameId === 0
@@ -272,7 +273,7 @@ const initialize = () => {
 		"scholar.google.co.uk/scholar",
 	];
 	const researchIds: ResearchIds = {};
-	const pagesActive: Array<string> = [];
+	const pagesActive: Array<string> = []; // TODO: sensible context-menu page handling.
 	const pagesInactive: Array<string> = [];
 	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};
 	createContextSwitch(stoplist, researchIds, pagesActive, pagesInactive);
