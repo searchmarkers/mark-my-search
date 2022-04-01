@@ -26,8 +26,6 @@ class ElementSelect {
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	nextElement(predicate = (element: HTMLElement) => true): HTMLElement {
-		console.log(this.#index);
-		console.log(this.#length);
 		this.#index += 1;
 		return predicate(this.currentElement())
 			? this.currentElement()
@@ -66,17 +64,25 @@ const STYLE_MAIN = `
 	@keyframes flash { 0% { background-color: rgba(160,160,160,1); } 100% { background-color: rgba(160,160,160,0); }; }
 	.${getSelector(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
 	.${getSelector(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
-	.${getSelector(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; display: inline;
-		border: none; border-left-style: groove; border-left-width: thick; padding-top: 3px; padding-bottom: 3px; }
-	.${getSelector(ElementClass.CONTROL_BUTTON)} { all: revert; display: inline;
-		border-width: 2px; border-block-color: #000; margin: 0 0 0 0; }
-	.${getSelector(ElementClass.OPTION_LIST)} { all: revert; position: absolute; display: inline;
-		margin-top: 20px; padding-left: inherit; }
-	.${getSelector(ElementClass.OPTION)} { all: revert; display: block;
-		border-style: none; border-bottom-style: groove; border-left-style: groove; border-left-width: thick; translate: 2px; }
-	#${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: 1000000000000000; width: 100%; }
+	.${getSelector(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
+		border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
+	.${getSelector(ElementClass.CONTROL_EXPAND)}:hover { all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
+		border: none; margin-left: 3px; width: 15px; background-color: rgb(210,210,210); color: transparent; }
+	.${getSelector(ElementClass.CONTROL_EXPAND)}:hover .${getSelector(ElementClass.OPTION_LIST)} { all: revert; position: absolute; display: inline;
+		top: 5px; padding-left: inherit; left: -7px; }
+	.${getSelector(ElementClass.CONTROL_BUTTON)} { all: revert; display: inline; border-width: 2px; border-block-color: black; }
+	.${getSelector(ElementClass.CONTROL_BUTTON)}:hover { all: revert; display: inline; border-width: 2px; border-block-color: black; }
+	.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled { all: revert; display: inline; color: #333; background-color: rgba(200,200,200,0.6);
+		border-width: 2px; border-block-color: black; }
+	.${getSelector(ElementClass.OPTION_LIST)} { all: revert; display: none; }
+	.${getSelector(ElementClass.OPTION)} { all: revert; display: block; background-color: rgb(210,210,210);
+		border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
+	.${getSelector(ElementClass.OPTION)}:hover { all: revert; display: block; background-color: rgb(150,150,150);
+		border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
+	#${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: 1000000000000000; width: 100%; color-scheme: light;
+		line-height: initial; }
 	#${getSelector(ElementId.TOGGLE)} { all: revert; }
-`;
+`; // TODO: focus/hover effect curation, grey on disabled, combining hover/focus/normal rules [?]
 
 const BUTTON_COLORS: ReadonlyArray<ReadonlyArray<number>> = [
 	[255, 255, 0],
@@ -100,17 +106,25 @@ const getTermPredicate = (term: string) => {
 		element && element.offsetParent !== null && element.textContent.match(pattern) !== null;
 };
 
-const createButton = (focus: ElementSelect, term: string, COLOR: ReadonlyArray<number>) => {
+const createButton = (focus: ElementSelect, style: HTMLStyleElement, term: string, COLOR: ReadonlyArray<number>) => {
+	style.textContent += `
+		.${getSelector(ElementClass.ALL)} .${getSelector(ElementClass.TERM, term)}
+			{ background-color: rgba(${COLOR.join(",")},0.4) }
+		.${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)} {
+			all: revert; display: inline; border-width: 2px; border-block-color: black; background-color: rgba(${COLOR.map(channel => channel ? channel : 140).join(",")},1); }
+		.${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)}:hover {
+			all: revert; display: inline; border-width: 2px; border-block-color: black; background-color: rgba(${COLOR.map(channel => channel ? channel : 200).join(",")},1); }
+		.${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
+			all: revert; display: inline; border-width: 2px; border-block-color: black; background-color: rgba(100,100,100,0.5); color: white; }
+	`;
 	const button = document.createElement("button");
 	button.classList.add(getSelector(ElementClass.CONTROL_BUTTON));
-	if (focus.getElementCount(getTermPredicate(term)) !== 0) {
-		button.style.backgroundColor = "#" + COLOR.map(channel => channel === 255 ? "f" : "7").join("");
-	} else {
-		button.style.color = "#ddd";
+	button.classList.add(getSelector(ElementClass.TERM, term));
+	if (focus.getElementCount(getTermPredicate(term)) === 0) {
 		button.disabled = true;
 	}
 	button.textContent = term;
-	button.title = "TODO: count tooltip";
+	button.title = focus.getElementCount(getTermPredicate(term)).toString() + " [TODO: update tooltip]";
 	button.onclick = () => {
 		if (focus.isEmpty()) return;
 		if (focus.currentElement()) {
@@ -122,72 +136,76 @@ const createButton = (focus: ElementSelect, term: string, COLOR: ReadonlyArray<n
 	};
 	const menu = document.createElement("menu");
 	menu.classList.add(getSelector(ElementClass.OPTION_LIST));
-	menu.style.display = "none";
 	menu.appendChild(createOption("Fuzzy"));
 	menu.appendChild(createOption("Whole Word"));
-	const arrow = document.createElement("button");
-	arrow.classList.add(getSelector(ElementClass.CONTROL_EXPAND));
-	arrow.textContent = "⋮";
-	arrow.onclick = () => {
-		arrow.textContent = menu.style.display === "" ?  "⋮" : " ";
-		menu.style.display = menu.style.display === "" ?  "none" : "";
-	};
+	const expand = document.createElement("button");
+	expand.classList.add(getSelector(ElementClass.CONTROL_EXPAND));
+	expand.textContent = "⁝";
+	expand.appendChild(menu);
 	const div = document.createElement("div");
 	div.classList.add(getSelector(ElementClass.CONTROL));
-	div.appendChild(menu);
-	div.appendChild(arrow);
+	div.appendChild(expand);
 	div.appendChild(button);
 	return div;
 };
 
-const addControls = (focus: ElementSelect, termButtons: Array<HTMLElement>, terms: Array<string>) => {
-	// TODO: Gap on websites like this: https://codesource.io/how-to-disable-button-in-javascript/.
-	// TODO: Issue due to dark theme on Github.
+const addControls = (focus: ElementSelect, terms: Array<string>) => {
 	const style = document.createElement("style");
 	style.id = getSelector(ElementId.STYLE);
 	style.textContent = STYLE_MAIN;
 	document.head.appendChild(style);
-	document.body.classList.add(getSelector(ElementClass.ALL));
-	
+	document.body.classList.add(getSelector(ElementClass.ALL)); // TODO: prevent removal on websites like https://codesource.io/how-to-disable-button-in-javascript/
 	const bar = document.createElement("div");
 	bar.id = getSelector(ElementId.BAR);
 	document.body.insertAdjacentElement("beforebegin", bar);
-	
-	const checkbox = document.createElement("input");
-	checkbox.id = getSelector(ElementId.TOGGLE);
-	checkbox.type = "checkbox";
-	checkbox.checked = true;
-	checkbox.oninput = () => {
-		document.body.classList[checkbox.checked ? "add" : "remove"](getSelector(ElementClass.ALL));
+	const toggle = document.createElement("input");
+	toggle.id = getSelector(ElementId.TOGGLE);
+	toggle.type = "checkbox";
+	toggle.checked = true;
+	toggle.oninput = () => {
+		// TODO: Can work by CSS (elegant, would eliminate class removal problem)
+		document.body.classList[toggle.checked ? "add" : "remove"](getSelector(ElementClass.ALL));
 	};
-	bar.appendChild(checkbox);
-	
+	bar.appendChild(toggle);
 	for (let i = 0; i < terms.length; i++) {
-		const color = BUTTON_COLORS[i % BUTTON_COLORS.length];
-		style.textContent += `.${getSelector(ElementClass.ALL)} .${getSelector(ElementClass.TERM, terms[i])}
-			{ background: rgba(${color.join(",")},0.4) }`;
-		const button = createButton(focus, terms[i], color);
-		bar.appendChild(button);
-		termButtons.push(button);
+		bar.appendChild(createButton(focus, style, terms[i], BUTTON_COLORS[i % BUTTON_COLORS.length]));
 	}
 };
 
 const removeControls = () => {
+	if (!document.getElementById(getSelector(ElementId.STYLE))) return;
 	document.getElementById(getSelector(ElementId.BAR)).remove();
 	document.getElementById(getSelector(ElementId.STYLE)).remove();
 };
 
-const highlightInNodes = (nodes: Array<Node>, pattern: RegExp, focus: ElementSelect) => {
+const enableButton = (enable: boolean, button: HTMLButtonElement) => {
+	button.disabled = !enable;
+};
+
+const highlightInNodes = (focus: ElementSelect, nodes: Array<Node>, pattern: RegExp) => {
+	const terms: Set<string> = new Set;
 	nodes.forEach(node => {
 		const element = document.createElement("span");
-		element.innerHTML = node.textContent.replace(pattern,
-			match => `<span class='${getSelector(ElementClass.TERM, match.replace("-","").toLowerCase())}'>${match}</span>`
-		);
+		element.innerHTML = node.textContent.replace(pattern, match => {
+			const term = match.replace("-","").toLowerCase();
+			terms.add(term);
+			return `<span class='${getSelector(ElementClass.TERM, term)}'>${match}</span>`;
+		});
 		node.parentNode.insertBefore(element, node);
 		node.parentNode.removeChild(node);
 		focus.addElement(element.parentElement.tagName === "P" || element.parentElement.parentElement.tagName !== "P"
 			? element.parentElement : element.parentElement.parentElement);
 		element.outerHTML = element.innerHTML;
+	});
+	const buttons = Array.from(document.getElementsByClassName(getSelector(ElementClass.CONTROL_BUTTON)));
+	//const termButtons: Record<string, HTMLButtonElement> = buttons.red
+	terms.forEach(term => {
+		const pattern = new RegExp(term.replace(/(.)/g,"$1-?"), "gi");
+		buttons.forEach((button: HTMLButtonElement) => {
+			if (button.textContent.match(pattern)) {
+				enableButton(true, button);
+			}
+		});
 	});
 };
 
@@ -211,25 +229,22 @@ const getNodesToHighlight = (rootNode: Node, pattern: RegExp, excludeHighlighted
 	return nodes;
 };
 
-const highlightNodeAdditions = (focus: ElementSelect, termButtons: Array<HTMLElement>, pattern: RegExp) =>
+const highlightNodeAdditions = (focus: ElementSelect, pattern: RegExp) =>
 	new MutationObserver(mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(node =>
-		highlightInNodes(getNodesToHighlight(node, pattern), pattern, focus)
+		highlightInNodes(focus, getNodesToHighlight(node, pattern), pattern)
 	))).observe(document.body, {childList: true, subtree: true})
 ;
 
-const receiveSearchDetails = (details: ResearchId) => {
-	if (details.terms.length === 0 && details.engine === "") {
-		removeControls();
-		return;
+const receiveResearchDetails = (researchDetails: ResearchDetail) => {
+	removeControls();
+	if (!researchDetails.enabled) return;
+	const focus = new ElementSelect;
+	if (researchDetails.terms.length !== 0) {
+		const pattern = new RegExp(`((${researchDetails.terms.map(term => term.replace(/(.)/g,"$1-?")).join(")|(")}))`, "gi");
+		highlightInNodes(focus, getNodesToHighlight(document.body, pattern), pattern);
+		highlightNodeAdditions(focus, pattern);
 	}
-	const focus = new ElementSelect();
-	const termButtons: Array<HTMLElement> = [];
-	if (details.terms.length !== 0) {
-		const pattern = new RegExp(`((${details.terms.map(term => term.replace(/(.)/g,"$1-?")).join(")|(")}))`, "gi");
-		highlightInNodes(getNodesToHighlight(document.body, pattern), pattern, focus);
-		highlightNodeAdditions(focus, termButtons, pattern);
-	}
-	addControls(focus, termButtons, details.terms);
+	addControls(focus, researchDetails.terms);
 };
 
-browser.runtime.onMessage.addListener(receiveSearchDetails);
+browser.runtime.onMessage.addListener(receiveResearchDetails);

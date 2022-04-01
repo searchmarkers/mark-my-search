@@ -1,11 +1,20 @@
-type ResearchIds = Record<number, ResearchId>;
+type ResearchIDs = Record<number, ResearchID>;
 type Stoplist = Array<string>;
 type SearchPrefixes = Array<string>;
-type Pages = Array<string>;
 
-class ResearchId {
+class ResearchDetail {
+	terms: Array<string>;
+	enabled: boolean;
+
+	constructor(terms: Array<string>, enabled = true) {
+		[this.terms, this.enabled] = [terms, enabled];
+	}
+}
+
+class ResearchID {
 	engine: string;
 	terms: Array<string>;
+	urls: Set<string>;
 
 	constructor(stoplist: Array<string>, url: string) {
 		this.engine = new URL(url).hostname;
@@ -13,6 +22,7 @@ class ResearchId {
 			.filter(term => stoplist.indexOf(term) === -1)
 			.map(term => JSON.stringify(term.toLowerCase()).replace(/\W/g , ""))
 		;
+		this.urls = new Set;
 	}
 }
 
@@ -20,72 +30,80 @@ const isTabSearchPage = (searchPrefixes: SearchPrefixes, url: string) =>
 	searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))
 ;
 
-const isTabResearchPage = (researchIds: ResearchIds, tabId: number) =>
+const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
 	tabId in researchIds
 ;
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const updateUrlActive = (activate: boolean, pagesActive: Pages, pagesInactive: Pages, url: string) => {
-	/*const [pagesFrom, pagesTo] = activate ? [pagesInactive, pagesActive] : [pagesActive, pagesInactive];
-	pagesFrom.splice(pagesFrom.indexOf(url), 1);
-	pagesTo.push(url);
-	browser.contextMenus.update("deactivate-research-mode", {documentUrlPatterns: pagesActive});
-	browser.contextMenus.update("activate-research-mode", {documentUrlPatterns: pagesInactive});*/
+const updateUrlActive = (activate: boolean, researchIds: ResearchIDs, url: string, tabId: number) => {
+	if (!(tabId in researchIds)) return;
+	// TODO: Fix
+	if (activate) {
+		researchIds[tabId].urls.add(url);
+	} else {
+		researchIds[tabId].urls.delete(url);
+	}
+	const urlsActive = Object.values(researchIds).flatMap(researchId => Array.from(researchId.urls));
+	const urlsInactive = [];
+	browser.tabs.query({}).then(tabs => tabs.forEach(tab =>
+		urlsActive.includes(tab.url) ? undefined : urlsInactive.push(tab.url)
+	));
+	console.log(urlsActive);
+	console.log(urlsInactive);
+	browser.contextMenus.update("deactivate-research-mode", {documentUrlPatterns: urlsActive});
+	browser.contextMenus.update("activate-research-mode", {documentUrlPatterns: urlsInactive});
 };
 
-const storeNewSearchDetails = (stoplist: Stoplist, researchIds: ResearchIds,
-	pagesActive: Pages, pagesInactive: Pages, url: string, tabId: number) => {
-	researchIds[tabId] = new ResearchId(stoplist, url);
-	updateUrlActive(true, pagesActive, pagesInactive, url);
-	return researchIds[tabId];
+const storeNewResearchDetails = (stoplist: Stoplist, researchIds: ResearchIDs, url: string, tabId: number) => {
+	researchIds[tabId] = new ResearchID(stoplist, url);
+	updateUrlActive(true, researchIds, url, tabId);
+	return new ResearchDetail(researchIds[tabId].terms);
 };
 
-const getCachedSearchDetails = (researchIds: ResearchIds,
-	pagesActive: Pages, pagesInactive: Pages, url: string, tabId: number) => {
-	updateUrlActive(true, pagesActive, pagesInactive, url);
-	return researchIds[tabId];
+const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: number) => {
+	updateUrlActive(true, researchIds, url, tabId);
+	return new ResearchDetail(researchIds[tabId].terms);
 };
 
-const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes, researchIds: ResearchIds,
-	pagesActive: Pages, pagesInactive: Pages, script: string) =>
-	browser.webNavigation.onCommitted.addListener(details => // TODO: Could use earlier event?
+const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes, researchIds: ResearchIDs, script: string) =>
+	browser.webNavigation.onCommitted.addListener(details => // TODO: Inject before DOM load?
 		isTabSearchPage(searchPrefixes, details.url) || isTabResearchPage(researchIds, details.tabId)
 			? browser.tabs.get(details.tabId).then(tab =>
 				details.frameId === 0
 					? browser.tabs.executeScript(tab.id, {file: script}).then(() =>
 						browser.tabs.sendMessage(tab.id, isTabSearchPage(searchPrefixes, tab.url)
-							? storeNewSearchDetails(stoplist, researchIds, pagesActive, pagesInactive, tab.url, tab.id)
-							: getCachedSearchDetails(researchIds, pagesActive, pagesInactive,tab.url, tab.id)
+							? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id)
+							: getCachedResearchDetails(researchIds, tab.url, tab.id)
 						)
 					) : undefined
 			) : undefined
 	)
 ;
 
-const extendResearchOnTabCreated = (researchIds: ResearchIds, pagesActive: Pages, pagesInactive: Pages) =>
+const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 	browser.tabs.onCreated.addListener(tab => {
 		if (tab.openerTabId in researchIds) {
 			researchIds[tab.id] = researchIds[tab.openerTabId];
-			updateUrlActive(true, pagesActive, pagesInactive, tab.url);
 		}
 	})
 ;
 
-const createContextSwitch = (stoplist: Stoplist, researchIds: ResearchIds, pagesActive: Pages, pagesInactive: Pages) => {
-	browser.contextMenus.create({title: "Deactivate Re&search Mode", id: "deactivate-research-mode", documentUrlPatterns: pagesActive, onclick: (event, tab) => {
-		browser.tabs.sendMessage(tab.id, {engine: "", terms: []});
-		browser.tabs.get(tab.id).then(tab => {
-			delete researchIds[tab.id];
-			updateUrlActive(false, pagesActive, pagesInactive, tab.url);
-		});
-	}});
-	browser.contextMenus.create({title: "Activate Re&search Mode", id: "activate-research-mode", documentUrlPatterns: pagesInactive, onclick: (event, tab) => {
-		browser.tabs.sendMessage(tab.id, {engine: "duckduckgo.com", terms: []});
-		browser.tabs.get(tab.id).then(tab => {
-			researchIds[tab.id] = new ResearchId(stoplist, tab.url);
-			updateUrlActive(true, pagesActive, pagesInactive, tab.url);
-		});
-	}});
+const getMenuSwitchId = (activate: boolean) =>
+	(activate ? "" : "de") + "activate-research-mode"
+;
+
+const createMenuSwitches = (stoplist: Stoplist, researchIds: ResearchIDs) => {
+	const createMenuSwitch = (activate: boolean, title: string, action: CallableFunction) =>
+		browser.contextMenus.create({title, id: getMenuSwitchId(activate), documentUrlPatterns: [], onclick: (event, tab) => {
+			browser.tabs.sendMessage(tab.id, new ResearchDetail([], activate));
+			browser.tabs.get(tab.id).then(tab => {
+				action();
+				updateUrlActive(activate, researchIds, tab.url, tab.id);
+			});
+		}});
+	createMenuSwitch(false, "Deactivate Re&search Mode",
+		(tab: browser.tabs.Tab) => delete researchIds[tab.id]);
+	createMenuSwitch(true, "Activate Re&search Mode",
+		(tab: browser.tabs.Tab) => researchIds[tab.id] = new ResearchID(stoplist, tab.url));
 };
 
 const initialize = () => {
@@ -272,13 +290,11 @@ const initialize = () => {
 		"www.google.com/search",
 		"scholar.google.co.uk/scholar",
 	];
-	const researchIds: ResearchIds = {};
-	const pagesActive: Array<string> = []; // TODO: sensible context-menu page handling.
-	const pagesInactive: Array<string> = [];
+	const researchIds: ResearchIDs = {};
 	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};
-	createContextSwitch(stoplist, researchIds, pagesActive, pagesInactive);
-	injectScriptOnNavigation(stoplist, searchPrefixes, researchIds, pagesActive, pagesInactive, "/dist/term-highlight.js");
-	extendResearchOnTabCreated(researchIds, pagesActive, pagesInactive);
+	createMenuSwitches(stoplist, researchIds);
+	injectScriptOnNavigation(stoplist, searchPrefixes, researchIds, "/dist/term-highlight.js");
+	extendResearchOnTabCreated(researchIds);
 };
 
 initialize();
