@@ -27,7 +27,7 @@ class ResearchID {
 }
 
 const isTabSearchPage = (searchPrefixes: SearchPrefixes, url: string) =>
-	searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))
+	(new URL(url)).searchParams.has("q") || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))
 ;
 
 const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
