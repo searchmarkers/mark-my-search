@@ -112,7 +112,7 @@ const HIGHLIGHT_TAGS: Record<string, ReadonlyArray<string>> = {
 };
 
 const termsToPattern = (terms: Array<string>) =>
-	new RegExp(`(${terms.map(term => term.replace(/(.)/g,"$1(-|‐|‐)?")).join(")|(")})`, "gi")
+	new RegExp(`(${terms.map(term => term.replace(/(.)/g,"$1(-|‐|‐)?").slice(0, -8)).join(")|(")})`, "gi")
 ;
 
 const termToPredicate = (term: string) =>
@@ -233,7 +233,6 @@ const addScrollMarker = (gutter: HTMLElement, element: HTMLElement, term: string
 	const marker = document.createElement("div");
 	marker.classList.add(getSelector(ElementClass.TERM, term));
 	marker.style.top = String(getOffset(element, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
-	console.log(marker.style.top);
 	gutter.appendChild(marker);
 };
 
@@ -258,6 +257,7 @@ const addScrollMarkers = (terms: Array<string>) => {
 
 const highlightInNode = (textEnd: Node, start: number, end: number, term: string) => {
 	// TODO: delete redundant nodes
+	[start, end] = [Math.max(0, start), Math.min(textEnd.textContent.length, end)];
 	const textStart = document.createTextNode(textEnd.textContent.slice(0, start));
 	const mark = document.createElement("mark");
 	mark.classList.add(getSelector(ElementClass.ALL));
@@ -269,33 +269,25 @@ const highlightInNode = (textEnd: Node, start: number, end: number, term: string
 };
 
 const breakIfAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
-	if (!unbrokenNodes.length) return;
 	const matches = Array.from(unbrokenNodes.map(node => node.textContent).join("").matchAll(pattern));
-	let start = 0;
 	let i = 0;
-	console.log(unbrokenNodes.map(node => node.textContent).join(""));
-	unbrokenNodes.forEach((node, j) => {
-		const length = node.textContent.length;
-		let adjust = 0;
+	let thisNodeStart = 0;
+	unbrokenNodes.forEach(node => {
+		const nextNodeStart = thisNodeStart + node.textContent.length;
 		matches.slice(i).every(match => {
-			console.log(match);
-			//console.log(start);
-			//console.log(length);
-			//console.log(adjust);
-			if (match.index >= start + length) {
+			if (match.index >= nextNodeStart) {
 				return false;
 			}
-			//console.log(unbrokenNodes[j]);
-			const originalLength = unbrokenNodes[j].textContent.length;
-			highlightInNode(unbrokenNodes[j], -start + match.index + adjust, -start + match.index + match[0].length + adjust, termFromMatch(match[0]));
-			adjust += unbrokenNodes[j].textContent.length - originalLength;
-			if (match.index + match[0].length >= start + length) {
+			const textLength = node.textContent.length;
+			highlightInNode(node, match.index - thisNodeStart, match.index - thisNodeStart + match[0].length, termFromMatch(match[0]));
+			thisNodeStart += textLength - node.textContent.length;
+			if (match.index + match[0].length >= nextNodeStart) {
 				return false;
 			}
 			i++;
 			return true;
 		});
-		start += length;
+		thisNodeStart = nextNodeStart;
 	});
 	unbrokenNodes.splice(0, unbrokenNodes.length);
 };
@@ -303,10 +295,10 @@ const breakIfAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
 const highlightInNodes = (rootNode: Node, pattern: RegExp) => {
 	const unbrokenNodes: Array<Node> = [];
 	const breakLevels: Array<number> = [0];
-	let acceptAll = false;
+	let acceptAny = false;
 	let level = 0;
 	const walk = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
-		if (acceptAll) {
+		if (acceptAny) {
 			return NodeFilter.FILTER_ACCEPT;
 		}
 		if (node.nodeType === Node.TEXT_NODE) {
@@ -336,9 +328,9 @@ const highlightInNodes = (rootNode: Node, pattern: RegExp) => {
 					breakIfAtBreakLevel(unbrokenNodes, pattern);
 				}
 				level--;
-				acceptAll = true;
+				acceptAny = true;
 				node = walk.parentNode();
-				acceptAll = false;
+				acceptAny = false;
 			}
 		}
 		node = walk.currentNode === node ? null : walk.currentNode;
@@ -355,7 +347,7 @@ const highlightInNodesOnMutation = (pattern: RegExp) =>
 // TODO: term editing (+ from user-highlighted text context menu)
 // TODO: customization
 // TODO: keyboard navigation
-// TODO: search engine detection, including bookmarked
+// TODO: bookmarked search engine detection
 
 const receiveResearchDetails = (researchDetails: ResearchDetail) => {
 	removeControls();
