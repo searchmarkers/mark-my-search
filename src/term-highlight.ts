@@ -46,13 +46,14 @@ enum ElementClass {
 	OPTION = "option",
 	TERM = "term",
 	FOCUS = "focus",
-	MARKER_GUTTER = "markers",
+	MARKER_BLOCK = "marker-block",
 }
 
 enum ElementId {
 	STYLE = "style",
 	BAR = "bar",
 	TOGGLE = "toggle",
+	MARKER_GUTTER = "markers",
 }
 
 const getSelector = (element: ElementId | ElementClass, term = "") =>
@@ -65,16 +66,16 @@ const STYLE_MAIN = `
 @keyframes flash { 0% { background-color: rgba(160,160,160,1); } 100% { background-color: rgba(160,160,160,0); }; }
 .${getSelector(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
 .${getSelector(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
-.${getSelector(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
+.${getSelector(ElementClass.CONTROL_EXPAND)}, .${getSelector(ElementClass.CONTROL_EXPAND)}:hover {
+	all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
 	border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
-.${getSelector(ElementClass.CONTROL_EXPAND)}:hover { all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
-	border: none; margin-left: 3px; width: 15px; background-color: rgb(210,210,210); color: transparent; }
-.${getSelector(ElementClass.CONTROL_EXPAND)}:hover .${getSelector(ElementClass.OPTION_LIST)} { all: revert; position: absolute; display: inline;
-	top: 5px; padding-left: inherit; left: -7px; }
-.${getSelector(ElementClass.CONTROL_BUTTON)} { all: revert; display: inline; border-width: 2px; border-block-color: black; }
-.${getSelector(ElementClass.CONTROL_BUTTON)}:hover { all: revert; display: inline; border-width: 2px; border-block-color: black; }
-.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled { all: revert; display: inline; color: #333; background-color: rgba(200,200,200,0.6);
-	border-width: 2px; border-block-color: black; }
+.${getSelector(ElementClass.CONTROL_EXPAND)}:hover { background-color: rgb(210,210,210); color: transparent; }
+.${getSelector(ElementClass.CONTROL_EXPAND)}:hover .${getSelector(ElementClass.OPTION_LIST)} {
+	all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; }
+.${getSelector(ElementClass.CONTROL_BUTTON)}, .${getSelector(ElementClass.CONTROL_BUTTON)}:hover,
+	.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
+	all: revert; display: inline; border-width: 2px; border-block-color: black; }
+.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled { color: #333; background-color: rgba(200,200,200,0.6); }
 .${getSelector(ElementClass.OPTION_LIST)} { all: revert; display: none; }
 .${getSelector(ElementClass.OPTION)} { all: revert; display: block; background-color: rgb(210,210,210);
 	border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
@@ -89,12 +90,15 @@ const STYLE_MAIN = `
 	background-color: rgba(100,100,100,0.5) !important; }
 .${getSelector(ElementClass.ALL)} {
 	background-color: unset; color: unset; }
-.${getSelector(ElementClass.MARKER_GUTTER)}, .${getSelector(ElementClass.MARKER_GUTTER)} > div {
-	width: 16px; height: 1px; right: 0; position: fixed; z-index: ${Z_INDEX_MAX}; display: none; }
-#${getSelector(ElementId.TOGGLE)}:checked ~ body .${getSelector(ElementClass.MARKER_GUTTER)},
-	#${getSelector(ElementId.TOGGLE)}:checked ~ .${getSelector(ElementClass.MARKER_GUTTER)} {
-	width: 12px; height: 100%; top: 0; display: block; background-color: rgba(0, 0, 0, 0.5); }
-`; // TODO: focus/hover effect curation, combining hover/focus/normal rules [?]
+#${getSelector(ElementId.MARKER_GUTTER)} { display: none; z-index: ${Z_INDEX_MAX};
+	right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
+#${getSelector(ElementId.MARKER_GUTTER)} div:not(.${getSelector(ElementClass.MARKER_BLOCK)}) {
+	width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
+#${getSelector(ElementId.MARKER_GUTTER)}, .${getSelector(ElementClass.MARKER_BLOCK)} {
+	position: fixed; background-color: rgba(0, 0, 0, 0.5); }
+.${getSelector(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
+#${getSelector(ElementId.TOGGLE)}:checked ~ #${getSelector(ElementId.MARKER_GUTTER)} { display: block; }
+`;
 
 const BUTTON_COLORS: ReadonlyArray<ReadonlyArray<number>> = [
 	[255, 255, 0],
@@ -135,9 +139,8 @@ const createTermControl = (focus: ElementSelect, style: HTMLStyleElement, term: 
 	style.textContent += `
 #${getSelector(ElementId.TOGGLE)}:checked ~ body .${getSelector(ElementClass.ALL)}.${getSelector(ElementClass.TERM, term)} {
 	background-color: rgba(${COLOR.join(",")},0.4); }
-#${getSelector(ElementId.TOGGLE)}:checked ~ body .${getSelector(ElementClass.MARKER_GUTTER)} > .${getSelector(ElementClass.TERM, term)},
-	#${getSelector(ElementId.TOGGLE)}:checked ~ .${getSelector(ElementClass.MARKER_GUTTER)} > .${getSelector(ElementClass.TERM, term)} {
-	background-color: rgb(${COLOR.join(",")}); display: block; }
+#${getSelector(ElementId.MARKER_GUTTER)} .${getSelector(ElementClass.TERM, term)} {
+	background-color: rgb(${COLOR.join(",")}); }
 .${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)} {
 	background-color: rgb(${COLOR.map(channel => channel ? channel : 140).join(",")}); }
 .${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)}:hover {
@@ -191,14 +194,16 @@ const addControls = (focus: ElementSelect, terms: Array<string>) => {
 	for (let i = 0; i < terms.length; i++) {
 		bar.appendChild(createTermControl(focus, style, terms[i], BUTTON_COLORS[i % BUTTON_COLORS.length]));
 	}
+	const gutter = document.createElement("div");
+	gutter.id = getSelector(ElementId.MARKER_GUTTER);
+	document.body.insertAdjacentElement("afterend", gutter);
 };
 
 const removeControls = () => {
 	if (!document.getElementById(getSelector(ElementId.STYLE))) return;
 	document.getElementById(getSelector(ElementId.BAR)).remove();
+	document.getElementById(getSelector(ElementId.MARKER_GUTTER)).remove();
 	document.getElementById(getSelector(ElementId.STYLE)).remove();
-	Array.from(document.getElementsByClassName(getSelector(ElementClass.MARKER_GUTTER))).forEach(gutter =>
-		gutter.remove());
 };
 
 /*const highlightInNodes = (focus: ElementSelect, nodes: Array<Node>, pattern: RegExp) => {
@@ -220,37 +225,36 @@ const getOffset = (element: HTMLElement, elementTop: HTMLElement) =>
 		: 0
 ;
 
-const getScrollContainer = (element: Element): Element =>
+const getScrollContainer = (element: HTMLElement): HTMLElement =>
 	element.scrollHeight > element.clientHeight &&
-	(document.scrollingElement === element || ["scroll", "auto"].indexOf(getComputedStyle(element).overflowY) >= 0)
+	(document.scrollingElement === element || ["scroll", "auto"].indexOf(getComputedStyle(element).overflowY) !== -1)
 		? element
 		: getScrollContainer(element.parentElement)
 ;
 
-const addScrollMarker = (gutter: HTMLElement, element: HTMLElement, term: string) => {
-	const scrollContainer = gutter.parentElement;
-	// TOOD: add overlap strategy, add update strategy, check calculations
-	const marker = document.createElement("div");
-	marker.classList.add(getSelector(ElementClass.TERM, term));
-	marker.style.top = String(getOffset(element, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
-	gutter.appendChild(marker);
-};
-
 const addScrollMarkers = (terms: Array<string>) => {
-	const containerPairs: Array<[Element, HTMLElement]> = [];
+	const gutter = document.getElementById(getSelector(ElementId.MARKER_GUTTER));
+	const containerPairs: Array<[Element, HTMLElement]> = [[document.scrollingElement, gutter]];
 	terms.forEach(term =>
-		Array.from(document.body.getElementsByClassName(getSelector(ElementClass.TERM, term))).forEach(mark => {
-			if ("offsetTop" in mark) {
-				const scrollContainer = getScrollContainer(mark);
-				const containerPair = containerPairs.find(containerPair => containerPair[0] === scrollContainer);
-				const gutter = containerPair ? containerPair[1] : document.createElement("div");
-				if (!containerPair) {
-					gutter.classList.add(getSelector(ElementClass.MARKER_GUTTER));
-					scrollContainer.appendChild(gutter);
-					containerPairs.push([scrollContainer, gutter]);
-				}
-				addScrollMarker(gutter, mark as HTMLElement, term);
+		Array.from(document.body.getElementsByClassName(getSelector(ElementClass.TERM, term))).forEach((mark: Element) => {
+			if (!("offsetTop" in mark)) return;
+			const scrollContainer = getScrollContainer(mark as HTMLElement);
+			const containerPair = containerPairs.find(containerPair => containerPair[0] === scrollContainer);
+			const block = containerPair ? containerPair[1] : document.createElement("div");
+			if (!containerPair) {
+				block.classList.add(getSelector(ElementClass.MARKER_BLOCK));
+				block.style.top = String(getOffset(scrollContainer, document.scrollingElement as HTMLElement) / document.scrollingElement.scrollHeight * 100) + "%";
+				console.log(getOffset(scrollContainer, document.scrollingElement as HTMLElement));
+				console.log(scrollContainer);
+				//block.style.height = "15%";
+				gutter.appendChild(block);
+				containerPairs.push([scrollContainer, block]);
 			}
+			// TOOD: add overlap strategy, add update strategy, check calculations
+			const marker = document.createElement("div");
+			marker.classList.add(getSelector(ElementClass.TERM, term));
+			marker.style.top = String(getOffset(mark as HTMLElement, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
+			block.appendChild(marker);
 		})
 	);
 };
@@ -309,7 +313,7 @@ const highlightInNodes = (rootNode: Node, pattern: RegExp) => {
 		}
 		if (node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.includes(node["tagName"])
 			&& (typeof(node["className"]) !== "string" || !node["classList"].contains(getSelector(ElementClass.ALL)))) {
-			if (!HIGHLIGHT_TAGS.FLOW.includes(node["tagName"]) && breakLevels.at(-1) !== level) {
+			if (!HIGHLIGHT_TAGS.FLOW.includes(node["tagName"])) {
 				breakLevels.push(level);
 				breakIfAtBreakLevel(unbrokenNodes, pattern);
 			}
@@ -353,13 +357,13 @@ const receiveResearchDetails = (researchDetails: ResearchDetail) => {
 	removeControls();
 	if (!researchDetails.enabled) return;
 	const focus = new ElementSelect;
+	addControls(focus, researchDetails.terms);
 	if (researchDetails.terms.length) {
 		const pattern = termsToPattern(researchDetails.terms);
 		highlightInNodes(document.body, pattern);
 		highlightInNodesOnMutation(pattern);
-		addScrollMarkers(researchDetails.terms);
+		setTimeout(() => addScrollMarkers(researchDetails.terms), 3000);
 	}
-	addControls(focus, researchDetails.terms);
 };
 
 browser.runtime.onMessage.addListener(receiveResearchDetails);
