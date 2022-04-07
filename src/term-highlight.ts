@@ -38,7 +38,7 @@ class ElementSelect {
 }
 
 enum ElementClass {
-	ALL = "all",
+	TERM_ANY = "all",
 	CONTROL = "control",
 	CONTROL_EXPAND = "control-expand",
 	CONTROL_BUTTON = "control-button",
@@ -71,24 +71,22 @@ const STYLE_MAIN = `
 	border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
 .${getSelector(ElementClass.CONTROL_EXPAND)}:hover { background-color: rgb(210,210,210); color: transparent; }
 .${getSelector(ElementClass.CONTROL_EXPAND)}:hover .${getSelector(ElementClass.OPTION_LIST)} {
-	all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; }
+	all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; z-index: 1; }
 .${getSelector(ElementClass.CONTROL_BUTTON)}, .${getSelector(ElementClass.CONTROL_BUTTON)}:hover,
 	.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
 	all: revert; display: inline; border-width: 2px; border-block-color: black; }
-.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled { color: #333; background-color: rgba(200,200,200,0.6); }
 .${getSelector(ElementClass.OPTION_LIST)} { all: revert; display: none; }
 .${getSelector(ElementClass.OPTION)} { all: revert; display: block; background-color: rgb(210,210,210);
 	border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
-.${getSelector(ElementClass.OPTION)}:hover { all: revert; display: block; background-color: rgb(150,150,150);
-	border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
+.${getSelector(ElementClass.OPTION)}:hover { background-color: rgb(150,150,150); }
 #${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; color-scheme: light;
-	line-height: initial; left: 20px; }
+	line-height: initial; left: 20px; font-size: 0; }
 #${getSelector(ElementId.TOGGLE)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; }
 .${getSelector(ElementClass.CONTROL_BUTTON)} {
 	all: revert; display: inline; border-width: 2px; border-block-color: black; }
 .${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
 	background-color: rgba(100,100,100,0.5) !important; }
-.${getSelector(ElementClass.ALL)} {
+.${getSelector(ElementClass.TERM_ANY)} {
 	background-color: unset; color: unset; }
 #${getSelector(ElementId.MARKER_GUTTER)} { display: none; z-index: ${Z_INDEX_MAX};
 	right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
@@ -137,7 +135,7 @@ const createTermOption = (title: string) => {
 
 const createTermControl = (focus: ElementSelect, style: HTMLStyleElement, term: string, COLOR: ReadonlyArray<number>) => {
 	style.textContent += `
-#${getSelector(ElementId.TOGGLE)}:checked ~ body .${getSelector(ElementClass.ALL)}.${getSelector(ElementClass.TERM, term)} {
+#${getSelector(ElementId.TOGGLE)}:checked ~ body .${getSelector(ElementClass.TERM_ANY)}.${getSelector(ElementClass.TERM, term)} {
 	background-color: rgba(${COLOR.join(",")},0.4); }
 #${getSelector(ElementId.MARKER_GUTTER)} .${getSelector(ElementClass.TERM, term)} {
 	background-color: rgb(${COLOR.join(",")}); }
@@ -150,7 +148,7 @@ const createTermControl = (focus: ElementSelect, style: HTMLStyleElement, term: 
 	button.classList.add(getSelector(ElementClass.CONTROL_BUTTON));
 	button.classList.add(getSelector(ElementClass.TERM, term));
 	if (focus.getElementCount(termToPredicate(term)) === 0) {
-		button.disabled = true;
+		//button.disabled = true;
 	}
 	button.textContent = term;
 	button.title = focus.getElementCount(termToPredicate(term)).toString() + " [TODO: update tooltip]";
@@ -159,7 +157,10 @@ const createTermControl = (focus: ElementSelect, style: HTMLStyleElement, term: 
 		if (focus.getCurrentElement()) {
 			focus.getCurrentElement().classList.remove(getSelector(ElementClass.FOCUS));
 		}
-		const element = focus.nextElement(termToPredicate(term));
+		const selection = document.getSelection();
+		const walk = document.createTreeWalker(selection.anchorNode, NodeFilter.SHOW_ELEMENT, (node: Element) =>
+			node.classList.contains(getSelector(ElementClass.TERM_ANY)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP);
+		const element = walk.nextNode() as Element;
 		element.scrollIntoView({behavior: "smooth", block: "center"});
 		element.classList.add(getSelector(ElementClass.FOCUS));
 	};
@@ -244,8 +245,6 @@ const addScrollMarkers = (terms: Array<string>) => {
 			if (!containerPair) {
 				block.classList.add(getSelector(ElementClass.MARKER_BLOCK));
 				block.style.top = String(getOffset(scrollContainer, document.scrollingElement as HTMLElement) / document.scrollingElement.scrollHeight * 100) + "%";
-				console.log(getOffset(scrollContainer, document.scrollingElement as HTMLElement));
-				console.log(scrollContainer);
 				//block.style.height = "15%";
 				gutter.appendChild(block);
 				containerPairs.push([scrollContainer, block]);
@@ -264,7 +263,7 @@ const highlightInNode = (textEnd: Node, start: number, end: number, term: string
 	[start, end] = [Math.max(0, start), Math.min(textEnd.textContent.length, end)];
 	const textStart = document.createTextNode(textEnd.textContent.slice(0, start));
 	const mark = document.createElement("mark");
-	mark.classList.add(getSelector(ElementClass.ALL));
+	mark.classList.add(getSelector(ElementClass.TERM_ANY));
 	mark.classList.add(getSelector(ElementClass.TERM, term));
 	mark.textContent = textEnd.textContent.slice(start, end);
 	textEnd.textContent = textEnd.textContent.slice(end);
@@ -272,7 +271,7 @@ const highlightInNode = (textEnd: Node, start: number, end: number, term: string
 	textEnd.parentNode.insertBefore(mark, textEnd);
 };
 
-const breakIfAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
+const highlightAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
 	const matches = Array.from(unbrokenNodes.map(node => node.textContent).join("").matchAll(pattern));
 	let i = 0;
 	let thisNodeStart = 0;
@@ -296,6 +295,13 @@ const breakIfAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
 	unbrokenNodes.splice(0, unbrokenNodes.length);
 };
 
+// TODO: find better alternative to hack
+const canHighlightInNextSiblings = (node: Node): boolean => node.nodeType === Node.TEXT_NODE ||
+	(node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.includes(node["tagName"])
+	&& (node.nodeType !== Node.ELEMENT_NODE || !node["classList"].contains(getSelector(ElementClass.TERM_ANY))))
+		|| (node.nextSibling && canHighlightInNextSiblings(node.nextSibling))
+;
+
 const highlightInNodes = (rootNode: Node, pattern: RegExp) => {
 	const unbrokenNodes: Array<Node> = [];
 	const breakLevels: Array<number> = [0];
@@ -312,44 +318,54 @@ const highlightInNodes = (rootNode: Node, pattern: RegExp) => {
 			return NodeFilter.FILTER_ACCEPT;
 		}
 		if (node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.includes(node["tagName"])
-			&& (typeof(node["className"]) !== "string" || !node["classList"].contains(getSelector(ElementClass.ALL)))) {
+			&& (node.nodeType !== Node.ELEMENT_NODE || !node["classList"].contains(getSelector(ElementClass.TERM_ANY)))) {
 			if (!HIGHLIGHT_TAGS.FLOW.includes(node["tagName"])) {
-				breakLevels.push(level);
-				breakIfAtBreakLevel(unbrokenNodes, pattern);
+				if (node.hasChildNodes()) breakLevels.push(level);
+				highlightAtBreakLevel(unbrokenNodes, pattern);
 			}
 			return NodeFilter.FILTER_ACCEPT;
 		}
 		return NodeFilter.FILTER_REJECT;
 	}});
 	let node = walk.currentNode;
-	while (node && (level > 0 || walk.currentNode === rootNode)) {
+	while (node) {
 		level++;
-		if (!walk.firstChild()) {
+		node = walk.firstChild();
+		if (!node) {
 			level--;
-			while (!walk.nextSibling() && !!node && level > 0) {
-				if (level === breakLevels.at(-1)) {
-					breakLevels.pop();
-					breakIfAtBreakLevel(unbrokenNodes, pattern);
-				}
+			while (!(walk.currentNode.nextSibling && canHighlightInNextSiblings(walk.currentNode.nextSibling)) && level > 0) {
 				level--;
 				acceptAny = true;
 				node = walk.parentNode();
 				acceptAny = false;
+				if (level === breakLevels.at(-1)) {
+					breakLevels.pop();
+					highlightAtBreakLevel(unbrokenNodes, pattern);
+				}
+				if (level === 0) return;
 			}
+			node = walk.nextSibling();
 		}
-		node = walk.currentNode === node ? null : walk.currentNode;
+		console.log(node);
+		console.log(breakLevels);
 	}
 };
 
+const canHighlightNode = (node: Node): boolean =>
+	!node || (node.nodeType !== Node.ELEMENT_NODE
+		|| (!HIGHLIGHT_TAGS.REJECT.includes(node["tagName"]) && !node["classList"].contains(getSelector(ElementClass.TERM_ANY)))
+	&& canHighlightNode(node.parentElement))
+;
+
 const highlightInNodesOnMutation = (pattern: RegExp) =>
 	new MutationObserver(mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(node =>
-		highlightInNodes(node, pattern)
+		canHighlightNode(node) ? highlightInNodes(node, pattern) : undefined
 	))).observe(document.body, {childList: true, subtree: true})
 ;
 
 // TODO: page position detection
 // TODO: term editing (+ from user-highlighted text context menu)
-// TODO: customization
+// TODO: configuration
 // TODO: keyboard navigation
 // TODO: bookmarked search engine detection
 
@@ -362,7 +378,7 @@ const receiveResearchDetails = (researchDetails: ResearchDetail) => {
 		const pattern = termsToPattern(researchDetails.terms);
 		highlightInNodes(document.body, pattern);
 		highlightInNodesOnMutation(pattern);
-		setTimeout(() => addScrollMarkers(researchDetails.terms), 3000);
+		setTimeout(() => addScrollMarkers(researchDetails.terms), 1000);
 	}
 };
 
