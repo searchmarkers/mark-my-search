@@ -67,33 +67,35 @@ const STYLE_MAIN = `
 .${getSelector(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
 .${getSelector(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
 .${getSelector(ElementClass.CONTROL_EXPAND)}, .${getSelector(ElementClass.CONTROL_EXPAND)}:hover {
-	all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
-	border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
-.${getSelector(ElementClass.CONTROL_EXPAND)}:hover { background-color: rgb(210,210,210); color: transparent; }
+all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
+border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
+.${getSelector(ElementClass.CONTROL_EXPAND)}:hover { color: transparent; }
 .${getSelector(ElementClass.CONTROL_EXPAND)}:hover .${getSelector(ElementClass.OPTION_LIST)} {
-	all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; z-index: 1; }
+all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; z-index: 1; }
 .${getSelector(ElementClass.CONTROL_BUTTON)}, .${getSelector(ElementClass.CONTROL_BUTTON)}:hover,
-	.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
-	all: revert; display: inline; border-width: 2px; border-block-color: black; }
+.${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
+all: revert; display: inline; border-width: 2px; border-block-color: black; }
 .${getSelector(ElementClass.OPTION_LIST)} { all: revert; display: none; }
-.${getSelector(ElementClass.OPTION)} { all: revert; display: block; background-color: rgb(210,210,210);
-	border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
+.${getSelector(ElementClass.OPTION)} { all: revert; display: block;
+border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
 .${getSelector(ElementClass.OPTION)}:hover { background-color: rgb(150,150,150); }
+.${getSelector(ElementClass.CONTROL_EXPAND)}:hover, .${getSelector(ElementClass.OPTION)} {
+background-color: rgb(180,180,180); }
 #${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; color-scheme: light;
-	line-height: initial; left: 20px; font-size: 0; }
+line-height: initial; left: 20px; font-size: 0; }
 #${getSelector(ElementId.TOGGLE)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; }
 .${getSelector(ElementClass.CONTROL_BUTTON)} {
-	all: revert; display: inline; border-width: 2px; border-block-color: black; }
+all: revert; display: inline; border-width: 2px; border-block-color: black; }
 .${getSelector(ElementClass.CONTROL_BUTTON)}:disabled {
-	background-color: rgba(100,100,100,0.5) !important; }
+background-color: rgba(100,100,100,0.5) !important; }
 .${getSelector(ElementClass.TERM_ANY)} {
-	background-color: unset; color: unset; }
+background-color: unset; color: unset; }
 #${getSelector(ElementId.MARKER_GUTTER)} { display: none; z-index: ${Z_INDEX_MAX};
-	right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
+right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
 #${getSelector(ElementId.MARKER_GUTTER)} div:not(.${getSelector(ElementClass.MARKER_BLOCK)}) {
-	width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
+width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
 #${getSelector(ElementId.MARKER_GUTTER)}, .${getSelector(ElementClass.MARKER_BLOCK)} {
-	position: fixed; background-color: rgba(0, 0, 0, 0.5); }
+position: fixed; background-color: rgba(0, 0, 0, 0.5); }
 .${getSelector(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
 #${getSelector(ElementId.TOGGLE)}:checked ~ #${getSelector(ElementId.MARKER_GUTTER)} { display: block; }
 `;
@@ -136,13 +138,13 @@ const createTermOption = (title: string) => {
 const createTermControl = (focus: ElementSelect, style: HTMLStyleElement, term: string, COLOR: ReadonlyArray<number>) => {
 	style.textContent += `
 #${getSelector(ElementId.TOGGLE)}:checked ~ body .${getSelector(ElementClass.TERM_ANY)}.${getSelector(ElementClass.TERM, term)} {
-	background-color: rgba(${COLOR.join(",")},0.4); }
+background-color: rgba(${COLOR.join(",")},0.4); }
 #${getSelector(ElementId.MARKER_GUTTER)} .${getSelector(ElementClass.TERM, term)} {
-	background-color: rgb(${COLOR.join(",")}); }
+background-color: rgb(${COLOR.join(",")}); }
 .${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)} {
-	background-color: rgb(${COLOR.map(channel => channel ? channel : 140).join(",")}); }
+background-color: rgb(${COLOR.map(channel => channel ? channel : 140).join(",")}); }
 .${getSelector(ElementClass.TERM, term)}.${getSelector(ElementClass.CONTROL_BUTTON)}:hover {
-	background-color: rgb(${COLOR.map(channel => channel ? channel : 200).join(",")}); }
+background-color: rgb(${COLOR.map(channel => channel ? channel : 200).join(",")}); }
 	`;
 	const button = document.createElement("button");
 	button.classList.add(getSelector(ElementClass.CONTROL_BUTTON));
@@ -346,8 +348,6 @@ const highlightInNodes = (rootNode: Node, pattern: RegExp) => {
 			}
 			node = walk.nextSibling();
 		}
-		console.log(node);
-		console.log(breakLevels);
 	}
 };
 
