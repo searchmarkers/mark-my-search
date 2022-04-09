@@ -80,7 +80,7 @@ all: revert; display: inline; border-width: 2px; border-block-color: black; }
 border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
 .${getSelector(ElementClass.OPTION)}:hover { background-color: rgb(150,150,150); }
 .${getSelector(ElementClass.CONTROL_EXPAND)}:hover, .${getSelector(ElementClass.OPTION)} {
-background-color: rgb(180,180,180); }
+background-color: rgb(190,190,190); }
 #${getSelector(ElementId.BAR)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; color-scheme: light;
 line-height: initial; left: 20px; font-size: 0; }
 #${getSelector(ElementId.TOGGLE)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; }
@@ -121,7 +121,7 @@ const termsToPattern = (terms: Array<string>) =>
 
 const termToPredicate = (term: string) =>
 	(element: HTMLElement) =>
-		element && element.offsetParent !== null && element.textContent.match(termsToPattern([term])) !== null
+		element && element.offsetParent && element.textContent.match(termsToPattern([term])) !== null
 ;
 
 const termFromMatch = (matchString: string) =>
@@ -155,6 +155,7 @@ background-color: rgb(${COLOR.map(channel => channel ? channel : 200).join(",")}
 	button.textContent = term;
 	button.title = focus.getElementCount(termToPredicate(term)).toString() + " [TODO: update tooltip]";
 	button.onclick = () => {
+		// TODO: make this work in blocks, e.g. paragraphs
 		if (focus.isEmpty()) return;
 		if (focus.getCurrentElement()) {
 			focus.getCurrentElement().classList.remove(getSelector(ElementClass.FOCUS));
@@ -363,11 +364,9 @@ const highlightInNodesOnMutation = (pattern: RegExp) =>
 	))).observe(document.body, {childList: true, subtree: true})
 ;
 
-// TODO: page position detection
 // TODO: term editing (+ from user-highlighted text context menu)
 // TODO: configuration
 // TODO: keyboard navigation
-// TODO: bookmarked search engine detection
 
 const receiveResearchDetails = (researchDetails: ResearchDetail) => {
 	removeControls();

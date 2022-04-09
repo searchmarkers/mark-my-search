@@ -1,13 +1,15 @@
 type ResearchIDs = Record<number, ResearchID>;
 type Stoplist = Array<string>;
 type SearchPrefixes = Array<string>;
+type Engines = Record<string, Engine>;
 
 class ResearchDetail {
 	terms: Array<string>;
 	enabled: boolean;
 
 	constructor(terms: Array<string>, enabled = true) {
-		[this.terms, this.enabled] = [terms, enabled];
+		this.terms = terms;
+		this.enabled = enabled;
 	}
 }
 
@@ -16,19 +18,72 @@ class ResearchID {
 	terms: Array<string>;
 	urls: Set<string>;
 
-	constructor(stoplist: Array<string>, url: string) {
+	constructor(stoplist: Array<string>, url: string, engine?: Engine) {
 		this.engine = new URL(url).hostname;
-		this.terms = Array.from(new Set(new URL(url).searchParams.get("q").split(" ")))
+		const rawTerms = engine
+			? engine.extract(url)
+			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
+		this.terms = Array.from(new Set(rawTerms))
 			.filter(term => stoplist.indexOf(term) === -1)
-			.map(term => JSON.stringify(term.toLowerCase()).replace(/\W/g , ""))
-		;
+			.map(term => JSON.stringify(term.toLowerCase()).replace(/\W/g , ""));
 		this.urls = new Set;
 	}
 }
 
-const isTabSearchPage = (searchPrefixes: SearchPrefixes, url: string) =>
-	(new URL(url)).searchParams.has("q") || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))
-;
+class Engine {
+	// TODO: check and finish
+	#hostname: string;
+	#pathname: [string, string];
+	#param: string;
+
+	constructor(pattern: string) {
+		// TODO: error checking?
+		const urlPattern = new URL(pattern);
+		this.#hostname = urlPattern.hostname;
+		if (urlPattern.pathname.includes(ENGINE_RFIELD)) {
+			const parts = urlPattern.pathname.split(ENGINE_RFIELD);
+			this.#pathname = [parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined)];
+		} else {
+			this.#param = Array.from(urlPattern.searchParams).find(param => param[1].includes(ENGINE_RFIELD))[0];
+		}
+	}
+
+	extract(urlString: string, matchOnly = false) {
+		const url = new URL(urlString);
+		return this.#pathname
+			? url.pathname.startsWith(this.#pathname[0]) && url.pathname.slice(this.#pathname[0].length).includes(this.#pathname[1])
+				? matchOnly ? [] : url.pathname.slice(
+					url.pathname.indexOf(this.#pathname[0]) + this.#pathname[0].length,
+					url.pathname.lastIndexOf(this.#pathname[1]) - 1).split("+")
+				: null
+			: url.searchParams.has(this.#param)
+				? matchOnly ? [] : url.searchParams.get(this.#param).split(" ")
+				: null;
+	}
+
+	match(urlString: string) {
+		return !!this.extract(urlString, true);
+	}
+
+	equals(engine: Engine) {
+		return engine.#hostname === this.#hostname
+			&& engine.#param === this.#param
+			&& engine.#pathname === this.#pathname;
+	}
+}
+
+const ENGINE_RFIELD = "%s";
+const SEARCH_PARAM = "q";
+
+const isTabSearchPage = (searchPrefixes: SearchPrefixes, engines: Engines, url: string): [boolean, Engine] => {
+	console.warn("'isTabSearchPage' check is temporarily limited.");
+	//if (new URL(url).searchParams.has(SEARCH_PARAM) || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))) {
+	//	return [true, undefined];
+	/*} else */{
+		const engine = Object.values(engines).find(thisEngine => thisEngine.extract(url));
+		return [!!engine, engine];
+	}
+};
 
 const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
 	tabId in researchIds
@@ -47,14 +102,12 @@ const updateUrlActive = (activate: boolean, researchIds: ResearchIDs, url: strin
 	browser.tabs.query({}).then(tabs => tabs.forEach(tab =>
 		urlsActive.includes(tab.url) ? undefined : urlsInactive.push(tab.url)
 	));
-	console.log(urlsActive);
-	console.log(urlsInactive);
 	browser.contextMenus.update("deactivate-research-mode", {documentUrlPatterns: urlsActive});
 	browser.contextMenus.update("activate-research-mode", {documentUrlPatterns: urlsInactive});
 };
 
-const storeNewResearchDetails = (stoplist: Stoplist, researchIds: ResearchIDs, url: string, tabId: number) => {
-	researchIds[tabId] = new ResearchID(stoplist, url);
+const storeNewResearchDetails = (stoplist: Stoplist, researchIds: ResearchIDs, url: string, tabId: number, engine?: Engine) => {
+	researchIds[tabId] = new ResearchID(stoplist, url, engine);
 	updateUrlActive(true, researchIds, url, tabId);
 	return new ResearchDetail(researchIds[tabId].terms);
 };
@@ -64,19 +117,21 @@ const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: 
 	return new ResearchDetail(researchIds[tabId].terms);
 };
 
-const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes, researchIds: ResearchIDs, script: string) =>
-	browser.webNavigation.onCommitted.addListener(details => // TODO: Inject before DOM load?
-		isTabSearchPage(searchPrefixes, details.url) || isTabResearchPage(researchIds, details.tabId)
-			? browser.tabs.get(details.tabId).then(tab =>
-				details.frameId === 0
-					? browser.tabs.executeScript(tab.id, {file: script}).then(() =>
-						browser.tabs.sendMessage(tab.id, isTabSearchPage(searchPrefixes, tab.url)
-							? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id)
-							: getCachedResearchDetails(researchIds, tab.url, tab.id)
-						)
-					) : undefined
-			) : undefined
-	)
+const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes,
+	engines: Engines, researchIds: ResearchIDs, script: string) =>
+	browser.webNavigation.onCommitted.addListener(details => { // TODO: Inject before DOM load?
+		const [isSearchPage, engine] = isTabSearchPage(searchPrefixes, engines, details.url);
+		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
+			browser.tabs.get(details.tabId).then(tab => details.frameId === 0
+				? browser.tabs.executeScript(tab.id, {file: "browser-polyfill.js"})
+					.then(() => browser.tabs.executeScript(tab.id, {file: script})
+						.then(() => browser.tabs.sendMessage(tab.id, isSearchPage
+							? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
+							: getCachedResearchDetails(researchIds, tab.url, tab.id))))
+				: undefined
+			);
+		}
+	})
 ;
 
 const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
@@ -102,8 +157,39 @@ const createMenuSwitches = (stoplist: Stoplist, researchIds: ResearchIDs) => {
 		}});
 	createMenuSwitch(false, "Deactivate Re&search Mode",
 		(tab: browser.tabs.Tab) => delete researchIds[tab.id]);
-	createMenuSwitch(true, "Activate Re&search Mode",
+	createMenuSwitch(true, "Activate Re&search Mode", // TODO: fix
 		(tab: browser.tabs.Tab) => researchIds[tab.id] = new ResearchID(stoplist, tab.url));
+};
+
+const addEngine = (engines: Engines, id: string, pattern: string) => {
+	if (!pattern) return;
+	if (!pattern.includes(ENGINE_RFIELD)) {
+		delete engines[id];
+		return;
+	}
+	const engine = new Engine(pattern);
+	if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
+	engines[id] = engine;
+};
+
+const setEngines = (engines: Engines, action, node: browser.bookmarks.BookmarkTreeNode) =>
+	node.type === "bookmark"
+		? action(engines, node)
+		: node.type === "folder"
+			? node.children.forEach(child => setEngines(engines, action, child)): undefined
+;
+
+const addEngineOnBookmarkChanged = (engines: Engines) => {
+	browser.bookmarks.getTree().then(nodes =>
+		nodes.forEach(node => setEngines(engines, (engines: Engines, node: browser.bookmarks.BookmarkTreeNode) =>
+			addEngine(engines, node.id, node.url), node)));
+	browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
+		setEngines(engines, (engines: Engines, node: browser.bookmarks.BookmarkTreeNode) =>
+			delete engines[node.id], removeInfo.node));
+	browser.bookmarks.onCreated.addListener((id, createInfo) =>
+		addEngine(engines, id, createInfo.url));
+	browser.bookmarks.onChanged.addListener((id, changeInfo) =>
+		addEngine(engines, id, changeInfo.url));
 };
 
 const initialize = () => {
@@ -291,10 +377,12 @@ const initialize = () => {
 		"scholar.google.co.uk/scholar",
 	];
 	const researchIds: ResearchIDs = {};
+	const engines: Engines = {};
 	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};
 	createMenuSwitches(stoplist, researchIds);
-	injectScriptOnNavigation(stoplist, searchPrefixes, researchIds, "/dist/term-highlight.js");
+	injectScriptOnNavigation(stoplist, searchPrefixes, engines, researchIds, "/dist/term-highlight.js");
 	extendResearchOnTabCreated(researchIds);
+	addEngineOnBookmarkChanged(engines);
 };
 
 initialize();

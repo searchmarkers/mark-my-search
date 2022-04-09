@@ -8,7 +8,7 @@
     ],
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
-        "ecmaVersion": 15
+        "ecmaVersion": 2015
     },
     "plugins": [
         "@typescript-eslint"
@@ -16,7 +16,8 @@
     "rules": {
         "indent": [
             "error",
-            "tab"
+            "tab",
+            { "flatTernaryExpressions": true }
         ],
         "linebreak-style": [
             "error",

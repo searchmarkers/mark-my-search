@@ -1,6 +1,9 @@
 {
 	"background": {
-		"scripts": ["/dist/background.js"]
+		"scripts": [
+			"browser-polyfill.js",
+			"/dist/background.js"
+		]
 	},
 
 	"description": "A WebExtension for improving online research efficiency.",
@@ -19,6 +22,7 @@
 		"webNavigation",
 		"cookies",
 		"contextMenus",
+		"bookmarks",
 		"<all_urls>"
 	],
 	
