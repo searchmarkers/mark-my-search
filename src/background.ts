@@ -50,11 +50,11 @@ class Engine {
 
 	extract(urlString: string, matchOnly = false) {
 		const url = new URL(urlString);
-		return this.#pathname
+		return url.hostname !== this.#hostname ? null : this.#pathname
 			? url.pathname.startsWith(this.#pathname[0]) && url.pathname.slice(this.#pathname[0].length).includes(this.#pathname[1])
 				? matchOnly ? [] : url.pathname.slice(
 					url.pathname.indexOf(this.#pathname[0]) + this.#pathname[0].length,
-					url.pathname.lastIndexOf(this.#pathname[1]) - 1).split("+")
+					url.pathname.lastIndexOf(this.#pathname[1])).split("+")
 				: null
 			: url.searchParams.has(this.#param)
 				? matchOnly ? [] : url.searchParams.get(this.#param).split(" ")
@@ -76,11 +76,10 @@ const ENGINE_RFIELD = "%s";
 const SEARCH_PARAM = "q";
 
 const isTabSearchPage = (searchPrefixes: SearchPrefixes, engines: Engines, url: string): [boolean, Engine] => {
-	console.warn("'isTabSearchPage' check is temporarily limited.");
-	//if (new URL(url).searchParams.has(SEARCH_PARAM) || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))) {
-	//	return [true, undefined];
-	/*} else */{
-		const engine = Object.values(engines).find(thisEngine => thisEngine.extract(url));
+	if (new URL(url).searchParams.has(SEARCH_PARAM) || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))) {
+		return [true, undefined];
+	} else {
+		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
 		return [!!engine, engine];
 	}
 };
@@ -121,13 +120,13 @@ const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPref
 	engines: Engines, researchIds: ResearchIDs, script: string) =>
 	browser.webNavigation.onCommitted.addListener(details => { // TODO: Inject before DOM load?
 		const [isSearchPage, engine] = isTabSearchPage(searchPrefixes, engines, details.url);
+		console.log(isSearchPage);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
 			browser.tabs.get(details.tabId).then(tab => details.frameId === 0
-				? browser.tabs.executeScript(tab.id, {file: "browser-polyfill.js"})
-					.then(() => browser.tabs.executeScript(tab.id, {file: script})
-						.then(() => browser.tabs.sendMessage(tab.id, isSearchPage
-							? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
-							: getCachedResearchDetails(researchIds, tab.url, tab.id))))
+				? browser.tabs.executeScript(tab.id, {file: script})
+					.then(() => browser.tabs.sendMessage(tab.id, isSearchPage
+						? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
+						: getCachedResearchDetails(researchIds, tab.url, tab.id)))
 				: undefined
 			);
 		}
@@ -172,11 +171,11 @@ const addEngine = (engines: Engines, id: string, pattern: string) => {
 	engines[id] = engine;
 };
 
-const setEngines = (engines: Engines, action, node: browser.bookmarks.BookmarkTreeNode) =>
+const setEngines = (engines: Engines, setEngine: CallableFunction, node: browser.bookmarks.BookmarkTreeNode) =>
 	node.type === "bookmark"
-		? action(engines, node)
+		? setEngine(engines, node)
 		: node.type === "folder"
-			? node.children.forEach(child => setEngines(engines, action, child)): undefined
+			? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
 ;
 
 const addEngineOnBookmarkChanged = (engines: Engines) => {

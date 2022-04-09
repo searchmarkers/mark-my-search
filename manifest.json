@@ -1,7 +1,6 @@
 {
 	"background": {
 		"scripts": [
-			"browser-polyfill.js",
 			"/dist/background.js"
 		]
 	},
