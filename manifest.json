@@ -6,8 +6,16 @@
 	},
 
 	"commands": {
+		"toggle-bar": {
+			"suggested_key": { "default": "Ctrl+Shift+F" },
+			"description": "Toggle highlighting toolbar"
+		},
+		"toggle-highlight": {
+			"suggested_key": { "default": "Alt+Shift+D" },
+			"description": "Toggle display of highlighting"
+		},
 		"toggle-select": {
-			"suggested_key": { "default": "Ctrl+Alt+S" },
+			"suggested_key": { "default": "Ctrl+Shift+U" },
 			"description": "Toggle between ACTION and CHOOSE select modes"
 		},
 		"advance-global": {

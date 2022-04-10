@@ -2,7 +2,7 @@ type TermJumpFunctions = Array<(reverse: boolean) => void>;
 type SelectTermPtr = Record<string, (command: string) => void>;
 
 enum ElementClass {
-	BAR_MINIMAL = "bar-minimal",
+	BAR_HIDDEN = "bar-hidden",
 	CONTROL = "control",
 	CONTROL_EXPAND = "control-expand",
 	CONTROL_BUTTON = "control-button",
@@ -17,8 +17,7 @@ enum ElementClass {
 enum ElementID {
 	STYLE = "style",
 	BAR = "bar",
-	BAR_TOGGLE = "bar-toggle",
-	MARK_TOGGLE = "mark-toggle",
+	HIGHLIGHT_TOGGLE = "highlight-toggle",
 	MARKER_GUTTER = "markers",
 }
 
@@ -31,10 +30,7 @@ const Z_INDEX_MAX = 2147483647;
 const STYLE_MAIN = `
 @keyframes flash { 0% { background-color: rgba(160,160,160,1); } 100% { background-color: rgba(160,160,160,0); }; }
 .${select(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
-.${select(ElementClass.CONTROL)} { all: revert; display: none; }
-#${select(ElementID.BAR)}:hover > .${select(ElementClass.CONTROL)},
-#${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_MINIMAL)}) > .${select(ElementClass.CONTROL)} {
-position: relative; display: inline; }
+.${select(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
 .${select(ElementClass.CONTROL_EXPAND)}, .${select(ElementClass.CONTROL_EXPAND)}:hover {
 all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
 border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
@@ -53,12 +49,14 @@ border-style: none; border-bottom-style: ridge; border-left-style: ridge; transl
 border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
 .${select(ElementClass.CONTROL_EXPAND)}:hover, .${select(ElementClass.OPTION)} {
 background-color: rgb(190,190,190); }
-#${select(ElementID.BAR)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; color-scheme: light;
-line-height: initial; font-size: 0; }
-#${select(ElementID.BAR_TOGGLE)} { all: revert; border: 0; border-bottom: 3px inset; padding: 0; margin: 0; margin-right: 20px;
-height: 24px; font-size: 16px; }
-#${select(ElementID.MARK_TOGGLE)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; left: 14px; }
-#${select(ElementID.MARK_TOGGLE)}:checked ~ #${select(ElementID.MARKER_GUTTER)} { display: block; }
+#${select(ElementID.BAR)} { all: revert; position: fixed; left: 20px; z-index: ${Z_INDEX_MAX}; color-scheme: light;
+line-height: initial; font-size: 0; display: none; }
+#${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) {
+display: inline; }
+#${select(ElementID.HIGHLIGHT_TOGGLE)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; display: none; }
+#${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) + #${select(ElementID.HIGHLIGHT_TOGGLE)} {
+display: inline; }
+#${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ #${select(ElementID.MARKER_GUTTER)} { display: block; }
 .${select(ElementClass.TERM_ANY)} {
 background-color: unset; color: unset; }
 #${select(ElementID.MARKER_GUTTER)} { display: none; z-index: ${Z_INDEX_MAX};
@@ -128,16 +126,17 @@ const createTermControl = (jumpToTerms: TermJumpFunctions, style: HTMLStyleEleme
 	term: string, idx: number, COLOR: ReadonlyArray<number>) => {
 	jumpToTerms.push((reverse: boolean) => jumpToTerm(reverse, term));
 	style.textContent += `
-#${select(ElementID.MARK_TOGGLE)}:checked ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term)} {
+#${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term)} {
 background-color: rgba(${COLOR.join(",")},0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term)} {
 background-color: rgb(${COLOR.join(",")}); }
 .${select(ElementClass.TERM, term)} > .${select(ElementClass.CONTROL_BUTTON)} {
-background-color: rgb(${COLOR.map(channel => channel ? channel : 140).join(",")}); }
+background-color: rgb(${COLOR.map(channel => channel ? channel : 80).join(",")}); }
 .${select(ElementClass.TERM, term)} > .${select(ElementClass.CONTROL_BUTTON)}:hover {
-background-color: rgb(${COLOR.map(channel => channel ? channel : 200).join(",")}); }
-.${select(ElementClass.CONTROL_BUTTON, idx)} > .${select(ElementClass.TERM, term)} > button {
-	background-color: rgb(${COLOR.map(channel => channel ? channel : 220).join(",")}); }
+background-color: rgb(${COLOR.map(channel => channel ? 200 : 100).join(",")}) !important; }
+.${select(ElementClass.CONTROL_BUTTON, idx)} > .${select(ElementClass.TERM, term)}
+> .${select(ElementClass.CONTROL_BUTTON)} {
+background-color: rgb(${COLOR.map(channel => channel ? channel : 210).join(",")}); }
 	`;
 	const controlButton = document.createElement("button");
 	controlButton.classList.add(select(ElementClass.CONTROL_BUTTON));
@@ -170,29 +169,17 @@ const addControls = (jumpToTerms: TermJumpFunctions, terms: Array<string>) => {
 	style.textContent = STYLE_MAIN;
 	document.head.appendChild(style);
 	const bar = document.createElement("div");
-	const TOGGLE_MIN = "⇱";
-	const TOGGLE_MAX = "⇲";
-	const barToggle = document.createElement("button");
-	barToggle.id = select(ElementID.BAR_TOGGLE);
-	barToggle.tabIndex = 998;
-	barToggle.textContent = TOGGLE_MIN;
-	barToggle.onclick = () => {
-		const minimal = !bar.classList.contains(select(ElementClass.BAR_MINIMAL));
-		bar.classList[minimal ? "add" : "remove"](select(ElementClass.BAR_MINIMAL));
-		barToggle.textContent = minimal ? TOGGLE_MAX : TOGGLE_MIN;
-	};
 	bar.id = select(ElementID.BAR);
-	bar.appendChild(barToggle);
 	for (let i = 0; i < terms.length; i++) {
 		bar.appendChild(createTermControl(jumpToTerms, style, terms[i], i, BUTTON_COLORS[i % BUTTON_COLORS.length]));
 	}
-	const markToggle = document.createElement("input");
-	markToggle.id = select(ElementID.MARK_TOGGLE);
-	markToggle.tabIndex = 999;
-	markToggle.type = "checkbox";
-	markToggle.checked = true;
+	const highlightToggle = document.createElement("input");
+	highlightToggle.id = select(ElementID.HIGHLIGHT_TOGGLE);
+	highlightToggle.tabIndex = -1; // Checkbox cannot be toggled via keyboard for unknown reason.
+	highlightToggle.type = "checkbox";
+	highlightToggle.checked = true;
 	document.body.insertAdjacentElement("beforebegin", bar);
-	document.body.insertAdjacentElement("beforebegin", markToggle);
+	document.body.insertAdjacentElement("beforebegin", highlightToggle);
 	const gutter = document.createElement("div");
 	gutter.id = select(ElementID.MARKER_GUTTER);
 	document.body.insertAdjacentElement("afterend", gutter);
@@ -235,9 +222,9 @@ const addScrollMarkers = (terms: Array<string>) => {
 	const gutter = document.getElementById(select(ElementID.MARKER_GUTTER));
 	const containerPairs: Array<[Element, HTMLElement]> = [[document.scrollingElement, gutter]];
 	terms.forEach(term =>
-		Array.from(document.body.getElementsByClassName(select(ElementClass.TERM, term))).forEach((mark: Element) => {
-			if (!("offsetTop" in mark)) return;
-			const scrollContainer = getScrollContainer(mark as HTMLElement);
+		Array.from(document.body.getElementsByClassName(select(ElementClass.TERM, term))).forEach((highlight: Element) => {
+			if (!("offsetTop" in highlight)) return;
+			const scrollContainer = getScrollContainer(highlight as HTMLElement);
 			const containerPair = containerPairs.find(containerPair => containerPair[0] === scrollContainer);
 			const block = containerPair ? containerPair[1] : document.createElement("div");
 			if (!containerPair) {
@@ -250,7 +237,7 @@ const addScrollMarkers = (terms: Array<string>) => {
 			// TOOD: add overlap strategy, add update strategy, check calculations
 			const marker = document.createElement("div");
 			marker.classList.add(select(ElementClass.TERM, term));
-			marker.style.top = String(getOffset(mark as HTMLElement, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
+			marker.style.top = String(getOffset(highlight as HTMLElement, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
 			block.appendChild(marker);
 		})
 	);
@@ -261,13 +248,13 @@ const highlightInNode = (textEnd: Node, start: number, end: number, term: string
 	start = Math.max(0, start);
 	end = Math.min(textEnd.textContent.length, end);
 	const textStart = document.createTextNode(textEnd.textContent.slice(0, start));
-	const mark = document.createElement("mark");
-	mark.classList.add(select(ElementClass.TERM_ANY));
-	mark.classList.add(select(ElementClass.TERM, term));
-	mark.textContent = textEnd.textContent.slice(start, end);
+	const highlight = document.createElement("mark");
+	highlight.classList.add(select(ElementClass.TERM_ANY));
+	highlight.classList.add(select(ElementClass.TERM, term));
+	highlight.textContent = textEnd.textContent.slice(start, end);
 	textEnd.textContent = textEnd.textContent.slice(end);
 	textEnd.parentNode.insertBefore(textStart, textEnd);
-	textEnd.parentNode.insertBefore(mark, textEnd);
+	textEnd.parentNode.insertBefore(highlight, textEnd);
 };
 
 const highlightAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
@@ -365,8 +352,26 @@ const selectTermOnCommand = (jumpToTerms: TermJumpFunctions, selectTermPtr: Sele
 	let focusedIdx = 0;
 	selectTermPtr.selectTerm = (command: string) => {
 		const parts = command.split("-");
-		if (parts[0] === "toggle" && parts[1] === "select") {
-			selectModeFocus = !selectModeFocus;
+		const getFocusedIdx = (idx: number) => Math.min(jumpToTerms.length - 1, idx);
+		focusedIdx = getFocusedIdx(focusedIdx);
+		console.log(command);
+		if (parts[0] === "toggle") {
+			switch (parts[1]) {
+			case "bar": {
+				const bar = document.getElementById(select(ElementID.BAR));
+				const operation = bar.classList.contains(select(ElementClass.BAR_HIDDEN)) ? "remove" : "add";
+				bar.classList[operation](select(ElementClass.BAR_HIDDEN));
+				break;
+			}
+			case "highlight": {
+				const highlightToggle = document.getElementById(select(ElementID.HIGHLIGHT_TOGGLE)) as HTMLInputElement;
+				highlightToggle.checked = !highlightToggle.checked;
+				break;
+			}
+			case "select": {
+				selectModeFocus = !selectModeFocus;
+				break;
+			}}
 		} else if (parts[0] === "advance" && parts[1] === "global") {
 			const reverse = parts[2] === "reverse";
 			if (selectModeFocus) {
@@ -377,7 +382,7 @@ const selectTermOnCommand = (jumpToTerms: TermJumpFunctions, selectTermPtr: Sele
 		} else if (parts[0] === "select" && parts[1] === "term") {
 			const bar = document.getElementById(select(ElementID.BAR));
 			bar.classList.remove(select(ElementClass.CONTROL_BUTTON, focusedIdx));
-			focusedIdx = Math.min(jumpToTerms.length, Number(parts[2]));
+			focusedIdx = getFocusedIdx(Number(parts[2]));
 			bar.classList.add(select(ElementClass.CONTROL_BUTTON, focusedIdx));
 			if (!selectModeFocus) {
 				jumpToTerms[focusedIdx](parts[3] === "reverse");
