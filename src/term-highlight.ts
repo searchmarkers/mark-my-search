@@ -28,7 +28,7 @@ const select = (element: ElementID | ElementClass, param?: string | number) =>
 const Z_INDEX_MAX = 2147483647;
 
 const STYLE_MAIN = `
-@keyframes flash { 0% { background-color: rgba(160,160,160,1); } 100% { background-color: rgba(160,160,160,0); }; }
+@keyframes flash { 0% { background-color: rgba(160,160,160,0.8); } 100% { background-color: rgba(160,160,160,0); }; }
 .${select(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
 .${select(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
 .${select(ElementClass.CONTROL_EXPAND)}, .${select(ElementClass.CONTROL_EXPAND)}:hover {
@@ -99,8 +99,15 @@ const createTermOption = (title: string) => {
 	return option;
 };
 
+const getTermOccurrenceBlock = (element: Element) =>
+	HIGHLIGHT_TAGS.FLOW.includes(element.tagName) ? getTermOccurrenceBlock(element.parentElement) : element
+;
+
+const getLastDescendant = (element: Element) =>
+	element.lastElementChild ? getLastDescendant(element.lastElementChild) : element
+;
+
 const jumpToTerm = (reverse: boolean, term = "") => {
-	// TODO: make this work in blocks, e.g. paragraphs
 	const termSelector = term ? select(ElementClass.TERM, term) : select(ElementClass.TERM_ANY);
 	const focusElement = document.getElementsByClassName(select(ElementClass.FOCUS))[0];
 	if (focusElement) focusElement.classList.remove(select(ElementClass.FOCUS));
@@ -109,7 +116,12 @@ const jumpToTerm = (reverse: boolean, term = "") => {
 		element.classList.contains(termSelector) && element.offsetParent
 			? NodeFilter.FILTER_ACCEPT
 			: NodeFilter.FILTER_SKIP);
-	walk.currentNode = selection.anchorNode ? selection.anchorNode : document.body;
+	const anchor = selection.anchorNode;
+	walk.currentNode = anchor
+		? reverse
+			? anchor
+			: getLastDescendant(anchor.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor.parentElement)
+		: document.body;
 	const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 	let element = walk[nextNodeMethod]() as Element;
 	if (!element) {
@@ -117,6 +129,7 @@ const jumpToTerm = (reverse: boolean, term = "") => {
 		element = walk[nextNodeMethod]() as Element;
 		if (!element) return;
 	}
+	element = getTermOccurrenceBlock(element);
 	element.scrollIntoView({behavior: "smooth", block: "center"});
 	element.classList.add(select(ElementClass.FOCUS));
 	selection.setBaseAndExtent(element, 0, element, 0);
