@@ -3,13 +3,16 @@ type Stoplist = Array<string>;
 type SearchPrefixes = Array<string>;
 type Engines = Record<string, Engine>;
 
-class ResearchDetail {
+class Message {
+	command: string;
 	terms: Array<string>;
 	enabled: boolean;
 
-	constructor(terms: Array<string>, enabled = true) {
-		this.terms = terms;
-		this.enabled = enabled;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	constructor(messageObject: Record<string, any>) {
+		this.command = messageObject.command;
+		this.terms = messageObject.terms;
+		this.enabled = "enabled" in messageObject ? messageObject.enabled : true;
 	}
 }
 
@@ -108,26 +111,25 @@ const updateUrlActive = (activate: boolean, researchIds: ResearchIDs, url: strin
 const storeNewResearchDetails = (stoplist: Stoplist, researchIds: ResearchIDs, url: string, tabId: number, engine?: Engine) => {
 	researchIds[tabId] = new ResearchID(stoplist, url, engine);
 	updateUrlActive(true, researchIds, url, tabId);
-	return new ResearchDetail(researchIds[tabId].terms);
+	return new Message({ terms: researchIds[tabId].terms });
 };
 
 const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: number) => {
 	updateUrlActive(true, researchIds, url, tabId);
-	return new ResearchDetail(researchIds[tabId].terms);
+	return new Message({ terms: researchIds[tabId].terms });
 };
 
 const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes,
 	engines: Engines, researchIds: ResearchIDs, script: string) =>
 	browser.webNavigation.onCommitted.addListener(details => { // TODO: Inject before DOM load?
+		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(searchPrefixes, engines, details.url);
 		console.log(isSearchPage);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab => details.frameId === 0
-				? browser.tabs.executeScript(tab.id, {file: script})
-					.then(() => browser.tabs.sendMessage(tab.id, isSearchPage
-						? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
-						: getCachedResearchDetails(researchIds, tab.url, tab.id)))
-				: undefined
+			browser.tabs.get(details.tabId).then(tab =>
+				browser.tabs.executeScript(tab.id, {file: script}).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
+					? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
+					: getCachedResearchDetails(researchIds, tab.url, tab.id)))
 			);
 		}
 	})
@@ -146,18 +148,18 @@ const getMenuSwitchId = (activate: boolean) =>
 ;
 
 const createMenuSwitches = (stoplist: Stoplist, researchIds: ResearchIDs) => {
-	const createMenuSwitch = (activate: boolean, title: string, action: CallableFunction) =>
+	const createMenuSwitch = (activate: boolean, title: string, action: (tab: browser.tabs.Tab) => void) =>
 		browser.contextMenus.create({title, id: getMenuSwitchId(activate), documentUrlPatterns: [], onclick: (event, tab) => {
-			browser.tabs.sendMessage(tab.id, new ResearchDetail([], activate));
+			browser.tabs.sendMessage(tab.id, new Message({ terms: [], enabled: activate }));
 			browser.tabs.get(tab.id).then(tab => {
-				action();
+				action(tab);
 				updateUrlActive(activate, researchIds, tab.url, tab.id);
 			});
 		}});
 	createMenuSwitch(false, "Deactivate Re&search Mode",
-		(tab: browser.tabs.Tab) => delete researchIds[tab.id]);
+		tab => delete researchIds[tab.id]);
 	createMenuSwitch(true, "Activate Re&search Mode", // TODO: fix
-		(tab: browser.tabs.Tab) => researchIds[tab.id] = new ResearchID(stoplist, tab.url));
+		tab => researchIds[tab.id] = new ResearchID(stoplist, tab.url));
 };
 
 const addEngine = (engines: Engines, id: string, pattern: string) => {
@@ -171,25 +173,31 @@ const addEngine = (engines: Engines, id: string, pattern: string) => {
 	engines[id] = engine;
 };
 
-const setEngines = (engines: Engines, setEngine: CallableFunction, node: browser.bookmarks.BookmarkTreeNode) =>
+const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void, node: browser.bookmarks.BookmarkTreeNode) =>
 	node.type === "bookmark"
-		? setEngine(engines, node)
+		? setEngine(node)
 		: node.type === "folder"
 			? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
 ;
 
 const addEngineOnBookmarkChanged = (engines: Engines) => {
 	browser.bookmarks.getTree().then(nodes =>
-		nodes.forEach(node => setEngines(engines, (engines: Engines, node: browser.bookmarks.BookmarkTreeNode) =>
+		nodes.forEach(node => setEngines(engines, node =>
 			addEngine(engines, node.id, node.url), node)));
 	browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
-		setEngines(engines, (engines: Engines, node: browser.bookmarks.BookmarkTreeNode) =>
+		setEngines(engines, node =>
 			delete engines[node.id], removeInfo.node));
 	browser.bookmarks.onCreated.addListener((id, createInfo) =>
 		addEngine(engines, id, createInfo.url));
 	browser.bookmarks.onChanged.addListener((id, changeInfo) =>
 		addEngine(engines, id, changeInfo.url));
 };
+
+const sendMessageOnCommand = () => browser.commands.onCommand.addListener(command =>
+	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
+		browser.tabs.sendMessage(tabs[0].id, new Message({ command }))
+	)
+);
 
 const initialize = () => {
 	const stoplist: Stoplist = [
@@ -382,6 +390,7 @@ const initialize = () => {
 	injectScriptOnNavigation(stoplist, searchPrefixes, engines, researchIds, "/dist/term-highlight.js");
 	extendResearchOnTabCreated(researchIds);
 	addEngineOnBookmarkChanged(engines);
+	sendMessageOnCommand();
 };
 
 initialize();

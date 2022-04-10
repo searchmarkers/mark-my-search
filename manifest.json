@@ -5,6 +5,101 @@
 		]
 	},
 
+	"commands": {
+		"toggle-select": {
+			"suggested_key": { "default": "Ctrl+Alt+S" },
+			"description": "Toggle between ACTION and CHOOSE select modes"
+		},
+		"advance-global": {
+			"suggested_key": { "default": "Alt+Space" },
+			"description": "ACTION: jump to next term; CHOOSE: jump to next chosen term"
+		},
+		"advance-global-reverse": {
+			"suggested_key": { "default": "Alt+Shift+Space" },
+			"description": "ACTION: jump to previous term; CHOOSE: jump to previous chosen term"
+		},
+		"select-term-0": {
+			"suggested_key": { "default": "Alt+Shift+1" },
+			"description": "ACTION: jump to next term 0; CHOOSE: choose term 0"
+		},
+		"select-term-1": {
+			"suggested_key": { "default": "Alt+Shift+2" },
+			"description": "Select term 1"
+		},
+		"select-term-2": {
+			"suggested_key": { "default": "Alt+Shift+3" },
+			"description": "Select term 2"
+		},
+		"select-term-3": {
+			"suggested_key": { "default": "Alt+Shift+4" },
+			"description": "Select term 3"
+		},
+		"select-term-4": {
+			"suggested_key": { "default": "Alt+Shift+5" },
+			"description": "Select term 4"
+		},
+		"select-term-5": {
+			"suggested_key": { "default": "Alt+Shift+6" },
+			"description": "Select term 5"
+		},
+		"select-term-6": {
+			"suggested_key": { "default": "Alt+Shift+7" },
+			"description": "Select term 6"
+		},
+		"select-term-7": {
+			"suggested_key": { "default": "Alt+Shift+8" },
+			"description": "Select term 7"
+		},
+		"select-term-8": {
+			"suggested_key": { "default": "Alt+Shift+9" },
+			"description": "Select term 8"
+		},
+		"select-term-9": {
+			"suggested_key": { "default": "Alt+Shift+0" },
+			"description": "Select term 9"
+		},
+		"select-term-0-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+1" },
+			"description": "ACTION: jump to previous term 0; CHOOSE: choose term 0"
+		},
+		"select-term-1-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+2" },
+			"description": "Select term 1 (reverse)"
+		},
+		"select-term-2-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+3" },
+			"description": "Select term 2 (reverse)"
+		},
+		"select-term-3-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+4" },
+			"description": "Select term 3 (reverse)"
+		},
+		"select-term-4-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+5" },
+			"description": "Select term 4 (reverse)"
+		},
+		"select-term-5-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+6" },
+			"description": "Select term 5 (reverse)"
+		},
+		"select-term-6-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+7" },
+			"description": "Select term 6 (reverse)"
+		},
+		"select-term-7-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+8" },
+			"description": "Select term 7 (reverse)"
+		},
+		"select-term-8-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+9" },
+			"description": "Select term 8 (reverse)"
+		},
+		"select-term-9-reverse": {
+			"suggested_key": { "default": "Ctrl+Shift+0" },
+			"description": "Select term 9 (reverse)"
+		}
+	},
+
 	"description": "A WebExtension for improving online research efficiency.",
 
 	"icons": {
