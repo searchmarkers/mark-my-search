@@ -28,13 +28,12 @@ class ResearchID {
 			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
 		this.terms = Array.from(new Set(rawTerms))
 			.filter(term => stoplist.indexOf(term) === -1)
-			.map(term => JSON.stringify(term.toLowerCase()).replace(/\W/g , ""));
+			.map(term => JSON.stringify(term.toLocaleLowerCase()).replace(/\W/g , ""));
 		this.urls = new Set;
 	}
 }
 
 class Engine {
-	// TODO: check and finish
 	#hostname: string;
 	#pathname: [string, string];
 	#param: string;
@@ -78,6 +77,10 @@ class Engine {
 const ENGINE_RFIELD = "%s";
 const SEARCH_PARAM = "q";
 
+const getMenuSwitchId = (activate: boolean) =>
+	(activate ? "" : "de") + "activate-research-mode"
+;
+
 const isTabSearchPage = (searchPrefixes: SearchPrefixes, engines: Engines, url: string): [boolean, Engine] => {
 	if (new URL(url).searchParams.has(SEARCH_PARAM) || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))) {
 		return [true, undefined];
@@ -92,20 +95,11 @@ const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
 ;
 
 const updateUrlActive = (activate: boolean, researchIds: ResearchIDs, url: string, tabId: number) => {
-	if (!(tabId in researchIds)) return;
-	// TODO: Fix
-	if (activate) {
-		researchIds[tabId].urls.add(url);
-	} else {
-		researchIds[tabId].urls.delete(url);
+	if (tabId in researchIds) {
+		researchIds[tabId].urls[activate ? "add" : "delete"](url);
 	}
 	const urlsActive = Object.values(researchIds).flatMap(researchId => Array.from(researchId.urls));
-	const urlsInactive = [];
-	browser.tabs.query({}).then(tabs => tabs.forEach(tab =>
-		urlsActive.includes(tab.url) ? undefined : urlsInactive.push(tab.url)
-	));
-	browser.contextMenus.update("deactivate-research-mode", {documentUrlPatterns: urlsActive});
-	browser.contextMenus.update("activate-research-mode", {documentUrlPatterns: urlsInactive});
+	browser.contextMenus.update(getMenuSwitchId(false), {documentUrlPatterns: urlsActive});
 };
 
 const storeNewResearchDetails = (stoplist: Stoplist, researchIds: ResearchIDs, url: string, tabId: number, engine?: Engine) => {
@@ -121,13 +115,12 @@ const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: 
 
 const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes,
 	engines: Engines, researchIds: ResearchIDs, script: string) =>
-	browser.webNavigation.onCommitted.addListener(details => { // TODO: Inject before DOM load?
+	browser.webNavigation.onCommitted.addListener(details => {
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(searchPrefixes, engines, details.url);
-		console.log(isSearchPage);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
 			browser.tabs.get(details.tabId).then(tab =>
-				browser.tabs.executeScript(tab.id, {file: script}).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
+				browser.tabs.executeScript(tab.id, { file: script }).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
 					? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
 					: getCachedResearchDetails(researchIds, tab.url, tab.id)))
 			);
@@ -143,22 +136,21 @@ const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 	})
 ;
 
-const getMenuSwitchId = (activate: boolean) =>
-	(activate ? "" : "de") + "activate-research-mode"
-;
-
 const createMenuSwitches = (stoplist: Stoplist, researchIds: ResearchIDs) => {
-	const createMenuSwitch = (activate: boolean, title: string, action: (tab: browser.tabs.Tab) => void) =>
-		browser.contextMenus.create({title, id: getMenuSwitchId(activate), documentUrlPatterns: [], onclick: (event, tab) => {
-			browser.tabs.sendMessage(tab.id, new Message({ terms: [], enabled: activate }));
-			browser.tabs.get(tab.id).then(tab => {
-				action(tab);
-				updateUrlActive(activate, researchIds, tab.url, tab.id);
-			});
-		}});
-	createMenuSwitch(false, "Deactivate Re&search Mode",
+	const createMenuSwitch = (activate: boolean, title: string, contexts: Array<browser.contextMenus.ContextType>,
+		documentUrlPatterns: Array<string>, action: (tab: browser.tabs.Tab) => void) =>
+		browser.contextMenus.create({ title, id: getMenuSwitchId(activate), contexts, documentUrlPatterns,
+			onclick: (event, tab) => {
+				browser.tabs.sendMessage(tab.id, new Message({ terms: [], enabled: activate }));
+				browser.tabs.get(tab.id).then(tab => {
+					action(tab);
+					updateUrlActive(activate, researchIds, tab.url, tab.id);
+				});
+			}
+		});
+	createMenuSwitch(false, "Deactivate Re&search Mode", ["page"], [],
 		tab => delete researchIds[tab.id]);
-	createMenuSwitch(true, "Activate Re&search Mode", // TODO: fix
+	createMenuSwitch(true, "Activate Re&search Mode", ["selection"], undefined,
 		tab => researchIds[tab.id] = new ResearchID(stoplist, tab.url));
 };
 
@@ -376,13 +368,7 @@ const initialize = () => {
 		"yourself",
 		"yourselves",
 	];
-	const searchPrefixes: SearchPrefixes = [
-		"www.bing.com/search",
-		"duckduckgo.com/",
-		"www.ecosia.org/search",
-		"www.google.com/search",
-		"scholar.google.co.uk/scholar",
-	];
+	const searchPrefixes: SearchPrefixes = [];
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
 	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};

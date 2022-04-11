@@ -1,4 +1,24 @@
 {
+	"manifest_version": 2,
+
+	"name": "Research Optimiser",
+
+	"description": "A WebExtension for improving online research efficiency.",
+
+	"version": "1.0.0",
+
+	"icons": {
+		"48": "/icons/firemod48.png",
+		"96": "/icons/firemod96.png"
+	},
+
+	"permissions": [
+		"webNavigation",
+		"contextMenus",
+		"bookmarks",
+		"<all_urls>"
+	],
+
 	"background": {
 		"scripts": [
 			"/dist/background.js"
@@ -106,27 +126,5 @@
 			"suggested_key": { "default": "Ctrl+Shift+0" },
 			"description": "Select term 9 (reverse)"
 		}
-	},
-
-	"description": "A WebExtension for improving online research efficiency.",
-
-	"icons": {
-		"48": "/icons/firemod48.png",
-		"96": "/icons/firemod96.png"
-	},
-
-	"manifest_version": 2,
-
-	"name": "Research Optimiser",
-
-	"permissions": [
-		"history",
-		"webNavigation",
-		"cookies",
-		"contextMenus",
-		"bookmarks",
-		"<all_urls>"
-	],
-	
-	"version": "1.0"
+	}
 }

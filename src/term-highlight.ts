@@ -27,8 +27,12 @@ const select = (element: ElementID | ElementClass, param?: string | number) =>
 
 const Z_INDEX_MAX = 2147483647;
 
+const STYLE_CONSTANT = `
+.${select(ElementClass.TERM_ANY)} { background-color: unset; color: unset; }
+`;
+
 const STYLE_MAIN = `
-@keyframes flash { 0% { background-color: rgba(160,160,160,0.8); } 100% { background-color: rgba(160,160,160,0); }; }
+@keyframes flash { 0% { background-color: hsla(0, 0%, 63%, 0.8); } 100% { background-color: hsla(0, 0%, 63%, 0); }; }
 .${select(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
 .${select(ElementClass.CONTROL)} { all: revert; position: relative; display: inline; }
 .${select(ElementClass.CONTROL_EXPAND)}, .${select(ElementClass.CONTROL_EXPAND)}:hover {
@@ -38,44 +42,32 @@ border: none; margin-left: 3px; width: 15px; background-color: transparent; colo
 .${select(ElementClass.CONTROL_EXPAND)}:hover .${select(ElementClass.OPTION_LIST)} {
 all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; z-index: 1; }
 .${select(ElementClass.CONTROL_BUTTON)}, .${select(ElementClass.CONTROL_BUTTON)}:hover,
-.${select(ElementClass.CONTROL_BUTTON)}:disabled {
-all: revert; display: inline; border-width: 2px; border-block-color: black; }
-.${select(ElementClass.CONTROL_BUTTON)}:disabled {
-background-color: rgba(100,100,100,0.5) !important; }
+.${select(ElementClass.CONTROL_BUTTON)}:disabled { all: revert; display: inline; border-width: 2px; border-block-color: black; }
+.${select(ElementClass.CONTROL_BUTTON)}:disabled { background-color: hsla(0, 0%, 39%, 0.5) !important; }
 .${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
 .${select(ElementClass.OPTION)} { all: revert; display: block;
 border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
-.${select(ElementClass.OPTION)}:hover { all: revert; display: block; background-color: rgb(150,150,150);
+.${select(ElementClass.OPTION)}:hover { all: revert; display: block; background-color: hsl(0, 0%, 59%);
 border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
 .${select(ElementClass.CONTROL_EXPAND)}:hover, .${select(ElementClass.OPTION)} {
-background-color: rgb(190,190,190); }
+background-color: hsl(0, 0%, 75%); }
 #${select(ElementID.BAR)} { all: revert; position: fixed; left: 20px; z-index: ${Z_INDEX_MAX}; color-scheme: light;
 line-height: initial; font-size: 0; display: none; }
-#${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) {
-display: inline; }
+#${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) { display: inline; }
 #${select(ElementID.HIGHLIGHT_TOGGLE)} { all: revert; position: fixed; z-index: ${Z_INDEX_MAX}; display: none; }
 #${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) + #${select(ElementID.HIGHLIGHT_TOGGLE)} {
 display: inline; }
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ #${select(ElementID.MARKER_GUTTER)} { display: block; }
-.${select(ElementClass.TERM_ANY)} {
-background-color: unset; color: unset; }
 #${select(ElementID.MARKER_GUTTER)} { display: none; z-index: ${Z_INDEX_MAX};
 right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
 #${select(ElementID.MARKER_GUTTER)} div:not(.${select(ElementClass.MARKER_BLOCK)}) {
 width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
 #${select(ElementID.MARKER_GUTTER)}, .${select(ElementClass.MARKER_BLOCK)} {
-position: fixed; background-color: rgba(0, 0, 0, 0.5); }
+position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
 .${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
 `;
 
-const BUTTON_COLORS: ReadonlyArray<ReadonlyArray<number>> = [
-	[255, 255, 0],
-	[0, 255, 0],
-	[0, 255, 255],
-	[255, 0, 255],
-	[255, 0, 0],
-	[0, 0, 255],
-];
+const TERM_HUES: ReadonlyArray<number> = [60, 300, 111, 240, 0, 191, 28];
 
 const HIGHLIGHT_TAGS: Record<string, ReadonlyArray<string>> = {
 	FLOW: ["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN", "MARK", "WBR", "CODE", "DATA", "DFN", "INS"],
@@ -88,7 +80,7 @@ const termsToPattern = (terms: Array<string>) =>
 ;
 
 const termFromMatch = (matchString: string) =>
-	matchString.replace(/-|‐|‐/, "").toLowerCase()
+	matchString.replace(/-|‐|‐/, "").toLocaleLowerCase()
 ;
 
 const createTermOption = (title: string) => {
@@ -136,20 +128,20 @@ const jumpToTerm = (reverse: boolean, term = "") => {
 };
 
 const createTermControl = (jumpToTerms: TermJumpFunctions, style: HTMLStyleElement,
-	term: string, idx: number, COLOR: ReadonlyArray<number>) => {
+	term: string, idx: number, hue: number) => {
 	jumpToTerms.push((reverse: boolean) => jumpToTerm(reverse, term));
 	style.textContent += `
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term)} {
-background-color: rgba(${COLOR.join(",")},0.4); }
+background-color: hsla(${hue}, 100%, 50%, 0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term)} {
-background-color: rgb(${COLOR.join(",")}); }
+background-color: hsl(${hue}, 100%, 50%); }
 .${select(ElementClass.TERM, term)} > .${select(ElementClass.CONTROL_BUTTON)} {
-background-color: rgb(${COLOR.map(channel => channel ? channel : 80).join(",")}); }
+background-color: hsl(${hue}, 80%, 50%); }
 .${select(ElementClass.TERM, term)} > .${select(ElementClass.CONTROL_BUTTON)}:hover {
-background-color: rgb(${COLOR.map(channel => channel ? 200 : 100).join(",")}) !important; }
+background-color: hsl(${hue}, 60%, 40%) !important; }
 .${select(ElementClass.CONTROL_BUTTON, idx)} > .${select(ElementClass.TERM, term)}
 > .${select(ElementClass.CONTROL_BUTTON)} {
-background-color: rgb(${COLOR.map(channel => channel ? channel : 210).join(",")}); }
+background-color: hsl(${hue}, 100%, 80%); }
 	`;
 	const controlButton = document.createElement("button");
 	controlButton.classList.add(select(ElementClass.CONTROL_BUTTON));
@@ -177,14 +169,17 @@ background-color: rgb(${COLOR.map(channel => channel ? channel : 210).join(",")}
 };
 
 const addControls = (jumpToTerms: TermJumpFunctions, terms: Array<string>) => {
-	const style = document.createElement("style");
-	style.id = select(ElementID.STYLE);
-	style.textContent = STYLE_MAIN;
-	document.head.appendChild(style);
+	let style = document.getElementById(select(ElementID.STYLE)) as HTMLStyleElement;
+	if (!style) {
+		style = style ? style : document.createElement("style");
+		style.id = select(ElementID.STYLE);
+		document.head.appendChild(style);
+	}
+	style.textContent = STYLE_CONSTANT + STYLE_MAIN;
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
 	for (let i = 0; i < terms.length; i++) {
-		bar.appendChild(createTermControl(jumpToTerms, style, terms[i], i, BUTTON_COLORS[i % BUTTON_COLORS.length]));
+		bar.appendChild(createTermControl(jumpToTerms, style, terms[i], i, TERM_HUES[i % TERM_HUES.length]));
 	}
 	const highlightToggle = document.createElement("input");
 	highlightToggle.id = select(ElementID.HIGHLIGHT_TOGGLE);
@@ -199,10 +194,12 @@ const addControls = (jumpToTerms: TermJumpFunctions, terms: Array<string>) => {
 };
 
 const removeControls = () => {
-	if (!document.getElementById(select(ElementID.STYLE))) return;
+	const style = document.getElementById(select(ElementID.STYLE));
+	if (!style || style.textContent === STYLE_CONSTANT) return;
 	document.getElementById(select(ElementID.BAR)).remove();
+	document.getElementById(select(ElementID.HIGHLIGHT_TOGGLE)).remove();
 	document.getElementById(select(ElementID.MARKER_GUTTER)).remove();
-	document.getElementById(select(ElementID.STYLE)).remove();
+	document.getElementById(select(ElementID.STYLE)).textContent = STYLE_CONSTANT;
 };
 
 /*const highlightInNodes = (focus: ElementSelect, nodes: Array<Node>, pattern: RegExp) => {
@@ -257,7 +254,6 @@ const addScrollMarkers = (terms: Array<string>) => {
 };
 
 const highlightInNode = (textEnd: Node, start: number, end: number, term: string) => {
-	// TODO: delete redundant nodes
 	start = Math.max(0, start);
 	end = Math.min(textEnd.textContent.length, end);
 	const textStart = document.createTextNode(textEnd.textContent.slice(0, start));
@@ -367,7 +363,6 @@ const selectTermOnCommand = (jumpToTerms: TermJumpFunctions, selectTermPtr: Sele
 		const parts = command.split("-");
 		const getFocusedIdx = (idx: number) => Math.min(jumpToTerms.length - 1, idx);
 		focusedIdx = getFocusedIdx(focusedIdx);
-		console.log(command);
 		if (parts[0] === "toggle") {
 			switch (parts[1]) {
 			case "bar": {
@@ -404,33 +399,35 @@ const selectTermOnCommand = (jumpToTerms: TermJumpFunctions, selectTermPtr: Sele
 	};
 };
 
-// TODO: term editing (+ from user-highlighted text context menu)
+// TODO: term/matching editing
 // TODO: configuration
 
 const receiveResearchDetails = (terms: Array<string>, enabled: boolean, selectTermPtr: SelectTermPtr) => {
 	removeControls();
 	if (!enabled) return;
+	if (!terms.length) {
+		// TODO: restore page to original state first (e.g. when deactivating), communicate changes to background script
+		terms = getSelection().toString().toLocaleLowerCase().replace(/\.|,/g, "").split(" ").filter(term => term !== "");
+		if (!terms.length) return;
+	}
 	const jumpToTerms: TermJumpFunctions = [];
 	addControls(jumpToTerms, terms);
 	selectTermOnCommand(jumpToTerms, selectTermPtr);
-	if (terms.length) {
-		const pattern = termsToPattern(terms);
-		highlightInNodes(document.body, pattern);
-		highlightInNodesOnMutation(pattern);
-		setTimeout(() => addScrollMarkers(terms), 1000);
-	}
+	const pattern = termsToPattern(terms);
+	highlightInNodes(document.body, pattern);
+	highlightInNodesOnMutation(pattern);
+	setTimeout(() => addScrollMarkers(terms), 1000);
 };
 
-const actionOnMessage = () => {
+const actOnMessage = () => {
 	const selectTermPtr = { selectTerm: undefined };
 	browser.runtime.onMessage.addListener((message: Message) => {
 		if (message.terms) {
 			receiveResearchDetails(message.terms, message.enabled, selectTermPtr);
 		} else if (message.command) {
-			console.log(message);
 			selectTermPtr.selectTerm(message.command);
 		}
 	});
 };
 
-actionOnMessage();
+actOnMessage();
