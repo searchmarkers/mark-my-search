@@ -1,5 +1,5 @@
 {
-  "name": "research-optimiser",
+  "name": "mark-my-search",
   "version": "1.0.0",
   "description": "A WebExtension for improving online research efficiency.",
   "main": "index.js",
@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ator-dev/research-optimiser.git"
+    "url": "git+https://github.com/ator-dev/mark-my-search.git"
   },
   "author": "ator-dev",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ator-dev/research-optimiser/issues"
+    "url": "https://github.com/ator-dev/mark-my-search/issues"
   },
-  "homepage": "https://github.com/ator-dev/research-optimiser#readme",
+  "homepage": "https://github.com/ator-dev/mark-my-search#readme",
   "dependencies": {
     "pluralize": "^8.0.0"
   },

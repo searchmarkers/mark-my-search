@@ -11,6 +11,7 @@ enum ElementClass {
 	TERM_ANY = "any",
 	TERM = "term",
 	FOCUS = "focus",
+	FOCUS_REVERT = "focus-revert",
 	MARKER_BLOCK = "marker-block",
 }
 
@@ -22,7 +23,7 @@ enum ElementID {
 }
 
 const select = (element: ElementID | ElementClass, param?: string | number) =>
-	["searchhighlight", element, param].join("-").slice(0, param ? undefined : -1)
+	["markmysearch", element, param].join("-").slice(0, param ? undefined : -1)
 ;
 
 const Z_INDEX_MAX = 2147483647;
@@ -75,19 +76,26 @@ const HIGHLIGHT_TAGS: Record<string, ReadonlyArray<string>> = {
 	REJECT: ["META", "STYLE", "SCRIPT", "NOSCRIPT"],
 };
 
-const termsToPattern = (terms: Array<string>) =>
-	new RegExp(`(${terms.map(term => term.replace(/(.)/g,"$1(-|‐|‐)?").slice(0, -8)).join(")|(")})`, "gi")
+const termsToPattern = (terms: MatchTerms) =>
+	new RegExp(`(${terms.map(term => term.getPatternString()).join(")|(")})`, "gi") // TODO: per-term case sensitivity
 ;
 
 const termFromMatch = (matchString: string) =>
 	matchString.replace(/-|‐|‐/, "").toLocaleLowerCase()
 ;
 
-const createTermOption = (title: string) => {
+const createTermOption = (term: MatchTerm, title: string) => {
 	const option = document.createElement("button");
 	option.classList.add(select(ElementClass.OPTION));
 	option.tabIndex = -1;
 	option.textContent = title;
+	option.onclick = () => {
+		console.log(term);
+		const matchMode = "match" + (title.includes(" ") ? title.slice(0, title.indexOf(" ")) : title);
+		console.log(matchMode);
+		term[matchMode] = !term[matchMode];
+		console.log(term);
+	};
 	return option;
 };
 
@@ -99,10 +107,16 @@ const getLastDescendant = (element: Element) =>
 	element.lastElementChild ? getLastDescendant(element.lastElementChild) : element
 ;
 
-const jumpToTerm = (reverse: boolean, term = "") => {
-	const termSelector = term ? select(ElementClass.TERM, term) : select(ElementClass.TERM_ANY);
-	const focusElement = document.getElementsByClassName(select(ElementClass.FOCUS))[0];
-	if (focusElement) focusElement.classList.remove(select(ElementClass.FOCUS));
+const jumpToTerm = (reverse: boolean, term?: MatchTerm) => {
+	const termSelector = term ? select(ElementClass.TERM, term.getSelector()) : select(ElementClass.TERM_ANY);
+	const focusElement = document.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
+	if (focusElement) {
+		focusElement.classList.remove(select(ElementClass.FOCUS));
+		if (focusElement.classList.contains(select(ElementClass.FOCUS_REVERT))) {
+			focusElement.tabIndex = -1;
+			focusElement.classList.remove(select(ElementClass.FOCUS_REVERT));
+		}
+	}
 	const selection = document.getSelection();
 	const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 		element.classList.contains(termSelector) && element.offsetParent
@@ -115,31 +129,36 @@ const jumpToTerm = (reverse: boolean, term = "") => {
 			: getLastDescendant(anchor.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor.parentElement)
 		: document.body;
 	const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-	let element = walk[nextNodeMethod]() as Element;
+	let element = walk[nextNodeMethod]() as HTMLElement;
 	if (!element) {
 		walk.currentNode = reverse ? document.body.lastElementChild : document.body;
-		element = walk[nextNodeMethod]() as Element;
+		element = walk[nextNodeMethod]() as HTMLElement;
 		if (!element) return;
 	}
 	element = getTermOccurrenceBlock(element);
-	element.scrollIntoView({behavior: "smooth", block: "center"});
 	element.classList.add(select(ElementClass.FOCUS));
+	if (element.tabIndex === -1) {
+		element.classList.add(select(ElementClass.FOCUS_REVERT));
+		element.tabIndex = 0;
+	}
+	element.focus({ preventScroll: true }); // TODO: focus first focusable descendant instead?
+	element.scrollIntoView({ behavior: "smooth", block: "center" });
 	selection.setBaseAndExtent(element, 0, element, 0);
 };
 
 const createTermControl = (jumpToTerms: TermJumpFunctions, style: HTMLStyleElement,
-	term: string, idx: number, hue: number) => {
+	term: MatchTerm, idx: number, hue: number) => {
 	jumpToTerms.push((reverse: boolean) => jumpToTerm(reverse, term));
 	style.textContent += `
-#${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term)} {
-background-color: hsla(${hue}, 100%, 50%, 0.4); }
-#${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term)} {
+#${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term.getSelector())} {
+background-color: hsla(${hue}, 100%, 60%, 0.4); }
+#${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term.getSelector())} {
 background-color: hsl(${hue}, 100%, 50%); }
-.${select(ElementClass.TERM, term)} > .${select(ElementClass.CONTROL_BUTTON)} {
-background-color: hsl(${hue}, 80%, 50%); }
-.${select(ElementClass.TERM, term)} > .${select(ElementClass.CONTROL_BUTTON)}:hover {
+.${select(ElementClass.TERM, term.getSelector())} > .${select(ElementClass.CONTROL_BUTTON)} {
+background-color: hsl(${hue}, 50%, 60%); }
+.${select(ElementClass.TERM, term.getSelector())} > .${select(ElementClass.CONTROL_BUTTON)}:hover {
 background-color: hsl(${hue}, 60%, 40%) !important; }
-.${select(ElementClass.CONTROL_BUTTON, idx)} > .${select(ElementClass.TERM, term)}
+.${select(ElementClass.CONTROL_BUTTON, idx)} > .${select(ElementClass.TERM, term.getSelector())}
 > .${select(ElementClass.CONTROL_BUTTON)} {
 background-color: hsl(${hue}, 100%, 80%); }
 	`;
@@ -149,12 +168,14 @@ background-color: hsl(${hue}, 100%, 80%); }
 	//	button.disabled = true;
 	//}
 	//controlButton.title = focus.getElementCount(termToPredicate(term)).toString() + " [TODO: update tooltip]";
-	controlButton.textContent = term;
+	controlButton.textContent = term.exp;
 	controlButton.onclick = () => jumpToTerm(false, term);
 	const menu = document.createElement("menu");
 	menu.classList.add(select(ElementClass.OPTION_LIST));
-	menu.appendChild(createTermOption("Fuzzy"));
-	menu.appendChild(createTermOption("Whole Word"));
+	menu.appendChild(createTermOption(term, "Case Sensitive"));
+	menu.appendChild(createTermOption(term, "Exact"));
+	menu.appendChild(createTermOption(term, "Whole Word"));
+	menu.appendChild(createTermOption(term, "Regex"));
 	const expand = document.createElement("button");
 	expand.classList.add(select(ElementClass.CONTROL_EXPAND));
 	expand.tabIndex = -1;
@@ -162,13 +183,13 @@ background-color: hsl(${hue}, 100%, 80%); }
 	expand.appendChild(menu);
 	const div = document.createElement("div");
 	div.classList.add(select(ElementClass.CONTROL));
-	div.classList.add(select(ElementClass.TERM, term));
+	div.classList.add(select(ElementClass.TERM, term.getSelector()));
 	div.appendChild(expand);
 	div.appendChild(controlButton);
 	return div;
 };
 
-const addControls = (jumpToTerms: TermJumpFunctions, terms: Array<string>) => {
+const addControls = (jumpToTerms: TermJumpFunctions, terms: MatchTerms) => {
 	let style = document.getElementById(select(ElementID.STYLE)) as HTMLStyleElement;
 	if (!style) {
 		style = style ? style : document.createElement("style");
@@ -206,7 +227,7 @@ const removeControls = () => {
 	...
 	const buttons = Array.from(document.getElementsByClassName(getSelector(ElementClass.CONTROL_BUTTON)));
 	terms.forEach(term => {
-		const pattern = termsToPattern([term]);
+		const pattern = new Regexp(termsToPattern([term]));
 		buttons.forEach((button: HTMLButtonElement) => {
 			if (button.textContent.match(pattern)) {
 				button.disabled = false;
@@ -228,11 +249,11 @@ const getScrollContainer = (element: HTMLElement): HTMLElement =>
 		: getScrollContainer(element.parentElement)
 ;
 
-const addScrollMarkers = (terms: Array<string>) => {
+const addScrollMarkers = (terms: MatchTerms) => {
 	const gutter = document.getElementById(select(ElementID.MARKER_GUTTER));
 	const containerPairs: Array<[Element, HTMLElement]> = [[document.scrollingElement, gutter]];
 	terms.forEach(term =>
-		Array.from(document.body.getElementsByClassName(select(ElementClass.TERM, term))).forEach((highlight: Element) => {
+		Array.from(document.body.getElementsByClassName(select(ElementClass.TERM, term.getSelector()))).forEach((highlight: Element) => {
 			if (!("offsetTop" in highlight)) return;
 			const scrollContainer = getScrollContainer(highlight as HTMLElement);
 			const containerPair = containerPairs.find(containerPair => containerPair[0] === scrollContainer);
@@ -246,7 +267,7 @@ const addScrollMarkers = (terms: Array<string>) => {
 			}
 			// TOOD: add overlap strategy, add update strategy, check calculations
 			const marker = document.createElement("div");
-			marker.classList.add(select(ElementClass.TERM, term));
+			marker.classList.add(select(ElementClass.TERM, term.getSelector()));
 			marker.style.top = String(getOffset(highlight as HTMLElement, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
 			block.appendChild(marker);
 		})
@@ -399,31 +420,37 @@ const selectTermOnCommand = (jumpToTerms: TermJumpFunctions, selectTermPtr: Sele
 	};
 };
 
-// TODO: term/matching editing
+// TODO: term/matching editingm
 // TODO: configuration
 
-const receiveResearchDetails = (terms: Array<string>, enabled: boolean, selectTermPtr: SelectTermPtr) => {
+const receiveResearchDetails = (terms: MatchTerms, enabled: boolean, selectTermPtr: SelectTermPtr) => {
 	removeControls();
 	if (!enabled) return;
 	if (!terms.length) {
 		// TODO: restore page to original state first (e.g. when deactivating), communicate changes to background script
-		terms = getSelection().toString().toLocaleLowerCase().replace(/\.|,/g, "").split(" ").filter(term => term !== "");
+		terms = getSelection().toString().toLocaleLowerCase().replace(/\.|,/g, "").split(" ").filter(term => term !== "")
+			.map(term => new MatchTerm(term));
 		if (!terms.length) return;
 	}
 	const jumpToTerms: TermJumpFunctions = [];
 	addControls(jumpToTerms, terms);
 	selectTermOnCommand(jumpToTerms, selectTermPtr);
-	const pattern = termsToPattern(terms);
-	highlightInNodes(document.body, pattern);
-	highlightInNodesOnMutation(pattern);
-	setTimeout(() => addScrollMarkers(terms), 1000);
+	setTimeout(() => {
+		console.log(terms);
+		const pattern = termsToPattern(terms);
+		console.log(pattern);
+		highlightInNodes(document.body, pattern);
+		highlightInNodesOnMutation(pattern);
+		setTimeout(() => addScrollMarkers(terms), 1000);
+	}, 5000);
 };
 
 const actOnMessage = () => {
 	const selectTermPtr = { selectTerm: undefined };
 	browser.runtime.onMessage.addListener((message: Message) => {
+		console.log(message);
 		if (message.terms) {
-			receiveResearchDetails(message.terms, message.enabled, selectTermPtr);
+			receiveResearchDetails(message.terms.map(term => Object.assign(new MatchTerm(""), term)), message.enabled, selectTermPtr);
 		} else if (message.command) {
 			selectTermPtr.selectTerm(message.command);
 		}

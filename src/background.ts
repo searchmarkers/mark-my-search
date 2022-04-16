@@ -1,24 +1,10 @@
 type ResearchIDs = Record<number, ResearchID>;
 type Stoplist = Array<string>;
-type SearchPrefixes = Array<string>;
 type Engines = Record<string, Engine>;
-
-class Message {
-	command: string;
-	terms: Array<string>;
-	enabled: boolean;
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	constructor(messageObject: Record<string, any>) {
-		this.command = messageObject.command;
-		this.terms = messageObject.terms;
-		this.enabled = "enabled" in messageObject ? messageObject.enabled : true;
-	}
-}
 
 class ResearchID {
 	engine: string;
-	terms: Array<string>;
+	terms: MatchTerms;
 	urls: Set<string>;
 
 	constructor(stoplist: Array<string>, url: string, engine?: Engine) {
@@ -28,7 +14,7 @@ class ResearchID {
 			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
 		this.terms = Array.from(new Set(rawTerms))
 			.filter(term => stoplist.indexOf(term) === -1)
-			.map(term => JSON.stringify(term.toLocaleLowerCase()).replace(/\W/g , ""));
+			.map(term => new MatchTerm(JSON.stringify(term.toLocaleLowerCase()).replace(/\W/g , "")));
 		this.urls = new Set;
 	}
 }
@@ -81,8 +67,8 @@ const getMenuSwitchId = (activate: boolean) =>
 	(activate ? "" : "de") + "activate-research-mode"
 ;
 
-const isTabSearchPage = (searchPrefixes: SearchPrefixes, engines: Engines, url: string): [boolean, Engine] => {
-	if (new URL(url).searchParams.has(SEARCH_PARAM) || searchPrefixes.find(prefix => url.startsWith(`https://${prefix}`))) {
+const isTabSearchPage = (engines: Engines, url: string): [boolean, Engine] => {
+	if (new URL(url).searchParams.has(SEARCH_PARAM)) {
 		return [true, undefined];
 	} else {
 		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
@@ -113,17 +99,16 @@ const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: 
 	return new Message({ terms: researchIds[tabId].terms });
 };
 
-const injectScriptOnNavigation = (stoplist: Stoplist, searchPrefixes: SearchPrefixes,
-	engines: Engines, researchIds: ResearchIDs, script: string) =>
+const injectScriptOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
 	browser.webNavigation.onCommitted.addListener(details => {
 		if (details.frameId !== 0) return;
-		const [isSearchPage, engine] = isTabSearchPage(searchPrefixes, engines, details.url);
+		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab =>
+			browser.tabs.get(details.tabId).then(tab => browser.tabs.executeScript(tab.id, { file: "/dist/shared-content.js" }).then(() =>
 				browser.tabs.executeScript(tab.id, { file: script }).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
 					? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
 					: getCachedResearchDetails(researchIds, tab.url, tab.id)))
-			);
+			));
 		}
 	})
 ;
@@ -165,7 +150,8 @@ const addEngine = (engines: Engines, id: string, pattern: string) => {
 	engines[id] = engine;
 };
 
-const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void, node: browser.bookmarks.BookmarkTreeNode) =>
+const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void,
+	node: browser.bookmarks.BookmarkTreeNode) =>
 	node.type === "bookmark"
 		? setEngine(node)
 		: node.type === "folder"
@@ -190,6 +176,23 @@ const sendMessageOnCommand = () => browser.commands.onCommand.addListener(comman
 		browser.tabs.sendMessage(tabs[0].id, new Message({ command }))
 	)
 );
+
+const sendUpdateMessages = (researchIds: ResearchIDs) =>
+	browser.tabs.query({ currentWindow: true, active: true }).then(activeTabs => {
+		const currentTab = activeTabs[0];
+		const researchId = Object.values(researchIds).find(researchId => researchId.urls.has(currentTab.url));
+		if (!researchId) return;
+		browser.tabs.sendMessage(currentTab.id, new Message({ getTermsIfChanged: true })).then((terms: MatchTerms) => researchId.urls.forEach(url =>
+			browser.tabs.query({ url }).then(tabs => tabs.forEach(tab => tab.id === currentTab.id ? undefined
+			: browser.tabs.sendMessage(tab.id, new Message({ terms, enabled: true }))))
+		));
+	})
+;
+
+const sendUpdateMessagesOnTabSwitch = (researchIds: ResearchIDs) => {
+	browser.windows.onFocusChanged.addListener(() => sendUpdateMessages(researchIds));
+	browser.tabs.onActivated.addListener(() => sendUpdateMessages(researchIds));
+};
 
 const initialize = () => {
 	const stoplist: Stoplist = [
@@ -368,15 +371,15 @@ const initialize = () => {
 		"yourself",
 		"yourselves",
 	];
-	const searchPrefixes: SearchPrefixes = [];
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
 	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};
 	createMenuSwitches(stoplist, researchIds);
-	injectScriptOnNavigation(stoplist, searchPrefixes, engines, researchIds, "/dist/term-highlight.js");
+	injectScriptOnNavigation(stoplist, engines, researchIds, "/dist/term-highlight.js");
 	extendResearchOnTabCreated(researchIds);
 	addEngineOnBookmarkChanged(engines);
 	sendMessageOnCommand();
+	sendUpdateMessagesOnTabSwitch(researchIds);
 };
 
 initialize();
