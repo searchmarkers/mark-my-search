@@ -37,13 +37,11 @@ class Message {
 	command: string;
 	terms: MatchTerms;
 	enabled: boolean;
-	getTermsIfChanged: boolean;
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	constructor(messageObject: Record<string, any>) {
 		this.command = messageObject.command;
 		this.terms = messageObject.terms;
-		this.enabled = "enabled" in messageObject ? messageObject.enabled : true;
-		this.getTermsIfChanged = messageObject.getTermsIfChanged;
+		this.enabled = messageObject.enabled === false ? false : true;
 	}
 }

@@ -3,12 +3,10 @@ type Stoplist = Array<string>;
 type Engines = Record<string, Engine>;
 
 class ResearchID {
-	engine: string;
 	terms: MatchTerms;
 	urls: Set<string>;
 
 	constructor(stoplist: Array<string>, url: string, engine?: Engine) {
-		this.engine = new URL(url).hostname;
 		const rawTerms = engine
 			? engine.extract(url)
 			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
@@ -99,6 +97,12 @@ const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: 
 	return new Message({ terms: researchIds[tabId].terms });
 };
 
+const updateCachedResearchDetails = (researchIds: ResearchIDs, terms: MatchTerms, tabId: number) => {
+	researchIds[tabId].terms = terms;
+	console.log(researchIds);
+	return new Message({ terms });
+};
+
 const injectScriptOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
 	browser.webNavigation.onCommitted.addListener(details => {
 		if (details.frameId !== 0) return;
@@ -177,22 +181,14 @@ const sendMessageOnCommand = () => browser.commands.onCommand.addListener(comman
 	)
 );
 
-const sendUpdateMessages = (researchIds: ResearchIDs) =>
-	browser.tabs.query({ currentWindow: true, active: true }).then(activeTabs => {
-		const currentTab = activeTabs[0];
-		const researchId = Object.values(researchIds).find(researchId => researchId.urls.has(currentTab.url));
-		if (!researchId) return;
-		browser.tabs.sendMessage(currentTab.id, new Message({ getTermsIfChanged: true })).then((terms: MatchTerms) => researchId.urls.forEach(url =>
-			browser.tabs.query({ url }).then(tabs => tabs.forEach(tab => tab.id === currentTab.id ? undefined
-			: browser.tabs.sendMessage(tab.id, new Message({ terms, enabled: true }))))
-		));
+const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
+	browser.runtime.onMessage.addListener((terms: MatchTerms, sender) => {
+		const message = updateCachedResearchDetails(researchIds, terms, sender.tab.id);
+		researchIds[sender.tab.id].urls.forEach(url =>
+			browser.tabs.query({ url }).then(tabs => tabs.forEach(tab => browser.tabs.sendMessage(tab.id, message)))
+		);
 	})
 ;
-
-const sendUpdateMessagesOnTabSwitch = (researchIds: ResearchIDs) => {
-	browser.windows.onFocusChanged.addListener(() => sendUpdateMessages(researchIds));
-	browser.tabs.onActivated.addListener(() => sendUpdateMessages(researchIds));
-};
 
 const initialize = () => {
 	const stoplist: Stoplist = [
@@ -379,7 +375,7 @@ const initialize = () => {
 	extendResearchOnTabCreated(researchIds);
 	addEngineOnBookmarkChanged(engines);
 	sendMessageOnCommand();
-	sendUpdateMessagesOnTabSwitch(researchIds);
+	sendUpdateMessagesOnMessage(researchIds);
 };
 
 initialize();

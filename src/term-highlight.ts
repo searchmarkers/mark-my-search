@@ -1,5 +1,4 @@
 type TermJumpFunctions = Array<(reverse: boolean) => void>;
-type SelectTermPtr = Record<string, (command: string) => void>;
 
 enum ElementClass {
 	BAR_HIDDEN = "bar-hidden",
@@ -20,6 +19,22 @@ enum ElementID {
 	BAR = "bar",
 	HIGHLIGHT_TOGGLE = "highlight-toggle",
 	MARKER_GUTTER = "markers",
+}
+
+class SelectTermPtr {
+	selectTerm: (command: string) => void;
+
+	constructor(selectTerm?: (command: string) => void) {
+		this.selectTerm = selectTerm;
+	}
+}
+
+class PatternPtr {
+	pattern: RegExp;
+
+	constructor(pattern?: RegExp) {
+		this.pattern = pattern;
+	}
 }
 
 const select = (element: ElementID | ElementClass, param?: string | number) =>
@@ -84,7 +99,7 @@ const termFromMatch = (matchString: string) =>
 	matchString.replace(/-|‐|‐/, "").toLocaleLowerCase()
 ;
 
-const createTermOption = (term: MatchTerm, title: string) => {
+const createTermOption = (terms: MatchTerms, term: MatchTerm, title: string) => {
 	const option = document.createElement("button");
 	option.classList.add(select(ElementClass.OPTION));
 	option.tabIndex = -1;
@@ -95,6 +110,7 @@ const createTermOption = (term: MatchTerm, title: string) => {
 		console.log(matchMode);
 		term[matchMode] = !term[matchMode];
 		console.log(term);
+		browser.runtime.sendMessage(terms);
 	};
 	return option;
 };
@@ -146,8 +162,9 @@ const jumpToTerm = (reverse: boolean, term?: MatchTerm) => {
 	selection.setBaseAndExtent(element, 0, element, 0);
 };
 
-const createTermControl = (jumpToTerms: TermJumpFunctions, style: HTMLStyleElement,
-	term: MatchTerm, idx: number, hue: number) => {
+const createTermControl = (jumpToTerms: TermJumpFunctions, terms: MatchTerms, style: HTMLStyleElement,
+	idx: number, hue: number) => {
+	const term = terms[idx];
 	jumpToTerms.push((reverse: boolean) => jumpToTerm(reverse, term));
 	style.textContent += `
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term.getSelector())} {
@@ -172,10 +189,10 @@ background-color: hsl(${hue}, 100%, 80%); }
 	controlButton.onclick = () => jumpToTerm(false, term);
 	const menu = document.createElement("menu");
 	menu.classList.add(select(ElementClass.OPTION_LIST));
-	menu.appendChild(createTermOption(term, "Case Sensitive"));
-	menu.appendChild(createTermOption(term, "Exact"));
-	menu.appendChild(createTermOption(term, "Whole Word"));
-	menu.appendChild(createTermOption(term, "Regex"));
+	menu.appendChild(createTermOption(terms, term, "Case Sensitive"));
+	menu.appendChild(createTermOption(terms, term, "Exact"));
+	menu.appendChild(createTermOption(terms, term, "Whole Word"));
+	menu.appendChild(createTermOption(terms, term, "Regex"));
 	const expand = document.createElement("button");
 	expand.classList.add(select(ElementClass.CONTROL_EXPAND));
 	expand.tabIndex = -1;
@@ -200,7 +217,7 @@ const addControls = (jumpToTerms: TermJumpFunctions, terms: MatchTerms) => {
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
 	for (let i = 0; i < terms.length; i++) {
-		bar.appendChild(createTermControl(jumpToTerms, style, terms[i], i, TERM_HUES[i % TERM_HUES.length]));
+		bar.appendChild(createTermControl(jumpToTerms, terms, style, i, TERM_HUES[i % TERM_HUES.length]));
 	}
 	const highlightToggle = document.createElement("input");
 	highlightToggle.id = select(ElementID.HIGHLIGHT_TOGGLE);
@@ -371,9 +388,9 @@ const canHighlightNode = (node: Node): boolean =>
 	&& canHighlightNode(node.parentElement))
 ;
 
-const highlightInNodesOnMutation = (pattern: RegExp) =>
+const highlightInNodesOnMutation = (patternPtr: PatternPtr) =>
 	new MutationObserver(mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(node =>
-		canHighlightNode(node) ? highlightInNodes(node, pattern) : undefined
+		canHighlightNode(node) ? highlightInNodes(node, patternPtr.pattern) : undefined
 	))).observe(document.body, {childList: true, subtree: true})
 ;
 
@@ -420,10 +437,10 @@ const selectTermOnCommand = (jumpToTerms: TermJumpFunctions, selectTermPtr: Sele
 	};
 };
 
-// TODO: term/matching editingm
+// TODO: term/matching editing
 // TODO: configuration
 
-const receiveResearchDetails = (terms: MatchTerms, enabled: boolean, selectTermPtr: SelectTermPtr) => {
+const activate = (terms: MatchTerms, enabled: boolean, selectTermPtr: SelectTermPtr, patternPtr: PatternPtr) => {
 	removeControls();
 	if (!enabled) return;
 	if (!terms.length) {
@@ -435,22 +452,25 @@ const receiveResearchDetails = (terms: MatchTerms, enabled: boolean, selectTermP
 	const jumpToTerms: TermJumpFunctions = [];
 	addControls(jumpToTerms, terms);
 	selectTermOnCommand(jumpToTerms, selectTermPtr);
-	setTimeout(() => {
-		console.log(terms);
-		const pattern = termsToPattern(terms);
-		console.log(pattern);
-		highlightInNodes(document.body, pattern);
-		highlightInNodesOnMutation(pattern);
-		setTimeout(() => addScrollMarkers(terms), 1000);
-	}, 5000);
+	console.log(terms);
+	patternPtr.pattern = termsToPattern(terms);
+	console.log(patternPtr.pattern);
+	highlightInNodes(document.body, patternPtr.pattern);
+	highlightInNodesOnMutation(patternPtr);
+	setTimeout(() => addScrollMarkers(terms), 1000); // TODO: make dynamic
 };
 
 const actOnMessage = () => {
-	const selectTermPtr = { selectTerm: undefined };
+	const terms: MatchTerms = [];
+	const selectTermPtr = new SelectTermPtr;
+	const patternPtr = new PatternPtr;
 	browser.runtime.onMessage.addListener((message: Message) => {
 		console.log(message);
 		if (message.terms) {
-			receiveResearchDetails(message.terms.map(term => Object.assign(new MatchTerm(""), term)), message.enabled, selectTermPtr);
+			terms.splice(0, terms.length);
+			message.terms.forEach(term =>
+				terms.push(Object.assign(new MatchTerm(""), term)));
+			activate(terms, message.enabled, selectTermPtr, patternPtr); 
 		} else if (message.command) {
 			selectTermPtr.selectTerm(message.command);
 		}
