@@ -96,7 +96,7 @@ const termsToPattern = (terms: MatchTerms) =>
 ;
 
 const termFromMatch = (matchString: string) =>
-	matchString.replace(/\p{Pd}/u, "").toLocaleLowerCase()
+	stem()(matchString).replace(/\p{Pd}/u, "").toLocaleLowerCase() // TODO: address code duplication [term processing]
 ;
 
 const createTermOption = (terms: MatchTerms, term: MatchTerm, title: string) => {
@@ -173,8 +173,8 @@ background-color: hsl(${hue}, 100%, 50%); }
 background-color: hsl(${hue}, 50%, 60%); }
 #${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.getSelector())} > .${select(ElementClass.CONTROL_BUTTON)}:hover {
 background-color: hsl(${hue}, 60%, 40%); }
-.${select(ElementClass.CONTROL_BUTTON, idx)} > .${select(ElementClass.TERM, term.getSelector())}
-> .${select(ElementClass.CONTROL_BUTTON)} {
+#${select(ElementID.BAR)}.${select(ElementClass.CONTROL_BUTTON, idx)}
+> .${select(ElementClass.TERM, term.getSelector())} > .${select(ElementClass.CONTROL_BUTTON)} {
 background-color: hsl(${hue}, 100%, 80%); }
 	`;
 	const controlButton = document.createElement("button");
@@ -278,19 +278,22 @@ const addScrollMarkers = (terms: MatchTerms) => {
 	);
 };
 
-const highlightInNode = (textEnd: Node, start: number, end: number, term: string) => {
+const highlightInNode = (textEndNode: Node, start: number, end: number, term: string) => {
 	start = Math.max(0, start);
-	end = Math.min(textEnd.textContent.length, end);
-	const textStart = document.createTextNode(textEnd.textContent.slice(0, start));
+	end = Math.min(textEndNode.textContent.length, end);
+	const textStart = textEndNode.textContent.slice(0, start);
 	const highlight = document.createElement("mark");
 	highlight.classList.add(select(ElementClass.TERM_ANY));
 	highlight.classList.add(select(ElementClass.TERM, term));
-	highlight.textContent = textEnd.textContent.slice(start, end);
-	textEnd.textContent = textEnd.textContent.slice(end);
-	textEnd.parentNode.insertBefore(textStart, textEnd);
-	textEnd.parentNode.insertBefore(highlight, textEnd);
-	if (textStart.textContent === "") textStart.remove();
-	if (textEnd.textContent === "") textEnd.parentNode.removeChild(textEnd);
+	highlight.textContent = textEndNode.textContent.slice(start, end);
+	const textEnd = textEndNode.textContent.slice(end);
+	if (textStart !== "") {
+		const textStartNode = document.createTextNode(textStart);
+		textEndNode.parentNode.insertBefore(textStartNode, textEndNode);
+	}
+	textEndNode.textContent = textEnd;
+	textEndNode.parentNode.insertBefore(highlight, textEndNode);
+	if (textEnd === "") textEndNode.parentNode.removeChild(textEndNode);
 };
 
 const highlightAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {

@@ -12,8 +12,8 @@ class ResearchID {
 			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
 		this.terms = Array.from(new Set(rawTerms))
 			.filter(term => stoplist.indexOf(term) === -1)
-			.map(term => new MatchTerm(JSON.stringify(term.toLocaleLowerCase()).replace(/\W/g , "")));
-		this.urls = new Set;
+			.map(term => new MatchTerm(JSON.stringify(stem()(term.toLocaleLowerCase())).replace(/\W/g , "")));
+		this.urls = new Set; // TODO: address code duplication [term processing]
 	}
 }
 
@@ -107,10 +107,13 @@ const injectScriptOnNavigation = (stoplist: Stoplist, engines: Engines, research
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab => browser.tabs.executeScript(tab.id, { file: "/dist/shared-content.js" }).then(() =>
-				browser.tabs.executeScript(tab.id, { file: script }).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
-					? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
-					: getCachedResearchDetails(researchIds, tab.url, tab.id)))
+			browser.tabs.get(details.tabId).then(tab => browser.tabs.executeScript(tab.id, { file: "/dist/stemmer.js" }).then(() =>
+				browser.tabs.get(details.tabId).then(tab => browser.tabs.executeScript(tab.id, { file: "/dist/shared-content.js" }).then(() =>
+					browser.tabs.executeScript(tab.id, { file: script }).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
+						? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
+						: getCachedResearchDetails(researchIds, tab.url, tab.id))
+					)
+				))
 			));
 		}
 	})
