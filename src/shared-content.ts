@@ -17,12 +17,12 @@ class MatchTerm {
     
 	getPatternString(): string {
 		if (this.matchRegex || this.matchExact) return this.exp;
-		const pattern = this.exp.replace(/(.)/g,"$1(-|‐|‐)?").slice(0, -8);
+		const pattern = this.exp.replace(/(.)/g,"$1(\\p{Pd})?").slice(0, -9);
 		return this.matchWhole ? `(\\b(${pattern})\\b)` : pattern; // TODO: advanced whole-word matching
 	}
 
 	getPattern(): RegExp {
-		const flags = this.matchCase ? "g" : "gi"; // TODO: use u? (for \p{})
+		const flags = this.matchCase ? "gu" : "giu"; // TODO: use u? (for \p{})
 		if (this.matchRegex || this.matchExact) return new RegExp(this.exp, flags);
 		return new RegExp(this.matchWhole ? this.getPatternString() : this.getPatternString(), flags);
 	}

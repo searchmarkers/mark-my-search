@@ -99,7 +99,6 @@ const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: 
 
 const updateCachedResearchDetails = (researchIds: ResearchIDs, terms: MatchTerms, tabId: number) => {
 	researchIds[tabId].terms = terms;
-	console.log(researchIds);
 	return new Message({ terms });
 };
 
