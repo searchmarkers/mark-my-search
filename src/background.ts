@@ -4,16 +4,19 @@ type Engines = Record<string, Engine>;
 
 class ResearchID {
 	terms: MatchTerms;
-	urls: Set<string>;
 
-	constructor(stoplist: Array<string>, url: string, engine?: Engine) {
+	constructor(stoplist?: Array<string>, url?: string, engine?: Engine, terms?: MatchTerms) {
+		if (terms) {
+			this.terms = terms;
+			return;
+		}
 		const rawTerms = engine
 			? engine.extract(url)
 			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
 		this.terms = Array.from(new Set(rawTerms))
 			.filter(term => stoplist.indexOf(term) === -1)
-			.map(term => new MatchTerm(JSON.stringify(stem()(term.toLocaleLowerCase())).replace(/\W/g , "")));
-		this.urls = new Set; // TODO: address code duplication [term processing]
+			.map(term => new MatchTerm(JSON.stringify(term).replace(/\W/g, "")));
+		// TODO: address code duplication [term processing]
 	}
 }
 
@@ -78,43 +81,47 @@ const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
 	tabId in researchIds
 ;
 
-const updateUrlActive = (activate: boolean, researchIds: ResearchIDs, url: string, tabId: number) => {
-	if (tabId in researchIds) {
-		researchIds[tabId].urls[activate ? "add" : "delete"](url);
+const updateDeactivateContextMenus = async (researchIds: ResearchIDs) => {
+	const tabUrls: Array<string> = [];
+	for (const tabId of Object.keys(researchIds)) {
+		await browser.tabs.get(Number(tabId)).then(tab => tabUrls.push(tab.url));
 	}
-	const urlsActive = Object.values(researchIds).flatMap(researchId => Array.from(researchId.urls));
-	browser.contextMenus.update(getMenuSwitchId(false), {documentUrlPatterns: urlsActive});
+	console.log(tabUrls);
+	browser.contextMenus.update(getMenuSwitchId(false), { documentUrlPatterns: Array.from(new Set(tabUrls)) });
 };
 
-const storeNewResearchDetails = (stoplist: Stoplist, researchIds: ResearchIDs, url: string, tabId: number, engine?: Engine) => {
-	researchIds[tabId] = new ResearchID(stoplist, url, engine);
-	updateUrlActive(true, researchIds, url, tabId);
-	return new Message({ terms: researchIds[tabId].terms });
+const storeNewResearchDetails = (researchIds: ResearchIDs, researchId: ResearchID, tabId: number) => {
+	researchIds[tabId] = researchId;
+	updateDeactivateContextMenus(researchIds);
+	return new HighlightMessage(undefined, researchIds[tabId].terms);
 };
 
-const getCachedResearchDetails = (researchIds: ResearchIDs, url: string, tabId: number) => {
-	updateUrlActive(true, researchIds, url, tabId);
-	return new Message({ terms: researchIds[tabId].terms });
+const getCachedResearchDetails = (researchIds: ResearchIDs, tabId: number) => {
+	return new HighlightMessage(undefined, researchIds[tabId].terms);
 };
 
 const updateCachedResearchDetails = (researchIds: ResearchIDs, terms: MatchTerms, tabId: number) => {
 	researchIds[tabId].terms = terms;
-	return new Message({ terms });
+	return new HighlightMessage(undefined, terms);
 };
 
-const injectScriptOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
+const injectScripts = (tabId: number, script: string) =>
+	browser.tabs.executeScript(tabId, { file: "/dist/stemmer.js" }).then(() =>
+		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
+			browser.tabs.executeScript(tabId, { file: script })))
+;
+
+const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
 	browser.webNavigation.onCommitted.addListener(details => {
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab => browser.tabs.executeScript(tab.id, { file: "/dist/stemmer.js" }).then(() =>
-				browser.tabs.get(details.tabId).then(tab => browser.tabs.executeScript(tab.id, { file: "/dist/shared-content.js" }).then(() =>
-					browser.tabs.executeScript(tab.id, { file: script }).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
-						? storeNewResearchDetails(stoplist, researchIds, tab.url, tab.id, engine)
-						: getCachedResearchDetails(researchIds, tab.url, tab.id))
-					)
-				))
-			));
+			browser.tabs.get(details.tabId).then(tab =>
+				injectScripts(tab.id, script).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
+					? storeNewResearchDetails(researchIds, new ResearchID(stoplist, tab.url, engine), tab.id)
+					: getCachedResearchDetails(researchIds, tab.id))
+				)
+			);
 		}
 	})
 ;
@@ -123,26 +130,31 @@ const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 	browser.tabs.onCreated.addListener(tab => {
 		if (tab.openerTabId in researchIds) {
 			researchIds[tab.id] = researchIds[tab.openerTabId];
+			updateDeactivateContextMenus(researchIds);
 		}
 	})
 ;
 
-const createMenuSwitches = (stoplist: Stoplist, researchIds: ResearchIDs) => {
-	const createMenuSwitch = (activate: boolean, title: string, contexts: Array<browser.contextMenus.ContextType>,
-		documentUrlPatterns: Array<string>, action: (tab: browser.tabs.Tab) => void) =>
-		browser.contextMenus.create({ title, id: getMenuSwitchId(activate), contexts, documentUrlPatterns,
-			onclick: (event, tab) => {
-				browser.tabs.sendMessage(tab.id, new Message({ terms: [], enabled: activate }));
-				browser.tabs.get(tab.id).then(tab => {
-					action(tab);
-					updateUrlActive(activate, researchIds, tab.url, tab.id);
-				});
+const createMenuSwitches = (researchIds: ResearchIDs) => {
+	browser.contextMenus.create({ title: "Deactivate Re&search Mode", id: getMenuSwitchId(false), contexts: ["page"],
+		documentUrlPatterns: [], onclick: (event, tab) => {
+			browser.tabs.sendMessage(tab.id, new HighlightMessage(undefined, [], false));
+			browser.tabs.get(tab.id).then(tab => {
+				delete researchIds[tab.id];
+				console.log(researchIds);
+				updateDeactivateContextMenus(researchIds);
+			});
+		}
+	});
+	browser.contextMenus.create({ title: "Activate Re&search Mode", id: getMenuSwitchId(true), contexts: ["selection"],
+		onclick: (event, tab) => {
+			if (!(tab.id in researchIds)) {
+				console.log(researchIds);
+				injectScripts(tab.id, "/dist/term-highlight.js");
 			}
-		});
-	createMenuSwitch(false, "Deactivate Re&search Mode", ["page"], [],
-		tab => delete researchIds[tab.id]);
-	createMenuSwitch(true, "Activate Re&search Mode", ["selection"], undefined,
-		tab => researchIds[tab.id] = new ResearchID(stoplist, tab.url));
+			browser.tabs.sendMessage(tab.id, new HighlightMessage(undefined, [], true));
+		}
+	});
 };
 
 const addEngine = (engines: Engines, id: string, pattern: string) => {
@@ -179,16 +191,24 @@ const addEngineOnBookmarkChanged = (engines: Engines) => {
 
 const sendMessageOnCommand = () => browser.commands.onCommand.addListener(command =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
-		browser.tabs.sendMessage(tabs[0].id, new Message({ command }))
+		browser.tabs.sendMessage(tabs[0].id, new HighlightMessage(command))
 	)
 );
 
 const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
-	browser.runtime.onMessage.addListener((terms: MatchTerms, sender) => {
-		const message = updateCachedResearchDetails(researchIds, terms, sender.tab.id);
-		researchIds[sender.tab.id].urls.forEach(url =>
-			browser.tabs.query({ url }).then(tabs => tabs.forEach(tab => browser.tabs.sendMessage(tab.id, message)))
-		);
+	browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
+		if (!(sender.tab.id in researchIds)) {
+			researchIds[sender.tab.id] = new ResearchID;
+		}
+		if (message.makeUnique) {
+			browser.tabs.sendMessage(sender.tab.id, storeNewResearchDetails(
+				researchIds, new ResearchID(undefined, undefined, undefined, message.terms), sender.tab.id));
+		} else {
+			const highlightMessage = updateCachedResearchDetails(researchIds, message.terms, sender.tab.id);
+			Object.keys(researchIds).forEach(tabId =>
+				researchIds[tabId] === researchIds[sender.tab.id] ? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
+			);
+		}
 	})
 ;
 
@@ -371,9 +391,8 @@ const initialize = () => {
 	];
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
-	//const cleanHistoryFilter = {url: searchPrefixes.map(prefix => ({urlPrefix: `https://${prefix}`}))};
-	createMenuSwitches(stoplist, researchIds);
-	injectScriptOnNavigation(stoplist, engines, researchIds, "/dist/term-highlight.js");
+	createMenuSwitches(researchIds);
+	injectScriptsOnNavigation(stoplist, engines, researchIds, "/dist/term-highlight.js");
 	extendResearchOnTabCreated(researchIds);
 	addEngineOnBookmarkChanged(engines);
 	sendMessageOnCommand();
@@ -381,13 +400,3 @@ const initialize = () => {
 };
 
 initialize();
-
-/*browser.webNavigation.onHistoryStateUpdated.addListener(details => {
-	browser.history.search({
-		text: (new URL(details.url)).hostname,
-		startTime: details.timeStamp - 9999,
-		maxResults: 1,
-	}).then(historyItems => {
-		if (historyItems.length > 0) browser.history.deleteUrl({url: historyItems[0].url});
-	});
-}, cleanHistoryFilter);*/

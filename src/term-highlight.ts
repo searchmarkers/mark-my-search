@@ -92,7 +92,7 @@ const HIGHLIGHT_TAGS: Record<string, ReadonlyArray<string>> = {
 };
 
 const termsToPattern = (terms: MatchTerms) =>
-	new RegExp(`(${terms.map(term => term.getPatternString()).join(")|(")})`, "giu") // TODO: per-term case sensitivity
+	new RegExp(`(?:${terms.map(term => term.getPatternString()).join(")|(?:")})`, "giu") // TODO: per-term case sensitivity
 ;
 
 const termFromMatch = (matchString: string) =>
@@ -107,7 +107,7 @@ const createTermOption = (terms: MatchTerms, term: MatchTerm, title: string) => 
 	option.onclick = () => {
 		const matchMode = "match" + (title.includes(" ") ? title.slice(0, title.indexOf(" ")) : title);
 		term[matchMode] = !term[matchMode];
-		browser.runtime.sendMessage(terms);
+		browser.runtime.sendMessage(new BackgroundMessage(terms, false));
 	};
 	return option;
 };
@@ -154,7 +154,7 @@ const jumpToTerm = (reverse: boolean, term?: MatchTerm) => {
 		element.classList.add(select(ElementClass.FOCUS_REVERT));
 		element.tabIndex = 0;
 	}
-	element.focus({ preventScroll: true }); // TODO: focus first focusable descendant instead?
+	element.focus({ preventScroll: true });
 	element.scrollIntoView({ behavior: "smooth", block: "center" });
 	selection.setBaseAndExtent(element, 0, element, 0);
 };
@@ -179,7 +179,7 @@ background-color: hsl(${hue}, 100%, 80%); }
 	`;
 	const controlButton = document.createElement("button");
 	controlButton.classList.add(select(ElementClass.CONTROL_BUTTON));
-	controlButton.textContent = term.exp;
+	controlButton.textContent = term.word;
 	controlButton.onclick = () => jumpToTerm(false, term);
 	updateTermControls.push(() => {
 		const occurrenceCount = document.getElementsByClassName(
@@ -192,7 +192,6 @@ background-color: hsl(${hue}, 100%, 80%); }
 	menu.appendChild(createTermOption(terms, term, "Case Sensitive"));
 	menu.appendChild(createTermOption(terms, term, "Exact"));
 	menu.appendChild(createTermOption(terms, term, "Whole Word"));
-	menu.appendChild(createTermOption(terms, term, "Regex"));
 	const expand = document.createElement("button");
 	expand.classList.add(select(ElementClass.CONTROL_EXPAND));
 	expand.tabIndex = -1;
@@ -279,21 +278,24 @@ const addScrollMarkers = (terms: MatchTerms) => {
 };
 
 const highlightInNode = (textEndNode: Node, start: number, end: number, term: string) => {
+	const text = textEndNode.textContent;
 	start = Math.max(0, start);
-	end = Math.min(textEndNode.textContent.length, end);
-	const textStart = textEndNode.textContent.slice(0, start);
+	end = Math.min(text.length, end);
+	if (end !== text.length) end += text.slice(end - 1).search(/[^^]\b/);
+	const textStart = text.slice(0, start);
 	const highlight = document.createElement("mark");
 	highlight.classList.add(select(ElementClass.TERM_ANY));
 	highlight.classList.add(select(ElementClass.TERM, term));
-	highlight.textContent = textEndNode.textContent.slice(start, end);
-	const textEnd = textEndNode.textContent.slice(end);
+	highlight.textContent = text.slice(start, end);
 	if (textStart !== "") {
 		const textStartNode = document.createTextNode(textStart);
 		textEndNode.parentNode.insertBefore(textStartNode, textEndNode);
 	}
-	textEndNode.textContent = textEnd;
+	textEndNode.textContent = text.slice(end);
 	textEndNode.parentNode.insertBefore(highlight, textEndNode);
-	if (textEnd === "") textEndNode.parentNode.removeChild(textEndNode);
+	if (textEndNode.textContent === "") {
+		textEndNode.parentNode.removeChild(textEndNode);
+	}
 };
 
 const highlightAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
@@ -306,9 +308,12 @@ const highlightAtBreakLevel = (unbrokenNodes: Array<Node>, pattern: RegExp) => {
 			if (match.index >= nextNodeStart) {
 				return false;
 			}
-			const textLength = node.textContent.length;
+			if (match.index + match[0].length < thisNodeStart) {
+				return true;
+			}
+			const textLengthOriginal = node.textContent.length;
 			highlightInNode(node, match.index - thisNodeStart, match.index - thisNodeStart + match[0].length, termFromMatch(match[0]));
-			thisNodeStart += textLength - node.textContent.length;
+			thisNodeStart += textLengthOriginal - node.textContent.length; // TODO: check page restoration can cope with nested highlights / other elements
 			if (match.index + match[0].length > nextNodeStart) {
 				return false;
 			}
@@ -458,10 +463,10 @@ const activate = (terms: MatchTerms, enabled: boolean, selectTermPtr: SelectTerm
 	restoreNodes();
 	if (!enabled) return;
 	if (!terms.length) {
-		// TODO: communicate changes to background script
-		terms = getSelection().toString().toLocaleLowerCase().replace(/\.|,/g, "").split(" ").filter(term => term !== "")
+		terms = getSelection().toString().replace(/\.|,/g, "").split(" ").filter(term => term !== "")
 			.map(term => new MatchTerm(term));
-		if (!terms.length) return;
+		browser.runtime.sendMessage(new BackgroundMessage(terms, true));
+		return;
 	}
 	const jumpToTerms: TermJumpFunctions = [];
 	addControls(jumpToTerms, updateTermControls, terms);
@@ -474,17 +479,14 @@ const activate = (terms: MatchTerms, enabled: boolean, selectTermPtr: SelectTerm
 };
 
 const actOnMessage = () => {
-	const terms: MatchTerms = [];
 	const selectTermPtr = new SelectTermPtr;
 	const patternPtr = new PatternPtr;
 	const updateTermControls: ControlUpdateFunctions = [];
 	const updateAllControls = () => updateTermControls.forEach(updateTermControl => updateTermControl());
 	const observer = getObserverNodeHighlighter(patternPtr, updateAllControls);
-	browser.runtime.onMessage.addListener((message: Message) => {
+	browser.runtime.onMessage.addListener((message: HighlightMessage) => {
 		if (message.terms) {
-			terms.splice(0, terms.length);
-			message.terms.forEach(term =>
-				terms.push(Object.assign(new MatchTerm(""), term)));
+			const terms = message.terms.map(term => Object.assign(new MatchTerm(""), term));
 			updateTermControls.splice(0, updateTermControls.length);
 			activate(terms, message.enabled, selectTermPtr, patternPtr, updateTermControls, updateAllControls, observer); 
 		} else if (message.command) {
