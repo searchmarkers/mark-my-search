@@ -240,7 +240,7 @@ const getStem = (() => {
 
 	const NORMALIZE_YS_RE = /Y/g;
 
-	return (word: string): string => {
+	const stem = (word: string): string => {
 		let l;
 		let match: RegExpExecArray | null;
 		let r1: number;
@@ -362,5 +362,10 @@ const getStem = (() => {
 		word = word.replace(NORMALIZE_YS_RE, "y");
 
 		return word;
+	};
+
+	return (word: string): string => {
+		// Retain case after necessary conversion to lowercase.
+		return Array.from(word.matchAll(new RegExp(stem(word.toLocaleLowerCase()), "gi")))[0][0];
 	};
 })();

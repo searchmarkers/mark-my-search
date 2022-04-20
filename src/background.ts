@@ -10,6 +10,7 @@ class ResearchID {
 			this.terms = terms;
 			return;
 		}
+		// TODO: investigate word-groups as terms (e.g. enclosed between speech marks)
 		const searchQuery = new URL(url).searchParams.get(SEARCH_PARAM);
 		const rawTerms = engine
 			? engine.extract(url)

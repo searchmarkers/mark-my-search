@@ -5,7 +5,8 @@ class MatchTerm {
     exp: string;
 	selector: string
 	pattern: RegExp;
-	patternWholeStem: RegExp;
+	wordPattern: RegExp;
+	wholeStemPattern: RegExp;
 
 	matchesCase: boolean;
 	matchesStem: boolean;
@@ -23,15 +24,20 @@ class MatchTerm {
 		this.exp = this.matchesStem ? getStem(this.phrase) : this.phrase;
 		this.selector = this.exp;
 		const flags = this.matchesCase ? "gu" : "giu";
-		const pattern = this.exp.replace(/(.)/g,"$1(\\p{Pd})?").slice(0, -9); // TODO: address code duplication [term processing]
-		this.pattern = new RegExp(this.matchesWhole && !this.matchesStem ? `\\b(?:${pattern})\\b` : pattern, flags);
-		if (this.matchesWhole && this.matchesStem)
-			this.patternWholeStem = new RegExp("");
-		// Highlighting algorithm uses special case for terms matching 'whole' as well as 'stem'.
+		const patternString = this.exp.replace(/(.)/g,"$1(\\p{Pd})?").slice(0, -9); // TODO: address code duplication [term processing]
+		this.pattern = new RegExp(this.matchesWhole && !this.matchesStem ? `\\b(?:${patternString})\\b` : patternString, flags);
+		if (this.matchesWhole && this.matchesStem) {
+			// Highlighting algorithm calls special case for term with match modes both 'whole' and 'stem'.
+			this.wordPattern = /\b\w+\b/g;
+			this.wholeStemPattern = new RegExp(`\\b(?:${patternString})\\b`, flags);
+			console.log(this.wholeStemPattern);
+		}
 	}
 
-	matchWholeStem(text: string, start: number, end: number) {
-		return !!(text[Math.max(0, start - 1)].match(this.patternWholeStem) && text[Math.min(text.length - 1, end + 1)].match(this.patternWholeStem));
+	matchWholeStem(text: string, start: number) {
+		console.log(getStem(Array.from(text.matchAll(this.wordPattern)).find(match => match.index + match[0].length > start)[0]));
+		return getStem(Array.from(text.matchAll(this.wordPattern)).find(match => match.index + match[0].length > start)[0])
+			.search(this.wholeStemPattern) !== -1;
 	}
 }
 

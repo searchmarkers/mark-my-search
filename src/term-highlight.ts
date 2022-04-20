@@ -43,20 +43,25 @@ const STYLE_MAIN = `
 @keyframes flash { 0% { background-color: hsla(0, 0%, 63%, 0.8); } 100% { background-color: hsla(0, 0%, 63%, 0); }; }
 .${select(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
 #${select(ElementID.BAR)} > div { all: revert; position: relative; display: inline; }
-.${select(ElementClass.CONTROL_EXPAND)}, .${select(ElementClass.CONTROL_EXPAND)}:hover {
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} {
 all: revert; position: relative; display: inline; font-weight: bold; height: 19px;
 border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
-.${select(ElementClass.CONTROL_EXPAND)}:hover, .${select(ElementClass.CONTROL_EXPAND)}:active { color: transparent; }
-.${select(ElementClass.CONTROL_EXPAND)}:hover .${select(ElementClass.OPTION_LIST)},
-.${select(ElementClass.CONTROL_EXPAND)}:active .${select(ElementClass.OPTION_LIST)} {
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active { color: transparent; }
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover > .${select(ElementClass.OPTION_LIST)},
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active > .${select(ElementClass.OPTION_LIST)} {
 all: revert; position: absolute; display: inline; top: 5px; padding-left: inherit; left: -7px; z-index: 1; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}, #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled { all: revert; display: inline; border-width: 2px; border-block-color: black; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled { background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
-.${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { all: revert; display: block;
-border-style: none; border-bottom-style: ridge; border-left-style: ridge; translate: 3px; }
-.${select(ElementClass.CONTROL_EXPAND)}:hover, .${select(ElementClass.CONTROL_EXPAND)}:active,
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)},
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled {
+all: revert; display: inline; border-width: 2px; border-block-color: hsl(0, 0%, 20%); border-style: dotted; }
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled {
+background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
+#${select(ElementID.BAR)} .${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
+#${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { all: revert; display: block; translate: 3px;
+border-style: none; border-bottom-style: solid; border-bottom-width: 1px; border-color: hsl(0, 0%, 50%); }
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active,
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { background-color: hsl(0, 0%, 75%); }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover { background-color: hsl(0, 0%, 65%); }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover:active { background-color: hsl(0, 0%, 50%); }
@@ -78,15 +83,15 @@ position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
 
 const TERM_HUES: ReadonlyArray<number> = [60, 300, 111, 240, 0, 191, 28];
 
-const HIGHLIGHT_TAGS: Record<string, ReadonlyArray<string>> = {
-	FLOW: ["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN", "MARK", "WBR", "CODE", "DATA", "DFN", "INS"],
-	SKIP: ["S", "DEL"], // TODO: use
-	REJECT: ["META", "STYLE", "SCRIPT", "NOSCRIPT"],
+const HIGHLIGHT_TAGS: Record<string, ReadonlySet<string>> = {
+	FLOW: new Set(["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN", "MARK", "WBR", "CODE", "DATA", "DFN", "INS"]),
+	SKIP: new Set(["S", "DEL"]), // TODO: use
+	REJECT: new Set(["META", "STYLE", "SCRIPT", "NOSCRIPT"]),
 };
 
 const jumpToTerm = (() => {
 	const getTermOccurrenceBlock = (element: Element) =>
-		HIGHLIGHT_TAGS.FLOW.includes(element.tagName) ? getTermOccurrenceBlock(element.parentElement) : element
+		HIGHLIGHT_TAGS.FLOW.has(element.tagName) ? getTermOccurrenceBlock(element.parentElement) : element
 	;
 
 	const getLastDescendant = (element: Element) =>
@@ -99,6 +104,7 @@ const jumpToTerm = (() => {
 	;
 
 	return (reverse: boolean, term?: MatchTerm) => {
+		// TODO: investigate https://www.geeksforgeeks.org/javascript-regular-expressions/ with term 'javascript'
 		const termSelector = term ? select(ElementClass.TERM, term.selector) : select(ElementClass.TERM_ANY);
 		const focusElement = document.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
 		if (focusElement) {
@@ -275,58 +281,58 @@ const addScrollMarkers = (() => {
 	};
 })();
 
-class UnbrokenNodeListItem {
-	next: UnbrokenNodeListItem;
-	value: Node;
-
-	constructor(value: Node) {
-		this.value = value;
-	}
-}
-
-class UnbrokenNodeList {
-	first: UnbrokenNodeListItem;
-	last: UnbrokenNodeListItem;
-
-	push(value: Node) {
-		if (this.last) {
-			this.last.next = new UnbrokenNodeListItem(value);
-			this.last = this.last.next;
-		} else {
-			this.first = new UnbrokenNodeListItem(value);
-			this.last = this.first;
-		}
-	}
-
-	getText() {
-		let text = "";
-		let current = this.first;
-		while (current) {
-			text += current.value.textContent;
-			current = current.next;
-		}
-		return text;
-	}
-
-	insertAfter(value: Node, itemBefore: UnbrokenNodeListItem) {
-		if (itemBefore) {
-			const itemAfter = itemBefore.next;
-			itemBefore.next = new UnbrokenNodeListItem(value);
-			itemBefore.next.next = itemAfter;
-		} else {
-			const itemAfter = this.first;
-			this.first = new UnbrokenNodeListItem(value);
-			this.first.next = itemAfter;
-		}
-	}
-
-	empty() {
-		this.first = undefined;
-		this.last = undefined; 
-	}
-}
-
 const highlightInNodes = (() => {
+	class UnbrokenNodeListItem {
+		next: UnbrokenNodeListItem;
+		value: Node;
+
+		constructor(value: Node) {
+			this.value = value;
+		}
+	}
+
+	class UnbrokenNodeList {
+		first: UnbrokenNodeListItem;
+		last: UnbrokenNodeListItem;
+	
+		push(value: Node) {
+			if (this.last) {
+				this.last.next = new UnbrokenNodeListItem(value);
+				this.last = this.last.next;
+			} else {
+				this.first = new UnbrokenNodeListItem(value);
+				this.last = this.first;
+			}
+		}
+	
+		insertAfter(value: Node, itemBefore: UnbrokenNodeListItem) {
+			if (itemBefore) {
+				const itemAfter = itemBefore.next;
+				itemBefore.next = new UnbrokenNodeListItem(value);
+				itemBefore.next.next = itemAfter;
+			} else {
+				const itemAfter = this.first;
+				this.first = new UnbrokenNodeListItem(value);
+				this.first.next = itemAfter;
+			}
+		}
+	
+		getText() {
+			let text = "";
+			let current = this.first;
+			while (current) {
+				text += current.value.textContent;
+				current = current.next;
+			}
+			return text;
+		}
+	
+		clear() {
+			this.first = undefined;
+			this.last = undefined; 
+		}
+	}
+
 	const highlightInNode = (wordRightPattern: RegExp, term: MatchTerm, textEndNode: Node, start: number, end: number) => {
 		const text = textEndNode.textContent;
 		start = Math.max(0, start);
@@ -351,21 +357,20 @@ const highlightInNodes = (() => {
 	const highlightAtBreakLevel = (wordRightPattern: RegExp, unbrokenNodes: UnbrokenNodeList, terms: MatchTerms) => {
 		if (unbrokenNodes.first) {
 			for (const term of terms) {
-				const matches = Array.from(unbrokenNodes.getText().matchAll(term.pattern));
-				let i = 0;
+				const textFlow = unbrokenNodes.getText();
+				const matches = Array.from(textFlow.matchAll(term.pattern));
+				let matchIdx = 0;
 				let currentNodeStart = 0;
 				let nodeItemPrevious: UnbrokenNodeListItem;
 				let nodeItem = unbrokenNodes.first;
 				while (nodeItem) {
 					const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
-					for (; i < matches.length; i++) {
-						const match = matches[i];
+					for (; matchIdx < matches.length; matchIdx++) {
+						const match = matches[matchIdx];
 						if (match.index >= nextNodeStart)
 							break;
-						if (match.index + match[0].length < currentNodeStart)
-							continue;
-						if (term.matchesWhole && term.matchesStem
-							&& !term.matchWholeStem(nodeItem.value.textContent, match.index - currentNodeStart, match.index - currentNodeStart + match[0].length))
+						if (match.index + match[0].length < currentNodeStart || (term.matchesWhole && term.matchesStem
+							&& !term.matchWholeStem(textFlow, match.index)))
 							continue;
 						const textLengthOriginal = nodeItem.value.textContent.length;
 						const newTextNode = highlightInNode(wordRightPattern, term,
@@ -384,11 +389,11 @@ const highlightInNodes = (() => {
 				}
 			}
 		}
-		unbrokenNodes.empty();
+		unbrokenNodes.clear();
 	};
 
 	const canHighlightInNextSiblings = (node: Node): boolean => node.nodeType === Node.TEXT_NODE ||
-		(node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.includes(node["tagName"])
+		(node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.has(node["tagName"])
 		&& (node.nodeType !== Node.ELEMENT_NODE || !node["classList"].contains(select(ElementClass.TERM_ANY))))
 			|| (node.nextSibling && canHighlightInNextSiblings(node.nextSibling))
 	; // TODO: find better alternative to hack
@@ -409,9 +414,9 @@ const highlightInNodes = (() => {
 				}
 				return NodeFilter.FILTER_ACCEPT;
 			}
-			if (node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.includes(node["tagName"])
+			if (node.nodeType === Node.ELEMENT_NODE && !HIGHLIGHT_TAGS.REJECT.has(node["tagName"])
 				&& (node.nodeType !== Node.ELEMENT_NODE || !node["classList"].contains(select(ElementClass.TERM_ANY)))) {
-				if (!HIGHLIGHT_TAGS.FLOW.includes(node["tagName"])) {
+				if (!HIGHLIGHT_TAGS.FLOW.has(node["tagName"])) {
 					if (node.hasChildNodes()) breakLevels.push(level);
 					highlightAtBreakLevel(wordRightPattern, unbrokenNodes, terms);
 				}
@@ -459,7 +464,7 @@ const restoreNodes = () => {
 const getObserverNodeHighlighter = (() => {
 	const canHighlightNode = (node: Node): boolean =>
 		!node || (node.nodeType !== Node.ELEMENT_NODE
-			|| (!HIGHLIGHT_TAGS.REJECT.includes(node["tagName"]) && !node["classList"].contains(select(ElementClass.TERM_ANY)))
+			|| (!HIGHLIGHT_TAGS.REJECT.has(node["tagName"]) && !node["classList"].contains(select(ElementClass.TERM_ANY)))
 		&& canHighlightNode(node.parentElement))
 	;
 
