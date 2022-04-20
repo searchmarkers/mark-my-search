@@ -7,7 +7,7 @@
 // Created by @localvoid at https://github.com/localvoid/stemr/blob/master/src/index.ts, modified for ESLint by @ator-dev.
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const stem = () => {
+const getStem = (() => {
 	// Exceptional forms
 	const EXCEPTIONAL_FORMS4: { [k: string]: string } = {
 		"skis": "ski",
@@ -334,7 +334,7 @@ const stem = () => {
 				l = word.charCodeAt(word.length - 2);
 				// "a|e|i|o|u|y"
 				if (l < 97 || l > 121 || (l !== 97 && l !== 101 && l !== 105 && l !== 111 && l !== 117 && l !== 121)) {
-					word = word.slice(0, -1) + "i";
+					word = word.slice(0, -1);// + "i"; TODO: fix in highlighting
 				}
 			}
 		}
@@ -363,4 +363,4 @@ const stem = () => {
 
 		return word;
 	};
-};
+})();

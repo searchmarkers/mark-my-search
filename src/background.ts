@@ -10,9 +10,10 @@ class ResearchID {
 			this.terms = terms;
 			return;
 		}
+		const searchQuery = new URL(url).searchParams.get(SEARCH_PARAM);
 		const rawTerms = engine
 			? engine.extract(url)
-			: new URL(url).searchParams.get(SEARCH_PARAM).split(" ");
+			: searchQuery.split(" ");
 		this.terms = Array.from(new Set(rawTerms))
 			.filter(term => stoplist.indexOf(term) === -1)
 			.map(term => new MatchTerm(JSON.stringify(term).replace(/\W/g, "")));
@@ -86,7 +87,6 @@ const updateDeactivateContextMenus = async (researchIds: ResearchIDs) => {
 	for (const tabId of Object.keys(researchIds)) {
 		await browser.tabs.get(Number(tabId)).then(tab => tabUrls.push(tab.url));
 	}
-	console.log(tabUrls);
 	browser.contextMenus.update(getMenuSwitchId(false), { documentUrlPatterns: Array.from(new Set(tabUrls)) });
 };
 
@@ -141,16 +141,14 @@ const createMenuSwitches = (researchIds: ResearchIDs) => {
 			browser.tabs.sendMessage(tab.id, new HighlightMessage(undefined, [], false));
 			browser.tabs.get(tab.id).then(tab => {
 				delete researchIds[tab.id];
-				console.log(researchIds);
 				updateDeactivateContextMenus(researchIds);
 			});
 		}
 	});
 	browser.contextMenus.create({ title: "Activate Re&search Mode", id: getMenuSwitchId(true), contexts: ["selection"],
-		onclick: (event, tab) => {
+		onclick: async (event, tab) => {
 			if (!(tab.id in researchIds)) {
-				console.log(researchIds);
-				injectScripts(tab.id, "/dist/term-highlight.js");
+				await injectScripts(tab.id, "/dist/term-highlight.js");
 			}
 			browser.tabs.sendMessage(tab.id, new HighlightMessage(undefined, [], true));
 		}
@@ -198,7 +196,7 @@ const sendMessageOnCommand = () => browser.commands.onCommand.addListener(comman
 const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 	browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
 		if (!(sender.tab.id in researchIds)) {
-			researchIds[sender.tab.id] = new ResearchID;
+			researchIds[sender.tab.id] = new ResearchID(undefined, undefined, undefined, message.terms);
 		}
 		if (message.makeUnique) {
 			browser.tabs.sendMessage(sender.tab.id, storeNewResearchDetails(
