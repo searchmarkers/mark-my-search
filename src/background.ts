@@ -1,54 +1,67 @@
 type ResearchIDs = Record<number, ResearchID>;
-type Stoplist = Array<string>;
+type Stoplist = Set<string>;
 type Engines = Record<string, Engine>;
+
+interface ResearchArgs {
+	terms?: MatchTerms;
+	termsRaw?: Array<string>;
+	stoplist?: Stoplist;
+	url?: string;
+	engine?: Engine;
+}
 
 class ResearchID {
 	terms: MatchTerms;
 
-	constructor(stoplist?: Array<string>, url?: string, engine?: Engine, terms?: MatchTerms) {
-		if (terms) {
-			this.terms = terms;
+	constructor(args: ResearchArgs) {
+		if (args.terms) {
+			this.terms = args.terms;
 			return;
 		}
-		// TODO: investigate word-groups as terms (e.g. enclosed between speech marks)
-		const searchQuery = new URL(url).searchParams.get(SEARCH_PARAM);
-		const rawTerms = engine
-			? engine.extract(url)
-			: searchQuery.split(" ");
-		this.terms = Array.from(new Set(rawTerms))
-			.filter(term => stoplist.indexOf(term) === -1)
-			.map(term => new MatchTerm(JSON.stringify(term).replace(/\W/g, "")));
-		// TODO: address code duplication [term processing]
+		const searchQuery = new URL(args.url).searchParams.get(SEARCH_PARAM);
+		if (!args.termsRaw) {
+			if (args.engine) {
+				args.termsRaw = args.engine.extract(args.url);
+			} else {
+				const phraseGroups = searchQuery.split("\"");
+				args.termsRaw = phraseGroups.flatMap(phraseGroups.length % 2
+					? ((phraseGroup, i) => i % 2 ? phraseGroup : phraseGroup.split(" ").filter(phrase => !!phrase))
+					: phraseGroup => phraseGroup.split(" "));
+			}
+		}
+		this.terms = Array.from(new Set(args.termsRaw))
+			.filter(phrase => !args.stoplist.has(phrase))
+			.map(phrase => new MatchTerm(phrase));
 	}
 }
 
 class Engine {
-	#hostname: string;
-	#pathname: [string, string];
-	#param: string;
+	hostname: string;
+	pathname: [string, string];
+	param: string;
 
 	constructor(pattern: string) {
 		// TODO: error checking?
 		const urlPattern = new URL(pattern);
-		this.#hostname = urlPattern.hostname;
+		this.hostname = urlPattern.hostname;
 		if (urlPattern.pathname.includes(ENGINE_RFIELD)) {
 			const parts = urlPattern.pathname.split(ENGINE_RFIELD);
-			this.#pathname = [parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined)];
+			this.pathname = [parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined)];
 		} else {
-			this.#param = Array.from(urlPattern.searchParams).find(param => param[1].includes(ENGINE_RFIELD))[0];
+			this.param = Array.from(urlPattern.searchParams).find(param => param[1].includes(ENGINE_RFIELD))[0];
 		}
 	}
 
 	extract(urlString: string, matchOnly = false) {
 		const url = new URL(urlString);
-		return url.hostname !== this.#hostname ? null : this.#pathname
-			? url.pathname.startsWith(this.#pathname[0]) && url.pathname.slice(this.#pathname[0].length).includes(this.#pathname[1])
+		return url.hostname !== this.hostname ? null : this.pathname
+			? url.pathname.startsWith(this.pathname[0]) && url.pathname.slice(this.pathname[0].length).includes(this.pathname[1])
 				? matchOnly ? [] : url.pathname.slice(
-					url.pathname.indexOf(this.#pathname[0]) + this.#pathname[0].length,
-					url.pathname.lastIndexOf(this.#pathname[1])).split("+")
+					url.pathname.indexOf(this.pathname[0]) + this.pathname[0].length,
+					url.pathname.lastIndexOf(this.pathname[1])).split("+")
 				: null
-			: url.searchParams.has(this.#param)
-				? matchOnly ? [] : url.searchParams.get(this.#param).split(" ")
+			: url.searchParams.has(this.param)
+				? matchOnly ? [] : url.searchParams.get(this.param).split(" ")
 				: null;
 	}
 
@@ -57,9 +70,9 @@ class Engine {
 	}
 
 	equals(engine: Engine) {
-		return engine.#hostname === this.#hostname
-			&& engine.#param === this.#param
-			&& engine.#pathname === this.#pathname;
+		return engine.hostname === this.hostname
+			&& engine.param === this.param
+			&& engine.pathname === this.pathname;
 	}
 }
 
@@ -94,22 +107,24 @@ const updateDeactivateContextMenus = async (researchIds: ResearchIDs) => {
 const storeNewResearchDetails = (researchIds: ResearchIDs, researchId: ResearchID, tabId: number) => {
 	researchIds[tabId] = researchId;
 	updateDeactivateContextMenus(researchIds);
-	return new HighlightMessage(undefined, researchIds[tabId].terms);
+	return { terms: researchIds[tabId].terms } as HighlightMessage;
 };
 
-const getCachedResearchDetails = (researchIds: ResearchIDs, tabId: number) => {
-	return new HighlightMessage(undefined, researchIds[tabId].terms);
-};
+const getCachedResearchDetails = (researchIds: ResearchIDs, tabId: number) =>
+	({ terms: researchIds[tabId].terms } as HighlightMessage)
+;
 
 const updateCachedResearchDetails = (researchIds: ResearchIDs, terms: MatchTerms, tabId: number) => {
 	researchIds[tabId].terms = terms;
-	return new HighlightMessage(undefined, terms);
+	return { terms } as HighlightMessage;
 };
 
-const injectScripts = (tabId: number, script: string) =>
+const injectScripts = (tabId: number, script: string, message?: HighlightMessage) =>
 	browser.tabs.executeScript(tabId, { file: "/dist/stemmer.js" }).then(() =>
 		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
-			browser.tabs.executeScript(tabId, { file: script })))
+			browser.tabs.executeScript(tabId, { file: script }).then(() =>
+				browser.commands.getAll().then(commands =>
+					browser.tabs.sendMessage(tabId, Object.assign({ commands } as HighlightMessage, message))))))
 ;
 
 const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
@@ -118,10 +133,9 @@ const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researc
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
 			browser.tabs.get(details.tabId).then(tab =>
-				injectScripts(tab.id, script).then(() => browser.tabs.sendMessage(tab.id, isSearchPage
-					? storeNewResearchDetails(researchIds, new ResearchID(stoplist, tab.url, engine), tab.id)
+				injectScripts(tab.id, script, isSearchPage
+					? storeNewResearchDetails(researchIds, new ResearchID({ stoplist, url: tab.url, engine }), tab.id)
 					: getCachedResearchDetails(researchIds, tab.id))
-				)
 			);
 		}
 	})
@@ -139,7 +153,7 @@ const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 const createMenuSwitches = (researchIds: ResearchIDs) => {
 	browser.contextMenus.create({ title: "Deactivate Re&search Mode", id: getMenuSwitchId(false), contexts: ["page"],
 		documentUrlPatterns: [], onclick: (event, tab) => {
-			browser.tabs.sendMessage(tab.id, new HighlightMessage(undefined, [], false));
+			browser.tabs.sendMessage(tab.id, { terms: [], disable: true } as HighlightMessage);
 			browser.tabs.get(tab.id).then(tab => {
 				delete researchIds[tab.id];
 				updateDeactivateContextMenus(researchIds);
@@ -147,12 +161,9 @@ const createMenuSwitches = (researchIds: ResearchIDs) => {
 		}
 	});
 	browser.contextMenus.create({ title: "Activate Re&search Mode", id: getMenuSwitchId(true), contexts: ["selection"],
-		onclick: async (event, tab) => {
-			if (!(tab.id in researchIds)) {
-				await injectScripts(tab.id, "/dist/term-highlight.js");
-			}
-			browser.tabs.sendMessage(tab.id, new HighlightMessage(undefined, [], true));
-		}
+		onclick: async (event, tab) => tab.id in researchIds
+			? browser.tabs.sendMessage(tab.id, { terms: [] } as HighlightMessage)
+			: injectScripts(tab.id, "/dist/term-highlight.js", { terms: [] } as HighlightMessage)
 	});
 };
 
@@ -190,18 +201,18 @@ const addEngineOnBookmarkChanged = (engines: Engines) => {
 
 const sendMessageOnCommand = () => browser.commands.onCommand.addListener(command =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
-		browser.tabs.sendMessage(tabs[0].id, new HighlightMessage(command))
+		browser.tabs.sendMessage(tabs[0].id, { command } as HighlightMessage)
 	)
 );
 
 const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 	browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
 		if (!(sender.tab.id in researchIds)) {
-			researchIds[sender.tab.id] = new ResearchID(undefined, undefined, undefined, message.terms);
+			researchIds[sender.tab.id] = new ResearchID({ terms: message.terms });
 		}
 		if (message.makeUnique) {
 			browser.tabs.sendMessage(sender.tab.id, storeNewResearchDetails(
-				researchIds, new ResearchID(undefined, undefined, undefined, message.terms), sender.tab.id));
+				researchIds, new ResearchID({ terms: message.terms }), sender.tab.id));
 		} else {
 			const highlightMessage = updateCachedResearchDetails(researchIds, message.terms, sender.tab.id);
 			Object.keys(researchIds).forEach(tabId =>
@@ -212,7 +223,7 @@ const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 ;
 
 const initialize = () => {
-	const stoplist: Stoplist = [
+	const stoplist: Stoplist = new Set([
 		"a",
 		"about",
 		"above",
@@ -387,7 +398,7 @@ const initialize = () => {
 		"yours",
 		"yourself",
 		"yourselves",
-	];
+	]);
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
 	createMenuSwitches(researchIds);

@@ -16,8 +16,7 @@
     "rules": {
         "indent": [
             "error",
-            "tab",
-            { "flatTernaryExpressions": true }
+            "tab"
         ],
         "linebreak-style": [
             "error",
