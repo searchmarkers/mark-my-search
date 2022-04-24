@@ -24,6 +24,7 @@ const getWordStem = (() => {
 			"eli" : "e",
 			"ousli" : "ous",
 			"ization" : "ize",
+			"isation" : "ise",
 			"ation" : "ate",
 			"ator" : "ate",
 			"alism" : "al",
@@ -40,6 +41,7 @@ const getWordStem = (() => {
 			"icate" : "ic",
 			"ative" : "",
 			"alize" : "al",
+			"alise" : "al",
 			"iciti" : "ic",
 			"ical" : "ic",
 			"ful" : "",
@@ -68,7 +70,7 @@ const getWordStem = (() => {
 
 			const firstch = w[0];
 			if (firstch === "y") {
-				w = firstch.toUpperCase() + w.substr(1);
+				w = firstch.toUpperCase() + w.substring(1);
 			}
 
 			// Step 1a
@@ -113,7 +115,7 @@ const getWordStem = (() => {
 			}
 
 			// Step 2
-			re0 = /^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$/;
+			re0 = /^(.+?)(ational|tional|enci|anci|i(?:z|s)er|bli|alli|entli|eli|ousli|i(?:z|s)ation|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$/;
 			if (re0.test(w)) {
 				const fp = re0.exec(w);
 				stem = fp[1];
@@ -125,7 +127,7 @@ const getWordStem = (() => {
 			}
 
 			// Step 3
-			re0 = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/;
+			re0 = /^(.+?)(icate|ative|ali(?:z|s)e|iciti|ical|ful|ness)$/;
 			if (re0.test(w)) {
 				const fp = re0.exec(w);
 				stem = fp[1];
@@ -137,7 +139,7 @@ const getWordStem = (() => {
 			}
 
 			// Step 4
-			re0 = /^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|ize)$/;
+			re0 = /^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|i(?:z|s)e)$/;
 			re1 = /^(.+?)(s|t)(ion)$/;
 			if (re0.test(w)) {
 				const fp = re0.exec(w);
@@ -178,15 +180,20 @@ const getWordStem = (() => {
 			// and turn initial Y back to y
 
 			if (firstch === "y") {
-				w = firstch.toLowerCase() + w.substr(1);
+				w = firstch.toLowerCase() + w.substring(1);
 			}
 
 			return w;
 		};
 	})();
 
+	const ENDINGS = new Set(["e", "i"]);
+
 	return (word: string) => {
 		// Retain case after necessary conversion to lowercase.
-		return Array.from(word.matchAll(new RegExp(getStem(word.toLocaleLowerCase()), "gi")))[0][0];
+		// TODO: generate regex for possible word forms (likely large, non-stemmer project)
+		let wordStem = getStem(word.toLocaleLowerCase());
+		wordStem = Array.from(word.matchAll(new RegExp(wordStem.replace(/(.)/g,"(?:$1") + wordStem.replace(/./g, ")?"), "gi")))[0][0];
+		return ENDINGS.has(wordStem.at(-1)) ? wordStem.slice(0, -1) : wordStem;
 	};
 })();

@@ -153,7 +153,7 @@ const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 ;
 
 const createMenuSwitches = (researchIds: ResearchIDs) => {
-	browser.contextMenus.create({ title: "Stop Re&search", id: getMenuSwitchId(false), contexts: ["page"],
+	browser.contextMenus.create({ title: "Stop Researc&h", id: getMenuSwitchId(false), contexts: ["page"],
 		documentUrlPatterns: [], onclick: (event, tab) => {
 			browser.tabs.sendMessage(tab.id, { terms: [], disable: true } as HighlightMessage);
 			browser.tabs.get(tab.id).then(tab => {
@@ -162,7 +162,7 @@ const createMenuSwitches = (researchIds: ResearchIDs) => {
 			});
 		}
 	});
-	browser.contextMenus.create({ title: "Re&search Selection", id: getMenuSwitchId(true), contexts: ["selection"],
+	browser.contextMenus.create({ title: "Researc&h Selection", id: getMenuSwitchId(true), contexts: ["selection"],
 		onclick: async (event, tab) => tab.id in researchIds
 			? browser.tabs.sendMessage(tab.id, { terms: [] } as HighlightMessage)
 			: injectScripts(tab.id, "/dist/term-highlight.js", { terms: [] } as HighlightMessage)

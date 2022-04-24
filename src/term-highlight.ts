@@ -10,6 +10,7 @@ enum ElementClass {
 	TERM_ANY = "any",
 	TERM = "term",
 	FOCUS = "focus",
+	FOCUS_CONTAINER = "focus-contain",
 	FOCUS_REVERT = "focus-revert",
 	MARKER_BLOCK = "marker-block",
 	DISABLED = "disabled",
@@ -42,7 +43,7 @@ const STYLE_CONSTANT = `
 
 const STYLE_MAIN = `
 @keyframes flash { 0% { background-color: hsla(0, 0%, 65%, 0.8); } 100% {}; }
-.${select(ElementClass.FOCUS)} { animation-name: flash; animation-duration: 1s; }
+.${select(ElementClass.FOCUS_CONTAINER)} { animation-name: flash; animation-duration: 1s; }
 #${select(ElementID.BAR)} > div { all: revert; position: relative; display: inline-block; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} {
 all: revert; position: relative; font-weight: bold; height: 19px;
@@ -56,7 +57,7 @@ all: revert; position: absolute; top: 5px; padding-left: inherit; left: -7px; z-
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled,
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
-all: revert; border-width: 2px; border-block-color: hsl(0, 0%, 20%); border-style: dotted; color: black; }
+all: revert; border-width: 2px; border-block-color: hsl(0, 0%, 20%); border-style: dotted; border-radius: 4px; color: black; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
 background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input,
@@ -64,15 +65,17 @@ background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
 all: revert; padding-block: 0; margin-left: 6px; border: 0; width: 100px; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input:disabled,
 #${select(ElementID.BAR)} > button > input:disabled { display: none; }
-#${select(ElementID.BAR)} > button { all: revert; border-width: 2px; margin-left: 4px; background-color: hsl(0, 0%, 80%); }
+#${select(ElementID.BAR)} > button { all: revert; border: 0; border-radius: 4px; margin-left: 4px; background-color: hsl(0, 0%, 80%); }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { all: revert; display: block; translate: 3px;
 border-style: none; border-bottom-style: solid; border-bottom-width: 1px; border-color: hsl(0, 0%, 50%); }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,1px
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active,
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { background-color: hsl(0, 0%, 75%); }
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover { background-color: hsl(0, 0%, 65%); }
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover:active { background-color: hsl(0, 0%, 50%); }
+#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover,
+#${select(ElementID.BAR)} > button:hover { background-color: hsl(0, 0%, 65%); }
+#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover:active,
+#${select(ElementID.BAR)} > button:active { background-color: hsl(0, 0%, 50%); }
 #${select(ElementID.BAR)} { all: revert; position: fixed; left: 20px; z-index: ${Z_INDEX_MAX}; color-scheme: light;
 line-height: initial; font-size: 0; display: none; }
 #${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) { display: inline; }
@@ -102,10 +105,6 @@ const jumpToTerm = (() => {
 		HIGHLIGHT_TAGS.FLOW.has(element.tagName) ? getTermOccurrenceBlock(element.parentElement) : element
 	;
 
-	const getLastDescendant = (element: Element) =>
-		element.lastElementChild ? getLastDescendant(element.lastElementChild) : element
-	;
-
 	const isVisible = (element: HTMLElement) =>
 		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
 		&& window.getComputedStyle(element).visibility !== "hidden"
@@ -113,24 +112,24 @@ const jumpToTerm = (() => {
 
 	return (reverse: boolean, term?: MatchTerm) => {
 		const termSelector = term ? select(ElementClass.TERM, term.selector) : select(ElementClass.TERM_ANY);
-		const focusElement = document.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
-		if (focusElement) {
-			focusElement.classList.remove(select(ElementClass.FOCUS));
-			if (focusElement.classList.contains(select(ElementClass.FOCUS_REVERT))) {
-				focusElement.tabIndex = -1;
-				focusElement.classList.remove(select(ElementClass.FOCUS_REVERT));
+		const focusBase = document.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
+		const focusContainer = document.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
+		if (focusBase) {
+			focusContainer.classList.remove(select(ElementClass.FOCUS_CONTAINER));
+			focusBase.classList.remove(select(ElementClass.FOCUS));
+			if (focusBase.classList.contains(select(ElementClass.FOCUS_REVERT))) {
+				focusBase.tabIndex = -1;
+				focusBase.classList.remove(select(ElementClass.FOCUS_REVERT));
 			}
 		}
 		const selection = document.getSelection();
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element.classList.contains(termSelector) && isVisible(element)
+			element.classList.contains(termSelector) && isVisible(element) && getTermOccurrenceBlock(element) !== focusContainer
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
 		const anchor = selection.anchorNode;
 		walk.currentNode = anchor
-			? reverse
-				? anchor
-				: getLastDescendant(anchor.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor.parentElement)
+			? anchor
 			: document.body;
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 		let element = walk[nextNodeMethod]() as HTMLElement;
@@ -139,8 +138,8 @@ const jumpToTerm = (() => {
 			element = walk[nextNodeMethod]() as HTMLElement;
 			if (!element) return;
 		}
-		// TODO: direct next/previous focusable (without same focus-ancestor), add FOCUS class also to that
-		element = getTermOccurrenceBlock(element);
+		const container = getTermOccurrenceBlock(element);
+		container.classList.add(select(ElementClass.FOCUS_CONTAINER));
 		element.classList.add(select(ElementClass.FOCUS));
 		if (element.tabIndex === -1) {
 			element.classList.add(select(ElementClass.FOCUS_REVERT));
@@ -655,6 +654,7 @@ const actOnMessage = () => {
 	const observer = getObserverNodeHighlighter(terms, updateAllControls);
 	browser.runtime.onMessage.addListener((message: HighlightMessage) => {
 		if (message.terms) {
+			// TODO: lightweight refresh for partial update
 			if (message.commands)
 				commands = message.commands;
 			terms.splice(0, terms.length);
