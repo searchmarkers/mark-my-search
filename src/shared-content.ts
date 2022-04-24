@@ -17,8 +17,10 @@ class MatchTerm {
 	}
     
 	compile() {
-		this.matchesStem = !this.phrase.includes(" ");
-		this.exp = this.matchesStem ? getStem(this.phrase) : this.phrase;
+		if (this.phrase.includes(" ")) {
+			this.matchesStem = false;
+		}
+		this.exp = this.matchesStem ? getWordStem(this.phrase) : this.phrase;
 		this.selector = this.exp.replace(/\W/g, "");
 		const flags = this.matchesCase ? "gu" : "giu";
 		const patternString = this.exp.slice(0, -1).replace(/(.)/g,"$1(\\p{Pd})?") + this.exp.at(-1);
@@ -31,7 +33,7 @@ class MatchTerm {
 	}
 
 	matchWholeStem(text: string, start: number) {
-		return getStem(Array.from(text.matchAll(this.wordPattern)).find(match => match.index + match[0].length > start)[0])
+		return getWordStem(Array.from(text.matchAll(this.wordPattern)).find(match => match.index + match[0].length > start)[0])
 			.search(this.wholeStemPattern) !== -1;
 	}
 }

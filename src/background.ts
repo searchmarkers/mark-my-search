@@ -96,7 +96,7 @@ const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
 	tabId in researchIds
 ;
 
-const updateDeactivateContextMenus = async (researchIds: ResearchIDs) => {
+const updateContextMenus = async (researchIds: ResearchIDs) => {
 	const tabUrls: Array<string> = [];
 	for (const tabId of Object.keys(researchIds)) {
 		await browser.tabs.get(Number(tabId)).then(tab => tabUrls.push(tab.url));
@@ -106,7 +106,7 @@ const updateDeactivateContextMenus = async (researchIds: ResearchIDs) => {
 
 const storeNewResearchDetails = (researchIds: ResearchIDs, researchId: ResearchID, tabId: number) => {
 	researchIds[tabId] = researchId;
-	updateDeactivateContextMenus(researchIds);
+	updateContextMenus(researchIds);
 	return { terms: researchIds[tabId].terms } as HighlightMessage;
 };
 
@@ -132,11 +132,13 @@ const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researc
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab =>
+			browser.tabs.get(details.tabId).then(tab => {
 				injectScripts(tab.id, script, isSearchPage
 					? storeNewResearchDetails(researchIds, new ResearchID({ stoplist, url: tab.url, engine }), tab.id)
-					: getCachedResearchDetails(researchIds, tab.id))
-			);
+					: getCachedResearchDetails(researchIds, tab.id));
+				if (!isSearchPage)
+					updateContextMenus(researchIds);
+			});
 		}
 	})
 ;
@@ -145,22 +147,22 @@ const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 	browser.tabs.onCreated.addListener(tab => {
 		if (tab.openerTabId in researchIds) {
 			researchIds[tab.id] = researchIds[tab.openerTabId];
-			updateDeactivateContextMenus(researchIds);
+			updateContextMenus(researchIds);
 		}
 	})
 ;
 
 const createMenuSwitches = (researchIds: ResearchIDs) => {
-	browser.contextMenus.create({ title: "Deactivate Re&search Mode", id: getMenuSwitchId(false), contexts: ["page"],
+	browser.contextMenus.create({ title: "Stop Re&search", id: getMenuSwitchId(false), contexts: ["page"],
 		documentUrlPatterns: [], onclick: (event, tab) => {
 			browser.tabs.sendMessage(tab.id, { terms: [], disable: true } as HighlightMessage);
 			browser.tabs.get(tab.id).then(tab => {
 				delete researchIds[tab.id];
-				updateDeactivateContextMenus(researchIds);
+				updateContextMenus(researchIds);
 			});
 		}
 	});
-	browser.contextMenus.create({ title: "Activate Re&search Mode", id: getMenuSwitchId(true), contexts: ["selection"],
+	browser.contextMenus.create({ title: "Re&search Selection", id: getMenuSwitchId(true), contexts: ["selection"],
 		onclick: async (event, tab) => tab.id in researchIds
 			? browser.tabs.sendMessage(tab.id, { terms: [] } as HighlightMessage)
 			: injectScripts(tab.id, "/dist/term-highlight.js", { terms: [] } as HighlightMessage)

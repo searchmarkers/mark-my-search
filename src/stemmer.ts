@@ -1,371 +1,192 @@
-/**
- * Snowball (Porter2) stemming algorithm.
- *
- * http://snowball.tartarus.org/algorithms/english/stemmer.html
- */
+// Porter stemmer in Javascript. Few comments, but it's easy to follow against the rules in the original
+// paper, in
+//
+//  Porter, 1980, An algorithm for suffix stripping, Program, Vol. 14,
+//  no. 3, pp 130-137,
+//
+// see also http://www.tartarus.org/~martin/PorterStemmer
 
-// Created by @localvoid at https://github.com/localvoid/stemr/blob/master/src/index.ts, modified for ESLint by @ator-dev.
+// Release 1 be 'andargor', Jul 2004
+// Release 2 (substantially revised) by Christopher McKenzie, Aug 2009
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStem = (() => {
-	// Exceptional forms
-	const EXCEPTIONAL_FORMS4: { [k: string]: string } = {
-		"skis": "ski",
-		"idly": "idl",
-		"ugly": "ugli",
-		"only": "onli",
-		"news": "news",
-		"howe": "howe",
-		"bias": "bias",
-	};
+const getWordStem = (() => {
+	const getStem = (() => {
+		const step2list = {
+			"ational" : "ate",
+			"tional" : "tion",
+			"enci" : "ence",
+			"anci" : "ance",
+			"izer" : "ize",
+			"bli" : "ble",
+			"alli" : "al",
+			"entli" : "ent",
+			"eli" : "e",
+			"ousli" : "ous",
+			"ization" : "ize",
+			"ation" : "ate",
+			"ator" : "ate",
+			"alism" : "al",
+			"iveness" : "ive",
+			"fulness" : "ful",
+			"ousness" : "ous",
+			"aliti" : "al",
+			"iviti" : "ive",
+			"biliti" : "ble",
+			"logi" : "log"
+		};
 
-	const EXCEPTIONAL_FORMS5: { [k: string]: string } = {
-		"skies": "sky",
-		"dying": "die",
-		"lying": "lie",
-		"tying": "tie",
-		"early": "earli",
-		"atlas": "atlas",
-		"andes": "andes",
-	};
+		const step3list = {
+			"icate" : "ic",
+			"ative" : "",
+			"alize" : "al",
+			"iciti" : "ic",
+			"ical" : "ic",
+			"ful" : "",
+			"ness" : ""
+		};
 
-	const EXCEPTIONAL_FORMS6: { [k: string]: string } = {
-		"gently": "gentl",
-		"singly": "singl",
-		"cosmos": "cosmos",
-	};
+		const c = "[^aeiou]";          // consonant
+		const v = "[aeiouy]";          // vowel
+		const C = c + "[^aeiouy]*";    // consonant sequence
+		const V = v + "[aeiou]*";      // vowel sequence
 
-	// Exceptional forms post 1a step
-	const EXCEPTIONAL_FORMS_POST_1A: { [k: string]: number } = {
-		"inning": 0,
-		"outing": 0,
-		"canning": 0,
-		"herring": 0,
-		"earring": 0,
-		"proceed": 0,
-		"exceed": 0,
-		"succeed": 0,
-	};
+		const mgr0 = "^(" + C + ")?" + V + C;               // [C]VC... is m>0
+		const meq1 = "^(" + C + ")?" + V + C + "(" + V + ")?$";  // [C]VC[V] is m=1
+		const mgr1 = "^(" + C + ")?" + V + C + V + C;       // [C]VCVC... is m>1
+		const s_v = "^(" + C + ")?" + v;                   // vowel in stem
 
-	const RANGE_RE = /[^aeiouy]*[aeiouy]+[^aeiouy](\w*)/;
+		return (w: string) => {
+			let stem: string,
+				suffix: string,
+				re0: RegExp,
+				re1: RegExp,
+				re2: RegExp,
+				re3: RegExp;
 
-	const EWSS1_RE = /^[aeiouy][^aeiouy]$/;
-	const EWSS2_RE = /.*[^aeiouy][aeiouy][^aeiouywxY]$/;
+			if (w.length < 3) { return w; }
 
-	function isEndsWithShortSyllable(word: string): boolean {
-		if (word.length === 2) {
-			return EWSS1_RE.test(word);
-		}
-		return EWSS2_RE.test(word);
-	}
-
-	// Capitalize consonant regexp
-	const CCY_RE = /([aeiouy])y/g;
-	const S1A_RE = /[aeiouy]./;
-
-	function step1bHelper(word: string, r1: number): string {
-		if (word.endsWith("at") || word.endsWith("bl") || word.endsWith("iz")) {
-			return word + "e";
-		}
-		// double ending
-		const l0 = word.charCodeAt(word.length - 1);
-		// /(bb|dd|ff|gg|mm|nn|pp|rr|tt)$/
-		if (l0 === word.charCodeAt(word.length - 2) &&
-			(l0 === 98 ||
-				l0 === 100 || l0 === 102 ||
-				l0 === 103 || l0 === 109 ||
-				l0 === 110 || l0 === 112 ||
-				l0 === 114 || l0 === 116)) {
-
-			return word.slice(0, -1);
-		}
-		// is short word
-		if (r1 === word.length && isEndsWithShortSyllable(word)) {
-			return word + "e";
-		}
-		return word;
-	}
-
-	const S1BSUFFIXES_RE = /(ed|edly|ing|ingly)$/;
-	const S1B_RE = /[aeiouy]/;
-
-	function step1b(word: string, r1: number): string {
-		if (word.endsWith("eedly")) {
-			if (word.length - 5 >= r1) {
-				return word.slice(0, -3);
+			const firstch = w[0];
+			if (firstch === "y") {
+				w = firstch.toUpperCase() + w.substr(1);
 			}
-			return word;
-		}
-		if (word.endsWith("eed")) {
-			if (word.length - 3 >= r1) {
-				return word.slice(0, -1);
-			}
-			return word;
-		}
-		const match = S1BSUFFIXES_RE.exec(word);
-		if (match) {
-			const preceding = word.slice(0, -match[0].length);
-			if (word.length > 1 && S1B_RE.test(preceding)) {
-				return step1bHelper(preceding, r1);
-			}
-		}
 
-		return word;
-	}
+			// Step 1a
+			re0 = /^(.+?)(ss|i)es$/;
+			re1 = /^(.+?)([^s])s$/;
 
-	function step2Helper(word: string, r1: number, end: string, repl: string, prev: string[] | null): string | null {
-		if (word.endsWith(end)) {
-			if ((word.length - end.length) >= r1) {
-				const w = word.slice(0, -end.length);
-				if (prev === null) {
-					return w + repl;
+			if (re0.test(w)) { w = w.replace(re0,"$1$2"); }
+			else if (re1.test(w)) {	w = w.replace(re1,"$1$2"); }
+
+			// Step 1b
+			re0 = /^(.+?)eed$/;
+			re1 = /^(.+?)(ed|ing)$/;
+			if (re0.test(w)) {
+				const fp = re0.exec(w);
+				re0 = new RegExp(mgr0);
+				if (re0.test(fp[1])) {
+					re0 = /.$/;
+					w = w.replace(re0,"");
 				}
-				for (let i = 0; i < prev.length; i++) {
-					const p = prev[i];
-					if (w.endsWith(p)) {
-						return w + repl;
-					}
+			} else if (re1.test(w)) {
+				const fp = re1.exec(w);
+				stem = fp[1];
+				re1 = new RegExp(s_v);
+				if (re1.test(stem)) {
+					w = stem;
+					re1 = /(at|bl|iz)$/;
+					re2 = new RegExp("([^aeiouylsz])\\1$");
+					re3 = new RegExp("^" + C + v + "[^aeiouwxy]$");
+					if (re1.test(w)) {	w = w + "e"; }
+					else if (re2.test(w)) { re0 = /.$/; w = w.replace(re0,""); }
+					else if (re3.test(w)) { w = w + "e"; }
 				}
 			}
-			return word;
-		}
-		return null;
-	}
 
-	const S2_TRIPLES: Array<[string, string, Array<string> | null]> = [
-		["enci", "ence", null],
-		["anci", "ance", null],
-		["abli", "able", null],
-		["izer", "ize", null],
-		["ator", "ate", null],
-		["alli", "al", null],
-		["bli", "ble", null],
-		["ogi", "og", ["l"]],
-		["li", "", ["c", "d", "e", "g", "h", "k", "m", "n", "r", "t"]],
-	];
-
-	const S2_TRIPLES5 = ([
-		["ization", "ize", null],
-		["ational", "ate", null],
-		["fulness", "ful", null],
-		["ousness", "ous", null],
-		["iveness", "ive", null],
-		["tional", "tion", null],
-		["biliti", "ble", null],
-		["lessli", "less", null],
-		["entli", "ent", null],
-		["ation", "ate", null],
-		["alism", "al", null],
-		["aliti", "al", null],
-		["ousli", "ous", null],
-		["iviti", "ive", null],
-		["fulli", "ful", null],
-	] as Array<[string, string, Array<string> | null]>).concat(S2_TRIPLES);
-
-	function step2(word: string, r1: number): string {
-		const triples = (word.length > 6) ? S2_TRIPLES5 : S2_TRIPLES;
-
-		for (let i = 0; i < triples.length; i++) {
-			const trip = triples[i];
-			const attempt = step2Helper(word, r1, trip[0], trip[1], trip[2]);
-			if (attempt !== null) {
-				return attempt;
+			// Step 1c
+			re0 = /^(.+?)y$/;
+			if (re0.test(w)) {
+				const fp = re0.exec(w);
+				stem = fp[1];
+				re0 = new RegExp(s_v);
+				if (re0.test(stem)) { w = stem + "i"; }
 			}
-		}
-		return word;
-	}
 
-	function step3Helper(word: string, r1: number, r2: number, end: string, repl: string, r2_necessary: boolean)
-		: string | null {
-
-		if (word.endsWith(end)) {
-			if (word.length - end.length >= r1) {
-				if (!r2_necessary) {
-					return word.slice(0, -end.length) + repl;
-				} else if (word.length - end.length >= r2) {
-					return word.slice(0, -end.length) + repl;
+			// Step 2
+			re0 = /^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|biliti|logi)$/;
+			if (re0.test(w)) {
+				const fp = re0.exec(w);
+				stem = fp[1];
+				suffix = fp[2];
+				re0 = new RegExp(mgr0);
+				if (re0.test(stem)) {
+					w = stem + step2list[suffix];
 				}
 			}
-			return word;
-		}
-		return null;
-	}
 
-	const S3_TRIPLES: Array<{ a: string, b: string, c: boolean }> = [
-		{ a: "ational", b: "ate", c: false },
-		{ a: "tional", b: "tion", c: false },
-		{ a: "alize", b: "al", c: false },
-		{ a: "icate", b: "ic", c: false },
-		{ a: "iciti", b: "ic", c: false },
-		{ a: "ative", b: "", c: true },
-		{ a: "ical", b: "ic", c: false },
-		{ a: "ness", b: "", c: false },
-		{ a: "ful", b: "", c: false },
-	];
-
-	function step3(word: string, r1: number, r2: number): string {
-		for (let i = 0; i < S3_TRIPLES.length; i++) {
-			const trip = S3_TRIPLES[i];
-			const attempt = step3Helper(word, r1, r2, trip.a, trip.b, trip.c);
-			if (attempt !== null) {
-				return attempt;
-			}
-		}
-		return word;
-	}
-
-	const S4_DELETE_LIST = ["al", "ance", "ence", "er", "ic", "able", "ible", "ant", "ement", "ment", "ent", "ism", "ate",
-		"iti", "ous", "ive", "ize"];
-
-	function step4(word: string, r2: number): string {
-		for (let i = 0; i < S4_DELETE_LIST.length; i++) {
-			const end = S4_DELETE_LIST[i];
-			if (word.endsWith(end)) {
-				if (word.length - end.length >= r2) {
-					return word.slice(0, -end.length);
-				}
-				return word;
-			}
-		}
-
-		if ((word.length - 3) >= r2) {
-			const l = word.charCodeAt(word.length - 4);
-			if ((l === 115 || l === 116) && word.endsWith("ion")) { // s === 115 , t === 116
-				return word.slice(0, -3);
-			}
-		}
-
-		return word;
-	}
-
-	const NORMALIZE_YS_RE = /Y/g;
-
-	const stem = (word: string): string => {
-		let l;
-		let match: RegExpExecArray | null;
-		let r1: number;
-		let r2: number;
-
-		if (word.length < 3) {
-			return word;
-		}
-
-		// remove initial apostrophe
-		if (word.charCodeAt(0) === 39) { // "'" === 39
-			word = word.slice(1);
-		}
-
-		// handle exceptional forms
-		if (word === "sky") {
-			return word;
-		} else if (word.length < 7) {
-			if (word.length === 4) {
-				if (Object.prototype.hasOwnProperty.call(EXCEPTIONAL_FORMS4, word)) {
-					return EXCEPTIONAL_FORMS4[word];
-				}
-			} else if (word.length === 5) {
-				if (Object.prototype.hasOwnProperty.call(EXCEPTIONAL_FORMS5, word)) {
-					return EXCEPTIONAL_FORMS5[word];
-				}
-			} else if (word.length === 6) {
-				if (Object.prototype.hasOwnProperty.call(EXCEPTIONAL_FORMS6, word)) {
-					return EXCEPTIONAL_FORMS6[word];
+			// Step 3
+			re0 = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/;
+			if (re0.test(w)) {
+				const fp = re0.exec(w);
+				stem = fp[1];
+				suffix = fp[2];
+				re0 = new RegExp(mgr0);
+				if (re0.test(stem)) {
+					w = stem + step3list[suffix];
 				}
 			}
-		}
 
-		// capitalize consonant ys
-		if (word.charCodeAt(0) === 121) { // "y" === 121
-			word = "Y" + word.slice(1);
-		}
-		word = word.replace(CCY_RE, "$1Y");
-
-		// r1
-		if (word.length > 4 && (word.startsWith("gener") || word.startsWith("arsen"))) {
-			r1 = 5;
-		} else if (word.startsWith("commun")) {
-			r1 = 6;
-		} else {
-			match = RANGE_RE.exec(word);
-			r1 = (match) ? word.length - match[1].length : word.length;
-		}
-
-		// r2
-		match = RANGE_RE.exec(word.slice(r1));
-		// eslint-disable-next-line prefer-const
-		r2 = match ? word.length - match[1].length : word.length;
-
-		// step 0
-		if (word.charCodeAt(word.length - 1) === 39) { // "'" === 39
-			if (word.endsWith("'s'")) {
-				word = word.slice(0, -3);
-			} else {
-				word = word.slice(0, -1);
-			}
-		} else if (word.endsWith("'s")) {
-			word = word.slice(0, -2);
-		}
-
-		// step 1a
-		if (word.endsWith("sses")) {
-			word = word.slice(0, -4) + "ss";
-		} else if (word.endsWith("ied") || word.endsWith("ies")) {
-			word = word.slice(0, -3) + ((word.length > 4) ? "i" : "ie");
-		} else if (word.endsWith("us") || word.endsWith("ss")) {
-			//word = word;
-		} else if (word.charCodeAt(word.length - 1) === 115) { // "s" == 115
-			const preceding = word.slice(0, -1);
-			if (S1A_RE.test(preceding)) {
-				word = preceding;
-			}
-		}
-
-		// handle exceptional forms post 1a
-		if ((word.length === 6 || word.length === 7) && Object.prototype.hasOwnProperty.call(EXCEPTIONAL_FORMS_POST_1A, word)) {
-			return word;
-		}
-
-		word = step1b(word, r1);
-
-		// step 1c
-		if (word.length > 2) {
-			l = word.charCodeAt(word.length - 1);
-			if (l === 121 || l === 89) {
-				l = word.charCodeAt(word.length - 2);
-				// "a|e|i|o|u|y"
-				if (l < 97 || l > 121 || (l !== 97 && l !== 101 && l !== 105 && l !== 111 && l !== 117 && l !== 121)) {
-					word = word.slice(0, -1);// + "i"; TODO: fix in highlighting
+			// Step 4
+			re0 = /^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|iti|ous|ive|ize)$/;
+			re1 = /^(.+?)(s|t)(ion)$/;
+			if (re0.test(w)) {
+				const fp = re0.exec(w);
+				stem = fp[1];
+				re0 = new RegExp(mgr1);
+				if (re0.test(stem)) {
+					w = stem;
+				}
+			} else if (re1.test(w)) {
+				const fp = re1.exec(w);
+				stem = fp[1] + fp[2];
+				re1 = new RegExp(mgr1);
+				if (re1.test(stem)) {
+					w = stem;
 				}
 			}
-		}
 
-		word = step2(word, r1);
-		word = step3(word, r1, r2);
-		word = step4(word, r2);
-
-		// step 5
-		l = word.charCodeAt(word.length - 1);
-
-		if (l === 108) { // l = 108
-			if (word.length - 1 >= r2 && word.charCodeAt(word.length - 2) === 108) { // l === 108
-				word = word.slice(0, -1);
+			// Step 5
+			re0 = /^(.+?)e$/;
+			if (re0.test(w)) {
+				const fp = re0.exec(w);
+				stem = fp[1];
+				re0 = new RegExp(mgr1);
+				re1 = new RegExp(meq1);
+				re2 = new RegExp("^" + C + v + "[^aeiouwxy]$");
+				if (re0.test(stem) || (re1.test(stem) && !(re2.test(stem)))) {
+					w = stem;
+				}
 			}
-		} else if (l === 101) { // e = 101
-			if (word.length - 1 >= r2) {
-				word = word.slice(0, -1);
-			} else if (word.length - 1 >= r1 && !isEndsWithShortSyllable(word.slice(0, -1))) {
-				word = word.slice(0, -1);
+
+			re0 = /ll$/;
+			re1 = new RegExp(mgr1);
+			if (re0.test(w) && re1.test(w)) {
+				re0 = /.$/;
+				w = w.replace(re0,"");
 			}
-		}
 
-		// normalize Ys
-		word = word.replace(NORMALIZE_YS_RE, "y");
+			// and turn initial Y back to y
 
-		return word;
-	};
+			if (firstch === "y") {
+				w = firstch.toLowerCase() + w.substr(1);
+			}
 
-	return (word: string): string => {
+			return w;
+		};
+	})();
+
+	return (word: string) => {
 		// Retain case after necessary conversion to lowercase.
-		return Array.from(word.matchAll(new RegExp(stem(word.toLocaleLowerCase()), "gi")))[0][0];
+		return Array.from(word.matchAll(new RegExp(getStem(word.toLocaleLowerCase()), "gi")))[0][0];
 	};
 })();
