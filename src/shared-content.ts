@@ -15,12 +15,14 @@ class MatchTerm {
 	wholeStemPattern: RegExp
 	matchMode: MatchMode
 	hue: number
-	shortcut: string
-	shortcutReverse: string
+	command: string
+	commandReverse: string
     
 	constructor(phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
 		this.matchMode = { case: false, stem: true, whole: false };
+		if (phrase.length <= 3)
+			this.matchMode.stem = false;
 		if (matchMode)
 			Object.assign(this.matchMode, matchMode);
 		this.compile();
@@ -33,6 +35,8 @@ class MatchTerm {
 		this.selector = this.exp.replace(/\W/g, "");
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const patternString = this.exp.slice(0, -1).replace(/(.)/g,"$1(\\p{Pd})?") + this.exp.at(-1);
+		console.log(patternString);
+		console.log(this.matchMode);
 		this.pattern = new RegExp(this.matchMode.whole && !this.matchMode.stem ? `\\b(?:${patternString})\\b` : patternString,
 			flags);
 		if (this.matchMode.whole && this.matchMode.stem) {

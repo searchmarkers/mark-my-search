@@ -124,11 +124,11 @@ const injectScripts = (tabId: number, script: string, message?: HighlightMessage
 		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
 			browser.tabs.executeScript(tabId, { file: script }).then(() =>
 				browser.commands.getAll().then(commands =>
-					browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands } as HighlightMessage, message))))))
+					browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))))))
 ;
 
 const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
-	browser.webNavigation.onCommitted.addListener(details => {
+	browser.webNavigation.onCompleted.addListener(details => {
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
@@ -220,7 +220,7 @@ const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 			highlightMessage.termUpdate = message.termChanged;
 			highlightMessage.termToUpdateIdx = message.termChangedIdx;
 			Object.keys(researchIds).forEach(tabId =>
-				researchIds[tabId] === researchIds[sender.tab.id]
+				researchIds[tabId] === researchIds[sender.tab.id] && Number(tabId) !== sender.tab.id
 					? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
 			);
 		}

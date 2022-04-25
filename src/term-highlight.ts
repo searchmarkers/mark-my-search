@@ -1,4 +1,5 @@
 type BrowserCommands = Array<browser.commands.Command>;
+type FunctionCallControlsRefresh = (termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number) => void;
 
 enum ElementClass {
 	BAR_HIDDEN = "bar-hidden",
@@ -106,8 +107,10 @@ const jumpToTerm = (() => {
 	};
 })();
 
-const createTermInput = (terms: MatchTerms, termButton: HTMLButtonElement, idx: number) => {
-	const replaces = idx !== -1;
+const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCallControlsRefresh,
+	termButton: HTMLButtonElement, idx: number) => {
+	const term = terms[idx];
+	const replaces = idx !== TermChange.CREATE;
 	const termInput = document.createElement("input");
 	termInput.type = "text";
 	termInput.disabled = true;
@@ -125,30 +128,36 @@ const createTermInput = (terms: MatchTerms, termButton: HTMLButtonElement, idx: 
 	};
 	const hideAndCommit = () => {
 		hide();
+		let message: BackgroundMessage;
+		console.log(terms);
 		if (replaces) {
 			if (termInput.value === "") {
-				const term = terms[idx];
 				terms.splice(idx, 1);
-				browser.runtime.sendMessage({
+				message = {
 					terms,
 					termChanged: term,
 					termChangedIdx: TermChange.REMOVE,
-				} as BackgroundMessage);
-			} else if (termInput.value !== terms[idx].phrase) {
-				terms[idx] = Object.assign(new MatchTerm(termInput.value, terms[idx].matchMode));
-				browser.runtime.sendMessage({
+				};
+			} else if (termInput.value !== term.phrase) {
+				term.phrase = termInput.value;
+				term.compile();
+				message = {
 					terms,
-					termChanged: terms[idx],
+					termChanged: term,
 					termChangedIdx: idx,
-				} as BackgroundMessage);
+				};
 			}
 		} else if (termInput.value !== "") {
 			terms.push(new MatchTerm(termInput.value));
-			browser.runtime.sendMessage({
+			message = {
 				terms,
 				termChanged: terms.at(-1),
 				termChangedIdx: TermChange.CREATE,
-			} as BackgroundMessage);
+			};
+		}
+		if (message) {
+			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
+			browser.runtime.sendMessage(message);
 		}
 	};
 	termButton.oncontextmenu = show;
@@ -211,7 +220,7 @@ position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
 .${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
 	`;
 	terms.forEach((term, i) => {
-		const hue = hues[i];
+		const hue = hues[i % hues.length];
 		style.textContent += `
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked
 ~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term.selector)} {
@@ -245,9 +254,9 @@ const updateTermTooltip = (term: MatchTerm) => {
 		select(ElementClass.TERM_ANY) + " " + select(ElementClass.TERM, term.selector)).length;
 	controlButton.classList[occurrenceCount === 0 ? "add" : "remove"](select(ElementClass.DISABLED));
 	controlButton.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
-		!occurrenceCount ? ""
-			: occurrenceCount === 1? `\nJump to: ${term.shortcut}, ${term.shortcutReverse}`
-				: `\nJump to next: ${term.shortcut}\nJump to previous: ${term.shortcutReverse}`}`;
+		!occurrenceCount || !term.command ? ""
+			: occurrenceCount === 1 ? `\nJump to: ${term.command}, ${term.commandReverse}`
+				: `\nJump to next: ${term.command}\nJump to previous: ${term.commandReverse}`}`;
 };
 
 const getTermOptionMatchType = (text: string, fromText = false) =>
@@ -274,16 +283,20 @@ const refreshTermControl = (term: MatchTerm, idx: number) => {
 };
 
 const addTermControl = (() => {
-	const createTermOption = (terms: MatchTerms, idx: number, title: string) => {
+	const createTermOption = (terms: MatchTerms, callRefreshTermControls: FunctionCallControlsRefresh,
+		idx: number, title: string) => {
 		const matchType = getTermOptionMatchType(title);
 		const onActivated = () => {
 			const term = terms[idx];
 			term.matchMode[matchType] = !term.matchMode[matchType];
-			browser.runtime.sendMessage({
+			term.compile();
+			const message: BackgroundMessage = {
 				terms,
-				termChanged: new MatchTerm(term.phrase, term.matchMode),
-				termChangedIdx: idx
-			} as BackgroundMessage);
+				termChanged: term,
+				termChangedIdx: idx,
+			};
+			browser.runtime.sendMessage(message);
+			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
 		};
 		const option = document.createElement("button");
 		option.classList.add(select(ElementClass.OPTION));
@@ -293,7 +306,8 @@ const addTermControl = (() => {
 		return option;
 	};
 
-	return (terms: MatchTerms, idx: number, shortcut: string, shortcutReverse: string, buttonAppend?: HTMLButtonElement) => {
+	return (terms: MatchTerms, callRefreshTermControls: FunctionCallControlsRefresh,
+		idx: number, command: string, commandReverse: string, buttonAppend?: HTMLButtonElement) => {
 		const term = terms[idx];
 		const controlButton = document.createElement("button");
 		controlButton.classList.add(select(ElementClass.CONTROL_BUTTON));
@@ -301,14 +315,14 @@ const addTermControl = (() => {
 		controlButton.tabIndex = -1;
 		controlButton.textContent = term.phrase;
 		controlButton.onclick = () => jumpToTerm(false, term);
-		createTermInput(terms, controlButton, idx);
-		term.shortcut = shortcut;
-		term.shortcutReverse = shortcutReverse;
+		createTermInput(terms, callRefreshTermControls, controlButton, idx);
+		term.command = command;
+		term.commandReverse = commandReverse;
 		const menu = document.createElement("menu");
 		menu.classList.add(select(ElementClass.OPTION_LIST));
-		menu.appendChild(createTermOption(terms, idx, "Case\u00A0Match"));
-		menu.appendChild(createTermOption(terms, idx, "Stem\u00A0Word"));
-		menu.appendChild(createTermOption(terms, idx, "Whole\u00A0Word"));
+		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Case\u00A0Match"));
+		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Stem\u00A0Word"));
+		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Whole\u00A0Word"));
 		const expand = document.createElement("button");
 		expand.classList.add(select(ElementClass.CONTROL_EXPAND));
 		expand.tabIndex = -1;
@@ -339,17 +353,19 @@ const getTermCommands = (commands: BrowserCommands) => {
 	};
 };
 
-const addControls = (commands: BrowserCommands, terms: MatchTerms, style: HTMLStyleElement, styleConstant: string) => {
+const addControls = (commands: BrowserCommands, terms: MatchTerms,
+	callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement, styleConstant: string) => {
 	insertStyle(terms, style, styleConstant, TERM_HUES);
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
 	const buttonAppend = document.createElement("button");
 	buttonAppend.textContent = "➕";
 	buttonAppend.tabIndex = -1;
-	createTermInput(terms, buttonAppend, -1);
+	createTermInput(terms, callRefreshTermControls, buttonAppend, TermChange.CREATE);
 	bar.appendChild(buttonAppend);
 	const termCommands = getTermCommands(commands);
-	terms.forEach((term, i) => addTermControl(terms, i, termCommands.down[i], termCommands.up[i], buttonAppend));
+	terms.forEach((term, i) => addTermControl(terms, callRefreshTermControls,
+		i, termCommands.down[i], termCommands.up[i], buttonAppend));
 	const highlightToggle = document.createElement("input");
 	highlightToggle.id = select(ElementID.HIGHLIGHT_TOGGLE);
 	highlightToggle.tabIndex = -1; // Checkbox cannot be toggled via keyboard for unknown reason.
@@ -625,23 +641,7 @@ const highlightInNodesOnMutation = (observer: MutationObserver) =>
 	observer.observe(document.body, {childList: true, subtree: true})
 ;
 
-const parseCommand = (commandString: string): { type: CommandType, termIdx?: number, reversed?: boolean } => {
-	const parts = commandString.split("-");
-	return parts[0] === "toggle"
-		? parts[1] === "bar"
-			? { type: CommandType.TOGGLE_BAR }
-			: parts[1] === "highlight"
-				? { type: CommandType.TOGGLE_HIGHLIGHT }
-				: parts[1] === "select"
-					? { type: CommandType.TOGGLE_SELECT } : undefined
-		: parts[0] === "advance" && parts[1] === "global"
-			? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
-			: parts[0] === "select" && parts[1] === "term"
-				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" } : undefined;
-};
-
-(() => {
-	// TODO: configuration
+const insertHighlighting = (() => {
 	const selectTermOnCommand = (terms: MatchTerms, selectTermPtr: SelectTermPtr) => {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
@@ -680,8 +680,9 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		};
 	};
 
-	const insertHighlighting = (terms: MatchTerms, disable: boolean,
+	return (terms: MatchTerms, disable: boolean,
 		selectTermPtr: SelectTermPtr, observer: MutationObserver) => {
+		console.log(terms);
 		observer.disconnect();
 		restoreNodes();
 		if (disable) return;
@@ -696,14 +697,71 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		highlightInNodes(document.body, terms);
 		terms.forEach(term => updateTermTooltip(term));
 		highlightInNodesOnMutation(observer);
-		addScrollMarkers(terms); // TODO: make dynamic
+		//addScrollMarkers(terms); // TODO: make dynamic
 	};
+})();
 
-	const insertInterface = (commands: BrowserCommands, terms: MatchTerms,
-		style: HTMLStyleElement, styleConstant: string) => {
-		removeControls(styleConstant);
-		addControls(commands, terms, style, styleConstant);
-	};
+const parseCommand = (commandString: string): { type: CommandType, termIdx?: number, reversed?: boolean } => {
+	const parts = commandString.split("-");
+	return parts[0] === "toggle"
+		? parts[1] === "bar"
+			? { type: CommandType.TOGGLE_BAR }
+			: parts[1] === "highlight"
+				? { type: CommandType.TOGGLE_HIGHLIGHT }
+				: parts[1] === "select"
+					? { type: CommandType.TOGGLE_SELECT } : undefined
+		: parts[0] === "advance" && parts[1] === "global"
+			? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
+			: parts[0] === "select" && parts[1] === "term"
+				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" } : undefined;
+};
+
+(() => {
+	// TODO: configuration
+	const refreshTermControls = (() => {
+		const insertInterface = (commands: BrowserCommands, terms: MatchTerms,
+			callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement, styleConstant: string) => {
+			removeControls(styleConstant);
+			addControls(commands, terms, callRefreshTermControls, style, styleConstant);
+		};
+	
+		return (terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement, styleConstant: string,
+			observer: MutationObserver, selectTermPtr: SelectTermPtr, callRefreshTermControls: FunctionCallControlsRefresh,
+			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number) => {
+			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE) {
+				// 'message.disable' assumed false.
+				console.log("here");
+				if (termToUpdateIdx === TermChange.CREATE) {
+					let idx = terms.length - 1;
+					const termCommands = getTermCommands(commands);
+					if (termUpdate !== terms[idx]) {
+						terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
+						idx++;
+					}
+					addTermControl(terms, callRefreshTermControls, idx, termCommands.down[idx], termCommands.up[idx]);
+				} else {
+					const term = terms[termToUpdateIdx];
+					if (termUpdate !== term) {
+						term.phrase = termUpdate.phrase;
+						term.matchMode = termUpdate.matchMode;
+						term.compile();
+					}
+					refreshTermControl(term, termToUpdateIdx);
+				}
+			} else if (termsUpdate) {
+				// TODO: retain colours
+				if (termsUpdate !== terms) { // If called from the same script, 'termsUpdate' is a shallow copy of 'terms' and is correct.
+					terms.splice(0, terms.length);
+					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
+				}
+				insertInterface(commands, terms, callRefreshTermControls, style, styleConstant);
+			} else {
+				return;
+			}
+			insertStyle(terms, style, styleConstant, TERM_HUES);
+			setTimeout(() => insertHighlighting(terms, false, selectTermPtr, observer));
+		};
+	})();
 
 	const insertStyleElement = (styleConstant: string) => {
 		let style = document.getElementById(select(ElementID.STYLE)) as HTMLStyleElement;
@@ -723,6 +781,10 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const observer = getObserverNodeHighlighter(terms);
 		const styleConstant = `.${select(ElementClass.TERM_ANY)} { background-color: unset; color: unset; }`;
 		const style = insertStyleElement(styleConstant);
+		const callRefreshTermControls: FunctionCallControlsRefresh = (termsUpdate: MatchTerms,
+			termUpdate: MatchTerm, termToUpdateIdx: number) =>
+			refreshTermControls(terms, commands, style, styleConstant, observer, selectTermPtr, callRefreshTermControls,
+				termsUpdate, termUpdate, termToUpdateIdx);
 		browser.runtime.onMessage.addListener((message: HighlightMessage) => {
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
@@ -731,30 +793,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			if (message.command) {
 				selectTermPtr.selectTerm(message.command);
 			}
-			if (message.termToUpdateIdx !== undefined && message.termToUpdateIdx !== TermChange.REMOVE) {
-				// 'message.disable' assumed false.
-				terms.splice(0, terms.length);
-				message.terms.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-				const term = new MatchTerm(message.termUpdate.phrase, message.termUpdate.matchMode);
-				if (message.termToUpdateIdx === TermChange.CREATE) {
-					const idx = terms.length - 1;
-					const termCommands = getTermCommands(commands);
-					terms.push(term);
-					addTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx]);
-				} else {
-					terms[message.termToUpdateIdx] = term;
-					refreshTermControl(terms[message.termToUpdateIdx], message.termToUpdateIdx);
-				}
-				insertStyle(terms, style, styleConstant, TERM_HUES);
-				setTimeout(() => insertHighlighting(terms, false, selectTermPtr, observer));
-			} else if (message.terms) {
-				// TODO: retain colours
-				terms.splice(0, terms.length);
-				message.terms.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-				insertInterface(commands, terms, style, styleConstant);
-				insertStyle(terms, style, styleConstant, TERM_HUES);
-				setTimeout(() => insertHighlighting(terms, message.disable, selectTermPtr, observer));
-			}
+			callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx);
 		});
 	});
 })()();
