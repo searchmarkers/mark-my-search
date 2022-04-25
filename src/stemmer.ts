@@ -66,8 +66,6 @@ const getWordStem = (() => {
 				re2: RegExp,
 				re3: RegExp;
 
-			if (w.length < 3) { return w; }
-
 			const firstch = w[0];
 			if (firstch === "y") {
 				w = firstch.toUpperCase() + w.substring(1);
@@ -192,6 +190,8 @@ const getWordStem = (() => {
 	return (word: string) => {
 		// Retain case after necessary conversion to lowercase.
 		// TODO: generate regex for possible word forms (likely large, non-stemmer project)
+		if (word.length < 3)
+			return word;
 		let wordStem = getStem(word.toLocaleLowerCase());
 		wordStem = Array.from(word.matchAll(new RegExp(wordStem.replace(/(.)/g,"(?:$1") + wordStem.replace(/./g, ")?"), "gi")))[0][0];
 		return ENDINGS.has(wordStem.at(-1)) ? wordStem.slice(0, -1) : wordStem;

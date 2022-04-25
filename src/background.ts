@@ -3,15 +3,15 @@ type Stoplist = Set<string>;
 type Engines = Record<string, Engine>;
 
 interface ResearchArgs {
-	terms?: MatchTerms;
-	termsRaw?: Array<string>;
-	stoplist?: Stoplist;
-	url?: string;
-	engine?: Engine;
+	terms?: MatchTerms
+	termsRaw?: Array<string>
+	stoplist?: Stoplist
+	url?: string
+	engine?: Engine
 }
 
 class ResearchID {
-	terms: MatchTerms;
+	terms: MatchTerms
 
 	constructor(args: ResearchArgs) {
 		if (args.terms) {
@@ -36,9 +36,9 @@ class ResearchID {
 }
 
 class Engine {
-	hostname: string;
-	pathname: [string, string];
-	param: string;
+	hostname: string
+	pathname: [string, string]
+	param: string
 
 	constructor(pattern: string) {
 		// TODO: error checking?
@@ -124,7 +124,7 @@ const injectScripts = (tabId: number, script: string, message?: HighlightMessage
 		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
 			browser.tabs.executeScript(tabId, { file: script }).then(() =>
 				browser.commands.getAll().then(commands =>
-					browser.tabs.sendMessage(tabId, Object.assign({ commands } as HighlightMessage, message))))))
+					browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands } as HighlightMessage, message))))))
 ;
 
 const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
@@ -212,19 +212,22 @@ const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 		if (!(sender.tab.id in researchIds)) {
 			researchIds[sender.tab.id] = new ResearchID({ terms: message.terms });
 		}
-		if (message.makeUnique) {
+		if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
 			browser.tabs.sendMessage(sender.tab.id, storeNewResearchDetails(
 				researchIds, new ResearchID({ terms: message.terms }), sender.tab.id));
 		} else {
 			const highlightMessage = updateCachedResearchDetails(researchIds, message.terms, sender.tab.id);
+			highlightMessage.termUpdate = message.termChanged;
+			highlightMessage.termToUpdateIdx = message.termChangedIdx;
 			Object.keys(researchIds).forEach(tabId =>
-				researchIds[tabId] === researchIds[sender.tab.id] ? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
+				researchIds[tabId] === researchIds[sender.tab.id]
+					? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
 			);
 		}
 	})
 ;
 
-const initialize = () => {
+(() => {
 	const stoplist: Stoplist = new Set([
 		"a",
 		"about",
@@ -409,6 +412,4 @@ const initialize = () => {
 	addEngineOnBookmarkChanged(engines);
 	sendMessageOnCommand();
 	sendUpdateMessagesOnMessage(researchIds);
-};
-
-initialize();
+})();
