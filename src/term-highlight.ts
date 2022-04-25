@@ -36,12 +36,8 @@ enum TermChange {
 	CREATE = -2,
 }
 
-class SelectTermPtr {
+interface SelectTermPtr {
 	selectTerm: (command: string) => void
-
-	constructor(selectTerm?: (command: string) => void) {
-		this.selectTerm = selectTerm;
-	}
 }
 
 const select = (element: ElementID | ElementClass, param?: string | number) =>
@@ -57,7 +53,7 @@ const HIGHLIGHT_TAGS: Record<string, ReadonlySet<string>> = {
 };
 
 const jumpToTerm = (() => {
-	const getTermOccurrenceBlock = (element: Element) =>
+	const getTermOccurrenceBlock = (element: HTMLElement): HTMLElement =>
 		HIGHLIGHT_TAGS.FLOW.has(element.tagName) ? getTermOccurrenceBlock(element.parentElement) : element
 	;
 
@@ -73,6 +69,10 @@ const jumpToTerm = (() => {
 		if (focusBase) {
 			focusContainer.classList.remove(select(ElementClass.FOCUS_CONTAINER));
 			focusBase.classList.remove(select(ElementClass.FOCUS));
+			if (focusContainer.classList.contains(select(ElementClass.FOCUS_REVERT))) {
+				focusContainer.tabIndex = -1;
+				focusContainer.classList.remove(select(ElementClass.FOCUS_REVERT));
+			}
 			if (focusBase.classList.contains(select(ElementClass.FOCUS_REVERT))) {
 				focusBase.tabIndex = -1;
 				focusBase.classList.remove(select(ElementClass.FOCUS_REVERT));
@@ -97,13 +97,17 @@ const jumpToTerm = (() => {
 		const container = getTermOccurrenceBlock(element);
 		container.classList.add(select(ElementClass.FOCUS_CONTAINER));
 		element.classList.add(select(ElementClass.FOCUS));
-		if (element.tabIndex === -1) {
-			element.classList.add(select(ElementClass.FOCUS_REVERT));
-			element.tabIndex = 0;
+		const elementToSelect = Array.from(container.getElementsByClassName(select(ElementClass.TERM_ANY)))
+			.every(thisElement => getTermOccurrenceBlock(thisElement as HTMLElement) === container)
+			? container
+			: element;
+		if (elementToSelect.tabIndex === -1) {
+			elementToSelect.classList.add(select(ElementClass.FOCUS_REVERT));
+			elementToSelect.tabIndex = 0;
 		}
-		element.focus({ preventScroll: true });
-		element.scrollIntoView({ behavior: "smooth", block: "center" });
-		selection.setBaseAndExtent(element, 0, element, 0);
+		elementToSelect.focus({ preventScroll: true });
+		elementToSelect.scrollIntoView({ behavior: "smooth", block: "center" });
+		selection.setBaseAndExtent(elementToSelect, 0, elementToSelect, 0);
 	};
 })();
 
@@ -129,7 +133,6 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 	const hideAndCommit = () => {
 		hide();
 		let message: BackgroundMessage;
-		console.log(terms);
 		if (replaces) {
 			if (termInput.value === "") {
 				terms.splice(idx, 1);
@@ -295,8 +298,8 @@ const addTermControl = (() => {
 				termChanged: term,
 				termChangedIdx: idx,
 			};
-			browser.runtime.sendMessage(message);
 			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
+			browser.runtime.sendMessage(message);
 		};
 		const option = document.createElement("button");
 		option.classList.add(select(ElementClass.OPTION));
@@ -433,58 +436,65 @@ const addScrollMarkers = (() => {
 })();
 
 const highlightInNodes = (() => {
-	class UnbrokenNodeListItem {
-		next: UnbrokenNodeListItem;
-		value: Node;
-
-		constructor(value: Node) {
-			this.value = value;
-		}
+	interface UnbrokenNodeListItem {
+		next?: UnbrokenNodeListItem
+		value: Node
 	}
-
-	class UnbrokenNodeList {
-		first: UnbrokenNodeListItem;
-		last: UnbrokenNodeListItem;
 	
-		push(value: Node) {
+	class UnbrokenNodeList {
+		first: UnbrokenNodeListItem
+		last: UnbrokenNodeListItem
+	
+		push (value: Node) {
 			if (this.last) {
-				this.last.next = new UnbrokenNodeListItem(value);
+				this.last.next = { value };
 				this.last = this.last.next;
 			} else {
-				this.first = new UnbrokenNodeListItem(value);
+				this.first = { value };
 				this.last = this.first;
 			}
 		}
 	
-		insertAfter(value: Node, itemBefore: UnbrokenNodeListItem) {
-			if (itemBefore) {
-				const itemAfter = itemBefore.next;
-				itemBefore.next = new UnbrokenNodeListItem(value);
-				itemBefore.next.next = itemAfter;
-			} else {
-				const itemAfter = this.first;
-				this.first = new UnbrokenNodeListItem(value);
-				this.first.next = itemAfter;
+		insertAfter (value: Node, itemBefore: UnbrokenNodeListItem) {
+			if (value) {
+				if (itemBefore) {
+					const itemAfter = itemBefore.next;
+					itemBefore.next = { value };
+					itemBefore.next.next = itemAfter;
+				} else {
+					const itemAfter = this.first;
+					this.first = { value };
+					this.first.next = itemAfter;
+				}
 			}
 		}
 	
-		getText() {
+		getText () {
 			let text = "";
 			let current = this.first;
-			while (current) {
+			do {
 				text += current.value.textContent;
-				current = current.next;
-			}
+			// eslint-disable-next-line no-cond-assign
+			} while (current = current.next);
 			return text;
 		}
 	
-		clear() {
+		clear () {
 			this.first = undefined;
 			this.last = undefined; 
+		}
+
+		*[Symbol.iterator] () {
+			let current = this.first;
+			do {
+				yield current;
+			// eslint-disable-next-line no-cond-assign
+			} while (current = current.next);
 		}
 	}
 
 	const highlightInNode = (wordRightPattern: RegExp, term: MatchTerm, textEndNode: Node, start: number, end: number) => {
+		// TODO: add strategy for mitigating damage (caused by programmatic changes by the website).
 		const text = textEndNode.textContent;
 		start = Math.max(0, start);
 		end = Math.min(text.length, end);
@@ -509,33 +519,28 @@ const highlightInNodes = (() => {
 		if (unbrokenNodes.first) {
 			for (const term of terms) {
 				const textFlow = unbrokenNodes.getText();
-				const matches = Array.from(textFlow.matchAll(term.pattern));
-				let matchIdx = 0;
+				const matches = textFlow.matchAll(term.pattern);
 				let currentNodeStart = 0;
+				let match: RegExpMatchArray = matches.next().value;
 				let nodeItemPrevious: UnbrokenNodeListItem;
-				let nodeItem = unbrokenNodes.first;
-				while (nodeItem) {
+				for (const nodeItem of unbrokenNodes) {
 					const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
-					for (; matchIdx < matches.length; matchIdx++) {
-						const match = matches[matchIdx];
-						if (match.index >= nextNodeStart)
-							break;
+					while (match && match.index < nextNodeStart) {
 						if ((term.matchMode.whole && term.matchMode.stem && !term.matchWholeStem(textFlow, match.index))
 							|| match.index + match[0].length < currentNodeStart)
 							continue;
 						const textLengthOriginal = nodeItem.value.textContent.length;
-						const newTextNode = highlightInNode(wordRightPattern, term,
-							nodeItem.value, match.index - currentNodeStart, match.index - currentNodeStart + match[0].length);
-						if (newTextNode) {
-							unbrokenNodes.insertAfter(newTextNode, nodeItemPrevious);
-						}
+						unbrokenNodes.insertAfter(
+							highlightInNode(wordRightPattern, term,
+								nodeItem.value, match.index - currentNodeStart, match.index - currentNodeStart + match[0].length),
+							nodeItemPrevious);
 						currentNodeStart += textLengthOriginal - nodeItem.value.textContent.length;
 						if (match.index + match[0].length > nextNodeStart)
 							break;
+						match = matches.next().value;
 					}
 					currentNodeStart = nextNodeStart;
 					nodeItemPrevious = nodeItem;
-					nodeItem = nodeItem.next;
 				}
 			}
 		}
@@ -544,7 +549,7 @@ const highlightInNodes = (() => {
 
 	return (rootNode: Node, terms: MatchTerms) => {
 		const wordRightPattern = /[^^]\b/;
-		const unbrokenNodes: UnbrokenNodeList = new UnbrokenNodeList();
+		const unbrokenNodes: UnbrokenNodeList = new UnbrokenNodeList;
 		const breakLevels: Array<number> = [0];
 		let level = 0;
 		const walkHandleBreaks = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
@@ -682,7 +687,6 @@ const insertHighlighting = (() => {
 
 	return (terms: MatchTerms, disable: boolean,
 		selectTermPtr: SelectTermPtr, observer: MutationObserver) => {
-		console.log(terms);
 		observer.disconnect();
 		restoreNodes();
 		if (disable) return;
@@ -730,7 +734,6 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number) => {
 			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE) {
 				// 'message.disable' assumed false.
-				console.log("here");
 				if (termToUpdateIdx === TermChange.CREATE) {
 					let idx = terms.length - 1;
 					const termCommands = getTermCommands(commands);
@@ -776,13 +779,13 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 
 	return (() => {
 		const commands: BrowserCommands = [];
-		const selectTermPtr = new SelectTermPtr;
+		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
 		const terms: MatchTerms = [];
 		const observer = getObserverNodeHighlighter(terms);
 		const styleConstant = `.${select(ElementClass.TERM_ANY)} { background-color: unset; color: unset; }`;
 		const style = insertStyleElement(styleConstant);
 		const callRefreshTermControls: FunctionCallControlsRefresh = (termsUpdate: MatchTerms,
-			termUpdate: MatchTerm, termToUpdateIdx: number) =>
+			termUpdate: MatchTerm, termToUpdateIdx: number) => // For highly responsive controls, but requires nasty special cases.
 			refreshTermControls(terms, commands, style, styleConstant, observer, selectTermPtr, callRefreshTermControls,
 				termsUpdate, termUpdate, termToUpdateIdx);
 		browser.runtime.onMessage.addListener((message: HighlightMessage) => {

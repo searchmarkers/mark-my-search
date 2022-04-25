@@ -13,7 +13,7 @@ interface ResearchArgs {
 class ResearchID {
 	terms: MatchTerms
 
-	constructor(args: ResearchArgs) {
+	constructor (args: ResearchArgs) {
 		if (args.terms) {
 			this.terms = args.terms;
 			return;
@@ -40,7 +40,7 @@ class Engine {
 	pathname: [string, string]
 	param: string
 
-	constructor(pattern: string) {
+	constructor (pattern: string) {
 		// TODO: error checking?
 		const urlPattern = new URL(pattern);
 		this.hostname = urlPattern.hostname;
@@ -52,7 +52,7 @@ class Engine {
 		}
 	}
 
-	extract(urlString: string, matchOnly = false) {
+	extract (urlString: string, matchOnly = false) {
 		const url = new URL(urlString);
 		return url.hostname !== this.hostname ? null : this.pathname
 			? url.pathname.startsWith(this.pathname[0]) && url.pathname.slice(this.pathname[0].length).includes(this.pathname[1])
@@ -65,11 +65,11 @@ class Engine {
 				: null;
 	}
 
-	match(urlString: string) {
+	match (urlString: string) {
 		return !!this.extract(urlString, true);
 	}
 
-	equals(engine: Engine) {
+	equals (engine: Engine) {
 		return engine.hostname === this.hostname
 			&& engine.param === this.param
 			&& engine.pathname === this.pathname;

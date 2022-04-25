@@ -18,7 +18,7 @@ class MatchTerm {
 	command: string
 	commandReverse: string
     
-	constructor(phrase: string, matchMode?: MatchMode) {
+	constructor (phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
 		this.matchMode = { case: false, stem: true, whole: false };
 		if (phrase.length <= 3)
@@ -28,15 +28,13 @@ class MatchTerm {
 		this.compile();
 	}
     
-	compile() {
+	compile () {
 		if (this.phrase.includes(" "))
 			this.matchMode.stem = false;
 		this.exp = this.matchMode.stem ? getWordStem(this.phrase) : this.phrase;
 		this.selector = this.exp.replace(/\W/g, "");
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const patternString = this.exp.slice(0, -1).replace(/(.)/g,"$1(\\p{Pd})?") + this.exp.at(-1);
-		console.log(patternString);
-		console.log(this.matchMode);
 		this.pattern = new RegExp(this.matchMode.whole && !this.matchMode.stem ? `\\b(?:${patternString})\\b` : patternString,
 			flags);
 		if (this.matchMode.whole && this.matchMode.stem) {
@@ -46,12 +44,12 @@ class MatchTerm {
 		}
 	}
 
-	matchWholeStem(text: string, start: number) {
+	matchWholeStem (text: string, start: number) {
 		return getWordStem(Array.from(text.matchAll(this.wordPattern)).find(match => match.index + match[0].length > start)[0])
 			.search(this.wholeStemPattern) !== -1;
 	}
 
-	totalEqualityWith(term: MatchTerm, equal = true) {
+	totalEqualityWith (term: MatchTerm, equal = true) {
 		return (term.phrase === this.phrase) === equal
 			&& Object.entries(term).every(([matchType, value]) => (value === this[matchType]) === equal);
 	}
