@@ -3,9 +3,9 @@
 
 	"name": "Mark My Search",
 
-	"description": "A WebExtension for improving online research efficiency.",
+	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
 
-	"version": "1.0.0",
+	"version": "1.0.2",
 
 	"icons": {
 		"48": "/icons/firemod48.png",

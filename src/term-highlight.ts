@@ -8,7 +8,6 @@ enum ElementClass {
 	CONTROL_BUTTON = "control-button",
 	OPTION_LIST = "options",
 	OPTION = "option",
-	TERM_ANY = "any",
 	TERM = "term",
 	FOCUS = "focus",
 	FOCUS_CONTAINER = "focus-contain",
@@ -58,9 +57,9 @@ const jumpToTerm = (() => {
 	;
 
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
-		const termSelector = term ? select(ElementClass.TERM, term.selector) : select(ElementClass.TERM_ANY);
-		const focusBase = document.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
-		const focusContainer = document.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
+		const termSelector = term ? select(ElementClass.TERM, term.selector) : undefined;
+		const focusBase = document.body.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
+		const focusContainer = document.body.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
 		if (focusBase) {
 			focusContainer.classList.remove(select(ElementClass.FOCUS_CONTAINER));
 			focusBase.classList.remove(select(ElementClass.FOCUS));
@@ -75,8 +74,8 @@ const jumpToTerm = (() => {
 		}
 		const selection = document.getSelection();
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element.classList.contains(termSelector) && isVisible(element)
-				&& getTermOccurrenceBlock(highlightTags, element) !== focusContainer
+			element.tagName === "MMS-H" && (term ? element.classList.contains(termSelector) : true) && isVisible(element)
+				&& getTermOccurrenceBlock(highlightTags, element.parentElement) !== focusContainer
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
 		const anchor = selection.anchorNode;
@@ -90,11 +89,11 @@ const jumpToTerm = (() => {
 			element = walk[nextNodeMethod]() as HTMLElement;
 			if (!element) return;
 		}
-		const container = getTermOccurrenceBlock(highlightTags, element);
+		const container = getTermOccurrenceBlock(highlightTags, element.parentElement);
 		container.classList.add(select(ElementClass.FOCUS_CONTAINER));
 		element.classList.add(select(ElementClass.FOCUS));
-		const elementToSelect = Array.from(container.getElementsByClassName(select(ElementClass.TERM_ANY)))
-			.every(thisElement => getTermOccurrenceBlock(highlightTags, thisElement as HTMLElement) === container)
+		const elementToSelect = Array.from(container.getElementsByTagName("mms-h"))
+			.every(thisElement => getTermOccurrenceBlock(highlightTags, thisElement.parentElement) === container)
 			? container
 			: element;
 		if (elementToSelect.tabIndex === -1) {
@@ -166,77 +165,74 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 	termInput.onkeydown = event => event.key === "Enter" ? hideAndCommit() : event.key === "Escape" ? hide() : undefined;
 };
 
-const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, styleConstant: string, hues: ReadonlyArray<number>) => {
+const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyArray<number>) => {
 	const zIndexMax = 2147483647;
-	style.textContent = styleConstant + `
+	style.textContent = `
 @keyframes flash { 0% { background-color: hsla(0, 0%, 65%, 0.8); } 100% {}; }
 .${select(ElementClass.FOCUS_CONTAINER)} { animation-name: flash; animation-duration: 1s; }
-#${select(ElementID.BAR)} > div { all: revert; position: relative; display: inline-block; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} {
-all: revert; position: relative; font-weight: bold; height: 18px;
-border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active { color: transparent; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover > .${select(ElementClass.OPTION_LIST)},
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active > .${select(ElementClass.OPTION_LIST)} {
-all: revert; position: absolute; top: 4px; padding-left: inherit; left: -7px; z-index: 1; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)},
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled,
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:active:not(.${select(ElementClass.CONTROL_BUTTON)}:hover)
+	+ .${select(ElementClass.OPTION_LIST)} { all: revert; position: absolute; top: 18px; left: -32px; z-index: 1; }
+#${select(ElementID.BAR)} > button,
+	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)},
+	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
+	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled,
+	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
+	all: revert; color: black; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
-all: revert; color: black; border-width: 2px; border-style: dotted; border-top: 0;
-border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; border-block-color: black; border-inline-color: white; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
-background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
+	background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input,
-#${select(ElementID.BAR)} > button > input {
-all: revert; padding-block: 0; margin-left: 6px; border: 0; width: 100px; }
+	#${select(ElementID.BAR)} > button > input {
+	all: revert; padding-block: 0; margin-left: 6px; border-style: none; width: 100px; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input:disabled,
-#${select(ElementID.BAR)} > button > input:disabled { display: none; }
-#${select(ElementID.BAR)} > button { all: revert; border: 0; border-radius: 4px; margin-left: 4px; background-color: hsl(0, 0%, 80%); }
+	#${select(ElementID.BAR)} > button > input:disabled { display: none; }
+#${select(ElementID.BAR)} > div { all: revert; position: relative; display: inline-block; }
+#${select(ElementID.BAR)} > button { background-color: hsl(0, 0%, 80%); }
+#${select(ElementID.BAR)} > div, #${select(ElementID.BAR)} > button { margin-left: 8px; }
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} {
+	all: revert; position: relative; font-weight: bold; height: 18px;
+	border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
+	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active { color: transparent; }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { all: revert; display: block; translate: 3px;
-border-style: none; border-bottom-style: solid; border-bottom-width: 1px; border-color: hsl(0, 0%, 50%); }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active,
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { background-color: hsl(0, 0%, 75%); }
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover,
+	border-style: none; border-bottom-style: solid; border-bottom-width: 1px; border-left-style: solid;
+	border-color: hsl(0, 0%, 50%); background-color: hsl(0, 0%, 75%); }
+#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover { background-color: hsl(0, 0%, 100%); }
 #${select(ElementID.BAR)} > button:hover { background-color: hsl(0, 0%, 65%); }
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover:active,
 #${select(ElementID.BAR)} > button:active { background-color: hsl(0, 0%, 50%); }
 #${select(ElementID.BAR)} { all: revert; position: fixed; left: 20px; z-index: ${zIndexMax}; color-scheme: light;
-line-height: initial; font-size: 0; display: none; }
+	line-height: initial; font-size: 0; display: none; }
 #${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) { display: inline; }
 #${select(ElementID.HIGHLIGHT_TOGGLE)} { all: revert; position: fixed; z-index: ${zIndexMax}; display: none; }
 #${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) + #${select(ElementID.HIGHLIGHT_TOGGLE)} {
-display: inline; }
+	display: inline; }
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ #${select(ElementID.MARKER_GUTTER)} { display: block; }
 #${select(ElementID.MARKER_GUTTER)} { display: none; z-index: ${zIndexMax};
-right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
+	right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
 #${select(ElementID.MARKER_GUTTER)} div:not(.${select(ElementClass.MARKER_BLOCK)}) {
-width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
+	width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
 #${select(ElementID.MARKER_GUTTER)}, .${select(ElementClass.MARKER_BLOCK)} {
-position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
-.${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
-	`;
+	position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
+.${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }`
+	;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		style.textContent += `
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked
-~ body .${select(ElementClass.TERM_ANY)}.${select(ElementClass.TERM, term.selector)} {
-background-color: hsla(${hue}, 100%, 60%, 0.4); }
+	~ body .${select(ElementClass.TERM, term.selector)} {
+	background-color: hsla(${hue}, 100%, 60%, 0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term.selector)} {
-background-color: hsl(${hue}, 100%, 50%); }
+	background-color: hsl(${hue}, 100%, 50%); }
 #${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
-> .${select(ElementClass.CONTROL_BUTTON)} { background-color: hsl(${hue}, 50%, 60%); }
+	> .${select(ElementClass.CONTROL_BUTTON)} { background-color: hsl(${hue}, 50%, 60%); }
 #${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
-> .${select(ElementClass.CONTROL_BUTTON)}:hover { background-color: hsl(${hue}, 70%, 70%); }
+	> .${select(ElementClass.CONTROL_BUTTON)}:hover { background-color: hsl(${hue}, 70%, 70%); }
 #${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
-> .${select(ElementClass.CONTROL_BUTTON)}:active { background-color: hsl(${hue}, 70%, 50%); }
+	> .${select(ElementClass.CONTROL_BUTTON)}:active { background-color: hsl(${hue}, 70%, 50%); }
 #${select(ElementID.BAR)}.${select(ElementClass.CONTROL_BUTTON, i)}
-> .${select(ElementClass.TERM, term.selector)} > .${select(ElementClass.CONTROL_BUTTON)} {
-background-color: hsl(${hue}, 100%, 85%); }
-		`;
+	> .${select(ElementClass.TERM, term.selector)} > .${select(ElementClass.CONTROL_BUTTON)} {
+	background-color: hsl(${hue}, 100%, 85%); }`
+		;
 	});
 };
 
@@ -250,8 +246,7 @@ const getTermControl = (term: MatchTerm, idx?: number) => {
 const updateTermTooltip = (term: MatchTerm) => {
 	const controlButton = getTermControl(term)
 		.getElementsByClassName(select(ElementClass.CONTROL_BUTTON))[0] as HTMLButtonElement;
-	const occurrenceCount = document.getElementsByClassName(
-		select(ElementClass.TERM_ANY) + " " + select(ElementClass.TERM, term.selector)).length;
+	const occurrenceCount = document.body.getElementsByClassName(select(ElementClass.TERM, term.selector)).length;
 	controlButton.classList[occurrenceCount === 0 ? "add" : "remove"](select(ElementClass.DISABLED));
 	controlButton.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
 		!occurrenceCount || !term.command ? ""
@@ -302,7 +297,7 @@ const addTermControl = (() => {
 		option.classList.add(select(ElementClass.OPTION));
 		option.tabIndex = -1;
 		option.textContent = getTermOptionText(terms[idx], title, matchType);
-		option.onclick = onActivated;
+		option.onmouseup = onActivated;
 		return option;
 	};
 
@@ -323,15 +318,10 @@ const addTermControl = (() => {
 		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Case\u00A0Match"));
 		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Stem\u00A0Word"));
 		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Whole\u00A0Word"));
-		const expand = document.createElement("button");
-		expand.classList.add(select(ElementClass.CONTROL_EXPAND));
-		expand.tabIndex = -1;
-		expand.textContent = "⁝";
-		expand.appendChild(menu);
 		const control = document.createElement("div");
 		control.classList.add(select(ElementClass.TERM, term.selector));
-		control.appendChild(expand);
 		control.appendChild(controlButton);
+		control.appendChild(menu);
 		if (!buttonAppend) {
 			buttonAppend = (document.getElementById(select(ElementID.BAR)) as HTMLDivElement)
 				.lastElementChild as HTMLButtonElement;
@@ -354,8 +344,8 @@ const getTermCommands = (commands: BrowserCommands) => {
 };
 
 const addControls = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-	callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement, styleConstant: string) => {
-	insertStyle(terms, style, styleConstant, TERM_HUES);
+	callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement) => {
+	insertStyle(terms, style, TERM_HUES);
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
 	const buttonAppend = document.createElement("button");
@@ -378,14 +368,14 @@ const addControls = (highlightTags: HighlightTags, commands: BrowserCommands, te
 	document.body.insertAdjacentElement("afterend", gutter);
 };
 
-const removeControls = (styleConstant: string) => {
+const removeControls = () => {
 	const style = document.getElementById(select(ElementID.STYLE));
-	if (!style || style.textContent === styleConstant)
+	if (!style || style.textContent === "")
 		return;
 	document.getElementById(select(ElementID.BAR)).remove();
 	document.getElementById(select(ElementID.HIGHLIGHT_TOGGLE)).remove();
 	document.getElementById(select(ElementID.MARKER_GUTTER)).remove();
-	document.getElementById(select(ElementID.STYLE)).textContent = styleConstant;
+	document.getElementById(select(ElementID.STYLE)).textContent = "";
 };
 
 const addScrollMarkers = (() => {
@@ -499,8 +489,7 @@ const highlightInNodes = (() => {
 			end += text.substring(end - 1).search(wordRightPattern);
 		}
 		const textStart = text.substring(0, start);
-		const highlight = document.createElement("mark");
-		highlight.classList.add(select(ElementClass.TERM_ANY));
+		const highlight = document.createElement("mms-h");
 		highlight.classList.add(select(ElementClass.TERM, term.selector));
 		highlight.textContent = text.substring(start, end);
 		textEndNode.textContent = text.substring(end);
@@ -512,94 +501,94 @@ const highlightInNodes = (() => {
 		}
 	};
 
-	const highlightAtBreakLevel = (wordRightPattern: RegExp, unbrokenNodes: UnbrokenNodeList, terms: MatchTerms) => {
-		if (unbrokenNodes.first) {
-			for (const term of terms) {
-				const textFlow = unbrokenNodes.getText();
-				const matches = textFlow.matchAll(term.pattern);
-				let currentNodeStart = 0;
-				let match: RegExpMatchArray = matches.next().value;
-				let nodeItemPrevious: UnbrokenNodeListItem;
-				for (const nodeItem of unbrokenNodes) {
-					const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
-					while (match && match.index < nextNodeStart) {
-						if ((term.matchMode.whole && term.matchMode.stem && !term.matchWholeStem(textFlow, match.index))
-							|| match.index + match[0].length < currentNodeStart)
-							continue;
+	const highlightInBlock = (wordRightPattern: RegExp, nodeItems: UnbrokenNodeList, terms: MatchTerms) => {
+		for (const term of terms) {
+			const textFlow = nodeItems.getText();
+			const matches = textFlow.matchAll(term.pattern);
+			let currentNodeStart = 0;
+			let match: RegExpMatchArray = matches.next().value;
+			let nodeItemPrevious: UnbrokenNodeListItem;
+			for (const nodeItem of nodeItems) {
+				const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
+				while (match && match.index < nextNodeStart) {
+					if (!(term.matchMode.whole && term.matchMode.stem && !term.matchWholeStem(textFlow, match.index))
+						|| match.index + match[0].length >= currentNodeStart) {
 						const textLengthOriginal = nodeItem.value.textContent.length;
-						unbrokenNodes.insertAfter(
+						nodeItems.insertAfter(
 							highlightInNode(wordRightPattern, term,
 								nodeItem.value, match.index - currentNodeStart, match.index - currentNodeStart + match[0].length),
 							nodeItemPrevious);
 						currentNodeStart += textLengthOriginal - nodeItem.value.textContent.length;
-						if (match.index + match[0].length > nextNodeStart)
+						if (match.index + match[0].length > nextNodeStart) {
 							break;
-						match = matches.next().value;
+						}
 					}
-					currentNodeStart = nextNodeStart;
-					nodeItemPrevious = nodeItem;
+					match = matches.next().value;
 				}
+				currentNodeStart = nextNodeStart;
+				nodeItemPrevious = nodeItem;
 			}
 		}
-		unbrokenNodes.clear();
+		nodeItems.clear();
 	};
 
 	return (rootNode: Node, highlightTags: HighlightTags, terms: MatchTerms) => {
 		const wordRightPattern = /[^^]\b/;
-		const unbrokenNodes: UnbrokenNodeList = new UnbrokenNodeList;
+		const nodeItems: UnbrokenNodeList = new UnbrokenNodeList;
 		const breakLevels: Array<number> = [0];
 		let level = 0;
-		const walkHandleBreaks = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
+		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
 			switch (node.nodeType) {
 			case (1): { // NODE.ELEMENT_NODE
-				if (node.nodeType === Node.ELEMENT_NODE && !highlightTags.reject.has(node["tagName"])
-					&& !node["classList"].contains(select(ElementClass.TERM_ANY))) {
-					if (!highlightTags.flow.has(node["tagName"])) {
+				if (node.nodeType === Node.ELEMENT_NODE && !highlightTags.reject.has((node as Element).tagName)) {
+					if (!highlightTags.flow.has((node as Element).tagName)) {
 						if (node.hasChildNodes())
 							breakLevels.push(level);
-						highlightAtBreakLevel(wordRightPattern, unbrokenNodes, terms);
+						if (nodeItems.first)
+							highlightInBlock(wordRightPattern, nodeItems, terms);
 					}
 					return 1; // NodeFilter.FILTER_ACCEPT
 				}
 				return 2; // NodeFilter.FILTER_REJECT
 			} case (3): { // Node.TEXT_NODE
 				if (level > breakLevels.at(-1))
-					unbrokenNodes.push(node);
+					nodeItems.push(node);
 				return 1; // NodeFilter.FILTER_ACCEPT
 			}}
 			return 2; // NodeFilter.FILTER_REJECT
 		}});
-		const walk = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node =>
+		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node =>
 			node.nodeType === 1 // Node.ELEMENT_NODE
 				? !highlightTags.reject.has((node as Element).tagName)
-					&& ((node as Element).tagName !== "MARK"
-					|| !(node as Element).classList.contains(select(ElementClass.TERM_ANY)))
 					? 1 : 2 // NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
 				: node.nodeType === 3 // Node.TEXT_NODE
 					? 1 : 2 // NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
 		});
-		let node = walkHandleBreaks.currentNode;
+		let node = walkerBreakHandler.currentNode;
 		while (node) {
-			level++;
-			node = walkHandleBreaks.firstChild();
+			level++; // Down to child level.
+			node = walkerBreakHandler.firstChild();
 			if (!node) {
-				level--;
-				walk.currentNode = walkHandleBreaks.currentNode;
-				node = walk.nextSibling();
+				level--; // Up to sibling level.
+				walker.currentNode = walkerBreakHandler.currentNode;
+				node = walker.nextSibling();
 				while (!node) {
-					level--;
-					walk.parentNode();
-					walkHandleBreaks.currentNode = walk.currentNode;
+					level--; // Up to parent level.
+					walker.parentNode();
+					walkerBreakHandler.currentNode = walker.currentNode;
 					if (level === breakLevels.at(-1)) {
 						breakLevels.pop();
-						highlightAtBreakLevel(wordRightPattern, unbrokenNodes, terms);
+						if (nodeItems.first)
+							highlightInBlock(wordRightPattern, nodeItems, terms);
 					}
-					if (level <= 0) return;
-					node = walk.nextSibling();
+					if (level <= 0)
+						return;
+					node = walker.nextSibling();
 				}
-				node = walkHandleBreaks.nextSibling();
+				node = walkerBreakHandler.nextSibling();
 			}
 		}
+		document.body.normalize();
 	};
 })();
 
@@ -608,7 +597,7 @@ const purgeClass = (className: string) =>
 ;
 
 const restoreNodes = () => {
-	const highlights = document.getElementsByClassName(select(ElementClass.TERM_ANY));
+	const highlights = document.body.getElementsByTagName("mms-h");
 	if (!highlights.length)
 		return;
 	Array.from(highlights).forEach(element => {
@@ -623,15 +612,16 @@ const restoreNodes = () => {
 const getObserverNodeHighlighter = (() => {
 	const canHighlightNode = (highlightTags: HighlightTags, node: Element): boolean =>
 		!node.closest(Array.from(highlightTags.reject).join(", "))
-		&& !node.classList.contains(select(ElementClass.TERM_ANY))
 	;
 
 	return (highlightTags: HighlightTags, terms: MatchTerms) =>
 		new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
-					if (node.nodeType === Node.ELEMENT_NODE && canHighlightNode(highlightTags, node as Element))
+					if (node.nodeType === Node.ELEMENT_NODE && canHighlightNode(highlightTags, node as Element)) {
 						highlightInNodes(node, highlightTags, terms);
+						node.normalize();
+					}
 				}
 			}
 			terms.forEach(term => updateTermTooltip(term));
@@ -698,7 +688,7 @@ const insertHighlighting = (() => {
 		highlightInNodes(document.body, highlightTags, terms);
 		terms.forEach(term => updateTermTooltip(term));
 		highlightInNodesOnMutation(observer);
-		//addScrollMarkers(terms); // TODO: make dynamic
+		addScrollMarkers(terms); // TODO: make dynamic
 	};
 })();
 
@@ -721,13 +711,12 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 	// TODO: configuration
 	const refreshTermControls = (() => {
 		const insertInterface = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-			callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement, styleConstant: string) => {
-			removeControls(styleConstant);
-			addControls(highlightTags, commands, terms, callRefreshTermControls, style, styleConstant);
+			callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement) => {
+			removeControls();
+			addControls(highlightTags, commands, terms, callRefreshTermControls, style);
 		};
 	
-		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands,
-			style: HTMLStyleElement, styleConstant: string,
+		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
 			observer: MutationObserver, selectTermPtr: SelectTermPtr, callRefreshTermControls: FunctionCallControlsRefresh,
 			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number) => {
 			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE) {
@@ -756,41 +745,45 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 					terms.splice(0, terms.length);
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 				}
-				insertInterface(highlightTags, commands, terms, callRefreshTermControls, style, styleConstant);
+				insertInterface(highlightTags, commands, terms, callRefreshTermControls, style);
 			} else {
 				return;
 			}
-			insertStyle(terms, style, styleConstant, TERM_HUES);
+			insertStyle(terms, style, TERM_HUES);
 			setTimeout(() => insertHighlighting(highlightTags, terms, false, selectTermPtr, observer));
 		};
 	})();
 
-	const insertStyleElement = (styleConstant: string) => {
+	const insertStyleElement = () => {
 		let style = document.getElementById(select(ElementID.STYLE)) as HTMLStyleElement;
 		if (!style) {
 			style = style ? style : document.createElement("style");
 			style.id = select(ElementID.STYLE);
-			style.textContent = styleConstant;
 			document.head.appendChild(style);
 		}
 		return style;
 	};
 
 	return (() => {
+		class HighlightElement extends HTMLSpanElement {
+			constructor () {
+				super();
+			}
+		}
+		customElements.define("mms-h", HighlightElement, { extends: "span" });
 		const commands: BrowserCommands = [];
 		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
 		const terms: MatchTerms = [];
 		const highlightTags: HighlightTags = {
 			flow: new Set(["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN", "MARK", "WBR", "CODE", "DATA", "DFN", "INS"]),
 			skip: new Set(["S", "DEL"]), // Implementation would likely be overly complex.
-			reject: new Set(["META", "STYLE", "SCRIPT", "NOSCRIPT"]),
+			reject: new Set(["META", "STYLE", "SCRIPT", "NOSCRIPT", "MMS-H"]),
 		};
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
-		const styleConstant = `.${select(ElementClass.TERM_ANY)} { background-color: unset; color: unset; }`;
-		const style = insertStyleElement(styleConstant);
+		const style = insertStyleElement();
 		const callRefreshTermControls: FunctionCallControlsRefresh = (termsUpdate: MatchTerms,
 			termUpdate: MatchTerm, termToUpdateIdx: number) => // For highly responsive controls, but requires nasty special cases.
-			refreshTermControls(highlightTags, terms, commands, style, styleConstant,
+			refreshTermControls(highlightTags, terms, commands, style,
 				observer, selectTermPtr, callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx);
 		browser.runtime.onMessage.addListener((message: HighlightMessage) => {
 			if (message.extensionCommands) {

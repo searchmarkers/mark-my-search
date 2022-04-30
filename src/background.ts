@@ -128,7 +128,7 @@ const injectScripts = (tabId: number, script: string, message?: HighlightMessage
 ;
 
 const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
-	browser.webNavigation.onCompleted.addListener(details => {
+	browser.webNavigation.onCommitted.addListener(details => {
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
@@ -228,7 +228,7 @@ const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 ;
 
 (() => {
-	const stoplist: Stoplist = new Set(["i", "a", "an", "and", "or", "not", "the", "there", "where",
+	const stoplist: Stoplist = new Set(["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do",
 		"is", "isn't", "are", "aren't", "can", "can't", "how"]);
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
