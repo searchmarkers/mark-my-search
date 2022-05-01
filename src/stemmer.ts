@@ -192,6 +192,6 @@ const getWordStem = (() => {
 		// TODO: generate regex for possible word forms (likely large, non-stemmer project)
 		let wordStem = getStem(word.toLocaleLowerCase());
 		wordStem = Array.from(word.matchAll(new RegExp(wordStem.replace(/(.)/g,"(?:$1") + wordStem.replace(/./g, ")?"), "gi")))[0][0];
-		return ENDINGS.has(wordStem.at(-1)) ? wordStem.slice(0, -1) : wordStem;
+		return ENDINGS.has(wordStem[wordStem.length - 1]) ? wordStem.slice(0, -1) : wordStem;
 	};
 })();

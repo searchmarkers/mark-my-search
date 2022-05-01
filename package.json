@@ -22,6 +22,7 @@
   "devDependencies": {
     "@types/download": "^8.0.1",
     "@types/firefox-webext-browser": "^82.0.1",
+    "@types/webextension-polyfill": "^0.8.3",
     "@typescript-eslint/eslint-plugin": "^4.33.0",
     "@typescript-eslint/parser": "^4.33.0",
     "body-parser": "^1.19.0",
@@ -30,6 +31,7 @@
     "express": "^4.17.1",
     "safe-compare": "^1.1.4",
     "typescript": "^4.4.3",
-    "web-ext": "^6.8.0"
+    "web-ext": "^6.8.0",
+    "webextension-polyfill": "^0.9.0"
   }
 }

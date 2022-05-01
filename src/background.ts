@@ -96,17 +96,8 @@ const isTabResearchPage = (researchIds: ResearchIDs, tabId: number) =>
 	tabId in researchIds
 ;
 
-const updateContextMenus = async (researchIds: ResearchIDs) => {
-	const tabUrls: Array<string> = [];
-	for (const tabId of Object.keys(researchIds)) {
-		await browser.tabs.get(Number(tabId)).then(tab => tabUrls.push(tab.url));
-	}
-	browser.contextMenus.update(getMenuSwitchId(false), { documentUrlPatterns: Array.from(new Set(tabUrls)) });
-};
-
 const storeNewResearchDetails = (researchIds: ResearchIDs, researchId: ResearchID, tabId: number) => {
 	researchIds[tabId] = researchId;
-	updateContextMenus(researchIds);
 	return { terms: researchIds[tabId].terms } as HighlightMessage;
 };
 
@@ -120,11 +111,12 @@ const updateCachedResearchDetails = (researchIds: ResearchIDs, terms: MatchTerms
 };
 
 const injectScripts = (tabId: number, script: string, message?: HighlightMessage) =>
-	browser.tabs.executeScript(tabId, { file: "/dist/stemmer.js" }).then(() =>
-		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
-			browser.tabs.executeScript(tabId, { file: script }).then(() =>
-				browser.commands.getAll().then(commands =>
-					browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))))))
+	browser.tabs.executeScript(tabId, { file: "/browser-polyfill.min.js" }).then(() =>
+		browser.tabs.executeScript(tabId, { file: "/dist/stemmer.js" }).then(() =>
+			browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
+				browser.tabs.executeScript(tabId, { file: script }).then(() =>
+					browser.commands.getAll().then(commands =>
+						browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message)))))))
 ;
 
 const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
@@ -132,13 +124,11 @@ const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researc
 		if (details.frameId !== 0) return;
 		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
 		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab => {
+			browser.tabs.get(details.tabId).then(tab =>
 				injectScripts(tab.id, script, isSearchPage
 					? storeNewResearchDetails(researchIds, new ResearchID({ stoplist, url: tab.url, engine }), tab.id)
-					: getCachedResearchDetails(researchIds, tab.id));
-				if (!isSearchPage)
-					updateContextMenus(researchIds);
-			});
+					: getCachedResearchDetails(researchIds, tab.id))
+			);
 		}
 	})
 ;
@@ -147,21 +137,11 @@ const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
 	browser.tabs.onCreated.addListener(tab => {
 		if (tab.openerTabId in researchIds) {
 			researchIds[tab.id] = researchIds[tab.openerTabId];
-			updateContextMenus(researchIds);
 		}
 	})
 ;
 
 const createMenuSwitches = (researchIds: ResearchIDs) => {
-	browser.contextMenus.create({ title: "Stop Researc&h", id: getMenuSwitchId(false), contexts: ["page"],
-		documentUrlPatterns: [], onclick: (event, tab) => {
-			browser.tabs.sendMessage(tab.id, { terms: [], disable: true } as HighlightMessage);
-			browser.tabs.get(tab.id).then(tab => {
-				delete researchIds[tab.id];
-				updateContextMenus(researchIds);
-			});
-		}
-	});
 	browser.contextMenus.create({ title: "Researc&h Selection", id: getMenuSwitchId(true), contexts: ["selection"],
 		onclick: async (event, tab) => tab.id in researchIds
 			? browser.tabs.sendMessage(tab.id, { terms: [] } as HighlightMessage)
@@ -227,11 +207,29 @@ const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 	})
 ;
 
+const setUp = () =>
+	browser.storage.sync.get("isSetUp").then(isSetUp => {
+		if (isSetUp)
+			return;
+		browser.storage.sync.set({ keys: { isSetUp: true } });
+		if (browser.commands.update) {
+			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
+			for (let i = 0; i < 10; i++) {
+				browser.commands.update({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
+				browser.commands.update({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
+			}
+		} else {
+			// TODO: instruct user how to assign the appropriate shortcuts
+		}
+	})
+;
+
 (() => {
 	const stoplist: Stoplist = new Set(["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do",
 		"is", "isn't", "are", "aren't", "can", "can't", "how"]);
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
+	setUp();
 	createMenuSwitches(researchIds);
 	injectScriptsOnNavigation(stoplist, engines, researchIds, "/dist/term-highlight.js");
 	extendResearchOnTabCreated(researchIds);

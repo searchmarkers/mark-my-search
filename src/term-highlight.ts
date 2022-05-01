@@ -97,10 +97,16 @@ const jumpToTerm = (() => {
 			? container
 			: element;
 		if (elementToSelect.tabIndex === -1) {
-			elementToSelect.classList.add(select(ElementClass.FOCUS_REVERT));
-			elementToSelect.tabIndex = 0;
+			if (elementToSelect.parentElement.tabIndex !== -1) {
+				elementToSelect.parentElement.focus({ preventScroll: true });
+			} else {
+				elementToSelect.classList.add(select(ElementClass.FOCUS_REVERT));
+				elementToSelect.tabIndex = 0;
+				elementToSelect.focus({ preventScroll: true });
+			}
+		} else {
+			elementToSelect.focus({ preventScroll: true });
 		}
-		elementToSelect.focus({ preventScroll: true });
 		elementToSelect.scrollIntoView({ behavior: "smooth", block: "center" });
 		selection.setBaseAndExtent(elementToSelect, 0, elementToSelect, 0);
 	};
@@ -126,6 +132,8 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 		termButton.disabled = false;
 	};
 	const hideAndCommit = () => {
+		if (termInput.disabled)
+			return;
 		hide();
 		let message: BackgroundMessage;
 		if (replaces) {
@@ -149,7 +157,7 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 			terms.push(new MatchTerm(termInput.value));
 			message = {
 				terms,
-				termChanged: terms.at(-1),
+				termChanged: terms[terms.length - 1],
 				termChangedIdx: TermChange.CREATE,
 			};
 		}
@@ -551,7 +559,7 @@ const highlightInNodes = (() => {
 				}
 				return 2; // NodeFilter.FILTER_REJECT
 			} case (3): { // Node.TEXT_NODE
-				if (level > breakLevels.at(-1))
+				if (level > breakLevels[breakLevels.length - 1])
 					nodeItems.push(node);
 				return 1; // NodeFilter.FILTER_ACCEPT
 			}}
@@ -576,7 +584,7 @@ const highlightInNodes = (() => {
 					level--; // Up to parent level.
 					walker.parentNode();
 					walkerBreakHandler.currentNode = walker.currentNode;
-					if (level === breakLevels.at(-1)) {
+					if (level === breakLevels[breakLevels.length - 1]) {
 						breakLevels.pop();
 						if (nodeItems.first)
 							highlightInBlock(wordRightPattern, nodeItems, terms);
@@ -765,12 +773,6 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 	};
 
 	return (() => {
-		class HighlightElement extends HTMLSpanElement {
-			constructor () {
-				super();
-			}
-		}
-		customElements.define("mms-h", HighlightElement, { extends: "span" });
 		const commands: BrowserCommands = [];
 		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
 		const terms: MatchTerms = [];

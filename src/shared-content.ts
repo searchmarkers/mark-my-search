@@ -34,7 +34,7 @@ class MatchTerm {
 		this.exp = this.matchMode.stem ? getWordStem(this.phrase) : this.phrase;
 		this.selector = this.exp.replace(/\W/g, "");
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const patternString = this.exp.slice(0, -1).replace(/(.)/g,"$1(\\p{Pd})?") + this.exp.at(-1);
+		const patternString = this.exp.slice(0, -1).replace(/(.)/g,"$1(\\p{Pd})?") + this.exp[this.exp.length - 1];
 		this.pattern = new RegExp(this.matchMode.whole && !this.matchMode.stem ? `\\b(?:${patternString})\\b` : patternString,
 			flags);
 		if (this.matchMode.whole && this.matchMode.stem) {
