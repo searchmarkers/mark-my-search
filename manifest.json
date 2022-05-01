@@ -7,6 +7,12 @@
 
 	"version": "1.0.2",
 
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "mark-my-search@ator-dev"
+		}
+	},
+
 	"icons": {
 		"48": "/icons/firemod48.png",
 		"96": "/icons/firemod96.png"

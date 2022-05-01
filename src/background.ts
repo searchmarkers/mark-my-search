@@ -208,10 +208,10 @@ const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
 ;
 
 const setUp = () =>
-	browser.storage.sync.get("isSetUp").then(isSetUp => {
-		if (isSetUp)
+	browser.storage.sync.get("isSetUp").then(items => {
+		if (items.isSetUp)
 			return;
-		browser.storage.sync.set({ keys: { isSetUp: true } });
+		browser.storage.sync.set({ items: { isSetUp: true } });
 		if (browser.commands.update) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			for (let i = 0; i < 10; i++) {
@@ -225,7 +225,7 @@ const setUp = () =>
 ;
 
 (() => {
-	const stoplist: Stoplist = new Set(["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do",
+	const stoplist: Stoplist = new Set(["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of",
 		"is", "isn't", "are", "aren't", "can", "can't", "how"]);
 	const researchIds: ResearchIDs = {};
 	const engines: Engines = {};
