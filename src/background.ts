@@ -1,6 +1,18 @@
 type ResearchIDs = Record<number, ResearchID>;
-type Stoplist = Set<string>;
+type Stoplist = Array<string>;
 type Engines = Record<string, Engine>;
+type CacheItems = { [CacheKey.RESEARCH_IDS]?: ResearchIDs, [CacheKey.ENGINES]?: Engines }
+type StorageItems = { [StorageKey.IS_SET_UP]?: boolean, [StorageKey.STOPLIST]?: Stoplist }
+
+enum CacheKey {
+	RESEARCH_IDS = "researchIds",
+	ENGINES = "engines",
+}
+
+enum StorageKey {
+	IS_SET_UP = "isSetUp",
+	STOPLIST = "stoplist",
+}
 
 interface ResearchArgs {
 	terms?: MatchTerms
@@ -10,30 +22,30 @@ interface ResearchArgs {
 	engine?: Engine
 }
 
-class ResearchID {
+interface ResearchID {
 	terms: MatchTerms
-
-	constructor (args: ResearchArgs) {
-		if (args.terms) {
-			this.terms = args.terms;
-			return;
-		}
-		const searchQuery = new URL(args.url).searchParams.get(SEARCH_PARAM);
-		if (!args.termsRaw) {
-			if (args.engine) {
-				args.termsRaw = args.engine.extract(args.url);
-			} else {
-				const phraseGroups = searchQuery.split("\"");
-				args.termsRaw = phraseGroups.flatMap(phraseGroups.length % 2
-					? ((phraseGroup, i) => i % 2 ? phraseGroup : phraseGroup.split(" ").filter(phrase => !!phrase))
-					: phraseGroup => phraseGroup.split(" "));
-			}
-		}
-		this.terms = Array.from(new Set(args.termsRaw))
-			.filter(phrase => !args.stoplist.has(phrase))
-			.map(phrase => new MatchTerm(phrase));
-	}
 }
+
+const getResearchId = (args: ResearchArgs): ResearchID => {
+	if (args.terms) {
+		return { terms: args.terms };
+	}
+	const searchQuery = new URL(args.url).searchParams.get(SEARCH_PARAM);
+	if (!args.termsRaw) {
+		if (args.engine) {
+			args.termsRaw = args.engine.extract(args.url);
+		} else {
+			const phraseGroups = searchQuery.split("\"");
+			args.termsRaw = phraseGroups.flatMap(phraseGroups.length % 2
+				? ((phraseGroup, i) => i % 2 ? phraseGroup : phraseGroup.split(" ").filter(phrase => !!phrase))
+				: phraseGroup => phraseGroup.split(" "));
+		}
+	}
+	return { terms: Array.from(new Set(args.termsRaw))
+		.filter(phrase => !args.stoplist.includes(phrase))
+		.map(phrase => new MatchTerm(phrase))
+	};
+};
 
 class Engine {
 	hostname: string
@@ -119,99 +131,132 @@ const injectScripts = (tabId: number, script: string, message?: HighlightMessage
 						browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message)))))))
 ;
 
-const injectScriptsOnNavigation = (stoplist: Stoplist, engines: Engines, researchIds: ResearchIDs, script: string) =>
-	browser.webNavigation.onCommitted.addListener(details => {
+browser.webNavigation.onCommitted.addListener(details => getStorage(StorageKey.STOPLIST).then(storage =>
+	getCache([CacheKey.RESEARCH_IDS, CacheKey.ENGINES]).then(cache => {
+		console.log(cache);
 		if (details.frameId !== 0) return;
-		const [isSearchPage, engine] = isTabSearchPage(engines, details.url);
-		if (isSearchPage || isTabResearchPage(researchIds, details.tabId)) {
+		const [isSearchPage, engine] = isTabSearchPage(cache.engines, details.url);
+		if (isSearchPage || isTabResearchPage(cache.researchIds, details.tabId)) {
 			browser.tabs.get(details.tabId).then(tab =>
-				injectScripts(tab.id, script, isSearchPage
-					? storeNewResearchDetails(researchIds, new ResearchID({ stoplist, url: tab.url, engine }), tab.id)
-					: getCachedResearchDetails(researchIds, tab.id))
-			);
+				injectScripts(tab.id, "/dist/term-highlight.js", isSearchPage
+					? storeNewResearchDetails(cache.researchIds, getResearchId({ stoplist: storage.stoplist, url: tab.url, engine }), tab.id)
+					: getCachedResearchDetails(cache.researchIds, tab.id))
+			).then(() => isSearchPage ? setCache({ researchIds: cache.researchIds }) : undefined);
 		}
-	})
-;
+	}))
+);
 
-const extendResearchOnTabCreated = (researchIds: ResearchIDs) =>
-	browser.tabs.onCreated.addListener(tab => {
-		if (tab.openerTabId in researchIds) {
-			researchIds[tab.id] = researchIds[tab.openerTabId];
-		}
-	})
-;
+browser.tabs.onCreated.addListener(tab => getCache(CacheKey.RESEARCH_IDS).then(cache => {
+	if (tab.openerTabId in cache.researchIds) {
+		cache.researchIds[tab.id] = cache.researchIds[tab.openerTabId];
+		setCache({ researchIds: cache.researchIds });
+	}
+}));
 
-const createMenuSwitches = (researchIds: ResearchIDs) => {
-	browser.contextMenus.create({ title: "Researc&h Selection", id: getMenuSwitchId(true), contexts: ["selection"],
-		onclick: async (event, tab) => tab.id in researchIds
+const createContextMenuItem = () => {
+	browser.contextMenus.create({
+		title: "Researc&h Selection",
+		id: getMenuSwitchId(true),
+		contexts: ["selection"],
+		onclick: async (event, tab) => getCache(CacheKey.RESEARCH_IDS).then(cache => tab.id in cache.researchIds
 			? browser.tabs.sendMessage(tab.id, { terms: [] } as HighlightMessage)
 			: injectScripts(tab.id, "/dist/term-highlight.js", { terms: [] } as HighlightMessage)
+		),
 	});
 };
 
-const addEngine = (engines: Engines, id: string, pattern: string) => {
-	if (!pattern) return;
-	if (!pattern.includes(ENGINE_RFIELD)) {
-		delete engines[id];
-		return;
-	}
-	const engine = new Engine(pattern);
-	if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
-	engines[id] = engine;
-};
+const handleEnginesCache = (() => {
+	const addEngine = (engines: Engines, id: string, pattern: string) => {
+		if (!pattern) return;
+		if (!pattern.includes(ENGINE_RFIELD)) {
+			delete engines[id];
+			return;
+		}
+		const engine = new Engine(pattern);
+		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
+		engines[id] = engine;
+	};
 
-const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void,
-	node: browser.bookmarks.BookmarkTreeNode) =>
-	node.type === "bookmark"
-		? setEngine(node)
-		: node.type === "folder"
-			? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
-;
+	const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void,
+		node: browser.bookmarks.BookmarkTreeNode) =>
+		node.type === "bookmark"
+			? setEngine(node)
+			: node.type === "folder"
+				? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
+	;
 
-const addEngineOnBookmarkChanged = (engines: Engines) => {
-	browser.bookmarks.getTree().then(nodes =>
-		nodes.forEach(node => setEngines(engines, node =>
-			addEngine(engines, node.id, node.url), node)));
-	browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
-		setEngines(engines, node =>
-			delete engines[node.id], removeInfo.node));
-	browser.bookmarks.onCreated.addListener((id, createInfo) =>
-		addEngine(engines, id, createInfo.url));
-	browser.bookmarks.onChanged.addListener((id, changeInfo) =>
-		addEngine(engines, id, changeInfo.url));
-};
+	return () => {
+		browser.bookmarks.getTree().then(nodes => getCache(CacheKey.ENGINES).then(cache => {
+			nodes.forEach(node => setEngines(cache.engines, node =>
+				addEngine(cache.engines, node.id, node.url), node));
+			setCache({ engines: cache.engines });
+		}));
+		browser.bookmarks.onRemoved.addListener((id, removeInfo) => getCache(CacheKey.ENGINES).then(cache => {
+			setEngines(cache.engines, node =>
+				delete cache.engines[node.id], removeInfo.node);
+			setCache({ engines: cache.engines });
+		}));
+		browser.bookmarks.onCreated.addListener((id, createInfo) => getCache(CacheKey.ENGINES).then(cache => {
+			addEngine(cache.engines, id, createInfo.url);
+			setCache({ engines: cache.engines });
+		}));
+		browser.bookmarks.onChanged.addListener((id, changeInfo) => getCache(CacheKey.ENGINES).then(cache => {
+			addEngine(cache.engines, id, changeInfo.url);
+			setCache({ engines: cache.engines });
+		}));
+	};
+})();
 
-const sendMessageOnCommand = () => browser.commands.onCommand.addListener(command =>
+browser.commands.onCommand.addListener(command =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
 		browser.tabs.sendMessage(tabs[0].id, { command } as HighlightMessage)
 	)
 );
 
-const sendUpdateMessagesOnMessage = (researchIds: ResearchIDs) =>
-	browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
-		if (!(sender.tab.id in researchIds)) {
-			researchIds[sender.tab.id] = new ResearchID({ terms: message.terms });
+browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) =>
+	getCache(CacheKey.RESEARCH_IDS).then(cache => {
+		if (!(sender.tab.id in cache.researchIds)) {
+			cache.researchIds[sender.tab.id] = getResearchId({ terms: message.terms });
 		}
 		if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
 			browser.tabs.sendMessage(sender.tab.id, storeNewResearchDetails(
-				researchIds, new ResearchID({ terms: message.terms }), sender.tab.id));
+				cache.researchIds, getResearchId({ terms: message.terms }), sender.tab.id));
 		} else {
-			const highlightMessage = updateCachedResearchDetails(researchIds, message.terms, sender.tab.id);
+			const highlightMessage = updateCachedResearchDetails(cache.researchIds, message.terms, sender.tab.id);
 			highlightMessage.termUpdate = message.termChanged;
 			highlightMessage.termToUpdateIdx = message.termChangedIdx;
-			Object.keys(researchIds).forEach(tabId =>
-				researchIds[tabId] === researchIds[sender.tab.id] && Number(tabId) !== sender.tab.id
+			Object.keys(cache.researchIds).forEach(tabId =>
+				cache.researchIds[tabId] === cache.researchIds[sender.tab.id] && Number(tabId) !== sender.tab.id
 					? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
 			);
 		}
+		setCache({ researchIds: cache.researchIds });
 	})
+);
+
+const setCache = (items: CacheItems) =>
+	browser.storage.local.set(items)
 ;
 
-const setUp = () =>
-	browser.storage.sync.get("isSetUp").then(items => {
-		if (items.isSetUp)
-			return;
-		browser.storage.sync.set({ items: { isSetUp: true } });
+const getCache = (keys: string | Array<string>): Promise<CacheItems> =>
+	browser.storage.local.get(keys)
+;
+
+const setStorage = (items: StorageItems) =>
+	browser.storage.sync.set(items)
+;
+
+const getStorage = (keys: string | Array<string>): Promise<StorageItems> =>
+	browser.storage.sync.get(keys)
+;
+
+const startUp = () => {
+	const setUp = () => {
+		setStorage({
+			isSetUp: true,
+			stoplist: ["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of",
+				"is", "isn't", "are", "aren't", "can", "can't", "how"],
+		});
 		if (browser.commands.update) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			for (let i = 0; i < 10; i++) {
@@ -221,19 +266,14 @@ const setUp = () =>
 		} else {
 			// TODO: instruct user how to assign the appropriate shortcuts
 		}
-	})
-;
+	};
 
-(() => {
-	const stoplist: Stoplist = new Set(["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of",
-		"is", "isn't", "are", "aren't", "can", "can't", "how"]);
-	const researchIds: ResearchIDs = {};
-	const engines: Engines = {};
-	setUp();
-	createMenuSwitches(researchIds);
-	injectScriptsOnNavigation(stoplist, engines, researchIds, "/dist/term-highlight.js");
-	extendResearchOnTabCreated(researchIds);
-	addEngineOnBookmarkChanged(engines);
-	sendMessageOnCommand();
-	sendUpdateMessagesOnMessage(researchIds);
-})();
+	setCache({ researchIds: {}, engines: {} });
+	getStorage(StorageKey.IS_SET_UP).then(items =>
+		items.isSetUp ? undefined : setUp()
+	);
+};
+
+handleEnginesCache();
+createContextMenuItem();
+startUp();

@@ -179,7 +179,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 @keyframes flash { 0% { background-color: hsla(0, 0%, 65%, 0.8); } 100% {}; }
 .${select(ElementClass.FOCUS_CONTAINER)} { animation-name: flash; animation-duration: 1s; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:active:not(.${select(ElementClass.CONTROL_BUTTON)}:hover)
-	+ .${select(ElementClass.OPTION_LIST)} { all: revert; position: absolute; top: 18px; left: -32px; z-index: 1; }
+	+ .${select(ElementClass.OPTION_LIST)} { all: revert; position: absolute; top: 18px; left: -40px; z-index: 1; }
 #${select(ElementID.BAR)} > button,
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)},
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
@@ -196,9 +196,8 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 #${select(ElementID.BAR)} > div { all: revert; position: relative; display: inline-block; }
 #${select(ElementID.BAR)} > button { background-color: hsl(0, 0%, 80%); }
 #${select(ElementID.BAR)} > div, #${select(ElementID.BAR)} > button { margin-left: 8px; }
-#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} {
-	all: revert; position: relative; font-weight: bold; height: 18px;
-	border: none; margin-left: 3px; width: 15px; background-color: transparent; color: white; }
+#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; font-weight: bold;
+	border: none; margin-left: 3px; width: 15px; height: 18px; background-color: transparent; color: white; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active { color: transparent; }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
@@ -596,7 +595,6 @@ const highlightInNodes = (() => {
 				node = walkerBreakHandler.nextSibling();
 			}
 		}
-		document.body.normalize();
 	};
 })();
 
@@ -612,7 +610,6 @@ const restoreNodes = () => {
 		element.childNodes.forEach(childNode => element.parentNode.insertBefore(childNode, element));
 		element.remove();
 	});
-	document.body.normalize();
 	purgeClass(select(ElementClass.FOCUS));
 	purgeClass(select(ElementClass.FOCUS_REVERT));
 };
@@ -628,7 +625,6 @@ const getObserverNodeHighlighter = (() => {
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node.nodeType === Node.ELEMENT_NODE && canHighlightNode(highlightTags, node as Element)) {
 						highlightInNodes(node, highlightTags, terms);
-						node.normalize();
 					}
 				}
 			}
