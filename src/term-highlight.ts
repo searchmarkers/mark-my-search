@@ -48,8 +48,8 @@ const select = (element: ElementID | ElementClass, param?: string | number) =>
 const TERM_HUES: ReadonlyArray<number> = [60, 300, 110, 220, 0, 190, 30];
 
 const jumpToTerm = (() => {
-	const getTermOccurrenceBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-		highlightTags.flow.has(element.tagName) ? getTermOccurrenceBlock(highlightTags, element.parentElement) : element
+	const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
+		highlightTags.flow.has(element.tagName) ? getContainerBlock(highlightTags, element.parentElement) : element
 	;
 
 	const isVisible = (element: HTMLElement) =>
@@ -74,12 +74,13 @@ const jumpToTerm = (() => {
 			}
 		}
 		const selection = document.getSelection();
+		const anchor = selection.anchorNode;
+		const anchorContainer = anchor && focusContainer.contains(anchor) ? focusContainer : undefined;
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H" && (term ? element.classList.contains(termSelector) : true) && isVisible(element)
-				&& getTermOccurrenceBlock(highlightTags, element.parentElement) !== focusContainer
+				&& getContainerBlock(highlightTags, element.parentElement) !== anchorContainer
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
-		const anchor = selection.anchorNode;
 		walk.currentNode = anchor
 			? anchor
 			: document.body;
@@ -90,11 +91,11 @@ const jumpToTerm = (() => {
 			element = walk[nextNodeMethod]() as HTMLElement;
 			if (!element) return;
 		}
-		const container = getTermOccurrenceBlock(highlightTags, element.parentElement);
+		const container = getContainerBlock(highlightTags, element.parentElement);
 		container.classList.add(select(ElementClass.FOCUS_CONTAINER));
 		element.classList.add(select(ElementClass.FOCUS));
 		const elementToSelect = Array.from(container.getElementsByTagName("mms-h"))
-			.every(thisElement => getTermOccurrenceBlock(highlightTags, thisElement.parentElement) === container)
+			.every(thisElement => getContainerBlock(highlightTags, thisElement.parentElement) === container)
 			? container
 			: element;
 		if (elementToSelect.tabIndex === -1) {
