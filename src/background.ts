@@ -159,8 +159,8 @@ const createContextMenuItem = () => {
 		id: getMenuSwitchId(true),
 		contexts: ["selection"],
 		onclick: async (event, tab) => getCache(CacheKey.RESEARCH_IDS).then(cache => tab.id in cache.researchIds
-			? browser.tabs.sendMessage(tab.id, { terms: [] } as HighlightMessage)
-			: injectScripts(tab.id, "/dist/term-highlight.js", { terms: [] } as HighlightMessage)
+			? browser.tabs.sendMessage(tab.id, { termsFromSelection: true } as HighlightMessage)
+			: injectScripts(tab.id, "/dist/term-highlight.js", { termsFromSelection: true } as HighlightMessage)
 		),
 	});
 };
@@ -215,6 +215,7 @@ browser.commands.onCommand.addListener(command =>
 
 browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) =>
 	getCache(CacheKey.RESEARCH_IDS).then(cache => {
+		console.log(message);
 		if (!(sender.tab.id in cache.researchIds)) {
 			cache.researchIds[sender.tab.id] = getResearchId({ terms: message.terms });
 		}

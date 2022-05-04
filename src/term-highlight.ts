@@ -1,5 +1,6 @@
 type BrowserCommands = Array<browser.commands.Command>;
-type FunctionCallControlsRefresh = (termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number) => void;
+type FunctionCallControlsRefresh = (termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number,
+	termsFromSelection?: boolean) => void;
 type HighlightTags = Record<string, ReadonlySet<string>>;
 
 enum ElementClass {
@@ -676,12 +677,12 @@ const insertHighlighting = (() => {
 		};
 	};
 
-	return (highlightTags: HighlightTags, terms: MatchTerms, disable: boolean,
+	return (highlightTags: HighlightTags, terms: MatchTerms, disable: boolean, termsFromSelection: boolean,
 		selectTermPtr: SelectTermPtr, observer: MutationObserver) => {
 		observer.disconnect();
 		restoreNodes();
 		if (disable) return;
-		if (!terms.length) {
+		if (termsFromSelection) {
 			terms = document.getSelection().toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
 				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 			document.getSelection().collapseToStart();
@@ -722,7 +723,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
 			observer: MutationObserver, selectTermPtr: SelectTermPtr, callRefreshTermControls: FunctionCallControlsRefresh,
-			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number) => {
+			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number, termsFromSelection: boolean) => {
 			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE) {
 				// 'message.disable' assumed false.
 				if (termToUpdateIdx === TermChange.CREATE) {
@@ -754,7 +755,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 				return;
 			}
 			insertStyle(terms, style, TERM_HUES);
-			setTimeout(() => insertHighlighting(highlightTags, terms, false, selectTermPtr, observer));
+			setTimeout(() => insertHighlighting(highlightTags, terms, false, termsFromSelection, selectTermPtr, observer));
 		};
 	})();
 
@@ -780,10 +781,12 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
 		const style = insertStyleElement();
 		const callRefreshTermControls: FunctionCallControlsRefresh = (termsUpdate: MatchTerms,
-			termUpdate: MatchTerm, termToUpdateIdx: number) => // For highly responsive controls, but requires nasty special cases.
-			refreshTermControls(highlightTags, terms, commands, style,
-				observer, selectTermPtr, callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx);
+			termUpdate: MatchTerm, termToUpdateIdx: number,
+			termsFromSelection = false) => // For highly responsive controls, but requires nasty special cases.
+			refreshTermControls(highlightTags, terms, commands, style, observer,
+				selectTermPtr, callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx, termsFromSelection);
 		browser.runtime.onMessage.addListener((message: HighlightMessage) => {
+			console.log(message);
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
 				message.extensionCommands.forEach(command => commands.push(command));
@@ -791,7 +794,8 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			if (message.command) {
 				selectTermPtr.selectTerm(message.command);
 			}
-			callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx);
+			callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
+				message.termsFromSelection);
 		});
 	});
 })()();

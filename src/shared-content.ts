@@ -63,6 +63,7 @@ interface HighlightMessage {
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
 	disable?: boolean
+	termsFromSelection?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
