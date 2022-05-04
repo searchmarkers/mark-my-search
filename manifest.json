@@ -14,8 +14,8 @@
 	},
 
 	"icons": {
-		"48": "/icons/firemod48.png",
-		"96": "/icons/firemod96.png"
+		"48": "/icons/mms.svg",
+		"96": "/icons/mms.svg"
 	},
 
 	"permissions": [
