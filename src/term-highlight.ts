@@ -1,6 +1,6 @@
 type BrowserCommands = Array<browser.commands.Command>;
 type FunctionCallControlsRefresh = (termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number,
-	termsFromSelection?: boolean) => void;
+	termsFromSelection?: boolean, disable?: boolean) => void;
 type HighlightTags = Record<string, ReadonlySet<string>>;
 
 enum ElementClass {
@@ -75,7 +75,7 @@ const jumpToTerm = (() => {
 		}
 		const selection = document.getSelection();
 		const anchor = selection.anchorNode;
-		const anchorContainer = anchor && focusContainer.contains(anchor) ? focusContainer : undefined;
+		const anchorContainer = anchor && focusContainer && getContainerBlock(highlightTags, anchor as HTMLElement) ? focusContainer : undefined;
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H" && (term ? element.classList.contains(termSelector) : true) && isVisible(element)
 				&& getContainerBlock(highlightTags, element.parentElement) !== anchorContainer
@@ -520,8 +520,8 @@ const highlightInNodes = (() => {
 			for (const nodeItem of nodeItems) {
 				const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
 				while (match && match.index < nextNodeStart) {
-					if (!(term.matchMode.whole && term.matchMode.stem && !term.matchWholeStem(textFlow, match.index))
-						|| match.index + match[0].length >= currentNodeStart) {
+					if (((term.matchMode.whole && term.matchMode.stem) ? term.matchWholeStem(textFlow, match.index) : true)
+						&& match.index + match[0].length >= currentNodeStart) {
 						const textLengthOriginal = nodeItem.value.textContent.length;
 						nodeItems.insertAfter(
 							highlightInNode(wordRightPattern, term,
@@ -682,7 +682,10 @@ const insertHighlighting = (() => {
 		selectTermPtr: SelectTermPtr, observer: MutationObserver) => {
 		observer.disconnect();
 		restoreNodes();
-		if (disable) return;
+		if (disable) {
+			removeControls();
+			return;
+		}
 		if (termsFromSelection) {
 			terms = document.getSelection().toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
 				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
@@ -724,7 +727,8 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
 			observer: MutationObserver, selectTermPtr: SelectTermPtr, callRefreshTermControls: FunctionCallControlsRefresh,
-			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number, termsFromSelection: boolean) => {
+			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number, termsFromSelection: boolean,
+			disable: boolean) => {
 			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE) {
 				// 'message.disable' assumed false.
 				if (termToUpdateIdx === TermChange.CREATE) {
@@ -752,11 +756,13 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 				}
 				insertInterface(highlightTags, commands, terms, callRefreshTermControls, style);
-			} else {
+			} else if (!disable) {
 				return;
 			}
-			insertStyle(terms, style, TERM_HUES);
-			setTimeout(() => insertHighlighting(highlightTags, terms, false, termsFromSelection, selectTermPtr, observer));
+			if (!disable) {
+				insertStyle(terms, style, TERM_HUES);
+			}
+			setTimeout(() => insertHighlighting(highlightTags, terms, disable, termsFromSelection, selectTermPtr, observer));
 		};
 	})();
 
@@ -783,11 +789,10 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const style = insertStyleElement();
 		const callRefreshTermControls: FunctionCallControlsRefresh = (termsUpdate: MatchTerms,
 			termUpdate: MatchTerm, termToUpdateIdx: number,
-			termsFromSelection = false) => // For highly responsive controls, but requires nasty special cases.
-			refreshTermControls(highlightTags, terms, commands, style, observer,
-				selectTermPtr, callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx, termsFromSelection);
+			termsFromSelection = false, disable = false) => // For highly responsive controls, but requires nasty special cases.
+			refreshTermControls(highlightTags, terms, commands, style, observer, selectTermPtr,
+				callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx, termsFromSelection, disable);
 		browser.runtime.onMessage.addListener((message: HighlightMessage) => {
-			console.log(message);
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
 				message.extensionCommands.forEach(command => commands.push(command));
@@ -796,7 +801,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 				selectTermPtr.selectTerm(message.command);
 			}
 			callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
-				message.termsFromSelection);
+				message.termsFromSelection, message.disable);
 		});
 	});
 })()();

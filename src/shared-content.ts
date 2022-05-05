@@ -72,4 +72,6 @@ interface BackgroundMessage {
 	termChanged?: MatchTerm
 	termChangedIdx?: number
 	makeUnique?: boolean
+	disablePageResearch?: boolean
+	toggleResearchOn?: boolean
 }

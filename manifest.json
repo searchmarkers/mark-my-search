@@ -1,17 +1,12 @@
 {
 	"manifest_version": 2,
-
 	"name": "Mark My Search",
-
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-
 	"version": "1.0.3",
 
-	"browser_specific_settings": {
-		"gecko": {
-			"id": "mark-my-search@ator-dev"
-		}
-	},
+	"browser_specific_settings": { "gecko": {
+		"id": "mark-my-search@ator-dev"
+	} },
 
 	"icons": {
 		"48": "/icons/mms.svg",
@@ -28,6 +23,13 @@
 
 	"background": {
 		"page": "background.html"
+	},
+
+	"browser_action": {
+		"browser_style": true,
+		"default_icon": "/icons/mms.svg",
+		"default_title": "Mark My Search",
+		"default_popup": "/popup.html"
 	},
 
 	"commands": {
