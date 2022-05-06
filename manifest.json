@@ -2,10 +2,10 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.0.3",
+	"version": "1.0.4",
 
 	"browser_specific_settings": { "gecko": {
-		"id": "mark-my-search@ator-dev"
+		"id": "{3c87dcad-dbbd-4be1-b07b-b6d0739b0aec}"
 	} },
 
 	"icons": {

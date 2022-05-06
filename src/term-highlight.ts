@@ -75,15 +75,15 @@ const jumpToTerm = (() => {
 		}
 		const selection = document.getSelection();
 		const anchor = selection.anchorNode;
-		const anchorContainer = anchor && focusContainer && getContainerBlock(highlightTags, anchor as HTMLElement) ? focusContainer : undefined;
+		const anchorContainer = anchor
+			? getContainerBlock(highlightTags, anchor.nodeType === Node.ELEMENT_NODE ? anchor as HTMLElement : anchor.parentElement)
+			: undefined;
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H" && (term ? element.classList.contains(termSelector) : true) && isVisible(element)
-				&& getContainerBlock(highlightTags, element.parentElement) !== anchorContainer
+				&& getContainerBlock(highlightTags, element as HTMLElement) !== anchorContainer
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
-		walk.currentNode = anchor
-			? anchor
-			: document.body;
+		walk.currentNode = anchor ? anchor : document.body;
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 		let element = walk[nextNodeMethod]() as HTMLElement;
 		if (!element) {
@@ -781,9 +781,10 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
 		const terms: MatchTerms = [];
 		const highlightTags: HighlightTags = {
-			flow: new Set(["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN", "MARK", "WBR", "CODE", "DATA", "DFN", "INS"]),
-			skip: new Set(["S", "DEL"]), // Implementation would likely be overly complex.
 			reject: new Set(["META", "STYLE", "SCRIPT", "NOSCRIPT", "MMS-H"]),
+			skip: new Set(["S", "DEL"]), // Implementation would likely be overly complex.
+			flow: new Set(["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN",
+				"MARK", "WBR", "CODE", "DATA", "DFN", "INS", "MMS-H"]),
 		};
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
 		const style = insertStyleElement();
