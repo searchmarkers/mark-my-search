@@ -1,7 +1,7 @@
 type BrowserCommands = Array<browser.commands.Command>;
 type FunctionCallControlsRefresh = (termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number,
 	termsFromSelection?: boolean, disable?: boolean) => void;
-type HighlightTags = Record<string, ReadonlySet<string>>;
+type HighlightTags = Record<string, RegExp>;
 
 enum ElementClass {
 	BAR_HIDDEN = "bar-hidden",
@@ -49,7 +49,7 @@ const TERM_HUES: ReadonlyArray<number> = [60, 300, 110, 220, 0, 190, 30];
 
 const jumpToTerm = (() => {
 	const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-		highlightTags.flow.has(element.tagName) ? getContainerBlock(highlightTags, element.parentElement) : element
+		highlightTags.flow.test(element.tagName) ? getContainerBlock(highlightTags, element.parentElement) : element
 	;
 
 	const isVisible = (element: HTMLElement) =>
@@ -549,8 +549,8 @@ const highlightInNodes = (() => {
 		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
 			switch (node.nodeType) {
 			case (1): { // NODE.ELEMENT_NODE
-				if (node.nodeType === Node.ELEMENT_NODE && !highlightTags.reject.has((node as Element).tagName)) {
-					if (!highlightTags.flow.has((node as Element).tagName)) {
+				if (!highlightTags.reject.test((node as Element).tagName)) {
+					if (!highlightTags.flow.test((node as Element).tagName)) {
 						if (node.hasChildNodes())
 							breakLevels.push(level);
 						if (nodeItems.first)
@@ -568,7 +568,7 @@ const highlightInNodes = (() => {
 		}});
 		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node =>
 			node.nodeType === 1 // Node.ELEMENT_NODE
-				? !highlightTags.reject.has((node as Element).tagName)
+				? !highlightTags.reject.test((node as Element).tagName)
 					? 1 : 2 // NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
 				: node.nodeType === 3 // Node.TEXT_NODE
 					? 1 : 2 // NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
@@ -617,22 +617,23 @@ const restoreNodes = () => {
 };
 
 const getObserverNodeHighlighter = (() => {
-	const canHighlightNode = (highlightTags: HighlightTags, node: Element): boolean =>
-		!node.closest(Array.from(highlightTags.reject).join(", "))
+	const canHighlightNode = (rejectSelector: string, node: Element): boolean =>
+		!node.closest(rejectSelector)
 	;
 
-	return (highlightTags: HighlightTags, terms: MatchTerms) =>
-		new MutationObserver(mutations => {
+	return (highlightTags: HighlightTags, terms: MatchTerms) => {
+		const rejectSelector = highlightTags.reject.source.slice(5, -3).split("|").join(", ");
+		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
-					if (node.nodeType === Node.ELEMENT_NODE && canHighlightNode(highlightTags, node as Element)) {
+					if (node.nodeType === Node.ELEMENT_NODE && canHighlightNode(rejectSelector, node as Element)) {
 						highlightInNodes(node, highlightTags, terms);
 					}
 				}
 			}
 			terms.forEach(term => updateTermTooltip(term));
-		})
-	;
+		});
+	};
 })();
 
 const highlightInNodesOnMutation = (observer: MutationObserver) =>
@@ -780,11 +781,10 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const commands: BrowserCommands = [];
 		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
 		const terms: MatchTerms = [];
-		const highlightTags: HighlightTags = {
-			reject: new Set(["META", "STYLE", "SCRIPT", "NOSCRIPT", "MMS-H"]),
-			skip: new Set(["S", "DEL"]), // Implementation would likely be overly complex.
-			flow: new Set(["B", "I", "U", "STRONG", "EM", "BR", "CITE", "SPAN",
-				"MARK", "WBR", "CODE", "DATA", "DFN", "INS", "MMS-H"]),
+		const highlightTags: HighlightTags = { // TODO: make more efficient/concise?
+			reject: /\b(?:meta|style|script|noscript|mms-h)\b/i,
+			skip: /\b(?:s|del)\b/i, // Implementation would likely be overly complex.
+			flow: /\b(?:b|i|u|strong|em|cite|span|mark|wbr|code|data|dfn|ins|mms-h)\b/i,
 		};
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
 		const style = insertStyleElement();
