@@ -1,8 +1,13 @@
+const emailjsSend: (service: string, template: string,
+	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
+	key: string) => Promise<void> = window["emailjs"].send
+;
+
 const buttons: Record<string, HTMLButtonElement> = {
 	researchDisablePage: document.getElementById("research-disable-page") as HTMLButtonElement,
 	researchToggle: document.getElementById("research-toggle") as HTMLButtonElement,
-	problemReport: document.getElementById("problem-report") as HTMLButtonElement,
 	problemReportDescribe: document.getElementById("problem-report-describe") as HTMLButtonElement,
+	problemReport: document.getElementById("problem-report") as HTMLButtonElement,
 };
 
 browser.storage.local.get("enabled").then(local =>
@@ -11,11 +16,23 @@ browser.storage.local.get("enabled").then(local =>
 
 buttons.researchDisablePage.focus();
 const buttonArray = Object.values(buttons);
-buttonArray.forEach((button, i) => button.onkeydown = event =>
-	event.key === "ArrowDown" ? buttonArray[(i + 1) % buttonArray.length].focus()
-		: event.key === "ArrowUp" ? buttonArray[(i + buttonArray.length - 1) % buttonArray.length].focus()
-			: undefined)
-;
+const focusNext = (idx: number, increment: (idx: number) => number) => {
+	idx = increment(idx);
+	buttonArray[idx].focus();
+	if (document.activeElement !== buttonArray[idx]) {
+		focusNext(idx, increment);
+	}
+};
+buttonArray.forEach((button, i) => {
+	button.onmouseenter = () => buttonArray.includes(document.activeElement as HTMLButtonElement) ? button.focus() : undefined;
+	button.onkeydown = event => {
+		if (event.key === "ArrowDown") {
+			focusNext(i, idx => (idx + 1) % buttonArray.length);
+		} else if (event.key === "ArrowUp") {
+			focusNext(i, idx => (idx + buttonArray.length - 1) % buttonArray.length);
+		}
+	};
+});
 
 buttons.researchDisablePage.onclick = () => {
 	browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
@@ -27,17 +44,26 @@ buttons.researchToggle.onclick = () => {
 	browser.runtime.sendMessage({ toggleResearchOn });
 };
 
-const problemReport = () => {
-	buttons.problemReport.disabled = true;
-	buttons.problemReportDescribe.disabled = true;
+const problemReport = (userMessage = "") => {
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => browser.storage.local.get("researchIds").then(local => {
-		if (!local.researchIds[tabs[0].id])
-			return;
-		emailjs.send("service_mms_report", "template_mms_report", { reportType: "Simple", version: browser.runtime.getManifest().version, url: tabs[0].url, phrases: local.researchIds[tabs[0].id].terms.map(term => term.phrase).join(", ") }, "NNElRuGiCXYr1E43j").then(() => {
-			buttons.problemReport.textContent = "SUCCESS";
+		const phrases = local.researchIds[tabs[0].id]
+			? local.researchIds[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+			: "";
+		buttonArray[0].focus();
+		buttons.problemReportDescribe.textContent = buttons.problemReportDescribe.textContent.replace(/🆗|!/g, "").trimEnd();
+		buttons.problemReport.disabled = true;
+		buttons.problemReportDescribe.disabled = true;
+		emailjsSend("service_mms_report", "template_mms_report", {
+			mmsVersion: browser.runtime.getManifest().version,
+			url: tabs[0].url,
+			phrases,
+			userMessage,
+		}, "NNElRuGiCXYr1E43j").then(() => {
+			buttons.problemReportDescribe.textContent += " 🆗";
 		}, (error: { status: number, text: string }) => {
-			buttons.problemReport.title = `[${error.status}] ${error.text}`;
-			buttons.problemReport.textContent = "FAILURE (hover)";
+			buttons.problemReportDescribe.textContent += " !!";
+			buttons.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
+		}).then(() => {
 			buttons.problemReport.disabled = false;
 			buttons.problemReportDescribe.disabled = false;
 		});
@@ -48,7 +74,22 @@ buttons.problemReport.onclick = () =>
 	problemReport()
 ;
 
-buttons.problemReportDescribe.onclick = () =>
-	window.open("mailto:ator-dev@protonmail.com")
-	//problemReport()
-;
+const reportInput = document.createElement("input");
+reportInput.type = "text";
+reportInput.style.width = "calc(100%)";
+reportInput.onblur = () => reportInput.remove();
+reportInput.onkeydown = event => {
+	if (event.key === "Escape") {
+		reportInput.blur();
+		reportInput.value = "";
+	}
+};
+
+buttons.problemReportDescribe.onclick = () => {
+	if (reportInput.parentElement) {
+		problemReport(reportInput.value);
+	} else {
+		buttons.problemReportDescribe.appendChild(reportInput);
+		reportInput.focus();
+	}
+};

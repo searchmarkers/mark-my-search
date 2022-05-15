@@ -150,10 +150,10 @@ const injectScripts = (tabId: number, script: string, message?: HighlightMessage
 
 browser.webNavigation.onCommitted.addListener(details => getStorageSync(StorageSyncKey.STOPLIST).then(sync =>
 	getStorageLocal([StorageLocalKey.ENABLED, StorageLocalKey.RESEARCH_IDS, StorageLocalKey.ENGINES]).then(local => {
-		if (!local.enabled || details.frameId !== 0)
+		if (details.frameId !== 0)
 			return;
 		const [isSearchPage, engine] = isTabSearchPage(local.engines, details.url);
-		if (isSearchPage || isTabResearchPage(local.researchIds, details.tabId)) {
+		if ((isSearchPage && local.enabled) || isTabResearchPage(local.researchIds, details.tabId)) {
 			browser.tabs.get(details.tabId).then(tab =>
 				injectScripts(tab.id, "/dist/term-highlight.js", isSearchPage
 					? storeNewResearchDetails(local.researchIds, getResearchId({ stoplist: sync.stoplist, url: tab.url, engine }), tab.id)
@@ -270,7 +270,7 @@ browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
 	const setUp = () => {
 		setStorageSync({
 			isSetUp: true,
-			stoplist: ["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of",
+			stoplist: ["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of", "in", "on", "at",
 				"is", "isn't", "are", "aren't", "can", "can't", "how"],
 		});
 		if (browser.commands.update) {

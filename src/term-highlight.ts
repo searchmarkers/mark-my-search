@@ -58,6 +58,7 @@ const jumpToTerm = (() => {
 	;
 
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
+		// TODO: ensure classes are always removed correctly
 		const termSelector = term ? select(ElementClass.TERM, term.selector) : undefined;
 		const focusBase = document.body.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
 		const focusContainer = document.body.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
@@ -181,7 +182,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 @keyframes flash { 0% { background-color: hsla(0, 0%, 65%, 0.8); } 100% {}; }
 .${select(ElementClass.FOCUS_CONTAINER)} { animation-name: flash; animation-duration: 1s; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:active:not(.${select(ElementClass.CONTROL_BUTTON)}:hover)
-	+ .${select(ElementClass.OPTION_LIST)} { all: revert; position: absolute; top: 18px; left: -40px; z-index: 1; }
+	+ .${select(ElementClass.OPTION_LIST)} { all: revert; position: absolute; top: 17px; left: -40px; z-index: 1; }
 #${select(ElementID.BAR)} > button,
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)},
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,

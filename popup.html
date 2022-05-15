@@ -1,32 +1,32 @@
 <!DOCTYPE html>
-
 <html>
-
-<head>
-    <meta charset="utf-8">
-    <style>
-        body > div { width: fit-content; display: grid; background-color: hsl(0, 0%, 60%); }
-        body > div > button { border-radius: 0; border-style: none; border-bottom-style: solid; border-color: black; border-width: 1px; }
-        .toggle.enabled { background-color: hsl(90, 100%, 70%); }
-        .toggle.enabled:hover { background-color: hsl(90, 100%, 80%); }
-        .toggle.enabled:active { background-color: hsl(90, 100%, 90%); }
-        .toggle { background-color: hsl(0, 100%, 70%); }
-        .toggle:hover { background-color: hsl(0, 100%, 80%); }
-        .toggle:active { background-color: hsl(0, 100%, 90%); }
-        button:focus-visible { outline-style: none; }
-        button:focus:not(button:disabled) { text-decoration: underline; }
-    </style>
-</head>
-
-<body>
-    <div>
-        <button id="research-disable-page">Disable on Page</button>
-        <button id="research-toggle" class="toggle">Mark My Search</button>
-        <button id="problem-report">Report Problem</button>
-        <button id="problem-report-describe">Describe Problem…</button>
-    </div>
-    <script src="/email.min.js"></script>
-    <script src="/dist/popup.js"></script>
-</body>
-
+    <head>
+        <meta charset="utf-8">
+        <style>
+            #problem-report-describe { display: grid; }
+            body > div { display: grid; }
+            button { background-color: hsl(0, 0%, 70%);
+                border-radius: 0; border-style: none; border-bottom-style: solid; border-color: black; border-width: 1px; }
+            button:focus { outline-style: none; text-decoration: underline; }
+            button:hover { background-color: hsl(0, 0%, 85%); }
+            button:active { outline-style: none; background-color: hsl(0, 0%, 95%); }
+            .toggle.enabled { background-color: hsl(90, 100%, 60%); }
+            .toggle.enabled:hover { background-color: hsl(90, 100%, 75%); }
+            .toggle.enabled:active { background-color: hsl(90, 100%, 85%); }
+            .toggle { background-color: hsl(0, 100%, 75%); }
+            .toggle:hover { background-color: hsl(0, 100%, 85%); }
+            .toggle:active { background-color: hsl(0, 100%, 90%); }
+            input:active { outline-style: none; display: inline-block; }
+        </style>
+    </head>
+    <body>
+        <div>
+            <button id="research-disable-page">Disable on Page</button>
+            <button id="research-toggle" class="toggle">Mark My Search On/Off</button>
+            <button id="problem-report-describe">Report a Problem</button>
+            <button id="problem-report">Instant Report</button>
+        </div>
+        <script src="/email.min.js"></script>
+        <script src="/dist/popup.js"></script>
+    </body>
 </html>
