@@ -22,14 +22,14 @@
 	],
 
 	"background": {
-		"page": "background.html"
+		"page": "/pages/background.html"
 	},
 
 	"browser_action": {
 		"browser_style": true,
 		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",
-		"default_popup": "/popup.html"
+		"default_popup": "/pages/popup.html"
 	},
 
 	"commands": {

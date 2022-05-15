@@ -1,6 +1,6 @@
-const emailjsSend: (service: string, template: string,
+const emailSend: (service: string, template: string,
 	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
-	key: string) => Promise<void> = window["emailjs"].send
+	key: string) => Promise<void> = window["libEmailSend"]
 ;
 
 const buttons: Record<string, HTMLButtonElement> = {
@@ -53,7 +53,7 @@ const problemReport = (userMessage = "") => {
 		buttons.problemReportDescribe.textContent = buttons.problemReportDescribe.textContent.replace(/🆗|!/g, "").trimEnd();
 		buttons.problemReport.disabled = true;
 		buttons.problemReportDescribe.disabled = true;
-		emailjsSend("service_mms_report", "template_mms_report", {
+		emailSend("service_mms_report", "template_mms_report", {
 			mmsVersion: browser.runtime.getManifest().version,
 			url: tabs[0].url,
 			phrases,
@@ -82,6 +82,9 @@ reportInput.onkeydown = event => {
 	if (event.key === "Escape") {
 		reportInput.blur();
 		reportInput.value = "";
+	} else if (event.key === " ") {
+		event.preventDefault();
+		reportInput.value += " ";
 	}
 };
 
