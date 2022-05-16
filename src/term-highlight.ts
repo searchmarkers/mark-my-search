@@ -166,7 +166,7 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 		}
 		if (message) {
 			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
-			browser.runtime.sendMessage(message);
+			chrome.runtime.sendMessage(message);
 		}
 	};
 	termButton.oncontextmenu = show;
@@ -229,7 +229,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 		const hue = hues[i % hues.length];
 		style.textContent += `
 #${select(ElementID.HIGHLIGHT_TOGGLE)}:checked
-	~ body .${select(ElementClass.TERM, term.selector)} {
+	~ body mms-h.${select(ElementClass.TERM, term.selector)} {
 	background-color: hsla(${hue}, 100%, 60%, 0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term.selector)} {
 	background-color: hsl(${hue}, 100%, 50%); }
@@ -301,7 +301,7 @@ const addTermControl = (() => {
 				termChangedIdx: idx,
 			};
 			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
-			browser.runtime.sendMessage(message);
+			chrome.runtime.sendMessage(message);
 		};
 		const option = document.createElement("button");
 		option.classList.add(select(ElementClass.OPTION));
@@ -495,9 +495,6 @@ const highlightInNodes = (() => {
 		const text = textEndNode.textContent;
 		start = Math.max(0, start);
 		end = Math.min(text.length, end);
-		if (term.matchMode.stem && end !== text.length) {
-			end += text.substring(end - 1).search(wordRightPattern);
-		}
 		const textStart = text.substring(0, start);
 		const highlight = document.createElement("mms-h");
 		highlight.classList.add(select(ElementClass.TERM, term.selector));
@@ -521,8 +518,7 @@ const highlightInNodes = (() => {
 			for (const nodeItem of nodeItems) {
 				const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
 				while (match && match.index < nextNodeStart) {
-					if (((term.matchMode.whole && term.matchMode.stem) ? term.matchWholeStem(textFlow, match.index) : true)
-						&& match.index + match[0].length >= currentNodeStart) {
+					if (match.index + match[0].length >= currentNodeStart) {
 						const textLengthOriginal = nodeItem.value.textContent.length;
 						nodeItems.insertAfter(
 							highlightInNode(wordRightPattern, term,
@@ -549,7 +545,8 @@ const highlightInNodes = (() => {
 		let level = 0;
 		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
 			switch (node.nodeType) {
-			case (1): { // NODE.ELEMENT_NODE
+			case (1): // NODE.ELEMENT_NODE
+			case (11): { // NODE.DOCUMENT_FRAGMENT_NODE
 				if (!highlightTags.reject.test((node as Element).tagName)) {
 					if (!highlightTags.flow.test((node as Element).tagName)) {
 						if (node.hasChildNodes())
@@ -568,7 +565,7 @@ const highlightInNodes = (() => {
 			return 2; // NodeFilter.FILTER_REJECT
 		}});
 		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node =>
-			node.nodeType === 1 // Node.ELEMENT_NODE
+			(node.nodeType === 1 || node.nodeType === 11) // Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
 				? !highlightTags.reject.test((node as Element).tagName)
 					? 1 : 2 // NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
 				: node.nodeType === 3 // Node.TEXT_NODE
@@ -627,7 +624,8 @@ const getObserverNodeHighlighter = (() => {
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
-					if (node.nodeType === Node.ELEMENT_NODE && canHighlightNode(rejectSelector, node as Element)) {
+					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
+					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightNode(rejectSelector, node as Element)) {
 						highlightInNodes(node, highlightTags, terms);
 					}
 				}
@@ -692,7 +690,7 @@ const insertHighlighting = (() => {
 			terms = document.getSelection().toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
 				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 			document.getSelection().collapseToStart();
-			browser.runtime.sendMessage({ terms, makeUnique: true } as BackgroundMessage);
+			chrome.runtime.sendMessage({ terms, makeUnique: true } as BackgroundMessage);
 			return;
 		}
 		selectTermOnCommand(highlightTags, terms, selectTermPtr);
@@ -758,7 +756,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 				}
 				insertInterface(highlightTags, commands, terms, callRefreshTermControls, style);
-			} else if (!disable) {
+			} else if (!disable && !termsFromSelection) {
 				return;
 			}
 			if (!disable) {
@@ -794,7 +792,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			termsFromSelection = false, disable = false) => // For highly responsive controls, but requires nasty special cases.
 			refreshTermControls(highlightTags, terms, commands, style, observer, selectTermPtr,
 				callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx, termsFromSelection, disable);
-		browser.runtime.onMessage.addListener((message: HighlightMessage) => {
+		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
 				message.extensionCommands.forEach(command => commands.push(command));
@@ -804,6 +802,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			}
 			callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
 				message.termsFromSelection, message.disable);
+			sendResponse(); // Manifest V3 bug.
 		});
 	});
 })()();

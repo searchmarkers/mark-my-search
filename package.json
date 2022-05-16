@@ -20,6 +20,7 @@
     "pluralize": "^8.0.0"
   },
   "devDependencies": {
+    "@types/chrome": "^0.0.186",
     "@types/download": "^8.0.1",
     "@types/firefox-webext-browser": "^82.0.1",
     "@types/webextension-polyfill": "^0.8.3",

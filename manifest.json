@@ -1,12 +1,8 @@
 {
-	"manifest_version": 2,
+	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
 	"version": "1.0.6",
-
-	"browser_specific_settings": { "gecko": {
-		"id": "{3c87dcad-dbbd-4be1-b07b-b6d0739b0aec}"
-	} },
 
 	"icons": {
 		"48": "/icons/mms.svg",
@@ -16,17 +12,19 @@
 	"permissions": [
 		"webNavigation",
 		"contextMenus",
-		"bookmarks",
 		"storage",
+		"scripting"
+	],
+
+	"host_permissions": [
 		"<all_urls>"
 	],
 
 	"background": {
-		"page": "/pages/background.html"
+		"service_worker": "/dist/background.js"
 	},
 
-	"browser_action": {
-		"browser_style": true,
+	"action": {
 		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
@@ -42,18 +40,18 @@
 			"description": "Toggle display of highlighting"
 		},
 		"toggle-select": {
-			"description": "Toggle between ACTION and CHOOSE select modes"
+			"description": "Toggle between the two select modes [advanced]"
 		},
 		"advance-global": {
 			"suggested_key": { "default": "Alt+Space" },
-			"description": "ACTION: jump to next term; CHOOSE: jump to next chosen term"
+			"description": "Jump to next term in page"
 		},
 		"advance-global-reverse": {
 			"suggested_key": { "default": "Alt+Shift+Space" },
-			"description": "ACTION: jump to previous term; CHOOSE: jump to previous chosen term"
+			"description": "Jump to previous term in page"
 		},
 		"select-term-0": {
-			"description": "ACTION: jump to next term 0; CHOOSE: choose term 0"
+			"description": "Select term 0"
 		},
 		"select-term-1": {
 			"description": "Select term 1"
@@ -83,7 +81,7 @@
 			"description": "Select term 9"
 		},
 		"select-term-0-reverse": {
-			"description": "ACTION: jump to previous term 0; CHOOSE: choose term 0"
+			"description": "Select term 0 (reverse)"
 		},
 		"select-term-1-reverse": {
 			"description": "Select term 1 (reverse)"

@@ -1,3 +1,5 @@
+self["importScripts"]("/dist/stem-pattern-find.js", "/dist/shared-content.js");
+
 type ResearchIDs = Record<number, ResearchID>;
 type Stoplist = Array<string>;
 type Engines = Record<string, Engine>;
@@ -23,13 +25,13 @@ enum StorageSyncKey {
 }
 
 const setStorageLocal = (items: StorageLocal) =>
-	browser.storage.local.set(items);
+	chrome.storage.local.set(items);
 const getStorageLocal = (keys: string | Array<string>): Promise<StorageLocal> =>
-	browser.storage.local.get(keys);
+	chrome.storage.local.get(keys);
 const setStorageSync = (items: StorageSync) =>
-	browser.storage.sync.set(items);
+	chrome.storage.sync.set(items);
 const getStorageSync = (keys: string | Array<string>): Promise<StorageSync> =>
-	browser.storage.sync.get(keys)
+	chrome.storage.sync.get(keys)
 ;
 
 interface ResearchArgs {
@@ -141,47 +143,57 @@ const updateCachedResearchDetails = (researchIds: ResearchIDs, terms: MatchTerms
 };
 
 const injectScripts = (tabId: number, script: string, message?: HighlightMessage) =>
-	browser.tabs.executeScript(tabId, { file: "/dist/stemmer.js" }).then(() =>
-		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
-			browser.tabs.executeScript(tabId, { file: script }).then(() =>
-				browser.commands.getAll().then(commands =>
-					browser.tabs.sendMessage(tabId, Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))))))
+	chrome.scripting.executeScript({
+		target: { tabId },
+		files: ["/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js"]
+	}).then(() =>
+		chrome.commands.getAll().then(commands =>
+			chrome.tabs.sendMessage(tabId,
+				Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message)))
+	)
 ;
 
-browser.webNavigation.onCommitted.addListener(details => getStorageSync(StorageSyncKey.STOPLIST).then(sync =>
+chrome.webNavigation.onCommitted.addListener(details => getStorageSync(StorageSyncKey.STOPLIST).then(sync =>
 	getStorageLocal([StorageLocalKey.ENABLED, StorageLocalKey.RESEARCH_IDS, StorageLocalKey.ENGINES]).then(local => {
 		if (details.frameId !== 0)
 			return;
 		const [isSearchPage, engine] = isTabSearchPage(local.engines, details.url);
 		if ((isSearchPage && local.enabled) || isTabResearchPage(local.researchIds, details.tabId)) {
-			browser.tabs.get(details.tabId).then(tab =>
-				injectScripts(tab.id, "/dist/term-highlight.js", isSearchPage
-					? storeNewResearchDetails(local.researchIds, getResearchId({ stoplist: sync.stoplist, url: tab.url, engine }), tab.id)
-					: getCachedResearchDetails(local.researchIds, tab.id))
-			).then(() => isSearchPage ? setStorageLocal({ researchIds: local.researchIds }) : undefined);
+			chrome.tabs.get(details.tabId).then(tab => {
+				if (tab.url || tab.pendingUrl) {
+					injectScripts(tab.id, "/dist/term-highlight.js", isSearchPage
+						? storeNewResearchDetails(local.researchIds, getResearchId({ stoplist: sync.stoplist, url: tab.url, engine }), tab.id)
+						: getCachedResearchDetails(local.researchIds, tab.id));
+				} else {
+					delete local.researchIds[tab.id]; // Mitigates Chrome assigning openerTabId for new tabs, resulting in extra research ids.
+				}
+			}).then(() => setStorageLocal({ researchIds: local.researchIds }));
 		}
 	}))
 );
 
-browser.tabs.onCreated.addListener(tab => getStorageLocal(StorageLocalKey.RESEARCH_IDS).then(local => {
-	if (tab.openerTabId in local.researchIds) {
+chrome.tabs.onCreated.addListener(tab => getStorageLocal(StorageLocalKey.RESEARCH_IDS).then(local => {
+	if ((tab.openerTabId in local.researchIds)) {
 		local.researchIds[tab.id] = local.researchIds[tab.openerTabId];
 		setStorageLocal({ researchIds: local.researchIds });
 	}
 }));
 
 const createContextMenuItem = () => {
-	browser.contextMenus.create({
+	chrome.contextMenus.create({
 		title: "Researc&h Selection",
 		id: getMenuSwitchId(true),
 		contexts: ["selection"],
-		onclick: async (event, tab) => getStorageLocal(StorageLocalKey.RESEARCH_IDS).then(local => tab.id in local.researchIds
-			? browser.tabs.sendMessage(tab.id, { termsFromSelection: true } as HighlightMessage)
-			: injectScripts(tab.id, "/dist/term-highlight.js", { termsFromSelection: true } as HighlightMessage)
-		),
 	});
+	chrome.contextMenus.onClicked.addListener((info, tab) =>
+		getStorageLocal(StorageLocalKey.RESEARCH_IDS).then(local => tab.id in local.researchIds
+			? chrome.tabs.sendMessage(tab.id, { termsFromSelection: true } as HighlightMessage)
+			: injectScripts(tab.id, "/dist/term-highlight.js", { termsFromSelection: true } as HighlightMessage)
+		)
+	);
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const handleEnginesCache = (() => {
 	const addEngine = (engines: Engines, id: string, pattern: string) => {
 		if (!pattern) return;
@@ -194,39 +206,39 @@ const handleEnginesCache = (() => {
 		engines[id] = engine;
 	};
 
-	const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void,
-		node: browser.bookmarks.BookmarkTreeNode) =>
-		node.type === "bookmark"
+	const setEngines = (engines: Engines, setEngine: (node: chrome.bookmarks.BookmarkTreeNode) => void,
+		node: chrome.bookmarks.BookmarkTreeNode) =>
+		node["type"] === "bookmark"
 			? setEngine(node)
-			: node.type === "folder"
+			: node["type"] === "folder"
 				? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
 	;
 
 	return () => {
-		browser.bookmarks.getTree().then(nodes => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
+		chrome.bookmarks.getTree().then(nodes => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
 			nodes.forEach(node => setEngines(local.engines, node =>
 				addEngine(local.engines, node.id, node.url), node));
 			setStorageLocal({ engines: local.engines });
 		}));
-		browser.bookmarks.onRemoved.addListener((id, removeInfo) => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
+		chrome.bookmarks.onRemoved.addListener((id, removeInfo) => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
 			setEngines(local.engines, node =>
 				delete local.engines[node.id], removeInfo.node);
 			setStorageLocal({ engines: local.engines });
 		}));
-		browser.bookmarks.onCreated.addListener((id, createInfo) => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
+		chrome.bookmarks.onCreated.addListener((id, createInfo) => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
 			addEngine(local.engines, id, createInfo.url);
 			setStorageLocal({ engines: local.engines });
 		}));
-		browser.bookmarks.onChanged.addListener((id, changeInfo) => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
+		chrome.bookmarks.onChanged.addListener((id, changeInfo) => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
 			addEngine(local.engines, id, changeInfo.url);
 			setStorageLocal({ engines: local.engines });
 		}));
 	};
 })();
 
-browser.commands.onCommand.addListener(command =>
-	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
-		browser.tabs.sendMessage(tabs[0].id, { command } as HighlightMessage)
+chrome.commands.onCommand.addListener(command =>
+	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
+		chrome.tabs.sendMessage(tabs[0].id, { command } as HighlightMessage)
 	)
 );
 
@@ -236,13 +248,13 @@ const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
 			setStorageLocal({ enabled: message.toggleResearchOn });
 		} else if (message.disablePageResearch) {
 			delete local.researchIds[senderTabId];
-			browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
+			chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 		} else {
 			if (!(senderTabId in local.researchIds)) {
 				local.researchIds[senderTabId] = getResearchId({ terms: message.terms });
 			}
 			if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-				browser.tabs.sendMessage(senderTabId, storeNewResearchDetails(
+				chrome.tabs.sendMessage(senderTabId, storeNewResearchDetails(
 					local.researchIds, getResearchId({ terms: message.terms }), senderTabId));
 			} else if (message.terms) {
 				const highlightMessage = updateCachedResearchDetails(local.researchIds, message.terms, senderTabId);
@@ -250,7 +262,7 @@ const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
 				highlightMessage.termToUpdateIdx = message.termChangedIdx;
 				Object.keys(local.researchIds).forEach(tabId =>
 					local.researchIds[tabId] === local.researchIds[senderTabId] && Number(tabId) !== senderTabId
-						? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
+						? chrome.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
 				);
 			}
 		}
@@ -258,13 +270,11 @@ const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
 	})
 ;
 
-browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
-	if (sender.tab) { // TODO: refactor
-		handleMessage(message, sender.tab.id);
-	} else {
-		browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => handleMessage(message, tabs[0].id));
-	}
-});
+chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => (sender.tab
+	? handleMessage(message, sender.tab.id)
+	: chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => handleMessage(message, tabs[0].id)))
+	&& sendResponse() // Manifest V3 bug.
+);
 
 (() => {
 	const setUp = () => {
@@ -273,11 +283,11 @@ browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
 			stoplist: ["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of", "in", "on", "at",
 				"is", "isn't", "are", "aren't", "can", "can't", "how"],
 		});
-		if (browser.commands.update) {
-			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
+		if (chrome.commands["update"]) {
+			chrome.commands["update"]({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			for (let i = 0; i < 10; i++) {
-				browser.commands.update({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
-				browser.commands.update({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
+				chrome.commands["update"]({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
+				chrome.commands["update"]({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
 			}
 		} else {
 			// TODO: instruct user how to assign the appropriate shortcuts
@@ -285,7 +295,7 @@ browser.runtime.onMessage.addListener((message: BackgroundMessage, sender) => {
 	};
 
 	return (() => {
-		handleEnginesCache();
+		//handleEnginesCache();
 		createContextMenuItem();
 		getStorageLocal(StorageLocalKey.ENABLED).then(local =>
 			setStorageLocal({ enabled: local.enabled === undefined ? true : local.enabled, researchIds: {}, engines: {} }));

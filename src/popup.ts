@@ -10,7 +10,7 @@ const buttons: Record<string, HTMLButtonElement> = {
 	problemReport: document.getElementById("problem-report") as HTMLButtonElement,
 };
 
-browser.storage.local.get("enabled").then(local =>
+chrome.storage.local.get("enabled").then(local =>
 	local.enabled ? buttons.researchToggle.classList.add("enabled") : undefined
 );
 
@@ -35,17 +35,17 @@ buttonArray.forEach((button, i) => {
 });
 
 buttons.researchDisablePage.onclick = () => {
-	browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
+	chrome.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
 };
 
 buttons.researchToggle.onclick = () => {
 	const toggleResearchOn = !buttons.researchToggle.classList.contains("enabled");
 	buttons.researchToggle.classList[toggleResearchOn ? "add" : "remove"]("enabled");
-	browser.runtime.sendMessage({ toggleResearchOn });
+	chrome.runtime.sendMessage({ toggleResearchOn });
 };
 
 const problemReport = (userMessage = "") => {
-	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => browser.storage.local.get("researchIds").then(local => {
+	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => chrome.storage.local.get("researchIds").then(local => {
 		const phrases = local.researchIds[tabs[0].id]
 			? local.researchIds[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
@@ -54,7 +54,7 @@ const problemReport = (userMessage = "") => {
 		buttons.problemReport.disabled = true;
 		buttons.problemReportDescribe.disabled = true;
 		emailSend("service_mms_report", "template_mms_report", {
-			mmsVersion: browser.runtime.getManifest().version,
+			mmsVersion: chrome.runtime.getManifest().version,
 			url: tabs[0].url,
 			phrases,
 			userMessage,
@@ -77,6 +77,7 @@ buttons.problemReport.onclick = () =>
 const reportInput = document.createElement("input");
 reportInput.type = "text";
 reportInput.style.width = "calc(100%)";
+reportInput.style.padding = "0";
 reportInput.onblur = () => reportInput.remove();
 reportInput.onkeydown = event => {
 	if (event.key === "Escape") {
