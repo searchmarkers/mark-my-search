@@ -59,9 +59,10 @@ const jumpToTerm = (() => {
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
 		const termSelector = term ? select(ElementClass.TERM, term.selector) : undefined;
 		const focusBase = document.body.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
+		const focusContainer = document.body.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
 		const selection = document.getSelection();
 		const anchor = document.activeElement === document.body || !document.body.contains(document.activeElement)
-			|| document.activeElement === focusBase ? selection.anchorNode : document.activeElement;
+			|| document.activeElement === focusBase || document.activeElement.contains(focusContainer) ? selection.anchorNode : document.activeElement;
 		if (focusBase) {
 			focusBase.classList.remove(select(ElementClass.FOCUS));
 			purgeClass(select(ElementClass.FOCUS_CONTAINER));
