@@ -111,6 +111,7 @@ const getWordPatternString = (() => {
 		"opia",
 		"opsy",
 		"or",
+		"ors",
 		"ory",
 		"osis",
 		"ostomy",
@@ -152,20 +153,27 @@ const getWordPatternString = (() => {
 		"y",
 	];
 	const sortReverse = (a: string, b: string) => a > b ? -1 : 1;
-	const replacePatternReverse = new RegExp(suffixes.map(suffix => reverse(suffix)).sort(sortReverse).join("|"), "gi");
+	const replacePatternReverse = new RegExp(
+		`\\b(?:${ suffixes.map(suffix => reverse(suffix)).sort(sortReverse).join("|") })`, "gi");
 	const highlightPatternString = `(?:${ suffixes.sort(sortReverse).join("|") })?`;
 
-	return (word: string) => {
+	const makeRepeatedCharsOptional = (word: string) => {
+		for (let i = word.length; i >= 0; i--) {
+			if (i > 0 && word[i] === word[i - 1]) {
+				word = word.substring(0, i + 1) + "?" + word.substring(i + 1);
+			}
+		}
+		return word;
+	};
+
+	return (word: string) => { // Currently, returned pattern must have exactly one pair of brackets.
 		const patternString = highlightPatternString;
 		const matches = reverse(word).match(replacePatternReverse);
 		if (!matches)
-			return word;
+			return makeRepeatedCharsOptional(word) + patternString;
 		const idx = word.length - matches[0].length;
 		if (idx < 3)
-			return word;
-		if (word[idx - 1] === word[idx - 2]) {
-			word += "?";
-		}
-		return word.substring(0, idx) + patternString;
+			return makeRepeatedCharsOptional(word) + patternString;
+		return makeRepeatedCharsOptional(word.substring(0, idx)) + patternString;
 	};
 })();

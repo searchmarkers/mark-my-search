@@ -24,7 +24,8 @@ const focusNext = (idx: number, increment: (idx: number) => number) => {
 	}
 };
 buttonArray.forEach((button, i) => {
-	button.onmouseenter = () => buttonArray.includes(document.activeElement as HTMLButtonElement) ? button.focus() : undefined;
+	button.onmouseenter = () =>
+		buttonArray.includes(document.activeElement as HTMLButtonElement) ? button.focus() : undefined;
 	button.onkeydown = event => {
 		if (event.key === "ArrowDown") {
 			focusNext(i, idx => (idx + 1) % buttonArray.length);
@@ -44,10 +45,10 @@ buttons.researchToggle.onclick = () => {
 	chrome.runtime.sendMessage({ toggleResearchOn });
 };
 
-const problemReport = (userMessage = "") => {
-	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => chrome.storage.local.get("researchIds").then(local => {
-		const phrases = local.researchIds[tabs[0].id]
-			? local.researchIds[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
+	getStorageLocal(StorageLocalKey.RESEARCH_INSTANCES).then(local => {
+		const phrases = local.researchInstances[tabs[0].id]
+			? local.researchInstances[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
 		buttonArray[0].focus();
 		buttons.problemReportDescribe.textContent = buttons.problemReportDescribe.textContent.replace(/🆗|!/g, "").trimEnd();
@@ -67,8 +68,8 @@ const problemReport = (userMessage = "") => {
 			buttons.problemReport.disabled = false;
 			buttons.problemReportDescribe.disabled = false;
 		});
-	}));
-};
+	})
+);
 
 buttons.problemReport.onclick = () =>
 	problemReport()

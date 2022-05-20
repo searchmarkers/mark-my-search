@@ -20,7 +20,6 @@ enum ElementClass {
 enum ElementID {
 	STYLE = "style",
 	BAR = "bar",
-	HIGHLIGHT_TOGGLE = "highlight-toggle",
 	MARKER_GUTTER = "markers",
 }
 
@@ -58,24 +57,20 @@ const jumpToTerm = (() => {
 	;
 
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
-		// TODO: ensure classes are always removed correctly
 		const termSelector = term ? select(ElementClass.TERM, term.selector) : undefined;
 		const focusBase = document.body.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
-		const focusContainer = document.body.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
+		const selection = document.getSelection();
+		const anchor = document.activeElement === document.body || !document.body.contains(document.activeElement)
+			|| document.activeElement === focusBase ? selection.anchorNode : document.activeElement;
 		if (focusBase) {
-			focusContainer.classList.remove(select(ElementClass.FOCUS_CONTAINER));
 			focusBase.classList.remove(select(ElementClass.FOCUS));
-			if (focusContainer.classList.contains(select(ElementClass.FOCUS_REVERT))) {
-				focusContainer.tabIndex = -1;
-				focusContainer.classList.remove(select(ElementClass.FOCUS_REVERT));
-			}
-			if (focusBase.classList.contains(select(ElementClass.FOCUS_REVERT))) {
-				focusBase.tabIndex = -1;
-				focusBase.classList.remove(select(ElementClass.FOCUS_REVERT));
+			purgeClass(select(ElementClass.FOCUS_CONTAINER));
+			const focusRevertElement = document.body.getElementsByClassName(select(ElementClass.FOCUS_REVERT))[0] as HTMLElement;
+			if (focusRevertElement) {
+				focusRevertElement.tabIndex = -1;
+				focusRevertElement.classList.remove(select(ElementClass.FOCUS_REVERT));
 			}
 		}
-		const selection = document.getSelection();
-		const anchor = selection.anchorNode;
 		const anchorContainer = anchor
 			? getContainerBlock(highlightTags, anchor.nodeType === Node.ELEMENT_NODE ? anchor as HTMLElement : anchor.parentElement)
 			: undefined;
@@ -189,6 +184,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled,
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
 	all: revert; color: black; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; }
+#${select(ElementID.BAR)} > button { font-weight: bold; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
 	background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input,
@@ -204,32 +200,28 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
 	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:active { color: transparent; }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION_LIST)} { all: revert; display: none; }
-#${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { all: revert; display: block; translate: 3px;
+#${select(ElementID.BAR)} .${select(ElementClass.OPTION)} { all: revert; margin-left: 3px;
 	border-style: none; border-bottom-style: solid; border-bottom-width: 1px; border-left-style: solid;
 	border-color: hsl(0, 0%, 50%); background-color: hsl(0, 0%, 75%); }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover { background-color: hsl(0, 0%, 100%); }
 #${select(ElementID.BAR)} > button:hover { background-color: hsl(0, 0%, 65%); }
 #${select(ElementID.BAR)} > button:active { background-color: hsl(0, 0%, 50%); }
-#${select(ElementID.BAR)} { all: revert; position: fixed; left: 20px; z-index: ${zIndexMax}; color-scheme: light;
+#${select(ElementID.BAR)} { all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light;
 	line-height: initial; font-size: 0; display: none; }
 #${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) { display: inline; }
-#${select(ElementID.HIGHLIGHT_TOGGLE)} { all: revert; position: fixed; z-index: ${zIndexMax}; display: none; }
-#${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) + #${select(ElementID.HIGHLIGHT_TOGGLE)} {
-	display: inline; }
-#${select(ElementID.HIGHLIGHT_TOGGLE)}:checked ~ #${select(ElementID.MARKER_GUTTER)} { display: block; }
 #${select(ElementID.MARKER_GUTTER)} { display: none; z-index: ${zIndexMax};
 	right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
 #${select(ElementID.MARKER_GUTTER)} div:not(.${select(ElementClass.MARKER_BLOCK)}) {
 	width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
 #${select(ElementID.MARKER_GUTTER)}, .${select(ElementClass.MARKER_BLOCK)} {
 	position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
-.${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }`
+.${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
+/*#${/*select(ElementID.HIGHLIGHT_TOGGLE)*/""}:checked ~ */#${select(ElementID.MARKER_GUTTER)} { display: block; }`
 	;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		style.textContent += `
-#${select(ElementID.HIGHLIGHT_TOGGLE)}:checked
-	~ body mms-h.${select(ElementClass.TERM, term.selector)} {
+/*#${/*select(ElementID.HIGHLIGHT_TOGGLE)*/""}:checked ~ */body mms-h.${select(ElementClass.TERM, term.selector)} {
 	background-color: hsla(${hue}, 100%, 60%, 0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term.selector)} {
 	background-color: hsl(${hue}, 100%, 50%); }
@@ -258,6 +250,7 @@ const updateTermTooltip = (term: MatchTerm) => {
 		.getElementsByClassName(select(ElementClass.CONTROL_BUTTON))[0] as HTMLButtonElement;
 	const occurrenceCount = document.body.getElementsByClassName(select(ElementClass.TERM, term.selector)).length;
 	controlButton.classList[occurrenceCount === 0 ? "add" : "remove"](select(ElementClass.DISABLED));
+	// TODO: do not count parts of single matches individually
 	controlButton.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
 		!occurrenceCount || !term.command ? ""
 			: occurrenceCount === 1 ? `\nJump to: ${term.command}, ${term.commandReverse}`
@@ -359,20 +352,14 @@ const addControls = (highlightTags: HighlightTags, commands: BrowserCommands, te
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
 	const buttonAppend = document.createElement("button");
-	buttonAppend.textContent = "➕";
+	buttonAppend.textContent = "+";
 	buttonAppend.tabIndex = -1;
 	createTermInput(terms, callRefreshTermControls, buttonAppend, TermChange.CREATE);
 	bar.appendChild(buttonAppend);
 	const termCommands = getTermCommands(commands);
 	terms.forEach((term, i) => addTermControl(highlightTags, terms, callRefreshTermControls,
 		i, termCommands.down[i], termCommands.up[i], buttonAppend));
-	const highlightToggle = document.createElement("input");
-	highlightToggle.id = select(ElementID.HIGHLIGHT_TOGGLE);
-	highlightToggle.tabIndex = -1; // Checkbox cannot be toggled via keyboard for unknown reason.
-	highlightToggle.type = "checkbox";
-	highlightToggle.checked = true;
 	document.body.insertAdjacentElement("beforebegin", bar);
-	document.body.insertAdjacentElement("beforebegin", highlightToggle);
 	const gutter = document.createElement("div");
 	gutter.id = select(ElementID.MARKER_GUTTER);
 	document.body.insertAdjacentElement("afterend", gutter);
@@ -383,7 +370,6 @@ const removeControls = () => {
 	if (!style || style.textContent === "")
 		return;
 	document.getElementById(select(ElementID.BAR)).remove();
-	document.getElementById(select(ElementID.HIGHLIGHT_TOGGLE)).remove();
 	document.getElementById(select(ElementID.MARKER_GUTTER)).remove();
 	document.getElementById(select(ElementID.STYLE)).textContent = "";
 };
@@ -654,8 +640,6 @@ const insertHighlighting = (() => {
 					? "remove" : "add"](select(ElementClass.BAR_HIDDEN));
 				break;
 			} case CommandType.TOGGLE_HIGHLIGHT: {
-				const highlightToggle = document.getElementById(select(ElementID.HIGHLIGHT_TOGGLE)) as HTMLInputElement;
-				highlightToggle.checked = !highlightToggle.checked;
 				break;
 			} case CommandType.TOGGLE_SELECT: {
 				selectModeFocus = !selectModeFocus;

@@ -8,7 +8,6 @@ interface MatchMode {
 
 class MatchTerm {
 	phrase: string
-    exp: string
 	selector: string
 	pattern: RegExp
 	matchMode: MatchMode
@@ -18,23 +17,27 @@ class MatchTerm {
     
 	constructor (phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
-		this.matchMode = { case: false, stem: true, whole: false };
-		if (phrase.length <= 3) {
-			this.matchMode.stem = false;
-			this.matchMode.whole = true;
-		}
+		this.matchMode = phrase.length > 3 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: true };
 		if (matchMode)
 			Object.assign(this.matchMode, matchMode);
 		this.compile();
 	}
     
 	compile () {
-		if (this.phrase.includes(" "))
+		if (/\s/.test(this.phrase))
 			this.matchMode.stem = false;
-		this.exp = this.matchMode.stem ? getWordPatternString(this.phrase) : this.phrase;
 		this.selector = this.phrase.replace(/\W/g, "");
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const patternString = this.exp.slice(0, -1).replace(/(\w)/g,"$1(\\p{Pd})?") + this.exp[this.exp.length - 1];
+		const exp = this.matchMode.stem ? getWordPatternString(this.phrase.replace(/o+/g, "o").replace("o", "oo")) : this.phrase;
+		const addOptionalHyphens = word =>
+			word.replace(/(\w\?|\w)/g,"(\\p{Pd})?$1");
+		let patternString: string;
+		if (this.matchMode.stem) {
+			const dashedEnd = exp.search(/\(/g);
+			patternString = exp[0] + addOptionalHyphens(exp.substring(1, dashedEnd)) + exp.substring(dashedEnd);
+		} else {
+			patternString = exp[0] + addOptionalHyphens(exp.substring(1));
+		}
 		this.pattern = new RegExp(this.matchMode.whole ? `\\b(?:${patternString})\\b` : patternString, flags);
 	}
 }

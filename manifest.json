@@ -2,18 +2,18 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.0.6",
+	"version": "1.0.8",
 
 	"icons": {
-		"48": "/icons/mms.svg",
-		"96": "/icons/mms.svg"
+		"48": "/icons/mms-48.png",
+		"96": "/icons/mms-96.png"
 	},
 
 	"permissions": [
 		"webNavigation",
-		"contextMenus",
+		"scripting",
 		"storage",
-		"scripting"
+		"contextMenus"
 	],
 
 	"host_permissions": [
@@ -25,7 +25,10 @@
 	},
 
 	"action": {
-		"default_icon": "/icons/mms.svg",
+		"default_icon": {
+			"16": "/icons/mms-16.png",
+			"32": "/icons/mms-32.png"
+		},
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
 	},
