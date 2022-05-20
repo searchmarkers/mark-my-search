@@ -1,11 +1,13 @@
-self["importScripts"]("/dist/manage-storage.js", "/dist/stem-pattern-find.js", "/dist/shared-content.js");
-
 interface ResearchArgs {
 	terms?: MatchTerms
 	termsRaw?: Array<string>
 	stoplist?: Stoplist
 	url?: string
 	engine?: Engine
+}
+
+if (browser) {
+	self["chrome" + ""] = browser;
 }
 
 const getResearchInstance = (args: ResearchArgs): ResearchInstance => {
@@ -105,14 +107,12 @@ const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms
 };
 
 const injectScripts = (tabId: number, script: string, message?: HighlightMessage) =>
-	chrome.scripting.executeScript({
-		target: { tabId },
-		files: ["/dist/stem-pattern-find.js", "/dist/shared-content.js", script]
-	}).then(() =>
-		chrome.commands.getAll().then(commands =>
-			chrome.tabs.sendMessage(tabId,
-				Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message)))
-	)
+	browser.tabs.executeScript(tabId, { file: "/dist/stem-pattern-find.js" }).then(() =>
+		browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
+			browser.tabs.executeScript(tabId, { file: script }).then(() =>
+				chrome.commands.getAll().then(commands =>
+					chrome.tabs.sendMessage(tabId,
+						Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))))))
 ;
 
 chrome.webNavigation.onCommitted.addListener(details => getStorageSync(StorageSyncKey.STOPLIST).then(sync =>
@@ -156,7 +156,6 @@ const createContextMenuItem = () => {
 	);
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const handleEnginesCache = (() => {
 	const addEngine = (engines: Engines, id: string, pattern: string) => {
 		if (!pattern) return;
@@ -167,6 +166,7 @@ const handleEnginesCache = (() => {
 		const engine = new Engine(pattern);
 		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
 		engines[id] = engine;
+		setStorageLocal({ engines });
 	};
 
 	const setEngines = (engines: Engines, setEngine: (node: chrome.bookmarks.BookmarkTreeNode) => void,
@@ -178,6 +178,12 @@ const handleEnginesCache = (() => {
 	;
 
 	return () => {
+		if (!browser)
+			return;
+		if (!chrome.bookmarks) {
+			// TODO: request permission
+			return;
+		}
 		chrome.bookmarks.getTree().then(nodes => getStorageLocal(StorageLocalKey.ENGINES).then(local => {
 			nodes.forEach(node => setEngines(local.engines, node =>
 				addEngine(local.engines, node.id, node.url), node));
@@ -261,7 +267,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 	};
 
 	return (() => {
-		//handleEnginesCache();
+		handleEnginesCache();
 		createContextMenuItem();
 		getStorageLocal(StorageLocalKey.ENABLED).then(local =>
 			setStorageLocal({ enabled: local.enabled === undefined ? true : local.enabled, researchInstances: {}, engines: {} }));

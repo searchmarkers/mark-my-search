@@ -40,6 +40,10 @@ interface SelectTermPtr {
 	selectTerm: (command: string) => void
 }
 
+if (browser) {
+	self["chrome" + ""] = browser;
+}
+
 const select = (element: ElementID | ElementClass, param?: string | number) =>
 	["markmysearch", element, param].join("-").slice(0, param ? undefined : -1)
 ;

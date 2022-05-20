@@ -1,3 +1,7 @@
+if (browser) {
+	self["chrome" + ""] = browser;
+}
+
 const emailSend: (service: string, template: string,
 	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
 	key: string) => Promise<void> = window["libEmailSend"]
