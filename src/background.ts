@@ -9,15 +9,13 @@ interface ResearchArgs {
 }
 
 const getResearchInstance = (args: ResearchArgs): ResearchInstance => {
-	if (args.terms) {
+	if (args.terms)
 		return { terms: args.terms };
-	}
-	const searchQuery = new URL(args.url).searchParams.get(SEARCH_PARAM);
 	if (!args.termsRaw) {
 		if (args.engine) {
 			args.termsRaw = args.engine.extract(args.url);
 		} else {
-			const phraseGroups = searchQuery.split("\"");
+			const phraseGroups = getSearchQuery(args.url).split("\"");
 			args.termsRaw = phraseGroups.flatMap(phraseGroups.length % 2
 				? ((phraseGroup, i) => i % 2 ? phraseGroup : phraseGroup.split(" ").filter(phrase => !!phrase))
 				: phraseGroup => phraseGroup.split(" "));
@@ -71,14 +69,17 @@ class Engine {
 }
 
 const ENGINE_RFIELD = "%s";
-const SEARCH_PARAM = "q";
+
+const getSearchQuery = (url: string) =>
+	new URL(url).searchParams.get(["q", "query"].find(param => new URL(url).searchParams.has(param)))
+;
 
 const getMenuSwitchId = (activate: boolean) =>
 	(activate ? "" : "de") + "activate-research-mode"
 ;
 
 const isTabSearchPage = (engines: Engines, url: string): [boolean, Engine] => {
-	if (new URL(url).searchParams.has(SEARCH_PARAM)) {
+	if (getSearchQuery(url)) {
 		return [true, undefined];
 	} else {
 		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
@@ -90,10 +91,9 @@ const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number) 
 	tabId in researchInstances
 ;
 
-const storeNewResearchDetails = (researchInstances: ResearchInstances, researchInstance: ResearchInstance, tabId: number) => {
-	researchInstances[tabId] = researchInstance;
-	return { terms: researchInstances[tabId].terms } as HighlightMessage;
-};
+const getNewResearchDetails = (researchInstance: ResearchInstance) =>
+	({ terms: researchInstance.terms } as HighlightMessage)
+;
 
 const getCachedResearchDetails = (researchInstances: ResearchInstances, tabId: number) =>
 	({ terms: researchInstances[tabId].terms } as HighlightMessage)
@@ -104,10 +104,10 @@ const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms
 	return { terms } as HighlightMessage;
 };
 
-const injectScripts = (tabId: number, script: string, message?: HighlightMessage) =>
+const injectScripts = (tabId: number, message?: HighlightMessage) =>
 	chrome.scripting.executeScript({
 		target: { tabId },
-		files: ["/dist/stem-pattern-find.js", "/dist/shared-content.js", script]
+		files: ["/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js"]
 	}).then(() =>
 		chrome.commands.getAll().then(commands =>
 			chrome.tabs.sendMessage(tabId,
@@ -115,92 +115,163 @@ const injectScripts = (tabId: number, script: string, message?: HighlightMessage
 	)
 ;
 
-chrome.webNavigation.onCommitted.addListener(details => getStorageSync(StorageSync.STOPLIST).then(sync =>
-	getStorageLocal([StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES]).then(local => {
-		if (details.frameId !== 0)
-			return;
-		const [isSearchPage, engine] = isTabSearchPage(local.engines, details.url);
-		if ((isSearchPage && local.enabled) || isTabResearchPage(local.researchInstances, details.tabId)) {
-			chrome.tabs.get(details.tabId).then(tab => {
-				if (tab.url || tab.pendingUrl) {
-					injectScripts(tab.id, "/dist/term-highlight.js", isSearchPage
-						? storeNewResearchDetails(local.researchInstances,
-							getResearchInstance({ stoplist: sync.stoplist, url: tab.url, engine }), tab.id)
-						: getCachedResearchDetails(local.researchInstances, tab.id));
-				} else {
-					delete(local.researchInstances[tab.id]); // Chromium sets openerTabId for new tabs; unwanted research instances.
-				}
-			}).then(() => setStorageLocal({ researchInstances: local.researchInstances }));
+(() => {
+	const setUp = () => {
+		setStorageSync({
+			isSetUp: true,
+			stoplist: ["i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
+				"if", "for", "while", "is", "isn't", "are", "aren't", "can", "can't", "how"],
+		});
+		if (chrome.commands["update"]) {
+			chrome.commands["update"]({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
+			for (let i = 0; i < 10; i++) {
+				chrome.commands["update"]({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
+				chrome.commands["update"]({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
+			}
+		} else {
+			// TODO: instruct user how to assign the appropriate shortcuts
 		}
-	}))
-);
+	};
+
+	const initialize = (() => {
+		const handleEnginesCache = (() => {
+			const addEngine = (engines: Engines, id: string, pattern: string) => {
+				if (!pattern) return;
+				if (!pattern.includes(ENGINE_RFIELD)) {
+					delete(engines[id]);
+					return;
+				}
+				const engine = new Engine(pattern);
+				if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
+				engines[id] = engine;
+			};
+		
+			const setEngines = (engines: Engines, setEngine: (node: chrome.bookmarks.BookmarkTreeNode) => void,
+				node: chrome.bookmarks.BookmarkTreeNode) =>
+				node["type"] === "bookmark"
+					? setEngine(node)
+					: node["type"] === "folder"
+						? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
+			;
+		
+			return () => {
+				if (!chrome.bookmarks)
+					return;
+				chrome.bookmarks.getTree().then(nodes => getStorageLocal(StorageLocal.ENGINES).then(local => {
+					nodes.forEach(node => setEngines(local.engines, node =>
+						addEngine(local.engines, node.id, node.url), node));
+					setStorageLocal({ engines: local.engines });
+				}));
+				chrome.bookmarks.onRemoved.addListener((id, removeInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
+					setEngines(local.engines, node =>
+						delete(local.engines[node.id]), removeInfo.node);
+					setStorageLocal({ engines: local.engines });
+				}));
+				chrome.bookmarks.onCreated.addListener((id, createInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
+					addEngine(local.engines, id, createInfo.url);
+					setStorageLocal({ engines: local.engines });
+				}));
+				chrome.bookmarks.onChanged.addListener((id, changeInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
+					addEngine(local.engines, id, changeInfo.url);
+					setStorageLocal({ engines: local.engines });
+				}));
+			};
+		})();
+
+		const createContextMenuItem = () => {
+			chrome.contextMenus.removeAll();
+			chrome.contextMenus.create({
+				title: "Researc&h Selection",
+				id: getMenuSwitchId(true),
+				contexts: ["selection"],
+			});
+			chrome.contextMenus.onClicked.addListener((info, tab) =>
+				getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
+					if (tab.id in local.managedTabs) {
+						chrome.tabs.sendMessage(tab.id, { termsFromSelection: true } as HighlightMessage);
+					} else {
+						local.managedTabs[tab.id] = true;
+						injectScripts(tab.id, { termsFromSelection: true } as HighlightMessage);
+						setStorageLocal({ managedTabs: local.managedTabs });
+					}
+				})
+			);
+		};
+
+		return () => {
+			handleEnginesCache();
+			createContextMenuItem();
+			initStorageLocal();
+		};
+	})();
+
+	chrome.runtime.onInstalled.addListener(() => {
+		getStorageSync(StorageSync.IS_SET_UP).then(items =>
+			items.isSetUp ? undefined : setUp()
+		);
+		initialize();
+	});
+
+	chrome.runtime.onStartup.addListener(initialize);
+})();
+
+(() => {
+	const pageModifyRemote = (url: string, tabId: number) => getStorageSync(StorageSync.STOPLIST).then(sync =>
+		getStorageLocal([StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.MANAGED_TABS, StorageLocal.ENGINES]).then(local => {
+			const [isSearchPage, engine] = isTabSearchPage(local.engines, url);
+			const isResearchPage = isTabResearchPage(local.researchInstances, tabId);
+			if ((isSearchPage && local.enabled) || isResearchPage) {
+				chrome.tabs.get(tabId).then(tab => {
+					if (!tab.url && !tab.pendingUrl) {
+						delete(local.researchInstances[tab.id]); // Chromium sets openerTabId for new tabs; unwanted research instances.
+						return;
+					}
+					if (isSearchPage) {
+						const researchInstance = getResearchInstance({ stoplist: sync.stoplist, url, engine });
+						if (isResearchPage && local.managedTabs[tabId]
+							&& local.researchInstances[tabId].terms.length === researchInstance.terms.length
+							&& local.researchInstances[tabId].terms.every((term, i) => term.phrase === researchInstance.terms[i].phrase)) {
+							return;
+						}
+						local.researchInstances[tab.id] = researchInstance;
+					}
+					if (local.managedTabs[tabId]) {
+						chrome.tabs.sendMessage(tabId, getNewResearchDetails(local.researchInstances[tabId]));
+					} else {
+						local.managedTabs[tab.id] = true;
+						injectScripts(tab.id, isSearchPage
+							? getNewResearchDetails(local.researchInstances[tab.id])
+							: getCachedResearchDetails(local.researchInstances, tab.id));
+					}
+				}).then(() => setStorageLocal({ researchInstances: local.researchInstances, managedTabs: local.managedTabs }));
+			}
+		})
+	);
+
+	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => changeInfo.url
+		? pageModifyRemote(changeInfo.url, tabId) : undefined
+	);
+
+	chrome.webNavigation.onBeforeNavigate.addListener(details => details.frameId === 0
+		? getStorageLocal(StorageLocal.MANAGED_TABS).then(local => {
+			if (local.managedTabs[details.tabId]) {
+				delete(local.managedTabs[details.tabId]);
+				setStorageLocal({ managedTabs: local.managedTabs });
+			}
+		}) : undefined
+	);
+
+	chrome.webNavigation.onCommitted.addListener(details => details.frameId === 0
+		? pageModifyRemote(details.url, details.tabId) : undefined
+	);
+})();
 
 chrome.tabs.onCreated.addListener(tab => getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
-	if ((tab.openerTabId in local.researchInstances)) {
+	if (isTabResearchPage(local.researchInstances, tab.openerTabId)) {
 		local.researchInstances[tab.id] = local.researchInstances[tab.openerTabId];
 		setStorageLocal({ researchInstances: local.researchInstances });
 	}
 }));
-
-const createContextMenuItem = () => {
-	chrome.contextMenus.removeAll();
-	chrome.contextMenus.create({
-		title: "Researc&h Selection",
-		id: getMenuSwitchId(true),
-		contexts: ["selection"],
-	});
-	chrome.contextMenus.onClicked.addListener((info, tab) =>
-		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => tab.id in local.researchInstances
-			? chrome.tabs.sendMessage(tab.id, { termsFromSelection: true } as HighlightMessage)
-			: injectScripts(tab.id, "/dist/term-highlight.js", { termsFromSelection: true } as HighlightMessage)
-		)
-	);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const handleEnginesCache = (() => {
-	const addEngine = (engines: Engines, id: string, pattern: string) => {
-		if (!pattern) return;
-		if (!pattern.includes(ENGINE_RFIELD)) {
-			delete(engines[id]);
-			return;
-		}
-		const engine = new Engine(pattern);
-		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
-		engines[id] = engine;
-	};
-
-	const setEngines = (engines: Engines, setEngine: (node: chrome.bookmarks.BookmarkTreeNode) => void,
-		node: chrome.bookmarks.BookmarkTreeNode) =>
-		node["type"] === "bookmark"
-			? setEngine(node)
-			: node["type"] === "folder"
-				? node.children.forEach(child => setEngines(engines, setEngine, child)): undefined
-	;
-
-	return () => {
-		if (!chrome.bookmarks)
-			return;
-		chrome.bookmarks.getTree().then(nodes => getStorageLocal(StorageLocal.ENGINES).then(local => {
-			nodes.forEach(node => setEngines(local.engines, node =>
-				addEngine(local.engines, node.id, node.url), node));
-			setStorageLocal({ engines: local.engines });
-		}));
-		chrome.bookmarks.onRemoved.addListener((id, removeInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
-			setEngines(local.engines, node =>
-				delete(local.engines[node.id]), removeInfo.node);
-			setStorageLocal({ engines: local.engines });
-		}));
-		chrome.bookmarks.onCreated.addListener((id, createInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
-			addEngine(local.engines, id, createInfo.url);
-			setStorageLocal({ engines: local.engines });
-		}));
-		chrome.bookmarks.onChanged.addListener((id, changeInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
-			addEngine(local.engines, id, changeInfo.url);
-			setStorageLocal({ engines: local.engines });
-		}));
-	};
-})();
 
 chrome.commands.onCommand.addListener(command =>
 	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
@@ -217,12 +288,12 @@ chrome.commands.onCommand.addListener(command =>
 				delete(local.researchInstances[senderTabId]);
 				chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 			} else {
-				if (!(senderTabId in local.researchInstances)) {
+				if (!isTabResearchPage(local.researchInstances, senderTabId)) {
 					local.researchInstances[senderTabId] = getResearchInstance({ terms: message.terms });
 				}
 				if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-					chrome.tabs.sendMessage(senderTabId, storeNewResearchDetails(
-						local.researchInstances, getResearchInstance({ terms: message.terms }), senderTabId));
+					local.researchInstances[senderTabId] = getResearchInstance({ terms: message.terms });
+					chrome.tabs.sendMessage(senderTabId, getNewResearchDetails(local.researchInstances[senderTabId]));
 				} else if (message.terms) {
 					const highlightMessage = updateCachedResearchDetails(local.researchInstances, message.terms, senderTabId);
 					highlightMessage.termUpdate = message.termChanged;
@@ -245,39 +316,4 @@ chrome.commands.onCommand.addListener(command =>
 		}
 		sendResponse(); // Manifest V3 bug.
 	});
-})();
-
-(() => {
-	const setUp = () => {
-		setStorageSync({
-			isSetUp: true,
-			stoplist: ["i", "a", "an", "and", "or", "not", "the", "there", "where", "to", "do", "of", "in", "on", "at",
-				"is", "isn't", "are", "aren't", "can", "can't", "how"],
-		});
-		if (chrome.commands["update"]) {
-			chrome.commands["update"]({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
-			for (let i = 0; i < 10; i++) {
-				chrome.commands["update"]({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
-				chrome.commands["update"]({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
-			}
-		} else {
-			// TODO: instruct user how to assign the appropriate shortcuts
-		}
-	};
-
-	const initialize = () => {
-		handleEnginesCache();
-		createContextMenuItem();
-		getStorageLocal(StorageLocal.ENABLED).then(local =>
-			setStorageLocal({ enabled: local.enabled === undefined ? true : local.enabled, researchInstances: {}, engines: {} }));
-	};
-
-	chrome.runtime.onInstalled.addListener(() => {
-		getStorageSync(StorageSync.IS_SET_UP).then(items =>
-			items.isSetUp ? undefined : setUp()
-		);
-		initialize();
-	});
-
-	chrome.runtime.onStartup.addListener(initialize);
 })();

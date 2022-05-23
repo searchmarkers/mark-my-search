@@ -4,6 +4,7 @@ type Engines = Record<string, Engine>;
 type StorageLocalValues = {
 	[StorageLocal.ENABLED]?: boolean,
 	[StorageLocal.RESEARCH_INSTANCES]?: ResearchInstances,
+	[StorageLocal.MANAGED_TABS]?: Record<number, true>,
 	[StorageLocal.ENGINES]?: Engines,
 }
 type StorageSyncValues = {
@@ -20,6 +21,7 @@ enum StorageLocal {
 	RESEARCH_INSTANCES = "researchInstances",
 	_ID_R_INSTANCES = "idResearchInstances",
     _TAB_R_INSTANCE_IDS = "tabResearchInstanceIds",
+	MANAGED_TABS = "managedTabs",
 	ENGINES = "engines",
 }
 
@@ -52,7 +54,7 @@ const setStorageLocal = (items: StorageLocalValues) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageLocal = (keysParam: string | Array<string>): Promise<StorageLocalValues> => {
+const getStorageLocal = async (keysParam: string | Array<string>): Promise<StorageLocalValues> => {
 	const keys = typeof(keysParam) === "string" ? [keysParam] : keysParam;
 	const gettingRInstances = keys.includes(StorageLocal.RESEARCH_INSTANCES);
 	if (gettingRInstances) {
@@ -60,21 +62,30 @@ const getStorageLocal = (keysParam: string | Array<string>): Promise<StorageLoca
 		keys.push(StorageLocal._ID_R_INSTANCES);
 		keys.push(StorageLocal._TAB_R_INSTANCE_IDS);
 	}
-	return chrome.storage.local.get(keys).then(local => {
-		if (gettingRInstances) {
-			const idRInstances = local[StorageLocal._ID_R_INSTANCES];
-			const tabRInstanceIds = local[StorageLocal._TAB_R_INSTANCE_IDS];
-			delete(local[StorageLocal._ID_R_INSTANCES]);
-			delete(local[StorageLocal._TAB_R_INSTANCE_IDS]);
-			const tabRInstances = {};
-			Object.keys(tabRInstanceIds).forEach(tab => {
-				tabRInstances[tab] = idRInstances[tabRInstanceIds[tab]];
-			});
-			local[StorageLocal.RESEARCH_INSTANCES] = tabRInstances;
-		}
-		return local;
-	});
+	const local = await chrome.storage.local.get(keys);
+	if (gettingRInstances) {
+		const idRInstances = local[StorageLocal._ID_R_INSTANCES];
+		const tabRInstanceIds = local[StorageLocal._TAB_R_INSTANCE_IDS];
+		delete (local[StorageLocal._ID_R_INSTANCES]);
+		delete (local[StorageLocal._TAB_R_INSTANCE_IDS]);
+		const tabRInstances = {};
+		Object.keys(tabRInstanceIds).forEach(tab => {
+			tabRInstances[tab] = idRInstances[tabRInstanceIds[tab]];
+		});
+		local[StorageLocal.RESEARCH_INSTANCES] = tabRInstances;
+	}
+	return local;
 };
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const initStorageLocal = () => getStorageLocal(StorageLocal.ENABLED).then(local =>
+	setStorageLocal({
+		enabled: local.enabled === undefined ? true : local.enabled,
+		researchInstances: {},
+		managedTabs: {},
+		engines: {}
+	})
+);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSync = (items: StorageSyncValues) => {
