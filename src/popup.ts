@@ -46,7 +46,7 @@ buttons.researchToggle.onclick = () => {
 };
 
 const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
-	getStorageLocal(StorageLocalKey.RESEARCH_INSTANCES).then(local => {
+	getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
 		const phrases = local.researchInstances[tabs[0].id]
 			? local.researchInstances[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
