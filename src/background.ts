@@ -1,14 +1,12 @@
 self["importScripts"]("/dist/manage-storage.js", "/dist/stem-pattern-find.js", "/dist/shared-content.js");
 
-interface ResearchArgs {
+const getResearchInstance = (args: {
 	terms?: MatchTerms
 	termsRaw?: Array<string>
 	stoplist?: Stoplist
 	url?: string
 	engine?: Engine
-}
-
-const getResearchInstance = (args: ResearchArgs): ResearchInstance => {
+}): ResearchInstance => {
 	if (args.terms)
 		return { terms: args.terms };
 	if (!args.termsRaw) {
@@ -26,47 +24,6 @@ const getResearchInstance = (args: ResearchArgs): ResearchInstance => {
 		.map(phrase => new MatchTerm(phrase))
 	};
 };
-
-class Engine {
-	hostname: string
-	pathname: [string, string]
-	param: string
-
-	constructor (pattern: string) {
-		// TODO: error checking?
-		const urlPattern = new URL(pattern);
-		this.hostname = urlPattern.hostname;
-		if (urlPattern.pathname.includes(ENGINE_RFIELD)) {
-			const parts = urlPattern.pathname.split(ENGINE_RFIELD);
-			this.pathname = [parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined)];
-		} else {
-			this.param = Array.from(urlPattern.searchParams).find(param => param[1].includes(ENGINE_RFIELD))[0];
-		}
-	}
-
-	extract (urlString: string, matchOnly = false) {
-		const url = new URL(urlString);
-		return url.hostname !== this.hostname ? null : this.pathname
-			? url.pathname.startsWith(this.pathname[0]) && url.pathname.slice(this.pathname[0].length).includes(this.pathname[1])
-				? matchOnly ? [] : url.pathname.slice(
-					url.pathname.indexOf(this.pathname[0]) + this.pathname[0].length,
-					url.pathname.lastIndexOf(this.pathname[1])).split("+")
-				: null
-			: url.searchParams.has(this.param)
-				? matchOnly ? [] : url.searchParams.get(this.param).split(" ")
-				: null;
-	}
-
-	match (urlString: string) {
-		return !!this.extract(urlString, true);
-	}
-
-	equals (engine: Engine) {
-		return engine.hostname === this.hostname
-			&& engine.param === this.param
-			&& engine.pathname === this.pathname;
-	}
-}
 
 const ENGINE_RFIELD = "%s";
 
@@ -135,13 +92,13 @@ const injectScripts = (tabId: number, message?: HighlightMessage) =>
 
 	const initialize = (() => {
 		const handleEnginesCache = (() => {
-			const addEngine = (engines: Engines, id: string, pattern: string) => {
-				if (!pattern) return;
-				if (!pattern.includes(ENGINE_RFIELD)) {
+			const addEngine = (engines: Engines, id: string, urlPatternString: string) => {
+				if (!urlPatternString) return;
+				if (!urlPatternString.includes(ENGINE_RFIELD)) {
 					delete(engines[id]);
 					return;
 				}
-				const engine = new Engine(pattern);
+				const engine = new Engine({ urlPatternString });
 				if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
 				engines[id] = engine;
 			};

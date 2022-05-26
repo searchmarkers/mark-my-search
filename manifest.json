@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.0.10",
+	"version": "1.0.11",
 
 	"icons": {
 		"48": "/icons/mms-48.png",

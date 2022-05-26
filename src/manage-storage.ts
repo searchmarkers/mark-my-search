@@ -55,7 +55,7 @@ const setStorageLocal = (items: StorageLocalValues) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageLocal = async (keysParam: string | Array<string>): Promise<StorageLocalValues> => {
-	const keys = typeof(keysParam) === "string" ? [keysParam] : keysParam;
+	const keys = typeof(keysParam) === "string" ? [keysParam] : Array.from(new Set(keysParam));
 	const gettingRInstances = keys.includes(StorageLocal.RESEARCH_INSTANCES);
 	if (gettingRInstances) {
 		keys.splice(keys.indexOf(StorageLocal.RESEARCH_INSTANCES), 1);
@@ -66,13 +66,17 @@ const getStorageLocal = async (keysParam: string | Array<string>): Promise<Stora
 	if (gettingRInstances) {
 		const idRInstances = local[StorageLocal._ID_R_INSTANCES];
 		const tabRInstanceIds = local[StorageLocal._TAB_R_INSTANCE_IDS];
-		delete (local[StorageLocal._ID_R_INSTANCES]);
-		delete (local[StorageLocal._TAB_R_INSTANCE_IDS]);
+		delete(local[StorageLocal._ID_R_INSTANCES]);
+		delete(local[StorageLocal._TAB_R_INSTANCE_IDS]);
 		const tabRInstances = {};
 		Object.keys(tabRInstanceIds).forEach(tab => {
 			tabRInstances[tab] = idRInstances[tabRInstanceIds[tab]];
 		});
 		local[StorageLocal.RESEARCH_INSTANCES] = tabRInstances;
+	}
+	if (local[StorageLocal.ENGINES]) {
+		const engines = local[StorageLocal.ENGINES] as Engines;
+		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
 	}
 	return local;
 };
