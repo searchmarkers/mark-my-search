@@ -10,7 +10,7 @@ const buttons: Record<string, HTMLButtonElement> = {
 	problemReport: document.getElementById("problem-report") as HTMLButtonElement,
 };
 
-chrome.storage.local.get("enabled").then(local =>
+browser.storage.local.get("enabled").then(local =>
 	local.enabled ? buttons.researchToggle.classList.add("enabled") : undefined
 );
 
@@ -36,16 +36,16 @@ buttonArray.forEach((button, i) => {
 });
 
 buttons.researchDisablePage.onclick = () => {
-	chrome.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
+	browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
 };
 
 buttons.researchToggle.onclick = () => {
 	const toggleResearchOn = !buttons.researchToggle.classList.contains("enabled");
 	buttons.researchToggle.classList[toggleResearchOn ? "add" : "remove"]("enabled");
-	chrome.runtime.sendMessage({ toggleResearchOn });
+	browser.runtime.sendMessage({ toggleResearchOn });
 };
 
-const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
+const problemReport = (userMessage = "") => browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
 	getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
 		const phrases = local.researchInstances[tabs[0].id]
 			? local.researchInstances[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
@@ -55,7 +55,7 @@ const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, la
 		buttons.problemReport.disabled = true;
 		buttons.problemReportDescribe.disabled = true;
 		emailSend("service_mms_report", "template_mms_report", {
-			mmsVersion: chrome.runtime.getManifest().version,
+			mmsVersion: browser.runtime.getManifest().version,
 			url: tabs[0].url,
 			phrases,
 			userMessage,

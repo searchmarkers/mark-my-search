@@ -29,12 +29,10 @@ class MatchTerm {
 		this.selector = this.phrase.replace(/\s/g, "_");
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const exp = (this.matchMode.stem
-			? getWordPatternString(this.phrase.replace(/o+/g, "oo"))
-			: this.phrase
-		);
+			? getWordPatternString(this.phrase.replace(/(o)+/gi, "$1")).replace(/(o)/gi, "$1$1?")
+			: this.phrase);
 		const sanitize = (word: string) =>
 			word.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-		console.log(exp);
 		const addOptionalHyphens = (word: string) =>
 			word.replace(/(\w\?|\w)/g,"(\\p{Pd})?$1");
 		let patternString: string;
@@ -45,7 +43,6 @@ class MatchTerm {
 			patternString = sanitize(exp[0]) + addOptionalHyphens(sanitize(exp).substring(1));
 		}
 		this.pattern = new RegExp(this.matchMode.whole ? `\\b(?:${patternString})\\b` : patternString, flags);
-		console.log(this.pattern);
 	}
 }
 
@@ -61,11 +58,11 @@ class Engine {
 		// TODO: error checking?
 		const urlPattern = new URL(args.urlPatternString);
 		this.hostname = urlPattern.hostname;
-		if (urlPattern.pathname.includes(ENGINE_RFIELD)) {
-			const parts = urlPattern.pathname.split(ENGINE_RFIELD);
+		if (urlPattern.pathname.includes("%s")) {
+			const parts = urlPattern.pathname.split("%s");
 			this.pathname = [parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined)];
 		} else {
-			this.param = Array.from(urlPattern.searchParams).find(param => param[1].includes(ENGINE_RFIELD))[0];
+			this.param = Array.from(urlPattern.searchParams).find(param => param[1].includes("%s"))[0];
 		}
 	}
 

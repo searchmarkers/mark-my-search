@@ -4,7 +4,6 @@ type Engines = Record<string, Engine>;
 type StorageLocalValues = {
 	[StorageLocal.ENABLED]?: boolean,
 	[StorageLocal.RESEARCH_INSTANCES]?: ResearchInstances,
-	[StorageLocal.MANAGED_TABS]?: Record<number, true>,
 	[StorageLocal.ENGINES]?: Engines,
 }
 type StorageSyncValues = {
@@ -21,7 +20,6 @@ enum StorageLocal {
 	RESEARCH_INSTANCES = "researchInstances",
 	_ID_R_INSTANCES = "idResearchInstances",
     _TAB_R_INSTANCE_IDS = "tabResearchInstanceIds",
-	MANAGED_TABS = "managedTabs",
 	ENGINES = "engines",
 }
 
@@ -50,7 +48,7 @@ const setStorageLocal = (items: StorageLocalValues) => {
 		items[StorageLocal._ID_R_INSTANCES] = idRInstances;
 		items[StorageLocal._TAB_R_INSTANCE_IDS] = tabRInstanceIds;
 	}
-	return chrome.storage.local.set(items);
+	return browser.storage.local.set(items);
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -62,7 +60,7 @@ const getStorageLocal = async (keysParam: string | Array<string>): Promise<Stora
 		keys.push(StorageLocal._ID_R_INSTANCES);
 		keys.push(StorageLocal._TAB_R_INSTANCE_IDS);
 	}
-	const local = await chrome.storage.local.get(keys);
+	const local = await browser.storage.local.get(keys);
 	if (gettingRInstances) {
 		const idRInstances = local[StorageLocal._ID_R_INSTANCES];
 		const tabRInstanceIds = local[StorageLocal._TAB_R_INSTANCE_IDS];
@@ -86,17 +84,16 @@ const initStorageLocal = () => getStorageLocal(StorageLocal.ENABLED).then(local 
 	setStorageLocal({
 		enabled: local.enabled === undefined ? true : local.enabled,
 		researchInstances: {},
-		managedTabs: {},
 		engines: {}
 	})
 );
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSync = (items: StorageSyncValues) => {
-	return chrome.storage.sync.set(items);
+	return browser.storage.sync.set(items);
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageSync = (keysParam: string | Array<string>): Promise<StorageSyncValues> => {
-	return chrome.storage.sync.get(keysParam);
+	return browser.storage.sync.get(keysParam);
 };

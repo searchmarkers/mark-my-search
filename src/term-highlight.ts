@@ -185,7 +185,7 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 		}
 		if (message) {
 			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
-			chrome.runtime.sendMessage(message);
+			browser.runtime.sendMessage(message);
 		}
 	};
 	termButton.oncontextmenu = show;
@@ -318,7 +318,7 @@ const addTermControl = (() => {
 				termChangedIdx: idx,
 			};
 			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
-			chrome.runtime.sendMessage(message);
+			browser.runtime.sendMessage(message);
 		};
 		const option = document.createElement("button");
 		option.classList.add(select(ElementClass.OPTION));
@@ -698,7 +698,7 @@ const insertHighlighting = (() => {
 			terms = document.getSelection().toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
 				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 			document.getSelection().collapseToStart();
-			chrome.runtime.sendMessage({ terms, makeUnique: true } as BackgroundMessage);
+			browser.runtime.sendMessage({ terms, makeUnique: true } as BackgroundMessage);
 			return;
 		}
 		selectTermOnCommand(highlightTags, terms, selectTermPtr);
@@ -795,12 +795,12 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		};
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
 		const style = insertStyleElement();
-		const callRefreshTermControls: FunctionCallControlsRefresh = (termsUpdate: MatchTerms,
-			termUpdate: MatchTerm, termToUpdateIdx: number,
+		const callRefreshTermControls: FunctionCallControlsRefresh = (
+			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number,
 			termsFromSelection = false, disable = false) => // For highly responsive controls, but requires nasty special cases.
 			refreshTermControls(highlightTags, terms, commands, style, observer, selectTermPtr,
 				callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx, termsFromSelection, disable);
-		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
+		browser.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
 				message.extensionCommands.forEach(command => commands.push(command));
@@ -808,8 +808,13 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			if (message.command) {
 				selectTermPtr.selectTerm(message.command);
 			}
-			callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
-				message.termsFromSelection, message.disable);
+			if (message.termUpdate || (message.terms &&
+				(message.terms.length !== terms.length || message.terms.some((term, i) => term.phrase !== terms[i].phrase)))) {
+				console.log(terms);
+				console.log(message.terms);
+				callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
+					message.termsFromSelection, message.disable);
+			}
 			sendResponse(); // Manifest V3 bug.
 		});
 	});
