@@ -10,8 +10,25 @@ The extension is free and instant to setup and use, can be disabled temporarily 
 
 ## Features and Operation
 
-* TODO
+Note that not all features are fully implemented, and a few may use temporary non-optimal code.
 
+* Recognise a search based on a URL, and thus extract search terms.
+  * Allow custom 'search engines' to be registered or detected from dynamic bookmarks.
+  * Persist 'research' through links followed, including those opened in a new tab.
+* Provide a 'research' navigation toolbar that displays whether or not certain terms occur.
+  * Display the number of occurrences in the mouseover text.
+* Highlight occurrences of your search terms in a 'research' page.
+  * Highlight new occurrences as the page changes.
+  * Allow editing, adding, and removing of terms.
+    * Provide a context menu item for 'researching' selected text.
+  * Allow configuration of how a match is determined for a specific term.
+  * Detect 'research' when a search occurs without requiring a new page to be loaded.
+* Provide a compact scrollbar view of where terms occur in a page.
+* Allow occurrences to be 'jumped' (scrolled) to in either direction by clicking the term buttons.
+  * Provide shortcuts for individual/global jumping, including different 'jump' modes.
+  * Jump to occurrences usefully by 'focusing' whole buttons and links where possible, and otherwise focusing at a sensible point in a block where multiple terms occur.
+* Allow the user to disable auto-activation for any period of time.
+* Allow the user to disable 'research' and remove highlighting on a specific page.
 
 ## Advanced Use
 
