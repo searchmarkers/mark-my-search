@@ -22,10 +22,14 @@ The extension is free and instant to setup and use, can be disabled temporarily 
 * Problem reports: You can report problems with the extension, including websites which misbehave when highlighted or where highlighting is incorrect, from the toolbar icon. The report option opens a text box where you can input a description of the issue, then sends the following fields anonymously: version number, website URL (in the active tab), terms being highlighted in that website, and your message. The instant report option does the same thing without a description. Thanks for helping improve the extension!
 
 
-## Compatibility (2022-05-25)
+## Compatibility
 
-* **Mark My Search v1.0.5** is compatible with reasonably modern Firefox releases, and will remain so while Manifest V2 is supported (so for the foreseeable future). _Note: support will be re-added in a later version._
-* **Mark My Search v1.0.10** is compatible with browsers using very recent releases of Chromium.
+_As of 2022-05-31_
+
+Releases are regularly ported between browsers.
+
+* **Mark My Search v1.0.14** is compatible with reasonably modern Firefox releases, and will remain so while Manifest V2 is supported (so for the foreseeable future). V3 will be supported once it is at a reasonable stage of development.
+* **Mark My Search v1.0.11** is compatible with browsers using very recent releases of Chromium; Manifest V3 is supported but V2 is not explicitly tested.
 
 
 ## Store Listings
