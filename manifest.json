@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.0.8",
+	"version": "1.0.14",
 
 	"browser_specific_settings": {
 		"gecko": {
@@ -11,11 +11,12 @@
 	},
 
 	"icons": {
-		"48": "/icons/mms-48.png",
-		"96": "/icons/mms-96.png"
+		"48": "/icons/mms.svg",
+		"96": "/icons/mms.svg"
 	},
 
 	"permissions": [
+		"<all_urls>",
 		"webNavigation",
 		"storage",
 		"contextMenus",
@@ -31,10 +32,7 @@
 	},
 
 	"browser_action": {
-		"default_icon": {
-			"16": "/icons/mms-16.png",
-			"32": "/icons/mms-32.png"
-		},
+		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
 	},
