@@ -28,7 +28,8 @@
 	],
 
 	"background": {
-		"page": "/pages/background.html"
+		"page": "/pages/background.html",
+		"persistent": false
 	},
 
 	"browser_action": {
