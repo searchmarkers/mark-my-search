@@ -1,25 +1,80 @@
-if (browser) {
-	self["chrome" + ""] = browser;
+type OptionKey = "researchDisablePage" | "researchToggle" | "problemReportDescribe" | "problemReport";
+
+enum OptionClass {
+	TOGGLE = "toggle",
+	ENABLED = "enabled",
 }
+
+const optionKeyToId = (key: OptionKey) =>
+	Array.from(key).map(char => char === char.toLocaleLowerCase() ? char : `-${char.toLocaleLowerCase()}`).toString()
+;
+
+(() => {
+	const style = document.createElement("style");
+	style.textContent = `
+body { width: 160px; margin: 0; padding: 0; border: 0; }
+#${optionKeyToId("problemReportDescribe")} { display: grid; }
+body > div { display: grid; }
+button { background-color: hsl(0, 0%, 70%); text-align: left;
+	border-radius: 0; border-style: none; border-bottom-style: solid; border-color: black; border-width: 1px; }
+button:focus { outline-style: none; text-decoration: underline; }
+button:hover { background-color: hsl(0, 0%, 85%); }
+button:active { outline-style: none; background-color: hsl(0, 0%, 95%); }
+.${OptionClass.TOGGLE}.${OptionClass.ENABLED} { background-color: hsl(90, 100%, 60%); }
+.${OptionClass.TOGGLE}.${OptionClass.ENABLED}:hover { background-color: hsl(90, 100%, 75%); }
+.${OptionClass.TOGGLE}.${OptionClass.ENABLED}:active { background-color: hsl(90, 100%, 85%); }
+.${OptionClass.TOGGLE} { background-color: hsl(0, 100%, 75%); }
+.${OptionClass.TOGGLE}:hover { background-color: hsl(0, 100%, 85%); }
+.${OptionClass.TOGGLE}:active { background-color: hsl(0, 100%, 90%); }
+input:active { outline-style: none; display: inline-block; }`
+	;
+	document.head.appendChild(style);
+})();
+
+const container = document.createElement("div");
+document.body.appendChild(container);
+const optionsInfo: Record<OptionKey, { text: string, classes: Array<string> }> = {
+	researchDisablePage: {
+		text: "Disable on Page",
+		classes: [],
+	}, researchToggle: {
+		text: "Mark My Search On/Off",
+		classes: [ OptionClass.TOGGLE ],
+	}, problemReportDescribe: {
+		text: "Report a Problem",
+		classes: [],
+	}, problemReport: {
+		text: "Instant Report",
+		classes: [],
+	},
+};
+const options: Record<OptionKey, HTMLButtonElement> = {
+	researchDisablePage: undefined,
+	researchToggle: undefined,
+	problemReportDescribe: undefined,
+	problemReport: undefined,
+};
+
+Object.keys(optionsInfo).forEach((key: OptionKey) => {
+	const button = document.createElement("button");
+	button.textContent = optionsInfo[key].text;
+	optionsInfo[key].classes.forEach(classEl => button.classList.add(classEl));
+	container.appendChild(button);
+	options[key] = button;
+});
+
+const buttonArray = Object.values(options);
 
 const emailSend: (service: string, template: string,
 	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
 	key: string) => Promise<void> = window["libEmailSend"]
 ;
 
-const buttons: Record<string, HTMLButtonElement> = {
-	researchDisablePage: document.getElementById("research-disable-page") as HTMLButtonElement,
-	researchToggle: document.getElementById("research-toggle") as HTMLButtonElement,
-	problemReportDescribe: document.getElementById("problem-report-describe") as HTMLButtonElement,
-	problemReport: document.getElementById("problem-report") as HTMLButtonElement,
-};
-
-browser.storage.local.get("enabled").then(local =>
-	local.enabled ? buttons.researchToggle.classList.add("enabled") : undefined
+getStorageLocal(StorageLocal.ENABLED).then(local =>
+	local.enabled ? options.researchToggle.classList.add(OptionClass.ENABLED) : undefined
 );
 
-buttons.researchDisablePage.focus();
-const buttonArray = Object.values(buttons);
+options.researchDisablePage.focus();
 const focusNext = (idx: number, increment: (idx: number) => number) => {
 	idx = increment(idx);
 	buttonArray[idx].focus();
@@ -39,43 +94,43 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
-buttons.researchDisablePage.onclick = () => {
+options.researchDisablePage.onclick = () => {
 	browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
 };
 
-buttons.researchToggle.onclick = () => {
-	const toggleResearchOn = !buttons.researchToggle.classList.contains("enabled");
-	buttons.researchToggle.classList[toggleResearchOn ? "add" : "remove"]("enabled");
+options.researchToggle.onclick = () => {
+	const toggleResearchOn = !options.researchToggle.classList.contains(OptionClass.ENABLED);
+	options.researchToggle.classList[toggleResearchOn ? "add" : "remove"](OptionClass.ENABLED);
 	browser.runtime.sendMessage({ toggleResearchOn });
 };
 
-const problemReport = (userMessage = "") => browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
+const problemReport = (userMessage = "") => browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
 	getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
-		const phrases = local.researchInstances[tabs[0].id]
-			? local.researchInstances[tabs[0].id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+		const phrases = local.researchInstances[tab.id]
+			? local.researchInstances[tab.id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
 		buttonArray[0].focus();
-		buttons.problemReportDescribe.textContent = buttons.problemReportDescribe.textContent.replace(/🆗|!/g, "").trimEnd();
-		buttons.problemReport.disabled = true;
-		buttons.problemReportDescribe.disabled = true;
+		options.problemReportDescribe.textContent = options.problemReportDescribe.textContent.replace(/🆗|!/g, "").trimEnd();
+		options.problemReport.disabled = true;
+		options.problemReportDescribe.disabled = true;
 		emailSend("service_mms_report", "template_mms_report", {
 			mmsVersion: browser.runtime.getManifest().version,
-			url: tabs[0].url,
+			url: tab.url,
 			phrases,
 			userMessage,
 		}, "NNElRuGiCXYr1E43j").then(() => {
-			buttons.problemReportDescribe.textContent += " 🆗";
+			options.problemReportDescribe.textContent += " 🆗";
 		}, (error: { status: number, text: string }) => {
-			buttons.problemReportDescribe.textContent += " !!";
-			buttons.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
+			options.problemReportDescribe.textContent += " !!";
+			options.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
 		}).then(() => {
-			buttons.problemReport.disabled = false;
-			buttons.problemReportDescribe.disabled = false;
+			options.problemReport.disabled = false;
+			options.problemReportDescribe.disabled = false;
 		});
 	})
 );
 
-buttons.problemReport.onclick = () =>
+options.problemReport.onclick = () =>
 	problemReport()
 ;
 
@@ -94,11 +149,11 @@ reportInput.onkeydown = event => {
 	}
 };
 
-buttons.problemReportDescribe.onclick = () => {
+options.problemReportDescribe.onclick = () => {
 	if (reportInput.parentElement) {
 		problemReport(reportInput.value);
 	} else {
-		buttons.problemReportDescribe.appendChild(reportInput);
+		options.problemReportDescribe.appendChild(reportInput);
 		reportInput.focus();
 	}
 };

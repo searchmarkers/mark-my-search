@@ -5,8 +5,12 @@ const createResearchInstance = (args: {
 	url?: string
 	engine?: Engine
 }): ResearchInstance => {
-	if (args.terms)
-		return { terms: args.terms };
+	if (args.terms) {
+		return {
+			phrases: args.terms.map(term => term.phrase),
+			terms: args.terms
+		};
+	}
 	if (!args.termsRaw) {
 		if (args.engine) {
 			args.termsRaw = args.engine.extract(args.url);
@@ -17,26 +21,29 @@ const createResearchInstance = (args: {
 				: phraseGroup => phraseGroup.split(" "));
 		}
 	}
-	return { terms: Array.from(new Set(args.termsRaw))
+	const terms = Array.from(new Set(args.termsRaw))
 		.filter(phrase => !args.stoplist.includes(phrase))
-		.map(phrase => new MatchTerm(phrase))
+		.map(phrase => new MatchTerm(phrase));
+	return {
+		phrases: terms.map(term => term.phrase),
+		terms,
 	};
 };
 
 const getSearchQuery = (url: string) =>
-	new URL(url).searchParams.get(["q", "query"].find(param => new URL(url).searchParams.has(param)))
+	new URL(url).searchParams.get([ "q", "query" ].find(param => new URL(url).searchParams.has(param)))
 ;
 
 const getMenuSwitchId = (activate: boolean) =>
 	(activate ? "" : "de") + "activate-research-mode"
 ;
 
-const isTabSearchPage = (engines: Engines, url: string): [boolean, Engine] => {
+const isTabSearchPage = (engines: Engines, url: string): [ boolean, Engine ] => {
 	if (getSearchQuery(url)) {
-		return [true, undefined];
+		return [ true, undefined ];
 	} else {
 		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
-		return [!!engine, engine];
+		return [ !!engine, engine ];
 	}
 };
 
@@ -116,7 +123,7 @@ const createContextMenuItem = () => {
 	browser.contextMenus.create({
 		title: "Researc&h Selection",
 		id: getMenuSwitchId(true),
-		contexts: ["selection"],
+		contexts: [ "selection" ],
 	});
 	browser.contextMenus.onClicked.addListener((info, tab) =>
 		activateHighlighting(tab.id, { termsFromSelection: true } as HighlightMessage)
@@ -127,8 +134,8 @@ const createContextMenuItem = () => {
 	const setUp = () => {
 		setStorageSync({
 			isSetUp: true,
-			stoplist: ["i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
-				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how"],
+			stoplist: [ "i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
+				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs" ],
 		});
 		if (browser.commands["update"]) {
 			browser.commands["update"]({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
@@ -159,14 +166,13 @@ const createContextMenuItem = () => {
 
 (() => {
 	const pageModifyRemote = (url: string, tabId: number) => getStorageSync(StorageSync.STOPLIST).then(sync =>
-		getStorageLocal([StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES]).then(local => {
-			const [isSearchPage, engine] = local.enabled ? isTabSearchPage(local.engines, url) : [false, undefined];
+		getStorageLocal([ StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES ]).then(local => {
+			const [ isSearchPage, engine ] = local.enabled ? isTabSearchPage(local.engines, url) : [ false, undefined ];
 			const isResearchPage = isTabResearchPage(local.researchInstances, tabId);
 			if (isSearchPage) {
 				const researchInstance = createResearchInstance({ stoplist: sync.stoplist, url, engine });
-				// TODO: make function for checking terms' (phrase) equality
-				if (!isResearchPage || local.researchInstances[tabId].terms.length !== researchInstance.terms.length
-					|| local.researchInstances[tabId].terms.some((term, i) => term.phrase !== researchInstance.terms[i].phrase)) {
+				if (!isResearchPage || local.researchInstances[tabId].phrases.length !== researchInstance.phrases.length
+					|| local.researchInstances[tabId].phrases.some((phrase, i) => phrase !== researchInstance.phrases[i])) {
 					local.researchInstances[tabId] = researchInstance;
 					setStorageLocal({ researchInstances: local.researchInstances });
 					activateHighlighting(tabId, createResearchMessage(local.researchInstances[tabId]));
@@ -181,10 +187,6 @@ const createContextMenuItem = () => {
 	browser.tabs.onUpdated.addListener((tabId, changeInfo) => changeInfo.url
 		? pageModifyRemote(changeInfo.url, tabId) : undefined
 	);
-
-	browser.webNavigation.onCommitted.addListener(details => details.frameId === 0
-		? pageModifyRemote(details.url, details.tabId) : undefined
-	);
 })();
 
 browser.tabs.onCreated.addListener(tab => getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
@@ -195,8 +197,8 @@ browser.tabs.onCreated.addListener(tab => getStorageLocal(StorageLocal.RESEARCH_
 }));
 
 browser.commands.onCommand.addListener(command =>
-	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs =>
-		browser.tabs.sendMessage(tabs[0].id, { command } as HighlightMessage)
+	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
+		browser.tabs.sendMessage(tab.id, { command } as HighlightMessage)
 	)
 );
 
@@ -233,14 +235,16 @@ browser.commands.onCommand.addListener(command =>
 		if (sender.tab) {
 			handleMessage(message, sender.tab.id);
 		} else {
-			browser.tabs.query({ active: true, lastFocusedWindow: true }).then(tabs => handleMessage(message, tabs[0].id));
+			browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
+				handleMessage(message, tab.id)
+			);
 		}
 		sendResponse(); // Manifest V3 bug.
 	});
 })();
 
 browser.browserAction.onClicked.addListener(() =>
-	browser.permissions.request({ permissions: ["bookmarks"] })
+	browser.permissions.request({ permissions: [ "bookmarks" ] })
 );
 
 browser.permissions.onAdded.addListener(permissions =>

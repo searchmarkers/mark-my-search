@@ -12,6 +12,7 @@ type StorageSyncValues = {
 }
 
 interface ResearchInstance {
+	phrases: ReadonlyArray<string>
 	terms: MatchTerms
 }
 
@@ -53,7 +54,7 @@ const setStorageLocal = (items: StorageLocalValues) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageLocal = async (keysParam: string | Array<string>): Promise<StorageLocalValues> => {
-	const keys = typeof(keysParam) === "string" ? [keysParam] : Array.from(new Set(keysParam));
+	const keys = typeof(keysParam) === "string" ? [ keysParam ] : Array.from(new Set(keysParam));
 	const gettingRInstances = keys.includes(StorageLocal.RESEARCH_INSTANCES);
 	if (gettingRInstances) {
 		keys.splice(keys.indexOf(StorageLocal.RESEARCH_INSTANCES), 1);

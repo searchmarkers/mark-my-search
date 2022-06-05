@@ -49,7 +49,7 @@ class MatchTerm {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Engine {
 	hostname: string
-	pathname: [string, string]
+	pathname: [ string, string ]
 	param: string
 
 	constructor (args?: { urlPatternString: string }) {
@@ -60,7 +60,7 @@ class Engine {
 		this.hostname = urlPattern.hostname;
 		if (urlPattern.pathname.includes("%s")) {
 			const parts = urlPattern.pathname.split("%s");
-			this.pathname = [parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined)];
+			this.pathname = [ parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined) ];
 		} else {
 			this.param = Array.from(urlPattern.searchParams).find(param => param[1].includes("%s"))[0];
 		}

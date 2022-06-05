@@ -17,10 +17,9 @@
 
 	"permissions": [
 		"<all_urls>",
-		"webNavigation",
+		"tabs",
 		"storage",
-		"contextMenus",
-		"<all_urls>"
+		"contextMenus"
 	],
 
 	"optional_permissions": [

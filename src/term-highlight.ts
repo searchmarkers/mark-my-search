@@ -46,10 +46,10 @@ if (browser) {
 }
 
 const select = (element: ElementID | ElementClass, param?: string | number) =>
-	["markmysearch", element, param].join("-").slice(0, param ? undefined : -1)
+	[ "markmysearch", element, param ].join("-").slice(0, param ? undefined : -1)
 ;
 
-const TERM_HUES: ReadonlyArray<number> = [60, 300, 110, 220, 0, 190, 30];
+const TERM_HUES: ReadonlyArray<number> = [ 60, 300, 110, 220, 0, 190, 30 ];
 
 const jumpToTerm = (() => {
 	const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
@@ -412,14 +412,14 @@ const addScrollMarkers = (() => {
 	const getScrollContainer = (element: HTMLElement): HTMLElement =>
 		element.scrollHeight > element.clientHeight
 		&& (document.scrollingElement === element
-			|| ["scroll", "auto"].indexOf(window.getComputedStyle(element).overflowY) !== -1)
+			|| [ "scroll", "auto" ].includes(window.getComputedStyle(element).overflowY))
 			? element
 			: getScrollContainer(element.parentElement)
 	;
 
 	return (terms: MatchTerms) => {
 		const gutter = document.getElementById(select(ElementID.MARKER_GUTTER));
-		const containerPairs: Array<[Element, HTMLElement]> = [[document.scrollingElement, gutter]];
+		const containerPairs: Array<[Element, HTMLElement]> = [ [ document.scrollingElement, gutter ] ];
 		terms.forEach(term =>
 			Array.from(document.body.getElementsByClassName(select(ElementClass.TERM, term.selector))).forEach((highlight: Element) => {
 				if (!("offsetTop" in highlight))
@@ -434,7 +434,7 @@ const addScrollMarkers = (() => {
 					) + "%";
 					//block.style.height = "15%";
 					gutter.appendChild(block);
-					containerPairs.push([scrollContainer, block]);
+					containerPairs.push([ scrollContainer, block ]);
 				}
 				// TOOD: add overlap strategy, add update strategy, check calculations
 				const marker = document.createElement("div");
@@ -555,9 +555,9 @@ const highlightInNodes = (() => {
 	return (rootNode: Node, highlightTags: HighlightTags, terms: MatchTerms) => {
 		const wordRightPattern = /[^^]\b/;
 		const nodeItems: UnbrokenNodeList = new UnbrokenNodeList;
-		const breakLevels: Array<number> = [0];
+		const breakLevels: Array<number> = [ 0 ];
 		let level = 0;
-		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, {acceptNode: node => {
+		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node => {
 			switch (node.nodeType) {
 			case (1): // NODE.ELEMENT_NODE
 			case (11): { // NODE.DOCUMENT_FRAGMENT_NODE
@@ -577,7 +577,7 @@ const highlightInNodes = (() => {
 				return 1; // NodeFilter.FILTER_ACCEPT
 			}}
 			return 2; // NodeFilter.FILTER_REJECT
-		}});
+		} });
 		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node =>
 			(node.nodeType === 1 || node.nodeType === 11) // Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
 				? !highlightTags.reject.test((node as Element).tagName)
@@ -812,10 +812,8 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			if (message.command) {
 				selectTermPtr.selectTerm(message.command);
 			}
-			if (message.termUpdate || (message.terms &&
+			if (message.disable || message.termUpdate || (message.terms &&
 				(message.terms.length !== terms.length || message.terms.some((term, i) => term.phrase !== terms[i].phrase)))) {
-				console.log(terms);
-				console.log(message.terms);
 				callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
 					message.termsFromSelection, message.disable);
 			}
