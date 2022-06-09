@@ -87,6 +87,7 @@ const getWordPatternString = (() => {
 		"ile",
 		"ily",
 		"ine",
+		"ines",
 		"ing",
 		"ion",
 		"ious",

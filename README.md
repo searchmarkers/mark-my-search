@@ -1,11 +1,12 @@
 # Mark My Search
+
 **Research productivity extension**
 
 **Mark My Search** is a Free and Open Source browser extension intended to render online research more efficient and effective.
 
 It addresses the growing issue of finding answers to your search queries on the web, by facilitating the process of sifting through a multitude of results and taking you where you need to be once you get there. By highlighting the words you searched for across the web, **Mark My Search** lets you instantly know the relevancy of a result, where to find any occurrence of a match, and where your problem is addressed in the most depth.
 
-The extension is free and instant to setup and use, can be disabled temporarily or for any period of time, and intelligently processes pages to provide the best results with the least disruption possible.
+The extension is instant to install and use, can be disabled temporarily or for any period of time, and intelligently processes pages to provide the best results with the least disruption possible.
 
 
 ## Features and Operation
@@ -29,6 +30,7 @@ Note that not all features are fully implemented, and a few may use temporary no
   * Jump to occurrences usefully by 'focusing' whole buttons and links where possible, and otherwise focusing at a sensible point in a block where multiple terms occur.
 * Allow the user to disable auto-activation for any period of time.
 * Allow the user to disable 'research' and remove highlighting on a specific page.
+
 
 ## Advanced Use
 
@@ -54,4 +56,3 @@ Releases are regularly ported between browsers.
 * At [Chrome Web Store](https://chrome.google.com/webstore/detail/mark-my-search/lijbnhoniejpjjgemoifpjklobhakinb)
 * At [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/mark-my-search/pgkppfodndbpalojpibdnlcdfcnidemj)
 * At [Firefox Browser Add-ons](https://addons.mozilla.org/en-GB/firefox/addon/mark-my-search/)
-

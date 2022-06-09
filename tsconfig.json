@@ -1,8 +1,8 @@
 {
 	"compilerOptions": {
-		"lib": ["ES2015", "DOM"],
+		"lib": ["es2019", "DOM"],
 		"outDir": "dist",
-		"target": "ES2015",
+		"target": "es2019",
 		"alwaysStrict": true
 	}
 }

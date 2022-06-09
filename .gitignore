@@ -4,3 +4,4 @@
 /web-ext-artifacts
 /.web-extension-id
 /mark-my-search.zip
+/.pnpm-debug.log
