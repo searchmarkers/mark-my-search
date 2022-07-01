@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.0.14",
+	"version": "1.0.15",
 
 	"browser_specific_settings": {
 		"gecko": {

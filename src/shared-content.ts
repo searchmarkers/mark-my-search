@@ -7,17 +7,17 @@ interface MatchMode {
 }
 
 class MatchTerm {
-	phrase: string
-	selector: string
-	pattern: RegExp
-	matchMode: MatchMode
-	hue: number
-	command: string
-	commandReverse: string
+	phrase: string;
+	selector: string;
+	pattern: RegExp;
+	matchMode: MatchMode;
+	hue: number;
+	command: string;
+	commandReverse: string;
     
 	constructor (phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
-		this.matchMode = phrase.length > 3 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: true };
+		this.matchMode = phrase.length > 2 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: true };
 		if (matchMode)
 			Object.assign(this.matchMode, matchMode);
 		this.compile();
@@ -28,9 +28,7 @@ class MatchTerm {
 			this.matchMode.stem = false;
 		this.selector = this.phrase.replace(/\s/g, "_");
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const exp = (this.matchMode.stem
-			? getWordPatternString(this.phrase.replace(/(o)+/gi, "$1")).replace(/(o)/gi, "$1$1?")
-			: this.phrase);
+		const exp = (this.matchMode.stem ? getWordPatternString(this.phrase) : this.phrase);
 		const sanitize = (word: string) =>
 			word.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
 		const addOptionalHyphens = (word: string) =>
@@ -48,9 +46,9 @@ class MatchTerm {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Engine {
-	hostname: string
-	pathname: [ string, string ]
-	param: string
+	hostname: string;
+	pathname: [ string, string ];
+	param: string;
 
 	constructor (args?: { urlPatternString: string }) {
 		if (!args)
@@ -62,7 +60,9 @@ class Engine {
 			const parts = urlPattern.pathname.split("%s");
 			this.pathname = [ parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined) ];
 		} else {
-			this.param = Array.from(urlPattern.searchParams).find(param => param[1].includes("%s"))[0];
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			const [ param, arg ] = Array.from(urlPattern.searchParams).find(param => param[1].includes("%s")) ?? [ "", "" ];
+			this.param = param;
 		}
 	}
 
@@ -75,7 +75,7 @@ class Engine {
 					url.pathname.lastIndexOf(this.pathname[1])).split("+")
 				: null
 			: url.searchParams.has(this.param)
-				? matchOnly ? [] : url.searchParams.get(this.param).split(" ")
+				? matchOnly ? [] : (url.searchParams.get(this.param) ?? "").split(" ")
 				: null;
 	}
 

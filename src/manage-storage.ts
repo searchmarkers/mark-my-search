@@ -2,13 +2,14 @@ type ResearchInstances = Record<number, ResearchInstance>;
 type Stoplist = Array<string>;
 type Engines = Record<string, Engine>;
 type StorageLocalValues = {
-	[StorageLocal.ENABLED]?: boolean,
-	[StorageLocal.RESEARCH_INSTANCES]?: ResearchInstances,
-	[StorageLocal.ENGINES]?: Engines,
+	[StorageLocal.ENABLED]: boolean,
+	[StorageLocal.RESEARCH_INSTANCES]: ResearchInstances,
+	[StorageLocal.ENGINES]: Engines,
 }
 type StorageSyncValues = {
-	[StorageSync.IS_SET_UP]?: boolean,
-	[StorageSync.STOPLIST]?: Stoplist,
+	[StorageSync.IS_SET_UP]: boolean,
+	[StorageSync.STOPLIST]: Stoplist,
+	[StorageSync.LINK_RESEARCH_TABS]: boolean,
 }
 
 interface ResearchInstance {
@@ -25,18 +26,20 @@ enum StorageLocal {
 }
 
 enum StorageSync {
-	IS_SET_UP = "isSetUp",
+	IS_SET_UP = "isSetUp", // TODO: supplement with detection of unused keys
 	STOPLIST = "stoplist",
+	LINK_RESEARCH_TABS = "linkResearchTabs",
+
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageLocal = (items: StorageLocalValues) => {
 	if (Object.keys(items).includes(StorageLocal.RESEARCH_INSTANCES)) {
-		const tabRInstances = items[StorageLocal.RESEARCH_INSTANCES];
+		const tabRInstances = items.researchInstances;
 		const tabs = Object.keys(tabRInstances);
-		const idRInstances = [];
+		const idRInstances: Array<ResearchInstance> = [];
 		const tabRInstanceIds = {};
-		delete(items[StorageLocal.RESEARCH_INSTANCES]);
+		items.researchInstances = {};
 		tabs.forEach(tab => {
 			const id = idRInstances.indexOf(tabRInstances[tab]);
 			if (id === -1) {
@@ -61,7 +64,7 @@ const getStorageLocal = async (keysParam: string | Array<string>): Promise<Stora
 		keys.push(StorageLocal._ID_R_INSTANCES);
 		keys.push(StorageLocal._TAB_R_INSTANCE_IDS);
 	}
-	const local = await browser.storage.local.get(keys);
+	const local = await browser.storage.local.get(keys) as StorageLocalValues;
 	if (gettingRInstances) {
 		const idRInstances = local[StorageLocal._ID_R_INSTANCES];
 		const tabRInstanceIds = local[StorageLocal._TAB_R_INSTANCE_IDS];
@@ -71,10 +74,10 @@ const getStorageLocal = async (keysParam: string | Array<string>): Promise<Stora
 		Object.keys(tabRInstanceIds).forEach(tab => {
 			tabRInstances[tab] = idRInstances[tabRInstanceIds[tab]];
 		});
-		local[StorageLocal.RESEARCH_INSTANCES] = tabRInstances;
+		local.researchInstances = tabRInstances;
 	}
-	if (local[StorageLocal.ENGINES]) {
-		const engines = local[StorageLocal.ENGINES] as Engines;
+	if (local.engines) {
+		const engines = local.engines as Engines;
 		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
 	}
 	return local;
@@ -96,5 +99,5 @@ const setStorageSync = (items: StorageSyncValues) => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageSync = (keysParam: string | Array<string>): Promise<StorageSyncValues> => {
-	return browser.storage.sync.get(keysParam);
+	return browser.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
 };

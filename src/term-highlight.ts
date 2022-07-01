@@ -1,9 +1,10 @@
 type BrowserCommands = Array<browser.commands.Command>;
-type FunctionCallControlsRefresh = (termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number,
-	termsFromSelection?: boolean, disable?: boolean) => void;
+type FunctionCallControlsRefresh = (termsFromSelection?: boolean, disable?: boolean,
+	termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => void;
 type HighlightTags = Record<string, RegExp>;
 
 enum ElementClass {
+	HIGHLIGHTS_SHOWN = "highlights-shown",
 	BAR_HIDDEN = "bar-hidden",
 	CONTROL_EXPAND = "control-expand",
 	CONTROL_BUTTON = "control-button",
@@ -37,6 +38,12 @@ enum TermChange {
 	CREATE = -2,
 }
 
+interface Command {
+	type: CommandType
+	termIdx?: number
+	reversed?: boolean
+}
+
 interface SelectTermPtr {
 	selectTerm: (command: string) => void
 }
@@ -53,7 +60,9 @@ const TERM_HUES: ReadonlyArray<number> = [ 60, 300, 110, 220, 0, 190, 30 ];
 
 const jumpToTerm = (() => {
 	const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-		highlightTags.flow.test(element.tagName) ? getContainerBlock(highlightTags, element.parentElement) : element
+		highlightTags.flow.test(element.tagName) && element.parentElement
+			? getContainerBlock(highlightTags, element.parentElement)
+			: element
 	;
 
 	const isVisible = (element: HTMLElement) =>
@@ -62,16 +71,17 @@ const jumpToTerm = (() => {
 	;
 
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
-		const termSelector = term ? select(ElementClass.TERM, term.selector) : undefined;
+		const termSelector = term ? select(ElementClass.TERM, term.selector) : null;
 		const focusBase = document.body
 			.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
 		const focusContainer = document.body
 			.getElementsByClassName(select(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
 		const selection = document.getSelection();
-		const anchor = document.activeElement === document.body || !document.body.contains(document.activeElement)
-			|| document.activeElement === focusBase || document.activeElement.contains(focusContainer)
+		const anchor = selection && (!document.activeElement
+			|| document.activeElement === document.body || !document.body.contains(document.activeElement)
+			|| document.activeElement === focusBase || document.activeElement.contains(focusContainer))
 			? selection.anchorNode
-			: document.activeElement;
+			: document.activeElement ?? document.body;
 		if (focusBase) {
 			focusBase.classList.remove(select(ElementClass.FOCUS));
 			purgeClass(select(ElementClass.FOCUS_CONTAINER));
@@ -83,12 +93,12 @@ const jumpToTerm = (() => {
 			;
 		}
 		const anchorContainer = anchor
-			? getContainerBlock(highlightTags, anchor.nodeType === Node.ELEMENT_NODE
+			? getContainerBlock(highlightTags, anchor.nodeType === Node.ELEMENT_NODE || !anchor.parentElement
 				? anchor as HTMLElement
 				: anchor.parentElement)
 			: undefined;
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element.tagName === "MMS-H" && (term ? element.classList.contains(termSelector) : true) && isVisible(element)
+			element.tagName === "MMS-H" && (termSelector ? element.classList.contains(termSelector) : true) && isVisible(element)
 				&& getContainerBlock(highlightTags, element as HTMLElement) !== anchorContainer
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
@@ -96,24 +106,24 @@ const jumpToTerm = (() => {
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 		let elementTerm = walk[nextNodeMethod]() as HTMLElement;
 		if (!elementTerm) {
-			walk.currentNode = reverse ? document.body.lastElementChild : document.body;
+			walk.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
 			elementTerm = walk[nextNodeMethod]() as HTMLElement;
 			if (!elementTerm) {
 				return;
 			}
 		}
-		const container = getContainerBlock(highlightTags, elementTerm.parentElement);
+		const container = getContainerBlock(highlightTags, elementTerm.parentElement as HTMLElement);
 		container.classList.add(select(ElementClass.FOCUS_CONTAINER));
 		elementTerm.classList.add(select(ElementClass.FOCUS));
 		let elementToSelect = Array.from(container.getElementsByTagName("mms-h"))
-			.every(thisElement => getContainerBlock(highlightTags, thisElement.parentElement) === container)
+			.every(thisElement => getContainerBlock(highlightTags, thisElement.parentElement as HTMLElement) === container)
 			? container
 			: elementTerm;
 		if (elementToSelect.tabIndex === -1) {
 			if (!this["browser"]) {
-				elementToSelect.parentElement.focus({ preventScroll: true });
+				(elementToSelect.parentElement as HTMLElement).focus({ preventScroll: true });
 				if (document.activeElement === elementToSelect.parentElement) {
-					elementToSelect = elementToSelect.parentElement;
+					elementToSelect = elementToSelect.parentElement as HTMLElement;
 				}
 			}
 			elementToSelect.classList.add(select(ElementClass.FOCUS_REVERT));
@@ -129,7 +139,8 @@ const jumpToTerm = (() => {
 			elementToSelect.focus({ preventScroll: true });
 		}
 		elementToSelect.scrollIntoView({ behavior: "smooth", block: "center" });
-		selection.setBaseAndExtent(elementToSelect, 0, elementToSelect, 0);
+		if (selection)
+			selection.setBaseAndExtent(elementToSelect, 0, elementToSelect, 0);
 		Array.from(document.body.getElementsByClassName(select(ElementClass.REMOVE)))
 			.forEach((element: HTMLElement) => {
 				element.remove();
@@ -148,7 +159,7 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 	termButton.appendChild(termInput);
 	const show = (event: MouseEvent) => {
 		event.preventDefault();
-		termInput.value = replaces ? termButton.textContent : "";
+		termInput.value = replaces ? termButton.textContent as string : "";
 		termButton.disabled = true;
 		termInput.disabled = false;
 		termInput.select();
@@ -161,7 +172,7 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 		if (termInput.disabled)
 			return;
 		hide();
-		let message: BackgroundMessage;
+		let message: BackgroundMessage | null = null;
 		if (replaces) {
 			if (termInput.value === "") {
 				terms.splice(idx, 1);
@@ -183,12 +194,12 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 			terms.push(new MatchTerm(termInput.value));
 			message = {
 				terms,
-				termChanged: terms[terms.length - 1],
+				termChanged: terms.at(-1),
 				termChangedIdx: TermChange.CREATE,
 			};
 		}
 		if (message) {
-			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
+			callRefreshTermControls(false, false, message.terms, message.termChanged, message.termChangedIdx);
 			browser.runtime.sendMessage(message);
 		}
 	};
@@ -249,8 +260,8 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		style.textContent += `
-/*#${/*select(ElementID.HIGHLIGHT_TOGGLE)*/""}:checked ~ */body mms-h.${select(ElementClass.TERM, term.selector)} {
-	background-color: hsla(${hue}, 100%, 60%, 0.4); }
+#${select(ElementID.BAR)}.${select(ElementClass.HIGHLIGHTS_SHOWN)}
+	~ body mms-h.${select(ElementClass.TERM, term.selector)} { background-color: hsla(${hue}, 100%, 60%, 0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term.selector)} {
 	background-color: hsl(${hue}, 100%, 50%); }
 #${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
@@ -266,11 +277,17 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 	});
 };
 
-const getTermControl = (term: MatchTerm, idx?: number) => {
+const getTermControl = (term?: MatchTerm, idx = -1): HTMLDivElement => {
 	const bar = document.getElementById(select(ElementID.BAR));
-	return idx === undefined
-		? bar.getElementsByClassName(select(ElementClass.TERM, term.selector))[0] as HTMLDivElement
-		: bar.children[idx] as HTMLDivElement;
+	if (!bar) {
+		// TODO: recovery in order to end up retrieving the requested button anyway
+		console.error("MARK MY SEARCH: Navigation bar not found on request.");
+		return undefined as unknown as HTMLDivElement; // evil
+	}
+	return (idx === -1 && term
+		? bar.getElementsByClassName(select(ElementClass.TERM, term.selector))[0]
+		: bar.children[idx]
+	) as HTMLDivElement;
 };
 
 const updateTermTooltip = (term: MatchTerm) => {
@@ -301,11 +318,12 @@ const refreshTermControl = (term: MatchTerm, idx: number) => {
 	const control = getTermControl(undefined, idx);
 	control.className = "";
 	control.classList.add(select(ElementClass.TERM, term.selector));
-	(control.getElementsByClassName(select(ElementClass.CONTROL_BUTTON))[0] as HTMLButtonElement)
-		.firstChild.textContent = term.phrase;
+	const button = control.getElementsByClassName(select(ElementClass.CONTROL_BUTTON))[0] as HTMLButtonElement;
+	if (button.firstChild)
+		button.firstChild.textContent = term.phrase;
 	Array.from(control.getElementsByClassName(select(ElementClass.OPTION))).forEach((option) =>
-		option.textContent = getTermOptionText(term, option.textContent,
-			getTermOptionMatchType(option.textContent, true)));
+		option.textContent = getTermOptionText(term, (option.textContent as string),
+			getTermOptionMatchType(option.textContent as string, true)));
 };
 
 const addTermControl = (() => {
@@ -321,7 +339,7 @@ const addTermControl = (() => {
 				termChanged: term,
 				termChangedIdx: idx,
 			};
-			callRefreshTermControls(message.terms, message.termChanged, message.termChangedIdx);
+			callRefreshTermControls(false, false, message.terms, message.termChanged, message.termChangedIdx);
 			browser.runtime.sendMessage(message);
 		};
 		const option = document.createElement("button");
@@ -363,7 +381,8 @@ const addTermControl = (() => {
 
 const getTermCommands = (commands: BrowserCommands) => {
 	const commandsDetail = commands
-		.map(command => ({ info: parseCommand(command.name), shortcut: command.shortcut }));
+		.map(command => command.name ? ({ info: parseCommand(command.name), shortcut: command.shortcut ?? "" }) : null)
+		.filter(command => !!command && !!command.info) as unknown as Array<{ info: Command, shortcut: string }>;
 	return {
 		down: commandsDetail
 			.filter(commandDetail => commandDetail.info.type === CommandType.SELECT_TERM && !commandDetail.info.reversed)
@@ -379,6 +398,7 @@ const addControls = (highlightTags: HighlightTags, commands: BrowserCommands, te
 	insertStyle(terms, style, TERM_HUES);
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
+	bar.classList.add(select(ElementClass.HIGHLIGHTS_SHOWN));
 	const buttonAppend = document.createElement("button");
 	buttonAppend.textContent = "+";
 	buttonAppend.tabIndex = -1;
@@ -397,9 +417,13 @@ const removeControls = () => {
 	const style = document.getElementById(select(ElementID.STYLE));
 	if (!style || style.textContent === "")
 		return;
-	document.getElementById(select(ElementID.BAR)).remove();
-	document.getElementById(select(ElementID.MARKER_GUTTER)).remove();
-	document.getElementById(select(ElementID.STYLE)).textContent = "";
+	style.textContent = "";
+	const bar = document.getElementById(select(ElementID.BAR));
+	const gutter = document.getElementById(select(ElementID.MARKER_GUTTER));
+	if (bar)
+		bar.remove();
+	if (gutter)
+		gutter.remove();
 };
 
 const addScrollMarkers = (() => {
@@ -412,13 +436,19 @@ const addScrollMarkers = (() => {
 	const getScrollContainer = (element: HTMLElement): HTMLElement =>
 		element.scrollHeight > element.clientHeight
 		&& (document.scrollingElement === element
-			|| [ "scroll", "auto" ].includes(window.getComputedStyle(element).overflowY))
+			|| [ "scroll", "auto" ].includes(window.getComputedStyle(element).overflowY)) || !element.parentElement
 			? element
 			: getScrollContainer(element.parentElement)
 	;
 
 	return (terms: MatchTerms) => {
 		const gutter = document.getElementById(select(ElementID.MARKER_GUTTER));
+		if (!gutter) {
+			// TODO: recovery condition?
+			return;
+		}
+		if (!document.scrollingElement)
+			return;
 		const containerPairs: Array<[Element, HTMLElement]> = [ [ document.scrollingElement, gutter ] ];
 		terms.forEach(term =>
 			Array.from(document.body.getElementsByClassName(select(ElementClass.TERM, term.selector))).forEach((highlight: Element) => {
@@ -430,7 +460,8 @@ const addScrollMarkers = (() => {
 				if (!containerPair) {
 					block.classList.add(select(ElementClass.MARKER_BLOCK));
 					block.style.top = String(
-						getOffset(scrollContainer, document.scrollingElement as HTMLElement) / document.scrollingElement.scrollHeight * 100
+						getOffset(scrollContainer, document.scrollingElement as HTMLElement)
+							/ (document.scrollingElement as Element).scrollHeight * 100
 					) + "%";
 					//block.style.height = "15%";
 					gutter.appendChild(block);
@@ -453,8 +484,8 @@ const highlightInNodes = (() => {
 	}
 	
 	class UnbrokenNodeList {
-		first: UnbrokenNodeListItem
-		last: UnbrokenNodeListItem
+		first?: UnbrokenNodeListItem;
+		last?: UnbrokenNodeListItem;
 	
 		push (value: Node) {
 			if (this.last) {
@@ -466,7 +497,7 @@ const highlightInNodes = (() => {
 			}
 		}
 	
-		insertAfter (value: Node, itemBefore: UnbrokenNodeListItem) {
+		insertAfter (value?: Node, itemBefore?: UnbrokenNodeListItem | null) {
 			if (value) {
 				if (itemBefore) {
 					const itemAfter = itemBefore.next;
@@ -484,9 +515,9 @@ const highlightInNodes = (() => {
 			let text = "";
 			let current = this.first;
 			do {
-				text += current.value.textContent;
+				text += (current as UnbrokenNodeListItem).value.textContent;
 			// eslint-disable-next-line no-cond-assign
-			} while (current = current.next);
+			} while (current = (current as UnbrokenNodeListItem).next);
 			return text;
 		}
 	
@@ -498,15 +529,15 @@ const highlightInNodes = (() => {
 		*[Symbol.iterator] () {
 			let current = this.first;
 			do {
-				yield current;
+				yield current as UnbrokenNodeListItem;
 			// eslint-disable-next-line no-cond-assign
-			} while (current = current.next);
+			} while (current = (current as UnbrokenNodeListItem).next);
 		}
 	}
 
 	const highlightInNode = (wordRightPattern: RegExp, term: MatchTerm, textEndNode: Node, start: number, end: number) => {
 		// TODO: add strategy for mitigating damage (caused by programmatic changes by the website).
-		const text = textEndNode.textContent;
+		const text = textEndNode.textContent as string;
 		start = Math.max(0, start);
 		end = Math.min(text.length, end);
 		const textStart = text.substring(0, start);
@@ -514,10 +545,10 @@ const highlightInNodes = (() => {
 		highlight.classList.add(select(ElementClass.TERM, term.selector));
 		highlight.textContent = text.substring(start, end);
 		textEndNode.textContent = text.substring(end);
-		textEndNode.parentNode.insertBefore(highlight, textEndNode);
+		(textEndNode.parentNode as Node).insertBefore(highlight, textEndNode);
 		if (textStart !== "") {
 			const textStartNode = document.createTextNode(textStart);
-			textEndNode.parentNode.insertBefore(textStartNode, highlight);
+			(textEndNode.parentNode as Node).insertBefore(textStartNode, highlight);
 			return textStartNode;
 		}
 	};
@@ -528,18 +559,21 @@ const highlightInNodes = (() => {
 			const matches = textFlow.matchAll(term.pattern);
 			let currentNodeStart = 0;
 			let match: RegExpMatchArray = matches.next().value;
-			let nodeItemPrevious: UnbrokenNodeListItem;
+			let nodeItemPrevious: UnbrokenNodeListItem | null = null;
 			for (const nodeItem of nodeItems) {
-				const nextNodeStart = currentNodeStart + nodeItem.value.textContent.length;
-				while (match && match.index < nextNodeStart) {
-					if (match.index + match[0].length >= currentNodeStart) {
-						const textLengthOriginal = nodeItem.value.textContent.length;
+				const nextNodeStart = currentNodeStart + (nodeItem.value.textContent as string).length;
+				while (match && match.index as number < nextNodeStart) {
+					if (match.index as number + match[0].length >= currentNodeStart) {
+						const textLengthOriginal = (nodeItem.value.textContent as string).length;
 						nodeItems.insertAfter(
-							highlightInNode(wordRightPattern, term,
-								nodeItem.value, match.index - currentNodeStart, match.index - currentNodeStart + match[0].length),
+							highlightInNode(
+								wordRightPattern,
+								term,
+								nodeItem.value,
+								match.index as number - currentNodeStart, match.index as number - currentNodeStart + match[0].length),
 							nodeItemPrevious);
-						currentNodeStart += textLengthOriginal - nodeItem.value.textContent.length;
-						if (match.index + match[0].length > nextNodeStart) {
+						currentNodeStart += textLengthOriginal - (nodeItem.value.textContent as string).length;
+						if ((match.index as number) + match[0].length > nextNodeStart) {
 							break;
 						}
 					}
@@ -572,7 +606,7 @@ const highlightInNodes = (() => {
 				}
 				return 2; // NodeFilter.FILTER_REJECT
 			} case (3): { // Node.TEXT_NODE
-				if (level > breakLevels[breakLevels.length - 1])
+				if (level > (breakLevels.at(-1) as number))
 					nodeItems.push(node);
 				return 1; // NodeFilter.FILTER_ACCEPT
 			}}
@@ -585,7 +619,7 @@ const highlightInNodes = (() => {
 				: node.nodeType === 3 // Node.TEXT_NODE
 					? 1 : 2 // NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
 		});
-		let node = walkerBreakHandler.currentNode;
+		let node: Node | null = walkerBreakHandler.currentNode;
 		while (node) {
 			level++; // Down to child level.
 			node = walkerBreakHandler.firstChild();
@@ -597,7 +631,7 @@ const highlightInNodes = (() => {
 					level--; // Up to parent level.
 					walker.parentNode();
 					walkerBreakHandler.currentNode = walker.currentNode;
-					if (level === breakLevels[breakLevels.length - 1]) {
+					if (level === breakLevels.at(-1)) {
 						breakLevels.pop();
 						if (nodeItems.first)
 							highlightInBlock(wordRightPattern, nodeItems, terms);
@@ -621,7 +655,9 @@ const restoreNodes = () => {
 	if (!highlights.length)
 		return;
 	Array.from(highlights).forEach(element => {
-		element.childNodes.forEach(childNode => element.parentNode.insertBefore(childNode, element));
+		element.childNodes.forEach(childNode =>
+			element.parentNode ? element.parentNode.insertBefore(childNode, element) : undefined
+		);
 		element.remove();
 	});
 	purgeClass(select(ElementClass.FOCUS));
@@ -660,10 +696,14 @@ const insertHighlighting = (() => {
 		selectTermPtr.selectTerm = (commandString: string) => {
 			const getFocusedIdx = (idx: number) => Math.min(terms.length - 1, idx);
 			focusedIdx = getFocusedIdx(focusedIdx);
-			const commandInfo = parseCommand(commandString);
+			const commandInfo = parseCommand(commandString) as Command;
 			switch (commandInfo.type) {
 			case CommandType.TOGGLE_BAR: {
 				const bar = document.getElementById(select(ElementID.BAR));
+				if (!bar) {
+					// TODO: recovery condition?
+					return;
+				}
 				bar.classList[bar.classList.contains(select(ElementClass.BAR_HIDDEN))
 					? "remove" : "add"](select(ElementClass.BAR_HIDDEN));
 				break;
@@ -674,17 +714,21 @@ const insertHighlighting = (() => {
 				break;
 			} case CommandType.ADVANCE_GLOBAL: {
 				if (selectModeFocus)
-					jumpToTerm(highlightTags, commandInfo.reversed, terms[focusedIdx]);
+					jumpToTerm(highlightTags, commandInfo.reversed ?? false, terms[focusedIdx]);
 				else
-					jumpToTerm(highlightTags, commandInfo.reversed);
+					jumpToTerm(highlightTags, commandInfo.reversed ?? false);
 				break;
 			} case CommandType.SELECT_TERM: {
 				const bar = document.getElementById(select(ElementID.BAR));
+				if (!bar) {
+					// TODO: recovery condition?
+					return;
+				}
 				bar.classList.remove(select(ElementClass.CONTROL_BUTTON, focusedIdx));
-				focusedIdx = getFocusedIdx(commandInfo.termIdx);
+				focusedIdx = getFocusedIdx(commandInfo.termIdx as number);
 				bar.classList.add(select(ElementClass.CONTROL_BUTTON, focusedIdx));
 				if (!selectModeFocus)
-					jumpToTerm(highlightTags, commandInfo.reversed, terms[focusedIdx]);
+					jumpToTerm(highlightTags, commandInfo.reversed as boolean, terms[focusedIdx]);
 				break;
 			}}
 		};
@@ -699,9 +743,12 @@ const insertHighlighting = (() => {
 			return;
 		}
 		if (termsFromSelection) {
-			terms = document.getSelection().toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
+			const selection = document.getSelection();
+			if (!selection)
+				return;
+			terms = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
 				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-			document.getSelection().collapseToStart();
+			selection.collapseToStart();
 			browser.runtime.sendMessage({ terms, makeUnique: true } as BackgroundMessage);
 			return;
 		}
@@ -713,7 +760,7 @@ const insertHighlighting = (() => {
 	};
 })();
 
-const parseCommand = (commandString: string): { type: CommandType, termIdx?: number, reversed?: boolean } => {
+const parseCommand = (commandString: string): Command | null => {
 	const parts = commandString.split("-");
 	return parts[0] === "toggle"
 		? parts[1] === "bar"
@@ -721,11 +768,11 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			: parts[1] === "highlight"
 				? { type: CommandType.TOGGLE_HIGHLIGHT }
 				: parts[1] === "select"
-					? { type: CommandType.TOGGLE_SELECT } : undefined
+					? { type: CommandType.TOGGLE_SELECT } : null
 		: parts[0] === "advance" && parts[1] === "global"
 			? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
 			: parts[0] === "select" && parts[1] === "term"
-				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" } : undefined;
+				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" } : null;
 };
 
 (() => {
@@ -739,9 +786,9 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
 			observer: MutationObserver, selectTermPtr: SelectTermPtr, callRefreshTermControls: FunctionCallControlsRefresh,
-			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number, termsFromSelection: boolean,
-			disable: boolean) => {
-			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE) {
+			disable: boolean, termsFromSelection: boolean,
+			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
+			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
 				if (termToUpdateIdx === TermChange.CREATE) {
 					let idx = terms.length - 1;
@@ -792,7 +839,7 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const commands: BrowserCommands = [];
 		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
 		const terms: MatchTerms = [];
-		const highlightTags: HighlightTags = { // TODO: make more efficient/concise?
+		const highlightTags: HighlightTags = {
 			reject: /\b(?:meta|style|script|noscript|mms-h)\b/i,
 			skip: /\b(?:s|del)\b/i, // Implementation would likely be overly complex.
 			flow: /\b(?:b|i|u|strong|em|cite|span|mark|wbr|code|data|dfn|ins|mms-h)\b/i,
@@ -800,10 +847,10 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
 		const style = insertStyleElement();
 		const callRefreshTermControls: FunctionCallControlsRefresh = (
-			termsUpdate: MatchTerms, termUpdate: MatchTerm, termToUpdateIdx: number,
-			termsFromSelection = false, disable = false) => // For highly responsive controls, but requires nasty special cases.
+			termsFromSelection = false, disable = false, termsUpdate, termUpdate, termToUpdateIdx
+		) => // For highly responsive controls, but requires a few non-ideal special cases.
 			refreshTermControls(highlightTags, terms, commands, style, observer, selectTermPtr,
-				callRefreshTermControls, termsUpdate, termUpdate, termToUpdateIdx, termsFromSelection, disable);
+				callRefreshTermControls, termsFromSelection, disable, termsUpdate, termUpdate, termToUpdateIdx);
 		browser.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
@@ -814,8 +861,10 @@ const parseCommand = (commandString: string): { type: CommandType, termIdx?: num
 			}
 			if (message.disable || message.termUpdate || (message.terms &&
 				(message.terms.length !== terms.length || message.terms.some((term, i) => term.phrase !== terms[i].phrase)))) {
-				callRefreshTermControls(message.terms, message.termUpdate, message.termToUpdateIdx,
-					message.termsFromSelection, message.disable);
+				callRefreshTermControls(
+					message.termsFromSelection, message.disable,
+					message.terms, message.termUpdate, message.termToUpdateIdx
+				);
 			}
 			sendResponse(); // Manifest V3 bug.
 		});

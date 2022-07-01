@@ -49,10 +49,10 @@ const optionsInfo: Record<OptionKey, { text: string, classes: Array<string> }> =
 	},
 };
 const options: Record<OptionKey, HTMLButtonElement> = {
-	researchDisablePage: undefined,
-	researchToggle: undefined,
-	problemReportDescribe: undefined,
-	problemReport: undefined,
+	researchDisablePage: undefined as unknown as HTMLButtonElement,
+	researchToggle: undefined as unknown as HTMLButtonElement,
+	problemReportDescribe: undefined as unknown as HTMLButtonElement,
+	problemReport: undefined as unknown as HTMLButtonElement,
 };
 
 Object.keys(optionsInfo).forEach((key: OptionKey) => {
@@ -105,12 +105,13 @@ options.researchToggle.onclick = () => {
 };
 
 const problemReport = (userMessage = "") => browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
-	getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
-		const phrases = local.researchInstances[tab.id]
-			? local.researchInstances[tab.id].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+	tab.id === undefined ? undefined : getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
+		const phrases = local.researchInstances[tab.id ?? -1]
+			? local.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
-		buttonArray[0].focus();
-		options.problemReportDescribe.textContent = options.problemReportDescribe.textContent.replace(/🆗|!/g, "").trimEnd();
+		focusNext(-1, idx => (idx + 1) % buttonArray.length);
+		options.problemReportDescribe.textContent = (options.problemReportDescribe.textContent as string)
+			.replace(/🆗|!/g, "").trimEnd();
 		options.problemReport.disabled = true;
 		options.problemReportDescribe.disabled = true;
 		emailSend("service_mms_report", "template_mms_report", {
