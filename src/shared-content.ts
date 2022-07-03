@@ -100,6 +100,7 @@ interface HighlightMessage {
 	disable?: boolean
 	termsFromSelection?: boolean
 	toggleHighlightsOn?: boolean
+	barControls?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -110,6 +111,7 @@ interface BackgroundMessage {
 	makeUnique?: boolean
 	disablePageResearch?: boolean
 	toggleResearchOn?: boolean
+	performSearch?: boolean
 }
 
 enum CommandType {
@@ -146,7 +148,13 @@ const parseCommand = (commandString: string): CommandInfo => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const itemsMatchLoosely = (
-	as: ReadonlyArray<unknown>, bs: ReadonlyArray<unknown>, compare = (a: unknown, b: unknown) => a === b) =>
+const itemsMatchLoosely = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a: T, b: T) => a === b) =>
 	as.length === bs.length && as.every((a, i) => compare(a, bs[i]))
 ;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+enum BarControl {
+	DISABLE_PAGE_RESEARCH = "disablePageResearch",
+	PERFORM_SEARCH = "performSearch",
+	APPEND_TERM = "appendTerm",
+}

@@ -10,13 +10,16 @@ type StorageSyncValues = {
 	[StorageSync.IS_SET_UP]: boolean
 	[StorageSync.STOPLIST]: Stoplist
 	[StorageSync.LINK_RESEARCH_TABS]: boolean
-	[StorageSync.SHOW_HIGHLIGHTS]: { default: boolean, overrideSearchPages: boolean, overrideResearchPages: boolean }
-}
-
-interface ResearchInstance {
-	phrases: ReadonlyArray<string>
-	terms: MatchTerms
-	highlightsShown: boolean
+	[StorageSync.SHOW_HIGHLIGHTS]: {
+		default: boolean
+		overrideSearchPages: boolean
+		overrideResearchPages: boolean
+	}
+	[StorageSync.BAR_CONTROLS_SHOWN]: {
+		[BarControl.DISABLE_PAGE_RESEARCH]: boolean
+		[BarControl.PERFORM_SEARCH]: boolean
+		[BarControl.APPEND_TERM]: boolean
+	}
 }
 
 enum StorageLocal {
@@ -32,6 +35,13 @@ enum StorageSync {
 	STOPLIST = "stoplist",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
+	BAR_CONTROLS_SHOWN = "barControlsShown",
+}
+
+interface ResearchInstance {
+	phrases: ReadonlyArray<string>
+	terms: MatchTerms
+	highlightsShown: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

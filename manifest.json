@@ -19,6 +19,7 @@
 		"<all_urls>",
 		"tabs",
 		"storage",
+		"search",
 		"contextMenus"
 	],
 
@@ -57,65 +58,25 @@
 			"suggested_key": { "default": "Alt+Shift+Space" },
 			"description": "Jump to previous term in page"
 		},
-		"select-term-0": {
-			"description": "Select term 0"
-		},
-		"select-term-1": {
-			"description": "Select term 1"
-		},
-		"select-term-2": {
-			"description": "Select term 2"
-		},
-		"select-term-3": {
-			"description": "Select term 3"
-		},
-		"select-term-4": {
-			"description": "Select term 4"
-		},
-		"select-term-5": {
-			"description": "Select term 5"
-		},
-		"select-term-6": {
-			"description": "Select term 6"
-		},
-		"select-term-7": {
-			"description": "Select term 7"
-		},
-		"select-term-8": {
-			"description": "Select term 8"
-		},
-		"select-term-9": {
-			"description": "Select term 9"
-		},
-		"select-term-0-reverse": {
-			"description": "Select term 0 (reverse)"
-		},
-		"select-term-1-reverse": {
-			"description": "Select term 1 (reverse)"
-		},
-		"select-term-2-reverse": {
-			"description": "Select term 2 (reverse)"
-		},
-		"select-term-3-reverse": {
-			"description": "Select term 3 (reverse)"
-		},
-		"select-term-4-reverse": {
-			"description": "Select term 4 (reverse)"
-		},
-		"select-term-5-reverse": {
-			"description": "Select term 5 (reverse)"
-		},
-		"select-term-6-reverse": {
-			"description": "Select term 6 (reverse)"
-		},
-		"select-term-7-reverse": {
-			"description": "Select term 7 (reverse)"
-		},
-		"select-term-8-reverse": {
-			"description": "Select term 8 (reverse)"
-		},
-		"select-term-9-reverse": {
-			"description": "Select term 9 (reverse)"
-		}
+		"select-term-0": { "description": "Select term 0" },
+		"select-term-1": { "description": "Select term 1" },
+		"select-term-2": { "description": "Select term 2" },
+		"select-term-3": { "description": "Select term 3" },
+		"select-term-4": { "description": "Select term 4" },
+		"select-term-5": { "description": "Select term 5" },
+		"select-term-6": { "description": "Select term 6" },
+		"select-term-7": { "description": "Select term 7" },
+		"select-term-8": { "description": "Select term 8" },
+		"select-term-9": { "description": "Select term 9" },
+		"select-term-0-reverse": { "description": "Select term 0 (reverse)" },
+		"select-term-1-reverse": { "description": "Select term 1 (reverse)" },
+		"select-term-2-reverse": { "description": "Select term 2 (reverse)" },
+		"select-term-3-reverse": { "description": "Select term 3 (reverse)" },
+		"select-term-4-reverse": { "description": "Select term 4 (reverse)" },
+		"select-term-5-reverse": { "description": "Select term 5 (reverse)" },
+		"select-term-6-reverse": { "description": "Select term 6 (reverse)" },
+		"select-term-7-reverse": { "description": "Select term 7 (reverse)" },
+		"select-term-8-reverse": { "description": "Select term 8 (reverse)" },
+		"select-term-9-reverse": { "description": "Select term 9 (reverse)" }
 	}
 }

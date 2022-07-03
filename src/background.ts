@@ -43,10 +43,11 @@ const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number) 
 	tabId in researchInstances
 ;
 
-const createResearchMessage = (researchInstance: ResearchInstance, overrideHighlightsShown?: boolean) => ({
+const createResearchMessage = (researchInstance: ResearchInstance, overrideHighlightsShown?: boolean, barControls?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]) => ({
 	terms: researchInstance.terms,
 	toggleHighlightsOn: overrideHighlightsShown === undefined ? undefined :
 		researchInstance.highlightsShown || overrideHighlightsShown,
+	barControls,
 } as HighlightMessage);
 
 const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms: MatchTerms, tabId: number) => {
@@ -160,6 +161,11 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 				overrideSearchPages: true,
 				overrideResearchPages: false,
 			},
+			barControlsShown: {
+				disablePageResearch: true,
+				performSearch: true,
+				appendTerm: true,
+			}
 		});
 		if (browser.commands.update) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
@@ -189,7 +195,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 })();
 
 (() => {
-	const pageModifyRemote = (url: string, tabId: number) => getStorageSync([ StorageSync.STOPLIST, StorageSync.SHOW_HIGHLIGHTS ]).then(sync =>
+	const pageModifyRemote = (url: string, tabId: number) => getStorageSync([ StorageSync.STOPLIST, StorageSync.SHOW_HIGHLIGHTS, StorageSync.BAR_CONTROLS_SHOWN ]).then(sync =>
 		getStorageLocal([ StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES ]).then(async local => {
 			const [ isSearchPage, engine ] = local.enabled ? isTabSearchPage(local.engines, url) : [ false, undefined ];
 			const isResearchPage = isTabResearchPage(local.researchInstances, tabId);
@@ -201,13 +207,13 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 						local.researchInstances[tabId] = researchInstance;
 						setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
 						activateHighlightingInTab(tabId,
-							createResearchMessage(local.researchInstances[tabId], overrideHighlightsShown));
+							createResearchMessage(local.researchInstances[tabId], overrideHighlightsShown, sync.barControlsShown));
 					}
 				});
 			}
 			if (isResearchPage) {
 				activateHighlightingInTab(tabId,
-					createResearchMessage(local.researchInstances[tabId], overrideHighlightsShown));
+					createResearchMessage(local.researchInstances[tabId], overrideHighlightsShown, sync.barControlsShown));
 			}
 		})
 	);
@@ -234,15 +240,17 @@ browser.commands.onCommand.addListener(commandString =>
 		const commandInfo = parseCommand(commandString);
 		switch (commandInfo.type) {
 		case CommandType.TOGGLE_HIGHLIGHTS: {
-			getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
-				if (isTabResearchPage(local.researchInstances, tab.id as number)) {
-					const researchInstance = local.researchInstances[tab.id as number];
-					researchInstance.highlightsShown = !researchInstance.highlightsShown;
-					browser.tabs.sendMessage(tab.id as number,
-						{ toggleHighlightsOn: researchInstance.highlightsShown } as HighlightMessage);
-					setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
-				}
-			});
+			getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
+				getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
+					if (isTabResearchPage(local.researchInstances, tab.id as number)) {
+						const researchInstance = local.researchInstances[tab.id as number];
+						researchInstance.highlightsShown = !researchInstance.highlightsShown;
+						browser.tabs.sendMessage(tab.id as number,
+							{ toggleHighlightsOn: researchInstance.highlightsShown, barControls: sync.barControlsShown } as HighlightMessage);
+						setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
+					}
+				})
+			);
 			return;
 		}}
 		browser.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
@@ -257,6 +265,11 @@ browser.commands.onCommand.addListener(commandString =>
 			} else if (message.disablePageResearch) {
 				delete(local.researchInstances[senderTabId]);
 				browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
+			} else if (message.performSearch) {
+				browser.search.search({
+					query: local.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
+					tabId: senderTabId
+				});
 			} else {
 				if (!isTabResearchPage(local.researchInstances, senderTabId)) {
 					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
@@ -264,10 +277,15 @@ browser.commands.onCommand.addListener(commandString =>
 					});
 				}
 				if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
-						local.researchInstances[senderTabId] = researchInstance;
-						browser.tabs.sendMessage(senderTabId, createResearchMessage(researchInstance));
-					});
+					await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
+						createResearchInstance({ terms: message.terms }).then(
+							researchInstance => {
+								local.researchInstances[senderTabId] = researchInstance;
+								browser.tabs.sendMessage(senderTabId,
+									createResearchMessage(researchInstance, undefined, sync.barControlsShown));
+							}
+						)
+					);
 				} else if (message.terms) {
 					const highlightMessage = updateCachedResearchDetails(local.researchInstances, message.terms, senderTabId);
 					highlightMessage.termUpdate = message.termChanged;
