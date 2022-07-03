@@ -1,6 +1,4 @@
 type BrowserCommands = Array<browser.commands.Command>;
-type FunctionCallControlsRefresh = (termsFromSelection?: boolean, disable?: boolean,
-	termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => void;
 type HighlightTags = Record<string, RegExp>;
 
 enum ElementClass {
@@ -22,15 +20,10 @@ enum ElementClass {
 enum ElementID {
 	STYLE = "style",
 	BAR = "bar",
+	BAR_OPTIONS = "bar-options",
+	BAR_TERMS = "bar-terms",
+	BAR_CONTROLS = "bar-controls",
 	MARKER_GUTTER = "markers",
-}
-
-enum CommandType {
-	TOGGLE_BAR,
-	TOGGLE_HIGHLIGHT,
-	TOGGLE_SELECT,
-	ADVANCE_GLOBAL,
-	SELECT_TERM,
 }
 
 enum TermChange {
@@ -38,14 +31,12 @@ enum TermChange {
 	CREATE = -2,
 }
 
-interface Command {
-	type: CommandType
-	termIdx?: number
-	reversed?: boolean
+interface FnProcessCommand {
+	call: (command: CommandInfo) => void
 }
 
-interface SelectTermPtr {
-	selectTerm: (command: string) => void
+interface ControlsInfo {
+	highlightsShown: boolean
 }
 
 if (browser) {
@@ -65,13 +56,13 @@ const jumpToTerm = (() => {
 			: element
 	;
 
-	const isVisible = (element: HTMLElement) =>
+	const isVisible = (element: HTMLElement) => // TODO: improve
 		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
 		&& window.getComputedStyle(element).visibility !== "hidden"
 	;
 
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
-		const termSelector = term ? select(ElementClass.TERM, term.selector) : null;
+		const termSelector = term ? select(ElementClass.TERM, term.selector) : "";
 		const focusBase = document.body
 			.getElementsByClassName(select(ElementClass.FOCUS))[0] as HTMLElement;
 		const focusContainer = document.body
@@ -97,9 +88,10 @@ const jumpToTerm = (() => {
 				? anchor as HTMLElement
 				: anchor.parentElement)
 			: undefined;
+		const acceptInAnchorContainer = { value: false };
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H" && (termSelector ? element.classList.contains(termSelector) : true) && isVisible(element)
-				&& getContainerBlock(highlightTags, element as HTMLElement) !== anchorContainer
+				&& (getContainerBlock(highlightTags, element) !== anchorContainer || acceptInAnchorContainer.value)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
 		walk.currentNode = anchor ? anchor : document.body;
@@ -109,7 +101,11 @@ const jumpToTerm = (() => {
 			walk.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
 			elementTerm = walk[nextNodeMethod]() as HTMLElement;
 			if (!elementTerm) {
-				return;
+				acceptInAnchorContainer.value = true;
+				elementTerm = walk[nextNodeMethod]() as HTMLElement;
+				if (!elementTerm) {
+					return;
+				}
 			}
 		}
 		const container = getContainerBlock(highlightTags, elementTerm.parentElement as HTMLElement);
@@ -120,7 +116,7 @@ const jumpToTerm = (() => {
 			? container
 			: elementTerm;
 		if (elementToSelect.tabIndex === -1) {
-			if (!this["browser"]) {
+			if (!this.browser) { // Attempt to focus parent link in Chromium (FIrefox considers link focused when child is focused).
 				(elementToSelect.parentElement as HTMLElement).focus({ preventScroll: true });
 				if (document.activeElement === elementToSelect.parentElement) {
 					elementToSelect = elementToSelect.parentElement as HTMLElement;
@@ -149,8 +145,7 @@ const jumpToTerm = (() => {
 	};
 })();
 
-const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCallControlsRefresh,
-	termButton: HTMLButtonElement, idx: number) => {
+const createTermInput = (terms: MatchTerms, termButton: HTMLButtonElement, idx: number) => {
 	const term = terms[idx];
 	const replaces = idx !== TermChange.CREATE;
 	const termInput = document.createElement("input");
@@ -199,7 +194,6 @@ const createTermInput = (terms: MatchTerms, callRefreshTermControls: FunctionCal
 			};
 		}
 		if (message) {
-			callRefreshTermControls(false, false, message.terms, message.termChanged, message.termChangedIdx);
 			browser.runtime.sendMessage(message);
 		}
 	};
@@ -217,23 +211,22 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 .${select(ElementClass.FOCUS_CONTAINER)} { animation-name: flash; animation-duration: 1s; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:active:not(.${select(ElementClass.CONTROL_BUTTON)}:hover)
 	+ .${select(ElementClass.OPTION_LIST)} { all: revert; position: absolute; top: 17px; left: -40px; z-index: 1; }
-#${select(ElementID.BAR)} > button,
-	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)},
-	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:hover,
-	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}:disabled,
-	#${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
-	all: revert; color: black; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; }
-#${select(ElementID.BAR)} > button { font-weight: bold; }
+#${select(ElementID.BAR)} > span > button,
+	.${select(ElementClass.CONTROL_BUTTON)},
+	.${select(ElementClass.CONTROL_BUTTON)}:hover,
+	.${select(ElementClass.CONTROL_BUTTON)}:disabled,
+	.${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
+	all: revert; color: #111; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; }
+#${select(ElementID.BAR)} > span > button { background-color: hsl(0, 0%, 80%); font-weight: bold; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)}.${select(ElementClass.DISABLED)} {
-	background-color: hsla(0, 0%, 80%, 0.6) !important; color: black; }
+	background-color: hsla(0, 0%, 80%, 0.6) !important; color: #111; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input,
-	#${select(ElementID.BAR)} > button > input {
+	#${select(ElementID.BAR)} > span > button > input {
 	all: revert; padding-block: 0; margin-left: 6px; border-style: none; width: 100px; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_BUTTON)} > input:disabled,
-	#${select(ElementID.BAR)} > button > input:disabled { display: none; }
-#${select(ElementID.BAR)} > div { all: revert; position: relative; display: inline-block; }
-#${select(ElementID.BAR)} > button { background-color: hsl(0, 0%, 80%); }
-#${select(ElementID.BAR)} > div, #${select(ElementID.BAR)} > button { margin-left: 8px; }
+	#${select(ElementID.BAR)} > span > button > input:disabled { display: none; }
+#${select(ElementID.BAR)} > span, #${select(ElementID.BAR_TERMS)} > span { all: revert; position: relative; display: inline-block; }
+#${select(ElementID.BAR)} > span, #${select(ElementID.BAR)} > span > * { margin-left: 8px; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)} { all: revert; position: relative; font-weight: bold;
 	border: none; margin-left: 3px; width: 15px; height: 18px; background-color: transparent; color: white; }
 #${select(ElementID.BAR)} .${select(ElementClass.CONTROL_EXPAND)}:hover,
@@ -243,8 +236,8 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 	border-style: none; border-bottom-style: solid; border-bottom-width: 1px; border-left-style: solid;
 	border-color: hsl(0, 0%, 50%); background-color: hsl(0, 0%, 75%); }
 #${select(ElementID.BAR)} .${select(ElementClass.OPTION)}:hover { background-color: hsl(0, 0%, 100%); }
-#${select(ElementID.BAR)} > button:hover { background-color: hsl(0, 0%, 65%); }
-#${select(ElementID.BAR)} > button:active { background-color: hsl(0, 0%, 50%); }
+#${select(ElementID.BAR)} > span > button:hover { background-color: hsl(0, 0%, 65%); }
+#${select(ElementID.BAR)} > span > button:active { background-color: hsl(0, 0%, 50%); }
 #${select(ElementID.BAR)} { all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light;
 	line-height: initial; font-size: 0; display: none; }
 #${select(ElementID.BAR)}:not(.${select(ElementClass.BAR_HIDDEN)}) { display: inline; }
@@ -253,7 +246,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 #${select(ElementID.MARKER_GUTTER)} div:not(.${select(ElementClass.MARKER_BLOCK)}) {
 	width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
 #${select(ElementID.MARKER_GUTTER)}, .${select(ElementClass.MARKER_BLOCK)} {
-	position: fixed; background-color: hsla(0, 0%, 0%, 0.5); }
+	position: fixed; background: linear-gradient(to right, transparent, hsla(0, 0%, 0%, 0.7) 70%); }
 .${select(ElementClass.MARKER_BLOCK)} { width: inherit; z-index: -1; }
 /*#${/*select(ElementID.HIGHLIGHT_TOGGLE)*/""}:checked ~ */#${select(ElementID.MARKER_GUTTER)} { display: block; }`
 	;
@@ -261,16 +254,19 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 		const hue = hues[i % hues.length];
 		style.textContent += `
 #${select(ElementID.BAR)}.${select(ElementClass.HIGHLIGHTS_SHOWN)}
-	~ body mms-h.${select(ElementClass.TERM, term.selector)} { background-color: hsla(${hue}, 100%, 60%, 0.4); }
+	~ body mms-h.${select(ElementClass.TERM, term.selector)},
+	#${select(ElementID.BAR)}
+	~ body .${select(ElementClass.FOCUS_CONTAINER)} mms-h.${select(ElementClass.TERM, term.selector)}
+	{ background-color: hsla(${hue}, 100%, 60%, 0.4); }
 #${select(ElementID.MARKER_GUTTER)} .${select(ElementClass.TERM, term.selector)} {
 	background-color: hsl(${hue}, 100%, 50%); }
-#${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
+#${select(ElementID.BAR_TERMS)} > .${select(ElementClass.TERM, term.selector)}
 	> .${select(ElementClass.CONTROL_BUTTON)} { background-color: hsl(${hue}, 50%, 60%); }
-#${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
+#${select(ElementID.BAR_TERMS)} > .${select(ElementClass.TERM, term.selector)}
 	> .${select(ElementClass.CONTROL_BUTTON)}:hover { background-color: hsl(${hue}, 70%, 70%); }
-#${select(ElementID.BAR)} > .${select(ElementClass.TERM, term.selector)}
+#${select(ElementID.BAR_TERMS)} > .${select(ElementClass.TERM, term.selector)}
 	> .${select(ElementClass.CONTROL_BUTTON)}:active { background-color: hsl(${hue}, 70%, 50%); }
-#${select(ElementID.BAR)}.${select(ElementClass.CONTROL_BUTTON, i)}
+#${select(ElementID.BAR_TERMS)}.${select(ElementClass.CONTROL_BUTTON, i)}
 	> .${select(ElementClass.TERM, term.selector)} > .${select(ElementClass.CONTROL_BUTTON)} {
 	background-color: hsl(${hue}, 100%, 85%); }`
 		;
@@ -278,15 +274,10 @@ const insertStyle = (terms: MatchTerms, style: HTMLStyleElement, hues: ReadonlyA
 };
 
 const getTermControl = (term?: MatchTerm, idx = -1): HTMLDivElement => {
-	const bar = document.getElementById(select(ElementID.BAR));
-	if (!bar) {
-		// TODO: recovery in order to end up retrieving the requested button anyway
-		console.error("MARK MY SEARCH: Navigation bar not found on request.");
-		return undefined as unknown as HTMLDivElement; // evil
-	}
+	const barTerms = document.getElementById(select(ElementID.BAR_TERMS)) as HTMLDivElement;
 	return (idx === -1 && term
-		? bar.getElementsByClassName(select(ElementClass.TERM, term.selector))[0]
-		: bar.children[idx]
+		? barTerms.getElementsByClassName(select(ElementClass.TERM, term.selector))[0]
+		: barTerms.children[idx]
 	) as HTMLDivElement;
 };
 
@@ -326,9 +317,8 @@ const refreshTermControl = (term: MatchTerm, idx: number) => {
 			getTermOptionMatchType(option.textContent as string, true)));
 };
 
-const addTermControl = (() => {
-	const createTermOption = (terms: MatchTerms, callRefreshTermControls: FunctionCallControlsRefresh,
-		idx: number, title: string) => {
+const insertTermControl = (() => {
+	const createTermOption = (terms: MatchTerms, idx: number, title: string) => {
 		const matchType = getTermOptionMatchType(title);
 		const onActivated = () => {
 			const term = terms[idx];
@@ -339,7 +329,6 @@ const addTermControl = (() => {
 				termChanged: term,
 				termChangedIdx: idx,
 			};
-			callRefreshTermControls(false, false, message.terms, message.termChanged, message.termChangedIdx);
 			browser.runtime.sendMessage(message);
 		};
 		const option = document.createElement("button");
@@ -350,8 +339,7 @@ const addTermControl = (() => {
 		return option;
 	};
 
-	return (highlightTags: HighlightTags, terms: MatchTerms, callRefreshTermControls: FunctionCallControlsRefresh,
-		idx: number, command: string, commandReverse: string, buttonAppend?: HTMLButtonElement) => {
+	return (highlightTags: HighlightTags, terms: MatchTerms, idx: number, command: string, commandReverse: string) => {
 		const term = terms[idx];
 		const controlButton = document.createElement("button");
 		controlButton.classList.add(select(ElementClass.CONTROL_BUTTON));
@@ -359,30 +347,27 @@ const addTermControl = (() => {
 		controlButton.tabIndex = -1;
 		controlButton.textContent = term.phrase;
 		controlButton.onclick = () => jumpToTerm(highlightTags, false, term);
-		createTermInput(terms, callRefreshTermControls, controlButton, idx);
+		createTermInput(terms, controlButton, idx);
 		term.command = command;
 		term.commandReverse = commandReverse;
 		const menu = document.createElement("menu");
 		menu.classList.add(select(ElementClass.OPTION_LIST));
-		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Case\u00A0Match"));
-		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Stem\u00A0Word"));
-		menu.appendChild(createTermOption(terms, callRefreshTermControls, idx, "Whole\u00A0Word"));
-		const control = document.createElement("div");
+		menu.appendChild(createTermOption(terms, idx, "Case\u00A0Sensitive"));
+		menu.appendChild(createTermOption(terms, idx, "Stem\u00A0Word"));
+		menu.appendChild(createTermOption(terms, idx, "Whole\u00A0Word"));
+		const control = document.createElement("span");
 		control.classList.add(select(ElementClass.TERM, term.selector));
 		control.appendChild(controlButton);
 		control.appendChild(menu);
-		if (!buttonAppend) {
-			buttonAppend = (document.getElementById(select(ElementID.BAR)) as HTMLDivElement)
-				.lastElementChild as HTMLButtonElement;
-		}
-		buttonAppend.insertAdjacentElement("beforebegin", control);
+		(document.getElementById(select(ElementID.BAR_TERMS)) as HTMLDivElement).appendChild(control);
 	};
 })();
 
 const getTermCommands = (commands: BrowserCommands) => {
-	const commandsDetail = commands
-		.map(command => command.name ? ({ info: parseCommand(command.name), shortcut: command.shortcut ?? "" }) : null)
-		.filter(command => !!command && !!command.info) as unknown as Array<{ info: Command, shortcut: string }>;
+	const commandsDetail = commands.map(command => ({
+		info: command.name ? parseCommand(command.name) : { type: CommandType.NONE },
+		shortcut: command.shortcut ?? "",
+	}));
 	return {
 		down: commandsDetail
 			.filter(commandDetail => commandDetail.info.type === CommandType.SELECT_TERM && !commandDetail.info.reversed)
@@ -394,20 +379,30 @@ const getTermCommands = (commands: BrowserCommands) => {
 };
 
 const addControls = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-	callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement) => {
+	style: HTMLStyleElement, controlsInfo: ControlsInfo) => {
 	insertStyle(terms, style, TERM_HUES);
 	const bar = document.createElement("div");
 	bar.id = select(ElementID.BAR);
-	bar.classList.add(select(ElementClass.HIGHLIGHTS_SHOWN));
+	if (controlsInfo.highlightsShown) {
+		bar.classList.add(select(ElementClass.HIGHLIGHTS_SHOWN));
+	}
+	const barOptions = document.createElement("span");
+	barOptions.id = select(ElementID.BAR_OPTIONS);
+	const barTerms = document.createElement("span");
+	barTerms.id = select(ElementID.BAR_TERMS);
+	const barControls = document.createElement("span");
+	barControls.id = select(ElementID.BAR_CONTROLS);
 	const buttonAppend = document.createElement("button");
 	buttonAppend.textContent = "+";
 	buttonAppend.tabIndex = -1;
-	createTermInput(terms, callRefreshTermControls, buttonAppend, TermChange.CREATE);
-	bar.appendChild(buttonAppend);
+	createTermInput(terms, buttonAppend, TermChange.CREATE);
+	barControls.appendChild(buttonAppend);
+	bar.appendChild(barOptions);
+	bar.appendChild(barTerms);
+	bar.appendChild(barControls);
 	const termCommands = getTermCommands(commands);
-	terms.forEach((term, i) => addTermControl(highlightTags, terms, callRefreshTermControls,
-		i, termCommands.down[i], termCommands.up[i], buttonAppend));
 	document.body.insertAdjacentElement("beforebegin", bar);
+	terms.forEach((term, i) => insertTermControl(highlightTags, terms, i, termCommands.down[i], termCommands.up[i]));
 	const gutter = document.createElement("div");
 	gutter.id = select(ElementID.MARKER_GUTTER);
 	document.body.insertAdjacentElement("afterend", gutter);
@@ -424,6 +419,11 @@ const removeControls = () => {
 		bar.remove();
 	if (gutter)
 		gutter.remove();
+};
+
+const getControlsInfo = (): ControlsInfo => {
+	const bar = document.getElementById(select(ElementID.BAR));
+	return { highlightsShown: bar ? bar.classList.contains(select(ElementClass.HIGHLIGHTS_SHOWN)) : false };
 };
 
 const addScrollMarkers = (() => {
@@ -690,24 +690,17 @@ const highlightInNodesOnMutation = (observer: MutationObserver) =>
 ;
 
 const insertHighlighting = (() => {
-	const selectTermOnCommand = (highlightTags: HighlightTags, terms: MatchTerms, selectTermPtr: SelectTermPtr) => {
+	const selectTermOnCommand = (highlightTags: HighlightTags, terms: MatchTerms, processCommand: FnProcessCommand) => {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
-		selectTermPtr.selectTerm = (commandString: string) => {
+		processCommand.call = (commandInfo: CommandInfo) => {
 			const getFocusedIdx = (idx: number) => Math.min(terms.length - 1, idx);
 			focusedIdx = getFocusedIdx(focusedIdx);
-			const commandInfo = parseCommand(commandString) as Command;
 			switch (commandInfo.type) {
 			case CommandType.TOGGLE_BAR: {
-				const bar = document.getElementById(select(ElementID.BAR));
-				if (!bar) {
-					// TODO: recovery condition?
-					return;
-				}
+				const bar = document.getElementById(select(ElementID.BAR)) as HTMLDivElement;
 				bar.classList[bar.classList.contains(select(ElementClass.BAR_HIDDEN))
 					? "remove" : "add"](select(ElementClass.BAR_HIDDEN));
-				break;
-			} case CommandType.TOGGLE_HIGHLIGHT: {
 				break;
 			} case CommandType.TOGGLE_SELECT: {
 				selectModeFocus = !selectModeFocus;
@@ -719,14 +712,10 @@ const insertHighlighting = (() => {
 					jumpToTerm(highlightTags, commandInfo.reversed ?? false);
 				break;
 			} case CommandType.SELECT_TERM: {
-				const bar = document.getElementById(select(ElementID.BAR));
-				if (!bar) {
-					// TODO: recovery condition?
-					return;
-				}
-				bar.classList.remove(select(ElementClass.CONTROL_BUTTON, focusedIdx));
+				const barTerms = document.getElementById(select(ElementID.BAR_TERMS)) as HTMLDivElement;
+				barTerms.classList.remove(select(ElementClass.CONTROL_BUTTON, focusedIdx));
 				focusedIdx = getFocusedIdx(commandInfo.termIdx as number);
-				bar.classList.add(select(ElementClass.CONTROL_BUTTON, focusedIdx));
+				barTerms.classList.add(select(ElementClass.CONTROL_BUTTON, focusedIdx));
 				if (!selectModeFocus)
 					jumpToTerm(highlightTags, commandInfo.reversed as boolean, terms[focusedIdx]);
 				break;
@@ -735,7 +724,7 @@ const insertHighlighting = (() => {
 	};
 
 	return (highlightTags: HighlightTags, terms: MatchTerms, disable: boolean, termsFromSelection: boolean,
-		selectTermPtr: SelectTermPtr, observer: MutationObserver) => {
+		selectTermPtr: FnProcessCommand, observer: MutationObserver) => {
 		observer.disconnect();
 		restoreNodes();
 		if (disable) {
@@ -760,67 +749,46 @@ const insertHighlighting = (() => {
 	};
 })();
 
-const parseCommand = (commandString: string): Command | null => {
-	const parts = commandString.split("-");
-	return parts[0] === "toggle"
-		? parts[1] === "bar"
-			? { type: CommandType.TOGGLE_BAR }
-			: parts[1] === "highlight"
-				? { type: CommandType.TOGGLE_HIGHLIGHT }
-				: parts[1] === "select"
-					? { type: CommandType.TOGGLE_SELECT } : null
-		: parts[0] === "advance" && parts[1] === "global"
-			? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
-			: parts[0] === "select" && parts[1] === "term"
-				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" } : null;
-};
-
 (() => {
 	// TODO: configuration
 	const refreshTermControls = (() => {
 		const insertInterface = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-			callRefreshTermControls: FunctionCallControlsRefresh, style: HTMLStyleElement) => {
+			style: HTMLStyleElement) => {
+			const controlsInfo = getControlsInfo();
 			removeControls();
-			addControls(highlightTags, commands, terms, callRefreshTermControls, style);
+			addControls(highlightTags, commands, terms, style, controlsInfo);
 		};
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
-			observer: MutationObserver, selectTermPtr: SelectTermPtr, callRefreshTermControls: FunctionCallControlsRefresh,
-			disable: boolean, termsFromSelection: boolean,
+			observer: MutationObserver, selectTermPtr: FnProcessCommand, termsFromSelection: boolean, disable: boolean,
 			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
 			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
 				if (termToUpdateIdx === TermChange.CREATE) {
 					let idx = terms.length - 1;
 					const termCommands = getTermCommands(commands);
-					if (termUpdate !== terms[idx]) {
-						terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
-						idx++;
-					}
-					addTermControl(highlightTags, terms, callRefreshTermControls,
-						idx, termCommands.down[idx], termCommands.up[idx]);
+					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
+					idx++;
+					insertTermControl(highlightTags, terms, idx, termCommands.down[idx], termCommands.up[idx]);
 				} else {
 					const term = terms[termToUpdateIdx];
-					if (termUpdate !== term) {
-						term.phrase = termUpdate.phrase;
-						term.matchMode = termUpdate.matchMode;
-						term.compile();
-					}
+					term.phrase = termUpdate.phrase;
+					term.matchMode = termUpdate.matchMode;
+					term.compile();
 					refreshTermControl(term, termToUpdateIdx);
 				}
 			} else if (termsUpdate) {
-				// TODO: retain colours
-				if (termsUpdate !== terms) { // If called from the same script, 'termsUpdate' is a shallow copy of 'terms' and is correct.
-					terms.splice(0, terms.length);
-					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-				}
-				insertInterface(highlightTags, commands, terms, callRefreshTermControls, style);
+				// TODO: retain colours?
+				terms.splice(0, terms.length);
+				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
+				insertInterface(highlightTags, commands, terms, style);
 			} else if (!disable && !termsFromSelection) {
 				return;
 			}
 			if (!disable) {
 				insertStyle(terms, style, TERM_HUES);
 			}
+			// Timeout seems to reduce freezing impact (by causing threading?)
 			setTimeout(() => insertHighlighting(highlightTags, terms, disable, termsFromSelection, selectTermPtr, observer));
 		};
 	})();
@@ -837,34 +805,35 @@ const parseCommand = (commandString: string): Command | null => {
 
 	return (() => {
 		const commands: BrowserCommands = [];
-		const selectTermPtr: SelectTermPtr = { selectTerm: command => { command; } };
+		const processCommand: FnProcessCommand = { call: command => { command; } };
 		const terms: MatchTerms = [];
 		const highlightTags: HighlightTags = {
 			reject: /\b(?:meta|style|script|noscript|mms-h)\b/i,
 			skip: /\b(?:s|del)\b/i, // Implementation would likely be overly complex.
 			flow: /\b(?:b|i|u|strong|em|cite|span|mark|wbr|code|data|dfn|ins|mms-h)\b/i,
+			// break: any other class of element
 		};
 		const observer = getObserverNodeHighlighter(highlightTags, terms);
 		const style = insertStyleElement();
-		const callRefreshTermControls: FunctionCallControlsRefresh = (
-			termsFromSelection = false, disable = false, termsUpdate, termUpdate, termToUpdateIdx
-		) => // For highly responsive controls, but requires a few non-ideal special cases.
-			refreshTermControls(highlightTags, terms, commands, style, observer, selectTermPtr,
-				callRefreshTermControls, termsFromSelection, disable, termsUpdate, termUpdate, termToUpdateIdx);
 		browser.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
 				commands.splice(0, commands.length);
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
 			if (message.command) {
-				selectTermPtr.selectTerm(message.command);
+				processCommand.call(message.command);
 			}
-			if (message.disable || message.termUpdate || (message.terms &&
-				(message.terms.length !== terms.length || message.terms.some((term, i) => term.phrase !== terms[i].phrase)))) {
-				callRefreshTermControls(
-					message.termsFromSelection, message.disable,
+			if (message.disable || message.termsFromSelection || message.termUpdate || (message.terms
+				&& !itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase))) {
+				refreshTermControls(
+					highlightTags, terms, commands, style, observer, processCommand,
+					message.termsFromSelection ?? false, message.disable ?? false,
 					message.terms, message.termUpdate, message.termToUpdateIdx
 				);
+			}
+			if (message.toggleHighlightsOn !== undefined) {
+				const bar = document.getElementById(select(ElementID.BAR)) as HTMLDivElement;
+				bar.classList[message.toggleHighlightsOn ? "add" : "remove"](select(ElementClass.HIGHLIGHTS_SHOWN));
 			}
 			sendResponse(); // Manifest V3 bug.
 		});

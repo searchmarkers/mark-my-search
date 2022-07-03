@@ -2,19 +2,21 @@ type ResearchInstances = Record<number, ResearchInstance>;
 type Stoplist = Array<string>;
 type Engines = Record<string, Engine>;
 type StorageLocalValues = {
-	[StorageLocal.ENABLED]: boolean,
-	[StorageLocal.RESEARCH_INSTANCES]: ResearchInstances,
-	[StorageLocal.ENGINES]: Engines,
+	[StorageLocal.ENABLED]: boolean
+	[StorageLocal.RESEARCH_INSTANCES]: ResearchInstances
+	[StorageLocal.ENGINES]: Engines
 }
 type StorageSyncValues = {
-	[StorageSync.IS_SET_UP]: boolean,
-	[StorageSync.STOPLIST]: Stoplist,
-	[StorageSync.LINK_RESEARCH_TABS]: boolean,
+	[StorageSync.IS_SET_UP]: boolean
+	[StorageSync.STOPLIST]: Stoplist
+	[StorageSync.LINK_RESEARCH_TABS]: boolean
+	[StorageSync.SHOW_HIGHLIGHTS]: { default: boolean, overrideSearchPages: boolean, overrideResearchPages: boolean }
 }
 
 interface ResearchInstance {
 	phrases: ReadonlyArray<string>
 	terms: MatchTerms
+	highlightsShown: boolean
 }
 
 enum StorageLocal {
@@ -29,7 +31,7 @@ enum StorageSync {
 	IS_SET_UP = "isSetUp", // TODO: supplement with detection of unused keys
 	STOPLIST = "stoplist",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
-
+	SHOW_HIGHLIGHTS = "showHighlights",
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

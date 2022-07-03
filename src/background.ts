@@ -1,7 +1,7 @@
 const createResearchInstance = (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
 	terms?: MatchTerms
-}): ResearchInstance => {
+}): Promise<ResearchInstance> => getStorageSync(StorageSync.SHOW_HIGHLIGHTS).then(sync => {
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : getSearchQuery(args.url.url).split("\"");
 		const termsRaw = args.url.engine
@@ -15,18 +15,19 @@ const createResearchInstance = (args: {
 		return {
 			phrases: terms.map(term => term.phrase),
 			terms,
+			highlightsShown: sync.showHighlights.default,
 		};
 	}
 	args.terms = args.terms ?? [];
-	return { phrases: args.terms.map(term => term.phrase), terms: args.terms };
-};
+	return {
+		phrases: args.terms.map(term => term.phrase),
+		terms: args.terms,
+		highlightsShown: sync.showHighlights.default,
+	};
+});
 
 const getSearchQuery = (url: string) =>
 	new URL(url).searchParams.get([ "q", "query" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
-;
-
-const getMenuSwitchId = (activate: boolean) =>
-	(activate ? "" : "de") + "activate-research-mode"
 ;
 
 const isTabSearchPage = (engines: Engines, url: string): [ boolean, Engine? ] => {
@@ -42,9 +43,11 @@ const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number) 
 	tabId in researchInstances
 ;
 
-const createResearchMessage = (researchInstance: ResearchInstance) =>
-	({ terms: researchInstance.terms } as HighlightMessage)
-;
+const createResearchMessage = (researchInstance: ResearchInstance, overrideHighlightsShown?: boolean) => ({
+	terms: researchInstance.terms,
+	toggleHighlightsOn: overrideHighlightsShown === undefined ? undefined :
+		researchInstance.highlightsShown || overrideHighlightsShown,
+} as HighlightMessage);
 
 const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms: MatchTerms, tabId: number) => {
 	researchInstances[tabId].terms = terms;
@@ -62,7 +65,7 @@ const activateHighlightingInTab = (tabId: number, message?: HighlightMessage) =>
 						Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))))
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		).catch(reason =>
-			/*console.log(`Injection into tab ${tabId} failed: ${reason}`)*/  false
+			/*console.error(`Injection into tab ${tabId} failed: ${reason}`)*/  false
 		)
 	))
 ;
@@ -98,12 +101,14 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			setStorageLocal({ engines: local.engines } as StorageLocalValues);
 		}));
 
-		browser.bookmarks.onRemoved.addListener((id, removeInfo) => getStorageLocal(StorageLocal.ENGINES).then(local => {
-			setEngines(
-				local.engines, node => delete(local.engines[node.id]), removeInfo.node
-			);
-			setStorageLocal({ engines: local.engines } as StorageLocalValues);
-		}));
+		browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
+			getStorageLocal(StorageLocal.ENGINES).then(local => {
+				setEngines(
+					local.engines, node => delete(local.engines[node.id]), removeInfo.node
+				);
+				setStorageLocal({ engines: local.engines } as StorageLocalValues);
+			})
+		);
 
 		browser.bookmarks.onCreated.addListener((id, createInfo) => createInfo.url ?
 			getStorageLocal(StorageLocal.ENGINES).then(local => {
@@ -121,19 +126,26 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	};
 })();
 
-const createContextMenuItem = () => {
-	browser.contextMenus.removeAll();
-	browser.contextMenus.create({
-		title: "Researc&h Selection",
-		id: getMenuSwitchId(true),
-		contexts: [ "selection" ],
-	});
-	browser.contextMenus.onClicked.addListener((info, tab) => !tab || tab.id === undefined ? undefined :
-		activateHighlightingInTab(tab.id, { termsFromSelection: true } as HighlightMessage)
-	);
-};
-
 (() => {
+	const createContextMenuItems = () => {
+		const getMenuSwitchId = () =>
+			"activate-research-mode"
+		;
+	
+		browser.contextMenus.onClicked.addListener((info, tab) => !tab || tab.id === undefined ? undefined :
+			activateHighlightingInTab(tab.id, { termsFromSelection: true } as HighlightMessage)
+		);
+	
+		return (() => {
+			browser.contextMenus.removeAll();
+			browser.contextMenus.create({
+				title: "Researc&h Selection",
+				id: getMenuSwitchId(),
+				contexts: [ "selection" ],
+			});
+		})();
+	};
+
 	const setUp = () => {
 		setStorageSync({
 			isSetUp: true,
@@ -143,6 +155,11 @@ const createContextMenuItem = () => {
 				"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's"
 			],
 			linkResearchTabs: false,
+			showHighlights: {
+				default: true,
+				overrideSearchPages: true,
+				overrideResearchPages: false,
+			},
 		});
 		if (browser.commands.update) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
@@ -157,7 +174,7 @@ const createContextMenuItem = () => {
 
 	const initialize = () => {
 		manageEnginesCacheOnBookmarkUpdate();
-		createContextMenuItem();
+		createContextMenuItems();
 		initStorageLocal();
 	};
 
@@ -172,21 +189,25 @@ const createContextMenuItem = () => {
 })();
 
 (() => {
-	const pageModifyRemote = (url: string, tabId: number) => getStorageSync(StorageSync.STOPLIST).then(sync =>
-		getStorageLocal([ StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES ]).then(local => {
+	const pageModifyRemote = (url: string, tabId: number) => getStorageSync([ StorageSync.STOPLIST, StorageSync.SHOW_HIGHLIGHTS ]).then(sync =>
+		getStorageLocal([ StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES ]).then(async local => {
 			const [ isSearchPage, engine ] = local.enabled ? isTabSearchPage(local.engines, url) : [ false, undefined ];
 			const isResearchPage = isTabResearchPage(local.researchInstances, tabId);
+			const overrideHighlightsShown = (isSearchPage && sync.showHighlights.overrideSearchPages)
+				|| (isResearchPage && sync.showHighlights.overrideResearchPages);
 			if (isSearchPage) {
-				const researchInstance = createResearchInstance({ url: { stoplist: sync.stoplist, url, engine } });
-				if (!isResearchPage || local.researchInstances[tabId].phrases.length !== researchInstance.phrases.length
-					|| local.researchInstances[tabId].phrases.some((phrase, i) => phrase !== researchInstance.phrases[i])) {
-					local.researchInstances[tabId] = researchInstance;
-					setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
-					activateHighlightingInTab(tabId, createResearchMessage(local.researchInstances[tabId]));
-				}
+				await createResearchInstance({ url: { stoplist: sync.stoplist, url, engine } }).then(researchInstance => {
+					if (!isResearchPage || !itemsMatchLoosely(local.researchInstances[tabId].phrases, researchInstance.phrases)) {
+						local.researchInstances[tabId] = researchInstance;
+						setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
+						activateHighlightingInTab(tabId,
+							createResearchMessage(local.researchInstances[tabId], overrideHighlightsShown));
+					}
+				});
 			}
 			if (isResearchPage) {
-				activateHighlightingInTab(tabId, createResearchMessage(local.researchInstances[tabId]));
+				activateHighlightingInTab(tabId,
+					createResearchMessage(local.researchInstances[tabId], overrideHighlightsShown));
 			}
 		})
 	);
@@ -208,15 +229,29 @@ const createContextMenuItem = () => {
 	);
 })();
 
-browser.commands.onCommand.addListener(command =>
-	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
-		browser.tabs.sendMessage(tab.id, { command } as HighlightMessage)
-	)
+browser.commands.onCommand.addListener(commandString =>
+	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
+		const commandInfo = parseCommand(commandString);
+		switch (commandInfo.type) {
+		case CommandType.TOGGLE_HIGHLIGHTS: {
+			getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
+				if (isTabResearchPage(local.researchInstances, tab.id as number)) {
+					const researchInstance = local.researchInstances[tab.id as number];
+					researchInstance.highlightsShown = !researchInstance.highlightsShown;
+					browser.tabs.sendMessage(tab.id as number,
+						{ toggleHighlightsOn: researchInstance.highlightsShown } as HighlightMessage);
+					setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
+				}
+			});
+			return;
+		}}
+		browser.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
+	})
 );
 
 (() => {
 	const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
-		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
+		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(async local => {
 			if (message.toggleResearchOn !== undefined) {
 				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues);
 			} else if (message.disablePageResearch) {
@@ -224,17 +259,21 @@ browser.commands.onCommand.addListener(command =>
 				browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 			} else {
 				if (!isTabResearchPage(local.researchInstances, senderTabId)) {
-					local.researchInstances[senderTabId] = createResearchInstance({ terms: message.terms });
+					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
+						local.researchInstances[senderTabId] = researchInstance;
+					});
 				}
 				if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-					local.researchInstances[senderTabId] = createResearchInstance({ terms: message.terms });
-					browser.tabs.sendMessage(senderTabId, createResearchMessage(local.researchInstances[senderTabId]));
+					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
+						local.researchInstances[senderTabId] = researchInstance;
+						browser.tabs.sendMessage(senderTabId, createResearchMessage(researchInstance));
+					});
 				} else if (message.terms) {
 					const highlightMessage = updateCachedResearchDetails(local.researchInstances, message.terms, senderTabId);
 					highlightMessage.termUpdate = message.termChanged;
 					highlightMessage.termToUpdateIdx = message.termChangedIdx;
 					Object.keys(local.researchInstances).forEach(tabId =>
-						local.researchInstances[tabId] === local.researchInstances[senderTabId] && Number(tabId) !== senderTabId
+						local.researchInstances[tabId] === local.researchInstances[senderTabId]
 							? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
 					);
 				}
@@ -247,8 +286,8 @@ browser.commands.onCommand.addListener(command =>
 		if (sender.tab && sender.tab.id !== undefined) {
 			handleMessage(message, sender.tab.id);
 		} else {
-			browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
-				handleMessage(message, tab.id)
+			browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
+				handleMessage(message, tab.id as number)
 			);
 		}
 		sendResponse(); // Manifest V3 bug.

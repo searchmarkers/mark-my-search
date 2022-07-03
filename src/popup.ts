@@ -12,7 +12,7 @@ const optionKeyToId = (key: OptionKey) =>
 (() => {
 	const style = document.createElement("style");
 	style.textContent = `
-body { width: 160px; margin: 0; padding: 0; border: 0; }
+body { margin: 0; padding: 0; border: 0; }
 #${optionKeyToId("problemReportDescribe")} { display: grid; }
 body > div { display: grid; }
 button { background-color: hsl(0, 0%, 70%); text-align: left;

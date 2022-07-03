@@ -92,13 +92,14 @@ class Engine {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightMessage {
-	command?: string
+	command?: CommandInfo
 	extensionCommands?: Array<browser.commands.Command>
 	terms?: MatchTerms
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
 	disable?: boolean
 	termsFromSelection?: boolean
+	toggleHighlightsOn?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -110,3 +111,42 @@ interface BackgroundMessage {
 	disablePageResearch?: boolean
 	toggleResearchOn?: boolean
 }
+
+enum CommandType {
+	NONE,
+	TOGGLE_BAR,
+	TOGGLE_HIGHLIGHTS,
+	TOGGLE_SELECT,
+	ADVANCE_GLOBAL,
+	SELECT_TERM,
+}
+
+interface CommandInfo {
+	type: CommandType
+	termIdx?: number
+	reversed?: boolean
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const parseCommand = (commandString: string): CommandInfo => {
+	const parts = commandString.split("-");
+	return parts[0] === "toggle"
+		? parts[1] === "bar"
+			? { type: CommandType.TOGGLE_BAR }
+			: parts[1] === "highlights"
+				? { type: CommandType.TOGGLE_HIGHLIGHTS }
+				: parts[1] === "select"
+					? { type: CommandType.TOGGLE_SELECT }
+					: { type: CommandType.NONE }
+		: parts[0] === "advance" && parts[1] === "global"
+			? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
+			: parts[0] === "select" && parts[1] === "term"
+				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" }
+				: { type: CommandType.NONE };
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const itemsMatchLoosely = (
+	as: ReadonlyArray<unknown>, bs: ReadonlyArray<unknown>, compare = (a: unknown, b: unknown) => a === b) =>
+	as.length === bs.length && as.every((a, i) => compare(a, bs[i]))
+;
