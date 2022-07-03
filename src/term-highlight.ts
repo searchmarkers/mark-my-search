@@ -179,28 +179,32 @@ const createTermInput = (terms: MatchTerms, termButton: HTMLButtonElement, idx: 
 			return;
 		hide();
 		let message: BackgroundMessage | null = null;
+		// TODO: clean up following code and associated handling
 		if (replaces) {
+			const termsUpdate: MatchTerms = [];
+			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
 			if (termInput.value === "") {
-				terms.splice(idx, 1);
+				termsUpdate.splice(idx, 1);
 				message = {
-					terms,
+					terms: termsUpdate,
 					termChanged: term,
 					termChangedIdx: TermChange.REMOVE,
 				};
 			} else if (termInput.value !== term.phrase) {
-				term.phrase = termInput.value;
-				term.compile();
+				termsUpdate[idx] = new MatchTerm(termInput.value, term.matchMode);
 				message = {
-					terms,
-					termChanged: term,
+					terms: termsUpdate,
+					termChanged: termsUpdate[idx],
 					termChangedIdx: idx,
 				};
 			}
 		} else if (termInput.value !== "") {
-			terms.push(new MatchTerm(termInput.value));
+			const termsUpdate: MatchTerms = [];
+			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
+			termsUpdate.push(new MatchTerm(termInput.value));
 			message = {
-				terms,
-				termChanged: terms.at(-1),
+				terms: termsUpdate,
+				termChanged: termsUpdate.at(-1),
 				termChangedIdx: TermChange.CREATE,
 			};
 		}
@@ -592,7 +596,7 @@ const highlightInNodes = (() => {
 		}
 	}
 
-	const highlightInNode = (wordRightPattern: RegExp, term: MatchTerm, textEndNode: Node, start: number, end: number) => {
+	const highlightInNode = (term: MatchTerm, textEndNode: Node, start: number, end: number) => {
 		// TODO: add strategy for mitigating damage (caused by programmatic changes by the website).
 		const text = textEndNode.textContent as string;
 		start = Math.max(0, start);
@@ -610,7 +614,7 @@ const highlightInNodes = (() => {
 		}
 	};
 
-	const highlightInBlock = (wordRightPattern: RegExp, nodeItems: UnbrokenNodeList, terms: MatchTerms) => {
+	const highlightInBlock = (nodeItems: UnbrokenNodeList, terms: MatchTerms) => {
 		for (const term of terms) {
 			const textFlow = nodeItems.getText();
 			const matches = textFlow.matchAll(term.pattern);
@@ -624,7 +628,6 @@ const highlightInNodes = (() => {
 						const textLengthOriginal = (nodeItem.value.textContent as string).length;
 						nodeItems.insertAfter(
 							highlightInNode(
-								wordRightPattern,
 								term,
 								nodeItem.value,
 								match.index as number - currentNodeStart, match.index as number - currentNodeStart + match[0].length),
@@ -644,7 +647,6 @@ const highlightInNodes = (() => {
 	};
 
 	return (rootNode: Node, highlightTags: HighlightTags, terms: MatchTerms) => {
-		const wordRightPattern = /[^^]\b/;
 		const nodeItems: UnbrokenNodeList = new UnbrokenNodeList;
 		const breakLevels: Array<number> = [ 0 ];
 		let level = 0;
@@ -657,7 +659,7 @@ const highlightInNodes = (() => {
 						if (node.hasChildNodes())
 							breakLevels.push(level);
 						if (nodeItems.first)
-							highlightInBlock(wordRightPattern, nodeItems, terms);
+							highlightInBlock(nodeItems, terms);
 					}
 					return 1; // NodeFilter.FILTER_ACCEPT
 				}
@@ -691,7 +693,7 @@ const highlightInNodes = (() => {
 					if (level === breakLevels.at(-1)) {
 						breakLevels.pop();
 						if (nodeItems.first)
-							highlightInBlock(wordRightPattern, nodeItems, terms);
+							highlightInBlock(nodeItems, terms);
 					}
 					if (level <= 0)
 						return;
@@ -811,7 +813,6 @@ const insertHighlighting = (() => {
 	const refreshTermControls = (() => {
 		const insertInterface = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
 			style: HTMLElement, controlsInfo: ControlsInfo) => {
-			//const controlsInfo = getControlsInfo();
 			removeControls();
 			addControls(highlightTags, commands, terms, style, controlsInfo);
 		};
@@ -819,24 +820,20 @@ const insertHighlighting = (() => {
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
 			observer: MutationObserver, selectTermPtr: FnProcessCommand, termsFromSelection: boolean, disable: boolean,
 			controlsInfo: ControlsInfo, termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
-			if (termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
+			if (termsUpdate && termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
+				terms.splice(0);
+				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 				if (termToUpdateIdx === TermChange.CREATE) {
-					let idx = terms.length - 1;
 					const termCommands = getTermCommands(commands);
-					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
-					idx++;
+					const idx = terms.length - 1;
 					insertTermControl(highlightTags, terms, idx, termCommands.down[idx], termCommands.up[idx]);
 				} else {
-					const term = terms[termToUpdateIdx];
-					term.phrase = termUpdate.phrase;
-					term.matchMode = termUpdate.matchMode;
-					term.compile();
-					refreshTermControl(term, termToUpdateIdx);
+					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx);
 				}
 			} else if (termsUpdate) {
 				// TODO: retain colours?
-				terms.splice(0, terms.length);
+				terms.splice(0);
 				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 				insertInterface(highlightTags, commands, terms, style, controlsInfo);
 			} else if (!disable && !termsFromSelection) {
@@ -864,11 +861,14 @@ const insertHighlighting = (() => {
 		const commands: BrowserCommands = [];
 		const processCommand: FnProcessCommand = { call: command => { command; } };
 		const terms: MatchTerms = [];
-		const barControlsShown: { value: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN] } = { value: {
-			disablePageResearch: true,
-			performSearch: true,
-			appendTerm: true,
-		} };
+		const controlsInfo: ControlsInfo = {
+			highlightsShown: false,
+			barControlsShown: {
+				disablePageResearch: true,
+				performSearch: true,
+				appendTerm: true,
+			},
+		};
 		const highlightTags: HighlightTags = {
 			reject: /\b(?:meta|style|script|noscript|mms-h)\b/i,
 			skip: /\b(?:s|del)\b/i, // Implementation would likely be overly complex.
@@ -879,29 +879,29 @@ const insertHighlighting = (() => {
 		const style = insertStyleElement();
 		browser.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
-				commands.splice(0, commands.length);
+				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
 			if (message.command) {
 				processCommand.call(message.command);
 			}
-			if (message.barControls) {
-				barControlsShown.value = message.barControls;
+			if (message.barControlsShown) {
+				controlsInfo.barControlsShown = message.barControlsShown;
+			}
+			if (message.toggleHighlightsOn !== undefined) {
+				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
 			if (message.disable || message.termsFromSelection || message.termUpdate || (message.terms
 				&& !itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase))) {
 				refreshTermControls(
 					highlightTags, terms, commands, style, observer, processCommand,
-					message.termsFromSelection ?? false, message.disable ?? false, {
-						highlightsShown: message.toggleHighlightsOn ?? false,
-						barControlsShown: barControlsShown.value,
-					}, message.terms, message.termUpdate, message.termToUpdateIdx
+					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo,
+					message.terms, message.termUpdate, message.termToUpdateIdx
 				);
 			}
-			if (message.toggleHighlightsOn !== undefined) {
-				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
-				bar.classList[message.toggleHighlightsOn ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
-			}
+			// TODO: improve handling of highlight setting
+			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
+			bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
 			sendResponse(); // Manifest V3 bug.
 		});
 	});

@@ -43,11 +43,12 @@ const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number) 
 	tabId in researchInstances
 ;
 
-const createResearchMessage = (researchInstance: ResearchInstance, overrideHighlightsShown?: boolean, barControls?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]) => ({
+const createResearchMessage = (researchInstance: ResearchInstance, overrideHighlightsShown?: boolean,
+	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]) => ({
 	terms: researchInstance.terms,
 	toggleHighlightsOn: overrideHighlightsShown === undefined ? undefined :
 		researchInstance.highlightsShown || overrideHighlightsShown,
-	barControls,
+	barControlsShown: barControlsShown,
 } as HighlightMessage);
 
 const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms: MatchTerms, tabId: number) => {
@@ -195,8 +196,16 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 })();
 
 (() => {
-	const pageModifyRemote = (url: string, tabId: number) => getStorageSync([ StorageSync.STOPLIST, StorageSync.SHOW_HIGHLIGHTS, StorageSync.BAR_CONTROLS_SHOWN ]).then(sync =>
-		getStorageLocal([ StorageLocal.ENABLED, StorageLocal.RESEARCH_INSTANCES, StorageLocal.ENGINES ]).then(async local => {
+	const pageModifyRemote = (url: string, tabId: number) => getStorageSync([
+		StorageSync.STOPLIST,
+		StorageSync.SHOW_HIGHLIGHTS,
+		StorageSync.BAR_CONTROLS_SHOWN
+	]).then(sync =>
+		getStorageLocal([
+			StorageLocal.ENABLED,
+			StorageLocal.RESEARCH_INSTANCES,
+			StorageLocal.ENGINES
+		]).then(async local => {
 			const [ isSearchPage, engine ] = local.enabled ? isTabSearchPage(local.engines, url) : [ false, undefined ];
 			const isResearchPage = isTabResearchPage(local.researchInstances, tabId);
 			const overrideHighlightsShown = (isSearchPage && sync.showHighlights.overrideSearchPages)
@@ -245,8 +254,10 @@ browser.commands.onCommand.addListener(commandString =>
 					if (isTabResearchPage(local.researchInstances, tab.id as number)) {
 						const researchInstance = local.researchInstances[tab.id as number];
 						researchInstance.highlightsShown = !researchInstance.highlightsShown;
-						browser.tabs.sendMessage(tab.id as number,
-							{ toggleHighlightsOn: researchInstance.highlightsShown, barControls: sync.barControlsShown } as HighlightMessage);
+						browser.tabs.sendMessage(tab.id as number, {
+							toggleHighlightsOn: researchInstance.highlightsShown,
+							barControlsShown: sync.barControlsShown,
+						} as HighlightMessage);
 						setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
 					}
 				})

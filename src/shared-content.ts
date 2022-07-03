@@ -100,7 +100,7 @@ interface HighlightMessage {
 	disable?: boolean
 	termsFromSelection?: boolean
 	toggleHighlightsOn?: boolean
-	barControls?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
+	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
