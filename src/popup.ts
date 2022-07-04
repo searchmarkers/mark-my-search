@@ -1,4 +1,4 @@
-type OptionKey = "researchDisablePage" | "researchToggle" | "problemReportDescribe" | "problemReport";
+type OptionKey = "researchTogglePage" | "researchToggle" | "problemReportDescribe" | "problemReport"
 
 enum OptionClass {
 	TOGGLE = "toggle",
@@ -34,8 +34,8 @@ input:active { outline-style: none; display: inline-block; }`
 const container = document.createElement("div");
 document.body.appendChild(container);
 const optionsInfo: Record<OptionKey, { text: string, classes: Array<string> }> = {
-	researchDisablePage: {
-		text: "Disable on Page",
+	researchTogglePage: {
+		text: "Enable/Disable in Tab",
 		classes: [],
 	}, researchToggle: {
 		text: "Mark My Search On/Off",
@@ -49,7 +49,7 @@ const optionsInfo: Record<OptionKey, { text: string, classes: Array<string> }> =
 	},
 };
 const options: Record<OptionKey, HTMLButtonElement> = {
-	researchDisablePage: undefined as unknown as HTMLButtonElement,
+	researchTogglePage: undefined as unknown as HTMLButtonElement,
 	researchToggle: undefined as unknown as HTMLButtonElement,
 	problemReportDescribe: undefined as unknown as HTMLButtonElement,
 	problemReport: undefined as unknown as HTMLButtonElement,
@@ -74,7 +74,7 @@ getStorageLocal(StorageLocal.ENABLED).then(local =>
 	local.enabled ? options.researchToggle.classList.add(OptionClass.ENABLED) : undefined
 );
 
-options.researchDisablePage.focus();
+options.researchTogglePage.focus();
 const focusNext = (idx: number, increment: (idx: number) => number) => {
 	idx = increment(idx);
 	buttonArray[idx].focus();
@@ -94,9 +94,14 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
-options.researchDisablePage.onclick = () => {
-	browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage);
-};
+options.researchTogglePage.onclick = () =>
+	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
+		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => (tab.id as number) in local.researchInstances
+			? browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage)
+			: browser.runtime.sendMessage({ terms: [], makeUnique: true, toggleHighlightsOn: true } as BackgroundMessage)
+		)
+	)
+;
 
 options.researchToggle.onclick = () => {
 	const toggleResearchOn = !options.researchToggle.classList.contains(OptionClass.ENABLED);

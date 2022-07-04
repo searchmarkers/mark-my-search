@@ -1,6 +1,6 @@
-type ResearchInstances = Record<number, ResearchInstance>;
-type Stoplist = Array<string>;
-type Engines = Record<string, Engine>;
+type ResearchInstances = Record<number, ResearchInstance>
+type Stoplist = Array<string>
+type Engines = Record<string, Engine>
 type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
 	[StorageLocal.RESEARCH_INSTANCES]: ResearchInstances

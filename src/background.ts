@@ -143,7 +143,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			browser.contextMenus.create({
 				title: "Researc&h Selection",
 				id: getMenuSwitchId(),
-				contexts: [ "selection" ],
+				contexts: [ "selection", "page" ],
 			});
 		})();
 	};
@@ -244,24 +244,43 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	);
 })();
 
+const toggleHighlightsInTab = (tabId: number, toggleHighlightsOn?: boolean) => getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
+	getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
+		if (isTabResearchPage(local.researchInstances, tabId)) {
+			const researchInstance = local.researchInstances[tabId];
+			researchInstance.highlightsShown = toggleHighlightsOn ?? !researchInstance.highlightsShown;
+			browser.tabs.sendMessage(tabId, {
+				toggleHighlightsOn: researchInstance.highlightsShown,
+				barControlsShown: sync.barControlsShown,
+			} as HighlightMessage);
+			setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
+		}
+	})
+);
+
 browser.commands.onCommand.addListener(commandString =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
 		const commandInfo = parseCommand(commandString);
 		switch (commandInfo.type) {
-		case CommandType.TOGGLE_HIGHLIGHTS: {
-			getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
-				getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
-					if (isTabResearchPage(local.researchInstances, tab.id as number)) {
-						const researchInstance = local.researchInstances[tab.id as number];
-						researchInstance.highlightsShown = !researchInstance.highlightsShown;
-						browser.tabs.sendMessage(tab.id as number, {
-							toggleHighlightsOn: researchInstance.highlightsShown,
-							barControlsShown: sync.barControlsShown,
-						} as HighlightMessage);
-						setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
-					}
-				})
-			);
+		case CommandType.ENABLE_IN_TAB: {
+			if (tab.id !== undefined) {
+				getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
+					getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local =>
+						createResearchInstance({ terms: [] }).then(researchInstance => {
+							researchInstance.highlightsShown = true;
+							local.researchInstances[tab.id as number] = researchInstance;
+							setStorageLocal({ researchInstances: local.researchInstances } as StorageLocalValues);
+							activateHighlightingInTab(tab.id as number,
+								createResearchMessage(researchInstance, false, sync.barControlsShown));
+						})
+					)
+				);
+			}
+			return;
+		} case CommandType.TOGGLE_HIGHLIGHTS: {
+			if (tab.id !== undefined) {
+				toggleHighlightsInTab(tab.id);
+			}
 			return;
 		}}
 		browser.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
@@ -289,15 +308,16 @@ browser.commands.onCommand.addListener(commandString =>
 				}
 				if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
 					await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
-						createResearchInstance({ terms: message.terms }).then(
-							researchInstance => {
-								local.researchInstances[senderTabId] = researchInstance;
-								browser.tabs.sendMessage(senderTabId,
-									createResearchMessage(researchInstance, undefined, sync.barControlsShown));
+						createResearchInstance({ terms: message.terms }).then(researchInstance => {
+							if (message.toggleHighlightsOn !== undefined) {
+								researchInstance.highlightsShown = message.toggleHighlightsOn;
 							}
-						)
+							local.researchInstances[senderTabId] = researchInstance;
+							activateHighlightingInTab(senderTabId,
+								createResearchMessage(researchInstance, false, sync.barControlsShown));
+						})
 					);
-				} else if (message.terms) {
+				} else if (message.terms !== undefined) {
 					const highlightMessage = updateCachedResearchDetails(local.researchInstances, message.terms, senderTabId);
 					highlightMessage.termUpdate = message.termChanged;
 					highlightMessage.termToUpdateIdx = message.termChangedIdx;

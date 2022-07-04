@@ -1,11 +1,11 @@
-type BrowserCommands = Array<browser.commands.Command>;
-type HighlightTags = Record<string, RegExp>;
+type BrowserCommands = Array<browser.commands.Command>
+type HighlightTags = Record<string, RegExp>
 type ButtonInfo = {
 	label: string
 	containerId: ElementID
 	onclick?: () => void
 	setUp?: (button: HTMLButtonElement) => void
-};
+}
 
 enum ElementClass {
 	HIGHLIGHTS_SHOWN = "highlights-shown",
@@ -69,7 +69,7 @@ const jumpToTerm = (() => {
 
 	const isVisible = (element: HTMLElement) => // TODO: improve
 		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
-		&& window.getComputedStyle(element).visibility !== "hidden"
+		&& getComputedStyle(element).visibility !== "hidden"
 	;
 
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
@@ -501,7 +501,7 @@ const addScrollMarkers = (() => {
 	const getScrollContainer = (element: HTMLElement): HTMLElement =>
 		element.scrollHeight > element.clientHeight
 		&& (document.scrollingElement === element
-			|| [ "scroll", "auto" ].includes(window.getComputedStyle(element).overflowY)) || !element.parentElement
+			|| [ "scroll", "auto" ].includes(getComputedStyle(element).overflowY)) || !element.parentElement
 			? element
 			: getScrollContainer(element.parentElement)
 	;
@@ -792,12 +792,14 @@ const insertHighlighting = (() => {
 		}
 		if (termsFromSelection) {
 			const selection = document.getSelection();
-			if (!selection)
-				return;
-			terms = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
-				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-			selection.collapseToStart();
-			browser.runtime.sendMessage({ terms, makeUnique: true } as BackgroundMessage);
+			if (selection && selection.anchorNode) {
+				terms = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
+					.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
+				selection.collapseToStart();
+			} else {
+				terms = [];
+			}
+			browser.runtime.sendMessage({ terms, makeUnique: true, toggleHighlightsOn: true } as BackgroundMessage);
 			return;
 		}
 		selectTermOnCommand(highlightTags, terms, selectTermPtr);
@@ -820,7 +822,7 @@ const insertHighlighting = (() => {
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
 			observer: MutationObserver, selectTermPtr: FnProcessCommand, termsFromSelection: boolean, disable: boolean,
 			controlsInfo: ControlsInfo, termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
-			if (termsUpdate && termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
+			if (termsUpdate !== undefined && termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
 				terms.splice(0);
 				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
@@ -831,7 +833,7 @@ const insertHighlighting = (() => {
 				} else {
 					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx);
 				}
-			} else if (termsUpdate) {
+			} else if (termsUpdate !== undefined) {
 				// TODO: retain colours?
 				terms.splice(0);
 				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
@@ -840,6 +842,7 @@ const insertHighlighting = (() => {
 				return;
 			}
 			if (!disable) {
+				// TODO: only insert style if controls exist
 				insertStyle(terms, style, TERM_HUES);
 			}
 			// Timeout seems to reduce freezing impact (by causing threading?)
@@ -850,7 +853,7 @@ const insertHighlighting = (() => {
 	const insertStyleElement = () => {
 		let style = document.getElementById(getSel(ElementID.STYLE)) as HTMLElement;
 		if (!style) {
-			style = style ? style : document.createElement("style");
+			style = document.createElement("style");
 			style.id = getSel(ElementID.STYLE);
 			document.head.appendChild(style);
 		}
@@ -891,8 +894,10 @@ const insertHighlighting = (() => {
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
-			if (message.disable || message.termsFromSelection || message.termUpdate || (message.terms
-				&& !itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase))) {
+			// TODO: better way of identifying if extension is already active but with no terms
+			if (message.disable || message.termsFromSelection || message.termUpdate || (message.terms !== undefined
+				&& (!itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase)
+				|| (!terms.length && !document.getElementById(ElementID.BAR))))) {
 				refreshTermControls(
 					highlightTags, terms, commands, style, observer, processCommand,
 					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo,

@@ -1,4 +1,4 @@
-type MatchTerms = Array<MatchTerm>;
+type MatchTerms = Array<MatchTerm>
 
 interface MatchMode {
 	case: boolean
@@ -111,11 +111,13 @@ interface BackgroundMessage {
 	makeUnique?: boolean
 	disablePageResearch?: boolean
 	toggleResearchOn?: boolean
+	toggleHighlightsOn?: boolean
 	performSearch?: boolean
 }
 
 enum CommandType {
 	NONE,
+	ENABLE_IN_TAB,
 	TOGGLE_BAR,
 	TOGGLE_HIGHLIGHTS,
 	TOGGLE_SELECT,
@@ -132,19 +134,23 @@ interface CommandInfo {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const parseCommand = (commandString: string): CommandInfo => {
 	const parts = commandString.split("-");
-	return parts[0] === "toggle"
-		? parts[1] === "bar"
-			? { type: CommandType.TOGGLE_BAR }
-			: parts[1] === "highlights"
-				? { type: CommandType.TOGGLE_HIGHLIGHTS }
-				: parts[1] === "select"
-					? { type: CommandType.TOGGLE_SELECT }
-					: { type: CommandType.NONE }
-		: parts[0] === "advance" && parts[1] === "global"
-			? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
-			: parts[0] === "select" && parts[1] === "term"
-				? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" }
-				: { type: CommandType.NONE };
+	return parts[0] === "enable"
+		? parts[1] === "research"
+			? { type: CommandType.ENABLE_IN_TAB }
+			: { type: CommandType.NONE }
+		: parts[0] === "toggle"
+			? parts[1] === "bar"
+				? { type: CommandType.TOGGLE_BAR }
+				: parts[1] === "highlights"
+					? { type: CommandType.TOGGLE_HIGHLIGHTS }
+					: parts[1] === "select"
+						? { type: CommandType.TOGGLE_SELECT }
+						: { type: CommandType.NONE }
+			: parts[0] === "advance" && parts[1] === "global"
+				? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
+				: parts[0] === "select" && parts[1] === "term"
+					? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" }
+					: { type: CommandType.NONE };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

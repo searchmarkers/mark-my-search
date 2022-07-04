@@ -39,6 +39,10 @@
 	},
 
 	"commands": {
+		"enable-research": {
+			"suggested_key": { "default": "Alt+Shift+M" },
+			"description": "Enable in current tab"
+		},
 		"toggle-bar": {
 			"suggested_key": { "default": "Ctrl+Shift+F" },
 			"description": "Toggle highlighting toolbar"
