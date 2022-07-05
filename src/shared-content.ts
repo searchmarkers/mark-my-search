@@ -118,6 +118,7 @@ interface BackgroundMessage {
 enum CommandType {
 	NONE,
 	ENABLE_IN_TAB,
+	TOGGLE_ENABLED,
 	TOGGLE_BAR,
 	TOGGLE_HIGHLIGHTS,
 	TOGGLE_SELECT,
@@ -134,23 +135,42 @@ interface CommandInfo {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const parseCommand = (commandString: string): CommandInfo => {
 	const parts = commandString.split("-");
-	return parts[0] === "enable"
-		? parts[1] === "research"
-			? { type: CommandType.ENABLE_IN_TAB }
-			: { type: CommandType.NONE }
-		: parts[0] === "toggle"
-			? parts[1] === "bar"
-				? { type: CommandType.TOGGLE_BAR }
-				: parts[1] === "highlights"
-					? { type: CommandType.TOGGLE_HIGHLIGHTS }
-					: parts[1] === "select"
-						? { type: CommandType.TOGGLE_SELECT }
-						: { type: CommandType.NONE }
-			: parts[0] === "advance" && parts[1] === "global"
-				? { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" }
-				: parts[0] === "select" && parts[1] === "term"
-					? { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" }
-					: { type: CommandType.NONE };
+	switch (parts[0]) {
+	case "enable": {
+		switch (parts[1]) {
+		case "research": {
+			return { type: CommandType.ENABLE_IN_TAB };
+		}}
+		break;
+	} case "toggle": {
+		switch (parts[1]) {
+		case "research": {
+			switch (parts[2]) {
+			case "global": {
+				return { type: CommandType.TOGGLE_ENABLED };
+			}}
+			break;
+		} case "bar": {
+			return { type: CommandType.TOGGLE_BAR };
+		} case "highlights": {
+			return { type: CommandType.TOGGLE_HIGHLIGHTS };
+		} case "select": {
+			return { type: CommandType.TOGGLE_SELECT };
+		}}
+		break;
+	} case "advance": {
+		switch (parts[1]) {
+		case "global": {
+			return { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" };
+		}}
+		break;
+	} case "select": {
+		switch (parts[1]) {
+		case "term": {
+			return { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" };
+		}}
+	}}
+	return { type: CommandType.NONE };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

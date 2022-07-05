@@ -44,8 +44,12 @@
 	},
 
 	"commands": {
-		"enable-research": {
+		"enable-research-tab": {
 			"suggested_key": { "default": "Alt+Shift+M" },
+			"description": "Enable in current tab"
+		},
+		"toggle-research-global": {
+			"suggested_key": { "default": "Alt+Shift+J" },
 			"description": "Enable in current tab"
 		},
 		"toggle-bar": {

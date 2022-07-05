@@ -128,6 +128,12 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	};
 })();
 
+const updateActionIcon = (enabled?: boolean) =>
+	enabled === undefined
+		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
+		: browser.browserAction.setIcon({ path: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg" })
+;
+
 (() => {
 	const createContextMenuItems = () => {
 		const getMenuSwitchId = () =>
@@ -164,6 +170,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 		manageEnginesCacheOnBookmarkUpdate();
 		createContextMenuItems();
 		initStorageLocal();
+		updateActionIcon();
 	};
 
 	browser.runtime.onInstalled.addListener(() => {
@@ -244,7 +251,13 @@ browser.commands.onCommand.addListener(commandString =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
 		const commandInfo = parseCommand(commandString);
 		switch (commandInfo.type) {
-		case CommandType.ENABLE_IN_TAB: {
+		case CommandType.TOGGLE_ENABLED: {
+			getStorageLocal(StorageLocal.ENABLED).then(local => {
+				setStorageLocal({ enabled: !local.enabled } as StorageLocalValues);
+				updateActionIcon(!local.enabled);
+			});
+			return;
+		} case CommandType.ENABLE_IN_TAB: {
 			if (tab.id !== undefined) {
 				getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
 					getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local =>
@@ -273,7 +286,8 @@ browser.commands.onCommand.addListener(commandString =>
 	const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
 		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(async local => {
 			if (message.toggleResearchOn !== undefined) {
-				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues);
+				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
+					.then(() => updateActionIcon(local.enabled));
 			} else if (message.disableTabResearch) {
 				delete(local.researchInstances[senderTabId]);
 				browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
