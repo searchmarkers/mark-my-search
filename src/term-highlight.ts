@@ -427,11 +427,11 @@ const addControls = (() => {
 
 		return (terms: MatchTerms, barControl: BarControl, hideWhenInactive: boolean) =>
 			create(barControl, ({
-				[BarControl.DISABLE_PAGE_RESEARCH]: {
+				[BarControl.DISABLE_TAB_RESEARCH]: {
 					label: "X",
 					containerId: ElementID.BAR_OPTIONS,	
 					onclick: () => browser.runtime.sendMessage({
-						disablePageResearch: true,
+						disableTabResearch: true,
 					} as BackgroundMessage),
 				},
 				[BarControl.PERFORM_SEARCH]: {
@@ -867,7 +867,7 @@ const insertHighlighting = (() => {
 		const controlsInfo: ControlsInfo = {
 			highlightsShown: false,
 			barControlsShown: {
-				disablePageResearch: true,
+				disableTabResearch: true,
 				performSearch: true,
 				appendTerm: true,
 			},

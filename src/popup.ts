@@ -1,11 +1,11 @@
-type OptionKey = "researchTogglePage" | "researchToggle" | "problemReportDescribe" | "problemReport"
+type ButtonKey = "researchTogglePage" | "researchToggle" | "problemReportDescribe" | "problemReport"
 
-enum OptionClass {
+enum ButtonClass {
 	TOGGLE = "toggle",
 	ENABLED = "enabled",
 }
 
-const optionKeyToId = (key: OptionKey) =>
+const buttonKeyToId = (key: ButtonKey) =>
 	Array.from(key).map(char => char === char.toLocaleLowerCase() ? char : `-${char.toLocaleLowerCase()}`).toString()
 ;
 
@@ -13,33 +13,33 @@ const optionKeyToId = (key: OptionKey) =>
 	const style = document.createElement("style");
 	style.textContent = `
 body { margin: 0; padding: 0; border: 0; }
-#${optionKeyToId("problemReportDescribe")} { display: grid; }
+#${buttonKeyToId("problemReportDescribe")} { display: grid; }
 body > div { display: grid; }
 button { background-color: hsl(0, 0%, 70%); text-align: left;
 	border-radius: 0; border-style: none; border-bottom-style: solid; border-color: black; border-width: 1px; }
 button:focus { outline-style: none; text-decoration: underline; }
 button:hover { background-color: hsl(0, 0%, 85%); }
 button:active { outline-style: none; background-color: hsl(0, 0%, 95%); }
-.${OptionClass.TOGGLE}.${OptionClass.ENABLED} { background-color: hsl(90, 100%, 60%); }
-.${OptionClass.TOGGLE}.${OptionClass.ENABLED}:hover { background-color: hsl(90, 100%, 75%); }
-.${OptionClass.TOGGLE}.${OptionClass.ENABLED}:active { background-color: hsl(90, 100%, 85%); }
-.${OptionClass.TOGGLE} { background-color: hsl(0, 100%, 75%); }
-.${OptionClass.TOGGLE}:hover { background-color: hsl(0, 100%, 85%); }
-.${OptionClass.TOGGLE}:active { background-color: hsl(0, 100%, 90%); }
+.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED} { background-color: hsl(90, 100%, 60%); }
+.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED}:hover { background-color: hsl(90, 100%, 75%); }
+.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED}:active { background-color: hsl(90, 100%, 85%); }
+.${ButtonClass.TOGGLE} { background-color: hsl(0, 100%, 75%); }
+.${ButtonClass.TOGGLE}:hover { background-color: hsl(0, 100%, 85%); }
+.${ButtonClass.TOGGLE}:active { background-color: hsl(0, 100%, 90%); }
 input:active { outline-style: none; display: inline-block; }`
 	;
 	document.head.appendChild(style);
 })();
 
-const container = document.createElement("div");
-document.body.appendChild(container);
-const optionsInfo: Record<OptionKey, { text: string, classes: Array<string> }> = {
+const popup = document.createElement("div");
+document.body.appendChild(popup);
+const buttonsInfo: Record<ButtonKey, { text: string, classes: Array<string> }> = {
 	researchTogglePage: {
 		text: "Enable/Disable in Tab",
 		classes: [],
 	}, researchToggle: {
 		text: "Mark My Search On/Off",
-		classes: [ OptionClass.TOGGLE ],
+		classes: [ ButtonClass.TOGGLE ],
 	}, problemReportDescribe: {
 		text: "Report a Problem",
 		classes: [],
@@ -48,22 +48,22 @@ const optionsInfo: Record<OptionKey, { text: string, classes: Array<string> }> =
 		classes: [],
 	},
 };
-const options: Record<OptionKey, HTMLButtonElement> = {
+const buttons: Record<ButtonKey, HTMLButtonElement> = {
 	researchTogglePage: undefined as unknown as HTMLButtonElement,
 	researchToggle: undefined as unknown as HTMLButtonElement,
 	problemReportDescribe: undefined as unknown as HTMLButtonElement,
 	problemReport: undefined as unknown as HTMLButtonElement,
 };
 
-Object.keys(optionsInfo).forEach((key: OptionKey) => {
+Object.keys(buttonsInfo).forEach((key: ButtonKey) => {
 	const button = document.createElement("button");
-	button.textContent = optionsInfo[key].text;
-	optionsInfo[key].classes.forEach(classEl => button.classList.add(classEl));
-	container.appendChild(button);
-	options[key] = button;
+	button.textContent = buttonsInfo[key].text;
+	buttonsInfo[key].classes.forEach(classEl => button.classList.add(classEl));
+	popup.appendChild(button);
+	buttons[key] = button;
 });
 
-const buttonArray = Object.values(options);
+const buttonArray = Object.values(buttons);
 
 const emailSend: (service: string, template: string,
 	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
@@ -71,10 +71,10 @@ const emailSend: (service: string, template: string,
 ;
 
 getStorageLocal(StorageLocal.ENABLED).then(local =>
-	local.enabled ? options.researchToggle.classList.add(OptionClass.ENABLED) : undefined
+	local.enabled ? buttons.researchToggle.classList.add(ButtonClass.ENABLED) : undefined
 );
 
-options.researchTogglePage.focus();
+buttons.researchTogglePage.focus();
 const focusNext = (idx: number, increment: (idx: number) => number) => {
 	idx = increment(idx);
 	buttonArray[idx].focus();
@@ -94,18 +94,18 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
-options.researchTogglePage.onclick = () =>
+buttons.researchTogglePage.onclick = () =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
 		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => (tab.id as number) in local.researchInstances
-			? browser.runtime.sendMessage({ disablePageResearch: true } as BackgroundMessage)
+			? browser.runtime.sendMessage({ disableTabResearch: true } as BackgroundMessage)
 			: browser.runtime.sendMessage({ terms: [], makeUnique: true, toggleHighlightsOn: true } as BackgroundMessage)
 		)
 	)
 ;
 
-options.researchToggle.onclick = () => {
-	const toggleResearchOn = !options.researchToggle.classList.contains(OptionClass.ENABLED);
-	options.researchToggle.classList[toggleResearchOn ? "add" : "remove"](OptionClass.ENABLED);
+buttons.researchToggle.onclick = () => {
+	const toggleResearchOn = !buttons.researchToggle.classList.contains(ButtonClass.ENABLED);
+	buttons.researchToggle.classList[toggleResearchOn ? "add" : "remove"](ButtonClass.ENABLED);
 	browser.runtime.sendMessage({ toggleResearchOn });
 };
 
@@ -115,28 +115,28 @@ const problemReport = (userMessage = "") => browser.tabs.query({ active: true, l
 			? local.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
 		focusNext(-1, idx => (idx + 1) % buttonArray.length);
-		options.problemReportDescribe.textContent = (options.problemReportDescribe.textContent as string)
+		buttons.problemReportDescribe.textContent = (buttons.problemReportDescribe.textContent as string)
 			.replace(/🆗|!/g, "").trimEnd();
-		options.problemReport.disabled = true;
-		options.problemReportDescribe.disabled = true;
+		buttons.problemReport.disabled = true;
+		buttons.problemReportDescribe.disabled = true;
 		emailSend("service_mms_report", "template_mms_report", {
 			mmsVersion: browser.runtime.getManifest().version,
 			url: tab.url,
 			phrases,
 			userMessage,
 		}, "NNElRuGiCXYr1E43j").then(() => {
-			options.problemReportDescribe.textContent += " 🆗";
+			buttons.problemReportDescribe.textContent += " 🆗";
 		}, (error: { status: number, text: string }) => {
-			options.problemReportDescribe.textContent += " !!";
-			options.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
+			buttons.problemReportDescribe.textContent += " !!";
+			buttons.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
 		}).then(() => {
-			options.problemReport.disabled = false;
-			options.problemReportDescribe.disabled = false;
+			buttons.problemReport.disabled = false;
+			buttons.problemReportDescribe.disabled = false;
 		});
 	})
 );
 
-options.problemReport.onclick = () =>
+buttons.problemReport.onclick = () =>
 	problemReport()
 ;
 
@@ -155,11 +155,11 @@ reportInput.onkeydown = event => {
 	}
 };
 
-options.problemReportDescribe.onclick = () => {
+buttons.problemReportDescribe.onclick = () => {
 	if (reportInput.parentElement) {
 		problemReport(reportInput.value);
 	} else {
-		options.problemReportDescribe.appendChild(reportInput);
+		buttons.problemReportDescribe.appendChild(reportInput);
 		reportInput.focus();
 	}
 };

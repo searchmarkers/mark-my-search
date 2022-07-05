@@ -16,7 +16,7 @@ type StorageSyncValues = {
 		overrideResearchPages: boolean
 	}
 	[StorageSync.BAR_CONTROLS_SHOWN]: {
-		[BarControl.DISABLE_PAGE_RESEARCH]: boolean
+		[BarControl.DISABLE_TAB_RESEARCH]: boolean
 		[BarControl.PERFORM_SEARCH]: boolean
 		[BarControl.APPEND_TERM]: boolean
 	}
@@ -44,9 +44,30 @@ interface ResearchInstance {
 	highlightsShown: boolean
 }
 
+const defaultOptions: StorageSyncValues = {
+	isSetUp: true,
+	stoplist: [
+		"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
+		"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
+		"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's"
+	],
+	linkResearchTabs: false,
+	showHighlights: {
+		default: true,
+		overrideSearchPages: true,
+		overrideResearchPages: false,
+	},
+	barControlsShown: {
+		disableTabResearch: true,
+		performSearch: true,
+		appendTerm: true,
+	},
+};
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageLocal = (items: StorageLocalValues) => {
 	if (Object.keys(items).includes(StorageLocal.RESEARCH_INSTANCES)) {
+		// TODO: disable object shallow copying when linking disabled in settings
 		const tabRInstances = items.researchInstances;
 		const tabs = Object.keys(tabRInstances);
 		const idRInstances: Array<ResearchInstance> = [];
@@ -68,9 +89,11 @@ const setStorageLocal = (items: StorageLocalValues) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageLocal = async (keysParam: string | Array<string>): Promise<StorageLocalValues> => {
-	const keys = typeof(keysParam) === "string" ? [ keysParam ] : Array.from(new Set(keysParam));
-	const gettingRInstances = keys.includes(StorageLocal.RESEARCH_INSTANCES);
+const getStorageLocal = async (keysParam?: StorageLocal | Array<StorageLocal>): Promise<StorageLocalValues> => {
+	const keys = keysParam === undefined
+		? undefined
+		: typeof(keysParam) === "string" ? [ keysParam ] : Array.from(new Set(keysParam));
+	const gettingRInstances = keys && keys.includes(StorageLocal.RESEARCH_INSTANCES);
 	if (gettingRInstances) {
 		keys.splice(keys.indexOf(StorageLocal.RESEARCH_INSTANCES), 1);
 		keys.push(StorageLocal._ID_R_INSTANCES);
@@ -100,7 +123,7 @@ const initStorageLocal = () => getStorageLocal(StorageLocal.ENABLED).then(local 
 	setStorageLocal({
 		enabled: local.enabled === undefined ? true : local.enabled,
 		researchInstances: {},
-		engines: {}
+		engines: {},
 	})
 );
 
@@ -109,7 +132,45 @@ const setStorageSync = (items: StorageSyncValues) => {
 	return browser.storage.sync.set(items);
 };
 
+// TODO: make generic function for sync and local
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageSync = (keysParam: string | Array<string>): Promise<StorageSyncValues> => {
+const getStorageSync = (keysParam?: StorageSync | Array<StorageSync>): Promise<StorageSyncValues> => {
 	return browser.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
 };
+
+const fixObjectWithDefaults = (
+	object: Record<string, unknown>,
+	defaults: Record<string, unknown>,
+	toRemove: Array<string>,
+	atTopLevel = false,
+) => {
+	Object.keys(object).forEach(objectKey => {
+		if (defaults[objectKey] === undefined) {
+			if (atTopLevel) {
+				toRemove.push(objectKey);
+			} else {
+				delete(object[objectKey]);
+			}
+		} else if (typeof(object[objectKey]) === "object" && Array.isArray(object[objectKey])) {
+			fixObjectWithDefaults(
+				object[objectKey] as Record<string, unknown>,
+				defaults[objectKey] as Record<string, unknown>,
+				toRemove,
+			);
+		}
+	});
+	Object.keys(defaults).forEach(defaultsKey => {
+		if (typeof(object[defaultsKey]) !== typeof(defaults[defaultsKey])
+			|| Array.isArray(object[defaultsKey]) !== Array.isArray(defaults[defaultsKey])) {
+			object[defaultsKey] = defaults[defaultsKey];
+		}
+	});
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const repairOptions = () => getStorageSync().then(sync => {
+	const toRemove = [];
+	fixObjectWithDefaults(sync, defaultOptions, toRemove, true);
+	setStorageSync(sync);
+	browser.storage.sync.remove(toRemove);
+});

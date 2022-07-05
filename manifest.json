@@ -32,6 +32,11 @@
 		"persistent": false
 	},
 
+	"options_ui": {
+		"page": "/pages/options.html",
+		"browser_style": true
+	},
+
 	"browser_action": {
 		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",

@@ -109,7 +109,7 @@ interface BackgroundMessage {
 	termChanged?: MatchTerm
 	termChangedIdx?: number
 	makeUnique?: boolean
-	disablePageResearch?: boolean
+	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean
 	performSearch?: boolean
@@ -160,7 +160,7 @@ const itemsMatchLoosely = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compa
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 enum BarControl {
-	DISABLE_PAGE_RESEARCH = "disablePageResearch",
+	DISABLE_TAB_RESEARCH = "disableTabResearch",
 	PERFORM_SEARCH = "performSearch",
 	APPEND_TERM = "appendTerm",
 }

@@ -149,25 +149,6 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	};
 
 	const setUp = () => {
-		setStorageSync({
-			isSetUp: true,
-			stoplist: [
-				"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
-				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-				"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's"
-			],
-			linkResearchTabs: false,
-			showHighlights: {
-				default: true,
-				overrideSearchPages: true,
-				overrideResearchPages: false,
-			},
-			barControlsShown: {
-				disablePageResearch: true,
-				performSearch: true,
-				appendTerm: true,
-			}
-		});
 		if (browser.commands.update) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			for (let i = 0; i < 10; i++) {
@@ -189,6 +170,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 		getStorageSync(StorageSync.IS_SET_UP).then(items =>
 			items.isSetUp ? undefined : setUp()
 		);
+		repairOptions();
 		initialize();
 	});
 
@@ -292,7 +274,7 @@ browser.commands.onCommand.addListener(commandString =>
 		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(async local => {
 			if (message.toggleResearchOn !== undefined) {
 				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues);
-			} else if (message.disablePageResearch) {
+			} else if (message.disableTabResearch) {
 				delete(local.researchInstances[senderTabId]);
 				browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 			} else if (message.performSearch) {
