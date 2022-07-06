@@ -333,14 +333,14 @@ const updateTermMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) 
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.TERM_MATCH_WHOLE));
 };
 
-const refreshTermControl = (term: MatchTerm, idx: number) => {
+const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: number) => {
 	const control = getTermControl(undefined, idx);
 	control.className = "";
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	updateTermMatchModeClassList(term.matchMode, control.classList);
 	const controlButton = control.getElementsByClassName(getSel(ElementClass.CONTROL_BUTTON))[0] as HTMLElement;
-	if (controlButton.firstChild)
-		controlButton.firstChild.textContent = term.phrase;
+	controlButton.onclick = () => jumpToTerm(highlightTags, false, term);
+	(controlButton.firstChild as Node).textContent = term.phrase;
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach((option) =>
 		option.textContent = getTermOptionText(
 			term.matchMode[getTermOptionMatchType(option.textContent as string, true)], (option.textContent as string)));
@@ -831,7 +831,7 @@ const insertHighlighting = (() => {
 					const idx = terms.length - 1;
 					insertTermControl(highlightTags, terms, idx, termCommands.down[idx], termCommands.up[idx]);
 				} else {
-					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx);
+					refreshTermControl(highlightTags, terms[termToUpdateIdx], termToUpdateIdx);
 				}
 			} else if (termsUpdate !== undefined) {
 				// TODO: retain colours?
