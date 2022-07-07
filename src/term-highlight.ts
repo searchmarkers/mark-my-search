@@ -1,11 +1,14 @@
 type BrowserCommands = Array<browser.commands.Command>
 type HighlightTags = Record<string, RegExp>
+type TermHues = ReadonlyArray<number>
 type ButtonInfo = {
 	label: string
 	containerId: ElementID
 	onclick?: () => void
 	setUp?: (button: HTMLButtonElement) => void
 }
+
+// repeating-linear-gradient(-45deg, hsla(300, 100%, 95%, 0.4), hsla(300, 100%, 95%, 0.4) 6px, hsla(300, 100%, 60%, 0.4) 6px, hsla(300, 100%, 60%, 0.4) 8px)
 
 enum ElementClass {
 	HIGHLIGHTS_SHOWN = "highlights-shown",
@@ -54,11 +57,10 @@ if (browser) {
 	self["chrome" as string] = browser;
 }
 
-const getSel = (element: ElementID | ElementClass, param?: string | number) =>
-	[ "markmysearch", element, param ].join("-").slice(0, param ? undefined : -1)
+// Get a selector used for element identification / classification / styling. Shortened due to prolific use.
+const getSel = (identifier: ElementID | ElementClass, argument?: string | number) =>
+	argument ? `markmysearch-${identifier}-${argument}` : `markmysearch-${identifier}`
 ;
-
-const TERM_HUES: ReadonlyArray<number> = [ 60, 300, 110, 220, 0, 190, 30 ];
 
 const jumpToTerm = (() => {
 	const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
@@ -274,16 +276,20 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 	;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
+		const getBackgroundStyle = (colorA: string, colorB: string) =>
+			i < hues.length ? colorA : `repeating-linear-gradient(-45deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`;
 		style.textContent += `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 	~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 	#${getSel(ElementID.BAR)}
 	~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
-	{ background-color: hsla(${hue}, 100%, 60%, 0.4); }
+	{ background: ${getBackgroundStyle(`hsla(${hue}, 100%, 60%, 0.4)`, `hsla(${hue}, 100%, 90%, 0.4)`)} !important;
+	border-radius: 2px !important; box-shadow: 0 0 0 1px hsla(${hue}, 100%, 20%, 0.35) !important; }
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)} {
 	background-color: hsl(${hue}, 100%, 50%); }
 #${getSel(ElementID.BAR_TERMS)} > .${getSel(ElementClass.TERM, term.selector)}
-	> .${getSel(ElementClass.CONTROL_BUTTON)} { background-color: hsl(${hue}, 50%, 60%); }
+	> .${getSel(ElementClass.CONTROL_BUTTON)} {
+	background: ${getBackgroundStyle(`hsla(${hue}, 70%, 70%, 0.8)`, `hsla(${hue}, 70%, 90%, 0.8)`)}; }
 #${getSel(ElementID.BAR_TERMS)} > .${getSel(ElementClass.TERM, term.selector)}
 	> .${getSel(ElementClass.CONTROL_BUTTON)}:hover { background-color: hsl(${hue}, 70%, 70%); }
 #${getSel(ElementID.BAR_TERMS)} > .${getSel(ElementClass.TERM, term.selector)}
@@ -451,8 +457,8 @@ const addControls = (() => {
 	})();
 
 	return (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-		style: HTMLElement, controlsInfo: ControlsInfo) => {
-		insertStyle(terms, style, TERM_HUES);
+		style: HTMLElement, controlsInfo: ControlsInfo, hues: TermHues) => {
+		insertStyle(terms, style, hues);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
 		if (controlsInfo.highlightsShown) {
@@ -814,15 +820,17 @@ const insertHighlighting = (() => {
 	// TODO: configuration
 	const refreshTermControls = (() => {
 		const insertInterface = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-			style: HTMLElement, controlsInfo: ControlsInfo) => {
+			style: HTMLElement, controlsInfo: ControlsInfo, hues: TermHues) => {
 			removeControls();
-			addControls(highlightTags, commands, terms, style, controlsInfo);
+			addControls(highlightTags, commands, terms, style, controlsInfo, hues);
 		};
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
 			observer: MutationObserver, selectTermPtr: FnProcessCommand, termsFromSelection: boolean, disable: boolean,
-			controlsInfo: ControlsInfo, termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
-			if (termsUpdate !== undefined && termToUpdateIdx !== undefined && termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
+			controlsInfo: ControlsInfo, hues: TermHues,
+			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
+			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
+				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
 				terms.splice(0);
 				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
@@ -837,13 +845,13 @@ const insertHighlighting = (() => {
 				// TODO: retain colours?
 				terms.splice(0);
 				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-				insertInterface(highlightTags, commands, terms, style, controlsInfo);
+				insertInterface(highlightTags, commands, terms, style, controlsInfo, hues);
 			} else if (!disable && !termsFromSelection) {
 				return;
 			}
 			if (!disable) {
 				// TODO: only insert style if controls exist
-				insertStyle(terms, style, TERM_HUES);
+				insertStyle(terms, style, hues);
 			}
 			// Timeout seems to reduce freezing impact (by causing threading?)
 			setTimeout(() => insertHighlighting(highlightTags, terms, disable, termsFromSelection, selectTermPtr, observer));
@@ -864,6 +872,7 @@ const insertHighlighting = (() => {
 		const commands: BrowserCommands = [];
 		const processCommand: FnProcessCommand = { call: command => { command; } };
 		const terms: MatchTerms = [];
+		const hues: TermHues = [ 60, 300, 110, 220, 0, 190, 30 ];
 		const controlsInfo: ControlsInfo = {
 			highlightsShown: false,
 			barControlsShown: {
@@ -900,8 +909,8 @@ const insertHighlighting = (() => {
 				|| (!terms.length && !document.getElementById(ElementID.BAR))))) {
 				refreshTermControls(
 					highlightTags, terms, commands, style, observer, processCommand,
-					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo,
-					message.terms, message.termUpdate, message.termToUpdateIdx
+					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo, hues,
+					message.terms, message.termUpdate, message.termToUpdateIdx,
 				);
 			}
 			// TODO: improve handling of highlight setting
