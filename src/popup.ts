@@ -1,11 +1,16 @@
-type ButtonKey = "researchTogglePage" | "researchToggle" | "problemReportDescribe" | "problemReport"
+enum ButtonKey {
+	RESEARCH_TOGGLE_PAGE = "researchTogglePage",
+	RESEARCH_TOGGLE = "researchToggle",
+	PROBLEM_REPORT_DESCRIBE = "problemReportDescribe",
+	PROBLEM_REPORT = "problemReport",
+}
 
 enum ButtonClass {
 	TOGGLE = "toggle",
 	ENABLED = "enabled",
 }
 
-const buttonKeyToId = (key: ButtonKey) =>
+const keyToSelector = (key: string) =>
 	Array.from(key).map(char => char === char.toLocaleLowerCase() ? char : `-${char.toLocaleLowerCase()}`).toString()
 ;
 
@@ -13,7 +18,7 @@ const buttonKeyToId = (key: ButtonKey) =>
 	const style = document.createElement("style");
 	style.textContent = `
 body { margin: 0; padding: 0; border: 0; }
-#${buttonKeyToId("problemReportDescribe")} { display: grid; }
+#${keyToSelector(ButtonKey.PROBLEM_REPORT_DESCRIBE)} { display: grid; }
 body > div { display: grid; }
 button { background-color: hsl(0, 0%, 70%); text-align: left;
 	border-radius: 0; border-style: none; border-bottom-style: solid; border-color: black; border-width: 1px; }
@@ -48,20 +53,18 @@ const buttonsInfo: Record<ButtonKey, { text: string, classes: Array<string> }> =
 		classes: [],
 	},
 };
-const buttons: Record<ButtonKey, HTMLButtonElement> = {
-	researchTogglePage: undefined as unknown as HTMLButtonElement,
-	researchToggle: undefined as unknown as HTMLButtonElement,
-	problemReportDescribe: undefined as unknown as HTMLButtonElement,
-	problemReport: undefined as unknown as HTMLButtonElement,
-};
 
-Object.keys(buttonsInfo).forEach((key: ButtonKey) => {
-	const button = document.createElement("button");
-	button.textContent = buttonsInfo[key].text;
-	buttonsInfo[key].classes.forEach(classEl => button.classList.add(classEl));
-	popup.appendChild(button);
-	buttons[key] = button;
-});
+const buttons: Record<ButtonKey, HTMLButtonElement> = (() => {
+	const buttons: Record<string, HTMLButtonElement> = {};
+	Object.keys(buttonsInfo).forEach((key: ButtonKey) => {
+		const button = document.createElement("button");
+		button.textContent = buttonsInfo[key].text;
+		buttonsInfo[key].classes.forEach(classEl => button.classList.add(classEl));
+		popup.appendChild(button);
+		buttons[key] = button;
+	});
+	return buttons;
+})();
 
 const buttonArray = Object.values(buttons);
 
@@ -96,7 +99,7 @@ buttonArray.forEach((button, i) => {
 
 buttons.researchTogglePage.onclick = () =>
 	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
-		getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => (tab.id as number) in local.researchInstances
+		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => (tab.id as number) in session.researchInstances
 			? browser.runtime.sendMessage({ disableTabResearch: true } as BackgroundMessage)
 			: browser.runtime.sendMessage({ terms: [], makeUnique: true, toggleHighlightsOn: true } as BackgroundMessage)
 		)
@@ -110,9 +113,9 @@ buttons.researchToggle.onclick = () => {
 };
 
 const problemReport = (userMessage = "") => browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
-	tab.id === undefined ? undefined : getStorageLocal(StorageLocal.RESEARCH_INSTANCES).then(local => {
-		const phrases = local.researchInstances[tab.id ?? -1]
-			? local.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+	tab.id === undefined ? undefined : getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => {
+		const phrases = session.researchInstances[tab.id ?? -1]
+			? session.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
 		focusNext(-1, idx => (idx + 1) % buttonArray.length);
 		buttons.problemReportDescribe.textContent = (buttons.problemReportDescribe.textContent as string)

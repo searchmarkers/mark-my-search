@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.1.2",
+	"version": "1.1.4",
 
 	"browser_specific_settings": {
 		"gecko": {
@@ -44,13 +44,13 @@
 	},
 
 	"commands": {
-		"enable-research-tab": {
+		"toggle-research-tab": {
 			"suggested_key": { "default": "Alt+Shift+M" },
-			"description": "Enable in current tab"
+			"description": "Toggle in current tab"
 		},
 		"toggle-research-global": {
 			"suggested_key": { "default": "Alt+Shift+J" },
-			"description": "Enable in current tab"
+			"description": "Toggle automatic activation when searching"
 		},
 		"toggle-bar": {
 			"suggested_key": { "default": "Ctrl+Shift+F" },

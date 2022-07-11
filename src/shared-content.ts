@@ -101,6 +101,7 @@ interface HighlightMessage {
 	termsFromSelection?: boolean
 	toggleHighlightsOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
+	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -117,7 +118,7 @@ interface BackgroundMessage {
 
 enum CommandType {
 	NONE,
-	ENABLE_IN_TAB,
+	TOGGLE_IN_TAB,
 	TOGGLE_ENABLED,
 	TOGGLE_BAR,
 	TOGGLE_HIGHLIGHTS,
@@ -136,18 +137,14 @@ interface CommandInfo {
 const parseCommand = (commandString: string): CommandInfo => {
 	const parts = commandString.split("-");
 	switch (parts[0]) {
-	case "enable": {
-		switch (parts[1]) {
-		case "research": {
-			return { type: CommandType.ENABLE_IN_TAB };
-		}}
-		break;
-	} case "toggle": {
+	case "toggle": {
 		switch (parts[1]) {
 		case "research": {
 			switch (parts[2]) {
 			case "global": {
 				return { type: CommandType.TOGGLE_ENABLED };
+			} case "tab": {
+				return { type: CommandType.TOGGLE_IN_TAB };
 			}}
 			break;
 		} case "bar": {
@@ -183,4 +180,9 @@ enum BarControl {
 	DISABLE_TAB_RESEARCH = "disableTabResearch",
 	PERFORM_SEARCH = "performSearch",
 	APPEND_TERM = "appendTerm",
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+enum BarLook {
+	SHOW_EDIT_ICON = "showEditIcon",
 }

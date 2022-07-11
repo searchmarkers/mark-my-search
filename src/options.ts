@@ -69,6 +69,15 @@ const optionsInfo: Array<{
 					},
 				},
 			},
+			[StorageSync.BAR_LOOK]: {
+				label: "What the look of the toolbar is",
+				preferences: {
+					[BarLook.SHOW_EDIT_ICON]: {
+						label: "Show a pen icon in buttons with editable text",
+						type: PreferenceType.BOOLEAN,
+					},
+				},
+			},
 			[StorageSync.SHOW_HIGHLIGHTS]: {
 				label: "When to make highlights visible automatically",
 				preferences: {
