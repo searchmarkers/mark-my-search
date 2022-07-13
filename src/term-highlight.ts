@@ -8,6 +8,10 @@ type ButtonInfo = {
 	setUp?: (button: HTMLButtonElement) => void
 }
 
+enum Keyframes {
+	FLASH = "flash",
+}
+
 enum ElementClass {
 	HIGHLIGHTS_SHOWN = "highlights-shown",
 	BAR_HIDDEN = "bar-hidden",
@@ -29,6 +33,9 @@ enum ElementClass {
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
 	MATCH_WHOLE = "match-whole",
+	PRIMARY = "primary",
+	SECONDARY = "secondary",
+	OVERRIDE_VISIBILITY = "override-visibility",
 }
 
 enum ElementID {
@@ -60,7 +67,7 @@ if (browser) {
 }
 
 // Get a selector used for element identification / classification / styling. Shortened due to prolific use.
-const getSel = (identifier: ElementID | ElementClass, argument?: string | number) =>
+const getSel = (identifier: ElementID | ElementClass | Keyframes, argument?: string | number) =>
 	argument ? `markmysearch-${identifier}-${argument}` : `markmysearch-${identifier}`
 ;
 
@@ -162,7 +169,7 @@ const jumpToTerm = (() => {
 
 const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number) => {
 	const controlContent = controlPad
-		.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] ?? controlPad;
+		.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement ?? controlPad;
 	const controlEdit = controlPad
 		.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement | undefined;
 	const term = terms[idx];
@@ -179,34 +186,33 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 	const hide = () => {
 		termInput.disabled = true;
 	};
-	const hideAndCommit = () => {
-		if (termInput.disabled)
-			return;
+	const hideAndCommit = (inputValue?: string) => {
 		hide();
 		let message: BackgroundMessage | null = null;
+		inputValue = inputValue ?? termInput.value;
 		// TODO: clean up following code and associated handling
 		if (replaces) {
 			const termsUpdate: MatchTerms = [];
 			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
-			if (termInput.value === "") {
+			if (inputValue === "") {
 				termsUpdate.splice(idx, 1);
 				message = {
 					terms: termsUpdate,
 					termChanged: term,
 					termChangedIdx: TermChange.REMOVE,
 				};
-			} else if (termInput.value !== term.phrase) {
-				termsUpdate[idx] = new MatchTerm(termInput.value, term.matchMode);
+			} else if (inputValue !== term.phrase) {
+				termsUpdate[idx] = new MatchTerm(inputValue, term.matchMode);
 				message = {
 					terms: termsUpdate,
 					termChanged: termsUpdate[idx],
 					termChangedIdx: idx,
 				};
 			}
-		} else if (termInput.value !== "") {
+		} else if (inputValue !== "") {
 			const termsUpdate: MatchTerms = [];
 			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
-			termsUpdate.push(new MatchTerm(termInput.value));
+			termsUpdate.push(new MatchTerm(inputValue));
 			message = {
 				terms: termsUpdate,
 				termChanged: termsUpdate.at(-1),
@@ -218,40 +224,84 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 		}
 	};
 	if (controlEdit) {
-		controlEdit.onclick = show;
-		controlEdit.oncontextmenu = controlEdit.onclick;
-		controlPad.oncontextmenu = controlEdit.onclick;
+		controlEdit.onclick = event => termInput.disabled ? show(event) : hideAndCommit("");
+		controlEdit.oncontextmenu = event => {
+			event.preventDefault();
+			hideAndCommit("");
+		};
+		controlContent.oncontextmenu = show;
 	} else if (!replaces) {
 		controlPad.onclick = show;
 		controlPad.oncontextmenu = controlPad.onclick;
 	}
-	termInput.onblur = hideAndCommit;
-	termInput.onkeydown = event => event.key === "Enter" ? hideAndCommit() : event.key === "Escape" ? hide() : undefined;
+	(new ResizeObserver(entries =>
+		entries.forEach(entry =>
+			entry.contentRect.width === 0 && !termInput.disabled ? hideAndCommit() : undefined
+		)
+	)).observe(termInput);
+	termInput.onkeydown = event => {
+		if (event.key === "Enter") {
+			hideAndCommit();
+		} else if (event.key === "Escape") {
+			hide();
+		} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+			const shiftLeft = event.key.includes("Left");
+			if ((shiftLeft && idx === 0)
+				|| (!shiftLeft && !replaces)
+				|| termInput.selectionStart !== termInput.selectionEnd
+				|| termInput.selectionStart !== (shiftLeft ? 0 : termInput.value.length)) {
+				return;
+			}
+			const activateInput = (button: HTMLElement, inputField: HTMLElement) => {
+				inputField.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				button.click();
+				inputField.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
+			};
+			if (!shiftLeft && idx === terms.length - 1) {
+				const appendTerm = (document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
+					.firstElementChild as HTMLElement;
+				activateInput(appendTerm, appendTerm.querySelector("input") as HTMLElement);
+				return;
+			}
+			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
+			const control = bar.getElementsByClassName(getSel(ElementClass.TERM, terms[replaces
+				? shiftLeft ? idx-1 : idx+1
+				: terms.length - 1].selector))[0];
+			activateInput(
+				control.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement,
+				control.querySelector("input") as HTMLElement,
+			);
+		}
+	};
 	return termInput;
 };
 
 const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<number>) => {
 	const zIndexMax = 2147483647;
 	style.textContent = `
-@keyframes flash
+@keyframes ${getSel(Keyframes.FLASH)}
 	{ 0% { background-color: hsla(0, 0%, 65%, 0.8); } 100% {}; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
-	{ animation-name: flash; animation-duration: 1s; }
+	{ animation-name: ${getSel(Keyframes.FLASH)}; animation-duration: 1s; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
 + .${getSel(ElementClass.OPTION_LIST)}
-	{ all: revert; position: absolute; display: grid; top: 17px; left: -40px; z-index: 1; }
+	{ all: revert; position: absolute; display: grid; left: -40px; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)},
-.${getSel(ElementClass.CONTROL_PAD)}:hover,
-.${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:hover,
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
 	{ all: revert; display: inline-block; color: #111; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; }
 .${getSel(ElementClass.CONTROL_PAD)} button
 	{ background: transparent; border: none; padding-inline: 0; font: revert; line-height: 120%; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)},
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
 	{ padding-inline: 2px; padding-block: 1px; border: inherit; border-radius: inherit; }
-.${getSel(ElementClass.CONTROL_PAD)} input:focus + .${getSel(ElementClass.CONTROL_EDIT)}:disabled
-	{ display: inline; }
+.${getSel(ElementClass.CONTROL_PAD)} input:not(:disabled) + .${getSel(ElementClass.CONTROL_EDIT)}
+.${getSel(ElementClass.PRIMARY)}
+	{ display: none; }
+.${getSel(ElementClass.CONTROL_PAD)} input:disabled + .${getSel(ElementClass.CONTROL_EDIT)}
+.${getSel(ElementClass.SECONDARY)}
+	{ display: none; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 4px; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_CASE)} .${getSel(ElementClass.CONTROL_CONTENT)}
@@ -262,7 +312,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px !important; border-inline: 2px solid hsla(0, 0%, 0%, 0.4); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ background: hsl(0, 0%, 80%); font-weight: bold; }
+	{ background: hsl(0, 0%, 80%); line-height: 120%; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} span
 	{ filter: grayscale(100%) contrast(10000%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
@@ -270,8 +320,12 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
 	{ all: revert; padding-block: 0; margin-left: 4px; border-style: none; width: 100px; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:disabled,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:not(:hover)
+input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:disabled,
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}:not(:hover)
+input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input:disabled
 	{ display: none; }
 #${getSel(ElementID.BAR_TERMS)} > span
@@ -441,7 +495,14 @@ const insertTermControl = (() => {
 			controlEdit.disabled = true;
 		}
 		controlEdit.tabIndex = -1;
-		controlEdit.textContent = " 🖉";
+		const controlEditChange = document.createElement("span");
+		const controlEditRemove = document.createElement("span");
+		controlEditChange.textContent = "🖉";
+		controlEditRemove.textContent = " ☓ ";
+		controlEditChange.classList.add(getSel(ElementClass.PRIMARY));
+		controlEditRemove.classList.add(getSel(ElementClass.SECONDARY));
+		controlEdit.appendChild(controlEditChange);
+		controlEdit.appendChild(controlEditRemove);
 		controlPad.appendChild(controlEdit);
 		const termInput = createTermInput(terms, controlPad, idx);
 		controlPad.insertBefore(termInput, controlEdit);
@@ -481,7 +542,7 @@ const addControls = (() => {
 	const createButton = (() => {
 		const create = (id: BarControl, info: ButtonInfo, hideWhenInactive: boolean) => {
 			const button = document.createElement("button"); // TODO: find how vscode knows the type produced by the argument
-			button.classList.add(getSel(ElementClass.BAR_CONTROL));
+			button.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant, use CSS to select class containing this
 			button.classList.add(getSel(ElementClass.BAR_CONTROL, id));
 			const text = document.createElement("span");
 			text.tabIndex = -1;
@@ -501,7 +562,7 @@ const addControls = (() => {
 		return (terms: MatchTerms, barControl: BarControl, hideWhenInactive: boolean) =>
 			create(barControl, ({
 				[BarControl.DISABLE_TAB_RESEARCH]: {
-					label: "X",
+					label: "☓",
 					containerId: ElementID.BAR_OPTIONS,	
 					onclick: () => browser.runtime.sendMessage({
 						disableTabResearch: true,
@@ -515,7 +576,7 @@ const addControls = (() => {
 					} as BackgroundMessage),
 				},
 				[BarControl.APPEND_TERM]: {
-					label: "+",
+					label: "🞣",
 					containerId: ElementID.BAR_CONTROLS,
 					setUp: button => {
 						const termInput = createTermInput(terms, button, TermChange.CREATE);
@@ -786,11 +847,9 @@ const purgeClass = (className: string) =>
 	Array.from(document.getElementsByClassName(className)).forEach(element => element.classList.remove(className))
 ;
 
-const restoreNodes = () => {
-	const highlights = document.body.getElementsByTagName("mms-h");
-	if (!highlights.length)
-		return;
-	Array.from(highlights).forEach(element => {
+const restoreNodes = (className?: string) => {
+	const highlights = document.body.querySelectorAll(className ? `mms-h.${className}` : "mms-h");
+	highlights.forEach(element => {
 		element.childNodes.forEach(childNode =>
 			element.parentNode ? element.parentNode.insertBefore(childNode, element) : undefined
 		);
@@ -901,7 +960,9 @@ const insertHighlighting = (() => {
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
 			observer: MutationObserver, selectTermPtr: FnProcessCommand, termsFromSelection: boolean, disable: boolean,
 			controlsInfo: ControlsInfo, hues: TermHues,
-			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number) => {
+			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number
+		) => {
+			const termsToHighlight: MatchTerms = [];
 			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
 				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
@@ -917,6 +978,11 @@ const insertHighlighting = (() => {
 					term.compile();
 					refreshTermControl(highlightTags, terms[termToUpdateIdx], termToUpdateIdx);
 				}
+			} else if (termsUpdate !== undefined
+				&& termToUpdateIdx === TermChange.REMOVE && itemsMatchLoosely(terms.slice(0, -2), termsUpdate)) {
+				restoreNodes(getSel(ElementClass.TERM, (terms.at(-1) as MatchTerm).selector));
+				terms.splice(-1, 1);
+				return;
 			} else if (termsUpdate !== undefined) {
 				// TODO: retain colours?
 				terms.splice(0);
@@ -930,7 +996,10 @@ const insertHighlighting = (() => {
 				insertStyle(terms, style, hues);
 			}
 			// Timeout seems to reduce freezing impact (by causing threading?)
-			setTimeout(() => insertHighlighting(highlightTags, terms, disable, termsFromSelection, selectTermPtr, observer));
+			setTimeout(() => insertHighlighting(
+				highlightTags, termsToHighlight.length ? termsToHighlight : terms,
+				disable, termsFromSelection, selectTermPtr, observer
+			));
 		};
 	})();
 

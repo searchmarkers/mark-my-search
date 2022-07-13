@@ -115,8 +115,8 @@ const getStorageSession = async (keysParam?: StorageSession | Array<StorageSessi
 	if (gettingRInstances) {
 		const idRInstances = session[StorageSession._ID_R_INSTANCES];
 		const tabRInstanceIds = session[StorageSession._TAB_R_INSTANCE_IDS];
-		delete(session[StorageSession._ID_R_INSTANCES]);
-		delete(session[StorageSession._TAB_R_INSTANCE_IDS]);
+		delete session[StorageSession._ID_R_INSTANCES];
+		delete session[StorageSession._TAB_R_INSTANCE_IDS];
 		const tabRInstances = {};
 		Object.keys(tabRInstanceIds).forEach(tab => {
 			tabRInstances[tab] = idRInstances[tabRInstanceIds[tab]];
@@ -156,7 +156,7 @@ const getStorageSync = (keysParam?: StorageSync | Array<StorageSync>): Promise<S
 const initStorage = async () => {
 	const local = await getStorageLocal(StorageLocal.ENABLED);
 	await setStorageLocal({
-		enabled: local.enabled === undefined ? true : local.enabled,
+		enabled: local.enabled ?? true,
 	});
 	await setStorageSession({
 		researchInstances: {},
@@ -175,7 +175,7 @@ const fixObjectWithDefaults = (
 			if (atTopLevel) {
 				toRemove.push(objectKey);
 			} else {
-				delete(object[objectKey]);
+				delete object[objectKey];
 			}
 		} else if (typeof(object[objectKey]) === "object" && Array.isArray(object[objectKey])) {
 			fixObjectWithDefaults(

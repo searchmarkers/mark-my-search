@@ -78,7 +78,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	const updateEngine = (engines: Engines, id: string, urlPatternString: string) => {
 		if (!urlPatternString) return;
 		if (!urlPatternString.includes("%s")) {
-			delete(engines[id]);
+			delete engines[id];
 			return;
 		}
 		const engine = new Engine({ urlPatternString });
@@ -108,7 +108,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 		browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
 			getStorageSession(StorageSession.ENGINES).then(session => {
 				setEngines(
-					session.engines, node => delete(session.engines[node.id]), removeInfo.node
+					session.engines, node => delete session.engines[node.id], removeInfo.node
 				);
 				setStorageSession({ engines: session.engines } as StorageSessionValues);
 			})
@@ -149,7 +149,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		return (() => {
 			browser.contextMenus.removeAll();
 			browser.contextMenus.create({
-				title: "Researc&h Selection",
+				title: "&Highlight Selection",
 				id: getMenuSwitchId(),
 				contexts: [ "selection", "page" ],
 			});
@@ -268,7 +268,7 @@ browser.commands.onCommand.addListener(commandString =>
 				const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
 				if (isTabResearchPage(session.researchInstances, tab.id as number)) {
 					// TODO: make this a function
-					delete(session.researchInstances[tab.id as number]);
+					delete session.researchInstances[tab.id as number];
 					browser.tabs.sendMessage(tab.id as number, { disable: true } as HighlightMessage);
 				} else {
 					await createResearchInstance({ terms: [] }).then(researchInstance => {
@@ -298,7 +298,7 @@ browser.commands.onCommand.addListener(commandString =>
 				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
 					.then(() => updateActionIcon(message.toggleResearchOn));
 			} else if (message.disableTabResearch) {
-				delete(session.researchInstances[senderTabId]);
+				delete session.researchInstances[senderTabId];
 				browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 			} else if (message.performSearch) {
 				browser.search.search({
