@@ -1,8 +1,8 @@
 {
 	"manifest_version": 2,
 	"name": "Mark My Search",
-	"description": "Focus your research. Find what you searched for.\nHighlights your query on any engine, for any website you visit.",
-	"version": "1.1.5",
+	"description": "Find what you searched for anywhere on the web. Focus your research and find areas of interest with this intuitive instant word highlighter.",
+	"version": "1.2.0",
 
 	"browser_specific_settings": {
 		"gecko": {

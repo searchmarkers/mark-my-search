@@ -7,6 +7,7 @@ type ButtonInfo = {
 	onclick?: () => void
 	setUp?: (button: HTMLButtonElement) => void
 }
+type RequestRefreshMarkers = Generator<undefined, never, unknown>
 
 enum Keyframes {
 	FLASH = "flash",
@@ -66,18 +67,18 @@ if (browser) {
 	self["chrome" as string] = browser;
 }
 
-// Get a selector used for element identification / classification / styling. Shortened due to prolific use.
+// Get a selector for element identification / classification / styling. Abbreviated due to prolific use.
 const getSel = (identifier: ElementID | ElementClass | Keyframes, argument?: string | number) =>
 	argument ? `markmysearch-${identifier}-${argument}` : `markmysearch-${identifier}`
 ;
 
-const jumpToTerm = (() => {
-	const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-		highlightTags.flow.test(element.tagName) && element.parentElement
-			? getContainerBlock(highlightTags, element.parentElement)
-			: element
-	;
+const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
+	highlightTags.flow.test(element.tagName) && element.parentElement
+		? getContainerBlock(highlightTags, element.parentElement)
+		: element
+;
 
+const jumpToTerm = (() => {
 	const isVisible = (element: HTMLElement) => // TODO: improve
 		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
 		&& getComputedStyle(element).visibility !== "hidden"
@@ -112,8 +113,10 @@ const jumpToTerm = (() => {
 			: undefined;
 		const acceptInAnchorContainer = { value: false };
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element.tagName === "MMS-H" && (termSelector ? element.classList.contains(termSelector) : true) && isVisible(element)
-				&& (getContainerBlock(highlightTags, element) !== anchorContainer || acceptInAnchorContainer.value)
+			element.tagName === "MMS-H"
+			&& (termSelector ? element.classList.contains(termSelector) : true)
+			&& isVisible(element)
+			&& (getContainerBlock(highlightTags, element) !== anchorContainer || acceptInAnchorContainer.value)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
 		walk.currentNode = anchor ? anchor : document.body;
@@ -271,6 +274,13 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 				control.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement,
 				control.querySelector("input") as HTMLElement,
 			);
+		} else if (event.key === " ") {
+			// Pressing space unaccountably clears the input for the term-append button, workaround is a custom implementation.
+			event.preventDefault();
+			const selectionStart = termInput.selectionStart ?? -1;
+			termInput.value = `${termInput.value.slice(0, selectionStart)} ${termInput.value.slice(termInput.selectionEnd ?? -1)}`;
+			termInput.selectionStart = selectionStart + 1;
+			termInput.selectionEnd = selectionStart + 1;
 		}
 	};
 	return termInput;
@@ -290,12 +300,14 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:hover,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ all: revert; display: inline-block; color: #111; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; }
+	{ all: revert; display: inline-block; color: #000 !important; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px;
+	display: inline-flex; align-items: center; }
 .${getSel(ElementClass.CONTROL_PAD)} button
-	{ background: transparent; border: none; padding-inline: 0; font: revert; line-height: 120%; }
+	{ background: transparent; border: none; padding-inline: 0; margin-block: 0; font: revert; line-height: 120%;
+	vertical-align: initial; color: #000 !important; cursor: initial; height: fit-content; letter-spacing: normal; transition: unset; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)},
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
-	{ padding-inline: 2px; padding-block: 1px; border: inherit; border-radius: inherit; }
+	{ padding: 1px 2px 1px 2px !important; padding-block: 1px; border: inherit; border-radius: inherit; text-transform: revert; }
 .${getSel(ElementClass.CONTROL_PAD)} input:not(:disabled) + .${getSel(ElementClass.CONTROL_EDIT)}
 .${getSel(ElementClass.PRIMARY)}
 	{ display: none; }
@@ -312,14 +324,15 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px !important; border-inline: 2px solid hsla(0, 0%, 0%, 0.4); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ background: hsl(0, 0%, 80%); line-height: 120%; }
+	{ background: hsl(0, 0%, 80%) !important; line-height: 120%; padding: revert !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} span
 	{ filter: grayscale(100%) contrast(10000%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ background: hsla(0, 0%, 80%, 0.6) !important; color: #111; }
+	{ background: hsla(0, 0%, 80%, 0.6) !important; color: #000; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
-	{ all: revert; padding-block: 0; margin-left: 4px; border-style: none; width: 100px; }
+	{ all: revert; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; width: 100px; line-height: 120%;
+	box-sizing: unset !important; font-family: revert !important; color: #000 !important; height: fit-content; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:not(:hover)
 input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
@@ -342,15 +355,16 @@ input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
 	{ all: revert; display: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ all: revert; margin-left: 3px; background: hsl(0, 0%, 75%); filter: grayscale(100%); line-height: 120%; text-align: left;
-	border-color: hsl(0, 0%, 50%); border-bottom-width: 1px;
-	border-style: none; border-bottom-style: solid; border-left-style: solid; }
+	{ all: revert; margin-left: 3px; background: hsl(0, 0%, 75%) !important; filter: grayscale(100%);
+	line-height: 120%; text-align: left; color: #111 !important;
+	border-color: hsl(0, 0%, 50%) !important; border-bottom-width: 1px !important;
+	border-style: none none solid solid !important; width: max-content; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
-	{ background: hsl(0, 0%, 90%); }
+	{ background: hsl(0, 0%, 90%) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}:hover
-	{ background: hsl(0, 0%, 65%); }
+	{ background: hsl(0, 0%, 65%) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}:active
-	{ background: hsl(0, 0%, 50%); }
+	{ background: hsl(0, 0%, 50%) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.DISABLED)}:not(:active)
 	{ display: none; }
 #${getSel(ElementID.BAR)}
@@ -358,9 +372,9 @@ input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
 #${getSel(ElementID.BAR)}:not(.${getSel(ElementClass.BAR_HIDDEN)})
 	{ display: inline; }
 #${getSel(ElementID.MARKER_GUTTER)}
-	{ z-index: ${zIndexMax}; display: block; right: 0; top: 0; width: 12px; height: 100%; margin-left: -4px; }
+	{ z-index: ${zIndexMax}; display: block; right: 0; top: 0; width: 12px; height: 100%; }
 #${getSel(ElementID.MARKER_GUTTER)} div:not(.${getSel(ElementClass.MARKER_BLOCK)})
-	{ width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; }
+	{ width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; border-left: solid black 1px; box-sizing: unset; }
 #${getSel(ElementID.MARKER_GUTTER)}, .${getSel(ElementClass.MARKER_BLOCK)}
 	{ position: fixed; background: linear-gradient(to right, transparent, hsla(0, 0%, 0%, 0.7) 70%); }
 .${getSel(ElementClass.MARKER_BLOCK)}
@@ -530,10 +544,12 @@ const getTermCommands = (commands: BrowserCommands) => {
 	}));
 	return {
 		down: commandsDetail
-			.filter(commandDetail => commandDetail.info.type === CommandType.SELECT_TERM && !commandDetail.info.reversed)
+			.filter(commandDetail =>
+				commandDetail.info.type === CommandType.SELECT_TERM && !commandDetail.info.reversed)
 			.map(commandDetail => commandDetail.shortcut),
 		up: commandsDetail
-			.filter(commandDetail => commandDetail.info.type === CommandType.SELECT_TERM && commandDetail.info.reversed)
+			.filter(commandDetail =>
+				commandDetail.info.type === CommandType.SELECT_TERM && commandDetail.info.reversed)
 			.map(commandDetail => commandDetail.shortcut),
 	};
 };
@@ -618,61 +634,67 @@ const addControls = (() => {
 
 const removeControls = () => {
 	const style = document.getElementById(getSel(ElementID.STYLE));
-	if (!style || style.textContent === "")
+	if (!style || style.textContent === "") {
 		return;
+	}
 	style.textContent = "";
 	const bar = document.getElementById(getSel(ElementID.BAR));
 	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER));
-	if (bar)
+	if (bar) {
 		bar.remove();
-	if (gutter)
+	}
+	if (gutter) {
 		gutter.remove();
+	}
 };
 
-const addScrollMarkers = (() => {
-	const getOffset = (element: HTMLElement, elementTop: HTMLElement) =>
-		element && element !== elementTop && "offsetTop" in element
-			? element.offsetTop + getOffset(element.offsetParent as HTMLElement, elementTop)
-			: 0
-	;
+const insertScrollMarkers = (() => {
+	const clearMarkers = (gutter: HTMLElement) => {
+		gutter.replaceChildren();
+	};
 
-	const getScrollContainer = (element: HTMLElement): HTMLElement =>
-		element.scrollHeight > element.clientHeight
-		&& (document.scrollingElement === element
-			|| [ "scroll", "auto" ].includes(getComputedStyle(element).overflowY)) || !element.parentElement
-			? element
-			: getScrollContainer(element.parentElement)
-	;
-
-	return (terms: MatchTerms) => {
+	return (highlightTags: HighlightTags, terms: MatchTerms) => {
+		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}-\\w+\\b`);
+		const getTermSelector = (highlightClassName: string) =>
+			highlightClassName.slice(getSel(ElementClass.TERM).length + 1);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
-		if (!document.scrollingElement)
+		const getRectYRelative = (rect: DOMRect) =>
+			(rect.y + document.documentElement.scrollTop) / document.documentElement.scrollHeight;
+		const containersInfo: Array<{
+			container: HTMLElement,
+			termsAdded: Set<string>,
+		}> = [];
+		clearMarkers(gutter);
+		if (terms.length === 0) {
 			return;
-		const containerPairs: Array<[Element, HTMLElement]> = [ [ document.scrollingElement, gutter ] ];
-		terms.forEach(term =>
-			Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector))).forEach((highlight: Element) => {
-				if (!("offsetTop" in highlight))
-					return;
-				const scrollContainer = getScrollContainer(highlight as HTMLElement);
-				const containerPair = containerPairs.find(containerPair => containerPair[0] === scrollContainer);
-				const block = containerPair ? containerPair[1] : document.createElement("div");
-				if (!containerPair) {
-					block.classList.add(getSel(ElementClass.MARKER_BLOCK));
-					block.style.top = String(
-						getOffset(scrollContainer, document.scrollingElement as HTMLElement)
-							/ (document.scrollingElement as Element).scrollHeight * 100
-					) + "%";
-					//block.style.height = "15%";
-					gutter.appendChild(block);
-					containerPairs.push([ scrollContainer, block ]);
+		}
+		document.body.querySelectorAll(terms.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`
+		).join(", ")).forEach((highlight: HTMLElement) => {
+			const container = getContainerBlock(highlightTags, highlight);
+			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
+			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
+			const marker = document.createElement("div");
+			marker.classList.add(className);
+			marker.style.top = `${getRectYRelative(container.getBoundingClientRect()) * 100}%`;
+			if (containerIdx !== -1) {
+				if (containersInfo[containerIdx].container === container) {
+					if (containersInfo[containerIdx].termsAdded.has(getTermSelector(className))) {
+						return;
+					} else {
+						const termsAddedCount = Array.from(containersInfo[containerIdx].termsAdded).length;
+						marker.style.zIndex = `${termsAddedCount * -1}`;
+						marker.style.paddingLeft = `${termsAddedCount * 4}px`;
+						containersInfo[containerIdx].termsAdded.add(getTermSelector(className));
+					}
+				} else {
+					containersInfo.splice(containerIdx);
+					containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
 				}
-				// TOOD: add overlap strategy, add update strategy, check calculations
-				const marker = document.createElement("div");
-				marker.classList.add(getSel(ElementClass.TERM, term.selector));
-				marker.style.top = String(getOffset(highlight as HTMLElement, scrollContainer) / scrollContainer.scrollHeight * 100) + "%";
-				block.appendChild(marker);
-			})
-		);
+			} else {
+				containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
+			}
+			gutter.appendChild(marker);
+		});
 	};
 })();
 
@@ -784,7 +806,7 @@ const highlightInNodes = (() => {
 		nodeItems.clear();
 	};
 
-	return (rootNode: Node, highlightTags: HighlightTags, terms: MatchTerms) => {
+	const insertHighlights = (rootNode: Node, highlightTags: HighlightTags, terms: MatchTerms) => {
 		const nodeItems: UnbrokenNodeList = new UnbrokenNodeList;
 		const breakLevels: Array<number> = [ 0 ];
 		let level = 0;
@@ -841,6 +863,12 @@ const highlightInNodes = (() => {
 			}
 		}
 	};
+
+	return (requestRefreshMarkers: RequestRefreshMarkers, highlightTags: HighlightTags, terms: MatchTerms,
+		rootNode: Node) => {
+		insertHighlights(rootNode, highlightTags, terms);
+		requestRefreshMarkers.next();
+	};
 })();
 
 const purgeClass = (className: string) =>
@@ -864,14 +892,14 @@ const getObserverNodeHighlighter = (() => {
 		!node.closest(rejectSelector)
 	;
 
-	return (highlightTags: HighlightTags, terms: MatchTerms) => {
+	return (requestRefreshMarkers: RequestRefreshMarkers, highlightTags: HighlightTags, terms: MatchTerms) => {
 		const rejectSelector = highlightTags.reject.source.slice(5, -3).split("|").join(", ");
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
 					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
 					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightNode(rejectSelector, node as Element)) {
-						highlightInNodes(node, highlightTags, terms);
+						highlightInNodes(requestRefreshMarkers, highlightTags, terms, node);
 					}
 				}
 			}
@@ -884,8 +912,9 @@ const highlightInNodesOnMutation = (observer: MutationObserver) =>
 	observer.observe(document.body, {childList: true, subtree: true})
 ;
 
-const insertHighlighting = (() => {
-	const selectTermOnCommand = (highlightTags: HighlightTags, terms: MatchTerms, processCommand: FnProcessCommand) => {
+const insertHighlights = (() => {
+	const selectTermOnCommand = (highlightTags: HighlightTags, terms: MatchTerms,
+		processCommand: FnProcessCommand) => {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
 		processCommand.call = (commandInfo: CommandInfo) => {
@@ -918,7 +947,8 @@ const insertHighlighting = (() => {
 		};
 	};
 
-	return (highlightTags: HighlightTags, terms: MatchTerms, disable: boolean, termsFromSelection: boolean,
+	return (highlightTags: HighlightTags, requestRefreshMarkers: RequestRefreshMarkers,
+		terms: MatchTerms, disable: boolean, termsFromSelection: boolean,
 		selectTermPtr: FnProcessCommand, observer: MutationObserver) => {
 		observer.disconnect();
 		if (termsFromSelection) {
@@ -941,10 +971,9 @@ const insertHighlighting = (() => {
 			return;
 		}
 		selectTermOnCommand(highlightTags, terms, selectTermPtr);
-		highlightInNodes(document.body, highlightTags, terms);
+		highlightInNodes(requestRefreshMarkers, highlightTags, terms, document.body);
 		terms.forEach(term => updateTermTooltip(term));
 		highlightInNodesOnMutation(observer);
-		addScrollMarkers(terms); // TODO: make dynamic
 	};
 })();
 
@@ -958,9 +987,11 @@ const insertHighlighting = (() => {
 		};
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
-			observer: MutationObserver, selectTermPtr: FnProcessCommand, termsFromSelection: boolean, disable: boolean,
+			observer: MutationObserver, selectTermPtr: FnProcessCommand,
+			requestRefreshMarkers: RequestRefreshMarkers,
+			termsFromSelection: boolean, disable: boolean,
 			controlsInfo: ControlsInfo, hues: TermHues,
-			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number
+			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number,
 		) => {
 			const termsToHighlight: MatchTerms = [];
 			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
@@ -980,8 +1011,10 @@ const insertHighlighting = (() => {
 				}
 			} else if (termsUpdate !== undefined
 				&& termToUpdateIdx === TermChange.REMOVE && itemsMatchLoosely(terms.slice(0, -2), termsUpdate)) {
-				restoreNodes(getSel(ElementClass.TERM, (terms.at(-1) as MatchTerm).selector));
+				// TODO works?
+				restoreNodes(getSel(ElementClass.TERM, terms.length ? (terms.at(-1) as MatchTerm).selector : ""));
 				terms.splice(-1, 1);
+				insertInterface(highlightTags, commands, terms, style, controlsInfo, hues);
 				return;
 			} else if (termsUpdate !== undefined) {
 				// TODO: retain colours?
@@ -992,12 +1025,11 @@ const insertHighlighting = (() => {
 				return;
 			}
 			if (!disable) {
-				// TODO: only insert style if controls exist
 				insertStyle(terms, style, hues);
 			}
 			// Timeout seems to reduce freezing impact (by causing threading?)
-			setTimeout(() => insertHighlighting(
-				highlightTags, termsToHighlight.length ? termsToHighlight : terms,
+			setTimeout(() => insertHighlights(
+				highlightTags, requestRefreshMarkers, termsToHighlight.length ? termsToHighlight : terms,
 				disable, termsFromSelection, selectTermPtr, observer
 			));
 		};
@@ -1013,7 +1045,7 @@ const insertHighlighting = (() => {
 		return style;
 	};
 
-	return (() => {
+	return () => {
 		const commands: BrowserCommands = [];
 		const processCommand: FnProcessCommand = { call: command => { command; } };
 		const terms: MatchTerms = [];
@@ -1029,13 +1061,29 @@ const insertHighlighting = (() => {
 				showEditIcon: true,
 			},
 		};
+		const getHighlightTagsRegex = (tags: Array<HTMLElementTagName>) =>
+			new RegExp(`\\b(?:${tags.join("|")})\\b`, "i") // TODO replace this and similar with "[ ]"-like syntax in pattern
+		;
 		const highlightTags: HighlightTags = {
-			reject: /\b(?:meta|style|script|noscript|title|mms-h)\b/i,
-			skip: /\b(?:s|del)\b/i, // Implementation would likely be overly complex.
-			flow: /\b(?:b|i|u|strong|em|cite|span|mark|wbr|code|data|dfn|ins|mms-h)\b/i,
+			reject: getHighlightTagsRegex([ "meta", "style", "script", "noscript", "title", "mms-h" as HTMLElementTagName ]),
+			skip: getHighlightTagsRegex([ "s", "del"] ), // Implementation would likely be overly complex.
+			flow: getHighlightTagsRegex([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
+				"mms-h" as HTMLElementTagName ]),
 			// break: any other class of element
 		};
-		const observer = getObserverNodeHighlighter(highlightTags, terms);
+		const requestRefreshMarkers: RequestRefreshMarkers = function* () {
+			let timeRequestAcceptedLast = 0;
+			while (true) {
+				const requestWaitDuration = 1000;
+				const date = Date.now();
+				if (date > timeRequestAcceptedLast + requestWaitDuration) {
+					timeRequestAcceptedLast = date;
+					setTimeout(() => insertScrollMarkers(highlightTags, terms), requestWaitDuration + 50);
+				}
+				yield;
+			}
+		}();
+		const observer = getObserverNodeHighlighter(requestRefreshMarkers, highlightTags, terms);
 		const style = insertStyleElement();
 		browser.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
@@ -1059,7 +1107,7 @@ const insertHighlighting = (() => {
 				&& (!itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase)
 				|| (!terms.length && !document.getElementById(ElementID.BAR))))) {
 				refreshTermControls(
-					highlightTags, terms, commands, style, observer, processCommand,
+					highlightTags, terms, commands, style, observer, processCommand, requestRefreshMarkers,
 					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo, hues,
 					message.terms, message.termUpdate, message.termToUpdateIdx,
 				);
@@ -1069,5 +1117,5 @@ const insertHighlighting = (() => {
 			bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
 			sendResponse(); // Manifest V3 bug.
 		});
-	});
+	};
 })()();

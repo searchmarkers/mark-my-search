@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>
 
 interface MatchMode {
@@ -24,13 +26,14 @@ class MatchTerm {
 	}
     
 	compile () {
-		if (/\W/.test(this.phrase))
+		if (/\W/g.test(this.phrase)) {
 			this.matchMode.stem = false;
-		this.selector = this.phrase.replace(/\s/g, "_");
+		}
+		const sanitize = (word: string, replacement = "\\$&") =>
+			word.replace(/[-/\\^$*+?.()|[\]{}]/g, replacement);
+		this.selector = sanitize(this.phrase.replace(/\W/g, "_"), "_");
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const exp = (this.matchMode.stem ? getWordPatternString(this.phrase) : this.phrase);
-		const sanitize = (word: string) =>
-			word.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
 		const addOptionalHyphens = (word: string) =>
 			word.replace(/(\w\?|\w)/g,"(\\p{Pd})?$1");
 		let patternString: string;
@@ -38,7 +41,7 @@ class MatchTerm {
 			const dashedEnd = exp.search(/\(\?:/g);
 			patternString = exp[0] + addOptionalHyphens(exp.substring(1, dashedEnd)) + exp.substring(dashedEnd);
 		} else {
-			patternString = sanitize(exp[0]) + addOptionalHyphens(sanitize(exp).substring(1));
+			patternString = sanitize(exp[0]) + addOptionalHyphens(sanitize(exp.substring(1)));
 		}
 		this.pattern = new RegExp(this.matchMode.whole ? `\\b(?:${patternString})\\b` : patternString, flags);
 	}
