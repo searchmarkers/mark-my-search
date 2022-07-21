@@ -159,6 +159,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	const setUp = () => {
 		if (browser.commands.update) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
+			browser.commands.update({ name: "focus-term-append", shortcut: "Alt+Period" });
 			for (let i = 0; i < 10; i++) {
 				browser.commands.update({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
 				browser.commands.update({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
@@ -271,11 +272,12 @@ browser.commands.onCommand.addListener(commandString =>
 					delete session.researchInstances[tab.id as number];
 					browser.tabs.sendMessage(tab.id as number, { disable: true } as HighlightMessage);
 				} else {
-					await createResearchInstance({ terms: [] }).then(researchInstance => {
+					await createResearchInstance({ terms: [] }).then(async researchInstance => {
 						researchInstance.highlightsShown = true;
 						session.researchInstances[tab.id as number] = researchInstance;
-						activateHighlightingInTab(tab.id as number,
+						await activateHighlightingInTab(tab.id as number,
 							createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook));
+						browser.tabs.sendMessage(tab.id as number, { termsFromSelection: true } as HighlightMessage);
 					});
 				}
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);

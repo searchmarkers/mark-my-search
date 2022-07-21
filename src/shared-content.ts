@@ -128,6 +128,7 @@ enum CommandType {
 	TOGGLE_SELECT,
 	ADVANCE_GLOBAL,
 	SELECT_TERM,
+	FOCUS_TERM_INPUT,
 }
 
 interface CommandInfo {
@@ -162,6 +163,15 @@ const parseCommand = (commandString: string): CommandInfo => {
 		switch (parts[1]) {
 		case "global": {
 			return { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" };
+		}}
+		break;
+	} case "focus": {
+		switch (parts[1]) {
+		case "term": {
+			switch (parts[2]) {
+			case "append": {
+				return { type: CommandType.FOCUS_TERM_INPUT, termIdx: -1 };
+			}}
 		}}
 		break;
 	} case "select": {

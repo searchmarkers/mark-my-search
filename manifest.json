@@ -43,6 +43,10 @@
 		"default_popup": "/pages/popup.html"
 	},
 
+	"web_accessible_resources": [
+		"/icons/edit.svg"
+	],
+
 	"commands": {
 		"toggle-research-tab": {
 			"suggested_key": { "default": "Alt+Shift+M" },
@@ -70,6 +74,9 @@
 		"advance-global-reverse": {
 			"suggested_key": { "default": "Alt+Shift+Space" },
 			"description": "Jump to previous term in page"
+		},
+		"focus-term-append": {
+			"description": "Focus the toolbar input for appending a new term"
 		},
 		"select-term-0": { "description": "Select term 0" },
 		"select-term-1": { "description": "Select term 1" },
