@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Find what you searched for anywhere on the web. Focus your research and find areas of interest with this intuitive instant word highlighter.",
-	"version": "1.2.0",
+	"version": "1.2.1",
 
 	"browser_specific_settings": {
 		"gecko": {
@@ -50,53 +50,53 @@
 	"commands": {
 		"toggle-research-tab": {
 			"suggested_key": { "default": "Alt+Shift+M" },
-			"description": "Toggle in current tab"
+			"description": "Find in current tab"
 		},
 		"toggle-research-global": {
 			"suggested_key": { "default": "Alt+Shift+J" },
-			"description": "Toggle automatic activation when searching"
+			"description": "Enable/disable automatic web search marking"
 		},
 		"toggle-bar": {
 			"suggested_key": { "default": "Ctrl+Shift+F" },
-			"description": "Toggle highlighting toolbar"
+			"description": "Show/hide toolbar"
 		},
 		"toggle-highlights": {
 			"suggested_key": { "default": "Alt+Shift+D" },
-			"description": "Toggle display of highlighting"
+			"description": "Show/hide highlighting"
 		},
 		"toggle-select": {
-			"description": "Toggle between the two select modes [advanced]"
+			"description": "[Advanced] Sticky term selection mode"
+		},
+		"focus-term-append": {
+			"description": "Focus the toolbar input for adding a new term"
 		},
 		"advance-global": {
 			"suggested_key": { "default": "Alt+Space" },
-			"description": "Jump to next term in page"
+			"description": "Jump to next mark in page"
 		},
 		"advance-global-reverse": {
 			"suggested_key": { "default": "Alt+Shift+Space" },
-			"description": "Jump to previous term in page"
+			"description": "Jump to previous mark in page"
 		},
-		"focus-term-append": {
-			"description": "Focus the toolbar input for appending a new term"
-		},
-		"select-term-0": { "description": "Select term 0" },
-		"select-term-1": { "description": "Select term 1" },
-		"select-term-2": { "description": "Select term 2" },
-		"select-term-3": { "description": "Select term 3" },
-		"select-term-4": { "description": "Select term 4" },
-		"select-term-5": { "description": "Select term 5" },
-		"select-term-6": { "description": "Select term 6" },
-		"select-term-7": { "description": "Select term 7" },
-		"select-term-8": { "description": "Select term 8" },
-		"select-term-9": { "description": "Select term 9" },
-		"select-term-0-reverse": { "description": "Select term 0 (reverse)" },
-		"select-term-1-reverse": { "description": "Select term 1 (reverse)" },
-		"select-term-2-reverse": { "description": "Select term 2 (reverse)" },
-		"select-term-3-reverse": { "description": "Select term 3 (reverse)" },
-		"select-term-4-reverse": { "description": "Select term 4 (reverse)" },
-		"select-term-5-reverse": { "description": "Select term 5 (reverse)" },
-		"select-term-6-reverse": { "description": "Select term 6 (reverse)" },
-		"select-term-7-reverse": { "description": "Select term 7 (reverse)" },
-		"select-term-8-reverse": { "description": "Select term 8 (reverse)" },
-		"select-term-9-reverse": { "description": "Select term 9 (reverse)" }
+		"select-term-0": { "description": "Jump to next mark for the 1st term" },
+		"select-term-1": { "description": "Jump to next mark (2nd term)" },
+		"select-term-2": { "description": "Jump to next mark (3rd term)" },
+		"select-term-3": { "description": "Jump to next mark (4th term)" },
+		"select-term-4": { "description": "Jump to next mark (5th term)" },
+		"select-term-5": { "description": "Jump to next mark (6th term)" },
+		"select-term-6": { "description": "Jump to next mark (7th term)" },
+		"select-term-7": { "description": "Jump to next mark (8th term)" },
+		"select-term-8": { "description": "Jump to next mark (9th term)" },
+		"select-term-9": { "description": "Jump to next mark (10th term)" },
+		"select-term-0-reverse": { "description": "Jump to previous mark for the 1st term" },
+		"select-term-1-reverse": { "description": "Jump to previous mark (2nd term)" },
+		"select-term-2-reverse": { "description": "Jump to previous mark (3rd term)" },
+		"select-term-3-reverse": { "description": "Jump to previous mark (4th term)" },
+		"select-term-4-reverse": { "description": "Jump to previous mark (5th term)" },
+		"select-term-5-reverse": { "description": "Jump to previous mark (6th term)" },
+		"select-term-6-reverse": { "description": "Jump to previous mark (7th term)" },
+		"select-term-7-reverse": { "description": "Jump to previous mark (8th term)" },
+		"select-term-8-reverse": { "description": "Jump to previous mark (9th term)" },
+		"select-term-9-reverse": { "description": "Jump to previous mark (10th term)" }
 	}
 }

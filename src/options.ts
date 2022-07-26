@@ -53,7 +53,7 @@ const optionsInfo: Array<{
 		label: "Behaviour",
 		options: {
 			[StorageSync.BAR_CONTROLS_SHOWN]: {
-				label: "Which controls to show in the toolbar",
+				label: "Controls to show in the toolbar",
 				preferences: {
 					[BarControl.DISABLE_TAB_RESEARCH]: {
 						label: "Disable research in the current tab",
@@ -70,7 +70,7 @@ const optionsInfo: Array<{
 				},
 			},
 			[StorageSync.BAR_LOOK]: {
-				label: "What the look of the toolbar is",
+				label: "Toolbar style and icons",
 				preferences: {
 					[BarLook.SHOW_EDIT_ICON]: {
 						label: "Show a pen icon in buttons with editable text",
@@ -79,32 +79,24 @@ const optionsInfo: Array<{
 				},
 			},
 			[StorageSync.SHOW_HIGHLIGHTS]: {
-				label: "When to make highlights visible automatically",
+				label: "Marking visibility when finding terms from a search",
 				preferences: {
 					default: {
-						label: "Highlights made visible for new searches",
+						label: "Highlights start visible",
 						type: PreferenceType.BOOLEAN,
 					},
 					overrideSearchPages: {
 						label: "Highlights are always visible on search pages",
 						type: PreferenceType.BOOLEAN,
 					},
-					overrideResearchPages: {
-						label: "Highlights are always visible on non-search pages",
-						type: PreferenceType.BOOLEAN,
-					},
 				},
 			},
-			[StorageSync.LINK_RESEARCH_TABS]: {
-				label: "Link research between tabs",
-				type: PreferenceType.BOOLEAN,
-			},
 			[StorageSync.STOPLIST]: {
-				label: "Words to ignore when performing searches",
+				label: "Words to omit from automatic find",
 				type: PreferenceType.ARRAY,
 			},
 			[StorageSync.IS_SET_UP]: {
-				label: "First run setup completed",
+				label: "[Advanced] Uncheck to trigger initial setup after restarting the browser",
 				type: PreferenceType.BOOLEAN,
 			},
 		},

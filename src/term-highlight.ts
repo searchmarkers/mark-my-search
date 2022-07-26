@@ -316,11 +316,11 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 	{ animation: ${getSel(Keyframes.FLASH)} 1s; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
 + .${getSel(ElementClass.OPTION_LIST)}
-	{ all: revert; position: absolute; display: grid; width: max-content; left: -40px; z-index: 1; }
+	{ all: revert; position: absolute; display: flex; flex-direction: column; width: max-content; left: -40px; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
 	{ all: revert; display: inline-flex; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ all: revert; display: grid; grid-template-columns: repeat(3, auto); grid-auto-rows: 1fr; }
+	{ all: revert; display: grid; grid-template-columns: repeat(3, auto); grid-auto-rows: 1fr; } /* TODO remove use of grid */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:hover,
@@ -328,12 +328,14 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 	{ color: #000 !important; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; align-items: center; }
 .${getSel(ElementClass.CONTROL_PAD)} button
 	{ background: transparent; border: none; padding-inline: 0; margin-block: 0; font: revert; line-height: 120%;
-	vertical-align: initial; color: #000 !important; cursor: initial; height: fit-content; letter-spacing: normal; transition: unset; }
+	color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)},
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
 	{ padding: 0 1px 0 1px !important; border: inherit; border-radius: inherit; text-transform: revert; height: 100%; margin: 0; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} img
-	{ display: flex; height: 1.1em; }
+	{ display: block; height: 1.1em; }
+.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} *
+	{ margin: 0; filter: unset !important; background-color: unset; }
 .${getSel(ElementClass.CONTROL_PAD)} input:not(:disabled) + .${getSel(ElementClass.CONTROL_EDIT)}
 .${getSel(ElementClass.PRIMARY)}
 	{ display: none; }
@@ -386,7 +388,7 @@ input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
 	{ all: revert; display: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
 	{ all: revert; margin-left: 3px; background: hsl(0, 0%, 75%) !important; filter: grayscale(100%);
-	line-height: 120%; text-align: left; color: #111 !important;
+	width: 100%; line-height: 120%; text-align: left; color: #111 !important;
 	border-color: hsl(0, 0%, 50%) !important; border-bottom-width: 1px !important;
 	border-style: none none solid solid !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
@@ -405,7 +407,7 @@ input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
 	{ z-index: ${zIndexMax}; display: block; right: 0; top: 0; width: 12px; height: 100%; }
 #${getSel(ElementID.MARKER_GUTTER)} div
 	{ width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; border-left: solid black 1px; box-sizing: unset;
-	padding-right: 0; transition: padding-right 600ms; }
+	padding-right: 0; transition: padding-right 600ms; pointer-events: none; }
 #${getSel(ElementID.MARKER_GUTTER)}
 	{ position: fixed; background: linear-gradient(to right, transparent, hsla(0, 0%, 0%, 0.7) 70%); }
 #${getSel(ElementID.MARKER_GUTTER)} div.${getSel(ElementClass.FOCUS)}

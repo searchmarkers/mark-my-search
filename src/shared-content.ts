@@ -30,7 +30,7 @@ class MatchTerm {
 			this.matchMode.stem = false;
 		}
 		const sanitize = (word: string, replacement = "\\$&") =>
-			word.replace(/[-/\\^$*+?.()|[\]{}]/g, replacement);
+			word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement);
 		this.selector = sanitize(this.phrase.replace(/\W/g, "_"), "_");
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const exp = (this.matchMode.stem ? getWordPatternString(this.phrase) : this.phrase);
