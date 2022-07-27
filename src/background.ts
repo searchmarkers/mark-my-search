@@ -62,14 +62,15 @@ const activateHighlightingInTab = (tabId: number, message?: HighlightMessage) =>
 	browser.commands.getAll().then(commands => browser.tabs.sendMessage(tabId,
 		Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message)
 	).catch(() =>
-		browser.tabs.executeScript(tabId, { file: "/dist/stem-pattern-find.js" }).then(() =>
-			browser.tabs.executeScript(tabId, { file: "/dist/shared-content.js" }).then(() =>
-				browser.tabs.executeScript(tabId, { file: "/dist/term-highlight.js" }).then(() =>
-					browser.tabs.sendMessage(tabId,
-						Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))))
+		browser["scripting"].executeScript({
+			files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
+			target: { tabId },
+		}).then(() =>
+			browser.tabs.sendMessage(tabId,
+				Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		).catch(reason =>
-			/*console.error(`Injection into tab ${tabId} failed: ${reason}`)*/  false
+			console.error(`Injection into tab ${tabId} failed: ${reason}`)
 		)
 	))
 ;
@@ -133,7 +134,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
-		: browser.browserAction.setIcon({ path: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg" })
+		: browser.action.setIcon({ path: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg" })
 ;
 
 (() => {
@@ -350,7 +351,7 @@ browser.commands.onCommand.addListener(commandString =>
 	});
 })();
 
-browser.browserAction.onClicked.addListener(() =>
+browser.action.onClicked.addListener(() =>
 	browser.permissions.request({ permissions: [ "bookmarks" ] })
 );
 

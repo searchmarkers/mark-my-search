@@ -5,7 +5,7 @@ type ButtonInfo = {
 	label: string
 	containerId: ElementID
 	onclick?: () => void
-	setUp?: (button: HTMLButtonElement) => void
+	setUp?: (container: HTMLElement) => void
 }
 type RequestRefreshMarkers = Generator<undefined, never, unknown>
 
@@ -193,7 +193,7 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 	const termInput = document.createElement("input");
 	termInput.type = "text";
 	termInput.disabled = true;
-	const show = (event: MouseEvent) => {
+	const show = (event: KeyboardEvent | MouseEvent) => {
 		event.preventDefault();
 		purgeClass(getSel(ElementClass.ACTIVE), document.getElementById(getSel(ElementID.BAR)) as HTMLElement);
 		termInput.classList.add(getSel(ElementClass.ACTIVE));
@@ -252,7 +252,7 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 		controlContent.oncontextmenu = show;
 	} else if (!replaces) {
 		controlPad.onclick = show;
-		controlPad.oncontextmenu = controlPad.onclick;
+		controlPad.oncontextmenu = show;
 	}
 	(new ResizeObserver(entries =>
 		entries.forEach(entry =>
@@ -291,13 +291,6 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 				control.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement,
 				control.querySelector("input") as HTMLElement,
 			);
-		} else if (event.key === " ") {
-			// Pressing space unaccountably clears the input for the term-append button, workaround is a custom implementation.
-			event.preventDefault();
-			const selectionStart = termInput.selectionStart ?? -1;
-			termInput.value = `${termInput.value.slice(0, selectionStart)} ${termInput.value.slice(termInput.selectionEnd ?? -1)}`;
-			termInput.selectionStart = selectionStart + 1;
-			termInput.selectionEnd = selectionStart + 1;
 		}
 	};
 	return termInput;
@@ -327,7 +320,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
 	{ color: #000 !important; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; align-items: center; }
 .${getSel(ElementClass.CONTROL_PAD)} button
-	{ background: transparent; border: none; padding-inline: 0; margin-block: 0; font: revert; line-height: 120%;
+	{ background: none; border: none; padding-inline: 0; margin-block: 0; font: revert; line-height: 120%;
 	color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)},
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
@@ -343,7 +336,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 .${getSel(ElementClass.SECONDARY)}
 	{ display: none; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)}
-	{ padding-inline: 4px; padding: 1px 2px 1px 2px !important; }
+	{ padding-inline: 4px !important; padding-block: 1px !important; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_CASE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-top: 0 !important; border-top: 1px dashed black; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
@@ -352,9 +345,11 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px !important; border-inline: 2px solid hsla(0, 0%, 0%, 0.4); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ background: hsl(0, 0%, 80%) !important; line-height: 120%; padding: revert !important; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} *
-	{ filter: grayscale(100%) contrast(10000%); font-family: revert; }
+	{ background: hsl(0, 0%, 80%) !important; padding: 1px 4px 1px 4px; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} button
+	{ padding: 0 !important; margin: 0; font: revert; background: none; border: none; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} button > *
+	{ line-height: 120%; filter: grayscale(100%) contrast(10000%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
 	{ background: hsla(0, 0%, 80%, 0.6) !important; color: #000; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
@@ -380,7 +375,7 @@ input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
 	{ margin-left: 8px; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_EXPAND)}
 	{ all: revert; position: relative; font-weight: bold;
-	border: none; margin-left: 3px; width: 15px; height: 18px; background: transparent; color: white; }
+	border: none; margin-left: 3px; width: 15px; height: 18px; background: none; color: white; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_EXPAND)}:hover,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_EXPAND)}:active
 	{ color: transparent; }
@@ -590,22 +585,25 @@ const getTermCommands = (commands: BrowserCommands) => {
 const addControls = (() => {
 	const createButton = (() => {
 		const create = (id: BarControl, info: ButtonInfo, hideWhenInactive: boolean) => {
-			const button = document.createElement("button"); // TODO: find how vscode knows the type produced by the argument
-			button.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant, use CSS to select class containing this
-			button.classList.add(getSel(ElementClass.BAR_CONTROL, id));
+			const container = document.createElement("span"); // TODO find how vscode knows the type produced by the argument
+			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant, use CSS to select class containing this
+			container.classList.add(getSel(ElementClass.BAR_CONTROL, id));
+			container.tabIndex = -1;
+			const button = document.createElement("button");
+			button.tabIndex = -1;
 			const text = document.createElement("span");
 			text.tabIndex = -1;
 			text.textContent = info.label;
 			button.appendChild(text);
+			container.appendChild(button);
 			if (hideWhenInactive) {
-				button.classList.add(getSel(ElementClass.DISABLED));
+				container.classList.add(getSel(ElementClass.DISABLED));
 			}
-			button.tabIndex = -1;
 			button.onclick = info.onclick ?? null;
 			if (info.setUp) {
-				info.setUp(button);
+				info.setUp(container);
 			}
-			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(button);
+			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(container);
 		};
 
 		return (terms: MatchTerms, barControl: BarControl, hideWhenInactive: boolean) =>
@@ -627,9 +625,9 @@ const addControls = (() => {
 				[BarControl.APPEND_TERM]: {
 					label: "🞣",
 					containerId: ElementID.BAR_CONTROLS,
-					setUp: button => {
-						const termInput = createTermInput(terms, button, TermChange.CREATE);
-						button.appendChild(termInput);
+					setUp: container => {
+						const termInput = createTermInput(terms, container, TermChange.CREATE);
+						container.appendChild(termInput);
 					},
 				},
 			} as Record<BarControl, ButtonInfo>)[barControl], hideWhenInactive)
@@ -976,11 +974,12 @@ const insertHighlights = (() => {
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
 				const termIdx = commandInfo.termIdx as number;
-				const button = document.querySelector(termIdx === -1
-					? `#${getSel(ElementID.BAR_CONTROLS)} button`
-					: `#${getSel(ElementID.BAR)} .${getSel(ElementClass.TERM, terms[termIdx].selector)} button`
+				const control = document.querySelector(termIdx === -1
+					? `#${getSel(ElementID.BAR_CONTROLS)}`
+					: `#${getSel(ElementID.BAR)} .${getSel(ElementClass.TERM, terms[termIdx].selector)}`
 				) as HTMLElement;
-				const input = button.querySelector("input") as HTMLElement;
+				const input = control.querySelector("input") as HTMLInputElement;
+				const button = control.querySelector("button") as HTMLButtonElement;
 				input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				button.click();
 				input.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));

@@ -1,5 +1,5 @@
 {
-	"manifest_version": 2,
+	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Find what you searched for anywhere on the web. Focus your research and find areas of interest with this intuitive instant word highlighter.",
 	"version": "1.2.1",
@@ -16,7 +16,7 @@
 	},
 
 	"permissions": [
-		"<all_urls>",
+		"scripting",
 		"tabs",
 		"storage",
 		"search",
@@ -27,9 +27,17 @@
 		"bookmarks"
 	],
 
+	"host_permissions": [
+		"*://*/*"
+	],
+
 	"background": {
-		"page": "/pages/background.html",
-		"persistent": false
+		"scripts": [
+			"/dist/manage-storage.js",
+			"/dist/stem-pattern-find.js",
+			"/dist/shared-content.js",
+			"/dist/background.js"
+		]
 	},
 
 	"options_ui": {
@@ -37,14 +45,17 @@
 		"browser_style": true
 	},
 
-	"browser_action": {
+	"action": {
 		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
 	},
 
 	"web_accessible_resources": [
-		"/icons/edit.svg"
+		{
+			"resources": [ "/icons/edit.svg" ],
+			"matches": [ "*://*/*" ]
+		}
 	],
 
 	"commands": {
