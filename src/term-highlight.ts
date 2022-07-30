@@ -275,7 +275,7 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 			const activateInput = (button: HTMLElement, inputField: HTMLElement) => {
 				inputField.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
-				button.click();
+				button.dispatchEvent(new Event("contextmenu"));
 				inputField.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 			};
 			if (!shiftLeft && idx === terms.length - 1) {
@@ -288,7 +288,7 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 				? shiftLeft ? idx - 1 : idx + 1
 				: terms.length - 1].selector))[0];
 			activateInput(
-				control.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement,
+				control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement,
 				control.querySelector("input") as HTMLElement,
 			);
 		}
@@ -326,7 +326,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
 	{ padding: 0 1px 0 1px !important; border: inherit; border-radius: inherit; text-transform: revert; height: 100%; margin: 0; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} img
-	{ display: block; height: 1.1em; }
+	{ display: block; height: 1.1em; width: 1.1em; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} *
 	{ margin: 0; filter: unset !important; background-color: unset; }
 .${getSel(ElementClass.CONTROL_PAD)} input:not(:disabled) + .${getSel(ElementClass.CONTROL_EDIT)}
