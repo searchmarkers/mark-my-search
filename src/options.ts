@@ -73,7 +73,7 @@ const optionsInfo: Array<{
 				label: "Toolbar style and icons",
 				preferences: {
 					[BarLook.SHOW_EDIT_ICON]: {
-						label: "Show a pen icon in buttons with editable text",
+						label: "Show a pen button in buttons with editable text",
 						type: PreferenceType.BOOLEAN,
 					},
 				},
@@ -92,11 +92,11 @@ const optionsInfo: Array<{
 				},
 			},
 			[StorageSync.STOPLIST]: {
-				label: "Words to omit from automatic find",
+				label: "Words not to highlight automatically when searched",
 				type: PreferenceType.ARRAY,
 			},
 			[StorageSync.IS_SET_UP]: {
-				label: "[Advanced] Uncheck to trigger initial setup after restarting the browser",
+				label: "Do not perform initial setup on next browser restart",
 				type: PreferenceType.BOOLEAN,
 			},
 		},

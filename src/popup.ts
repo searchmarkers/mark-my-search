@@ -97,11 +97,19 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
+chrome.tabs.query = browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+
 buttons.researchTogglePage.onclick = () =>
-	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
+	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
 		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => (tab.id as number) in session.researchInstances
-			? browser.runtime.sendMessage({ disableTabResearch: true } as BackgroundMessage)
-			: browser.runtime.sendMessage({ terms: [], makeUnique: true, toggleHighlightsOn: true } as BackgroundMessage)
+			? chrome.runtime.sendMessage({
+				disableTabResearch: true
+			} as BackgroundMessage)
+			: chrome.runtime.sendMessage({
+				terms: [],
+				makeUnique: true,
+				toggleHighlightsOn: true
+			} as BackgroundMessage)
 		)
 	)
 ;
@@ -109,10 +117,10 @@ buttons.researchTogglePage.onclick = () =>
 buttons.researchToggle.onclick = () => {
 	const toggleResearchOn = !buttons.researchToggle.classList.contains(ButtonClass.ENABLED);
 	buttons.researchToggle.classList[toggleResearchOn ? "add" : "remove"](ButtonClass.ENABLED);
-	browser.runtime.sendMessage({ toggleResearchOn });
+	chrome.runtime.sendMessage({ toggleResearchOn });
 };
 
-const problemReport = (userMessage = "") => browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
+const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
 	tab.id === undefined ? undefined : getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => {
 		const phrases = session.researchInstances[tab.id ?? -1]
 			? session.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
@@ -123,7 +131,7 @@ const problemReport = (userMessage = "") => browser.tabs.query({ active: true, l
 		buttons.problemReport.disabled = true;
 		buttons.problemReportDescribe.disabled = true;
 		emailSend("service_mms_report", "template_mms_report", {
-			mmsVersion: browser.runtime.getManifest().version,
+			mmsVersion: chrome.runtime.getManifest().version,
 			url: tab.url,
 			phrases,
 			userMessage,

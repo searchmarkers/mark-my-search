@@ -13,6 +13,15 @@ const getWordPatternString = (() => {
 
 	return (() => {
 		const suffixes = [
+			"re",
+			"res",
+			"ring",
+			"rings",
+			"red",
+			"rison",
+			"risons",
+			"rer",
+			"rers",
 			"e",
 			"es",
 			"ely",
@@ -339,6 +348,14 @@ const getWordPatternString = (() => {
 			"nd",
 			"nds",
 			"n",
+			"ns",
+			"ned",
+			"ning",
+			"nings",
+			"ner",
+			"ners",
+			"nt",
+			"nts",
 			"nning",
 			"nnings",
 			"nner",
@@ -348,7 +365,9 @@ const getWordPatternString = (() => {
 			"tomy",
 			"trophy",
 			"tude",
+			"t",
 			"ty",
+			"ties",
 			"ular",
 			"uous",
 			"ure",
@@ -379,13 +398,10 @@ const getWordPatternString = (() => {
 		const highlightPatternString = `(?:${suffixes.join("|")})?`;
 
 		return (word: string) => { // Currently, returned pattern must have exactly one pair of brackets.
-			const matches = reverse(word).match(replacePatternReverse);
+			const matches = reverse(word.slice(3)).match(replacePatternReverse);
 			if (!matches)
 				return makeSomeCharDuplicatesOptional(word) + highlightPatternString;
-			const idx = word.length - matches[0].length;
-			if (idx < 3)
-				return makeSomeCharDuplicatesOptional(word) + highlightPatternString;
-			return makeSomeCharDuplicatesOptional(word.substring(0, idx)) + highlightPatternString;
+			return makeSomeCharDuplicatesOptional(word.slice(0, word.length - matches[0].length)) + highlightPatternString;
 		};
 	})();
 })();

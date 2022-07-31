@@ -1,3 +1,6 @@
+chrome.scripting = browser ? browser["scripting"] : chrome.scripting;
+chrome.tabs.query = browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+
 const createResearchInstance = (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
 	terms?: MatchTerms
@@ -58,21 +61,20 @@ const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms
 	return { terms } as HighlightMessage;
 };
 
-const activateHighlightingInTab = (tabId: number, message?: HighlightMessage) =>
-	browser.commands.getAll().then(commands => browser.tabs.sendMessage(tabId,
-		Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message)
-	).catch(() =>
-		browser["scripting"].executeScript({
-			files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
-			target: { tabId },
-		}).then(() =>
-			browser.tabs.sendMessage(tabId,
-				Object.assign({ extensionCommands: commands, tabId } as HighlightMessage, message))
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		).catch(reason =>
-			console.error(`Injection into tab ${tabId} failed: ${reason}`)
-		)
-	))
+const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) =>
+	chrome.scripting.executeScript({
+		func: (tabId, highlightMessage) => {
+			const executionDeniedIdentifier = "executionUnnecessary";
+			chrome.runtime.sendMessage({
+				executeInTab: !window[executionDeniedIdentifier],
+				tabId,
+				highlightMessage,
+			} as BackgroundMessage);
+			window[executionDeniedIdentifier] = true;
+		},
+		args: [ targetTabId, highlightMessageToReceive ],
+		target: { tabId: targetTabId },
+	})
 ;
 
 const manageEnginesCacheOnBookmarkUpdate = (() => {
@@ -97,8 +99,9 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	;
 
 	return () => {
-		if (!browser.bookmarks)
+		if (!browser || !chrome.bookmarks) {
 			return;
+		}
 		browser.bookmarks.getTree().then(nodes => getStorageSession(StorageSession.ENGINES).then(session => {
 			nodes.forEach(node => setEngines(
 				session.engines, node => node.url ? updateEngine(session.engines, node.id, node.url) : undefined, node
@@ -134,7 +137,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
-		: browser.action.setIcon({ path: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg" })
+		: chrome.action.setIcon({ path: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg" })
 ;
 
 (() => {
@@ -143,13 +146,13 @@ const updateActionIcon = (enabled?: boolean) =>
 			"activate-research-mode"
 		;
 	
-		browser.contextMenus.onClicked.addListener((info, tab) => !tab || tab.id === undefined ? undefined :
+		chrome.contextMenus.onClicked.addListener((info, tab) => !tab || tab.id === undefined ? undefined :
 			activateHighlightingInTab(tab.id, { termsFromSelection: true } as HighlightMessage)
 		);
 	
 		return (() => {
-			browser.contextMenus.removeAll();
-			browser.contextMenus.create({
+			chrome.contextMenus.removeAll();
+			chrome.contextMenus.create({
 				title: "&Highlight Selection",
 				id: getMenuSwitchId(),
 				contexts: [ "selection", "page" ],
@@ -158,7 +161,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	};
 
 	const setUp = () => {
-		if (browser.commands.update) {
+		if (window.browser) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			browser.commands.update({ name: "focus-term-append", shortcut: "Alt+Period" });
 			for (let i = 0; i < 10; i++) {
@@ -177,7 +180,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		updateActionIcon();
 	};
 
-	browser.runtime.onInstalled.addListener(() => {
+	chrome.runtime.onInstalled.addListener(() => {
 		getStorageSync(StorageSync.IS_SET_UP).then(items =>
 			items.isSetUp ? undefined : setUp()
 		);
@@ -185,7 +188,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		initialize();
 	});
 
-	browser.runtime.onStartup.addListener(initialize);
+	chrome.runtime.onStartup.addListener(initialize);
 })();
 
 (() => {
@@ -223,7 +226,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	};
 	
-	browser.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(sync =>
+	chrome.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(sync =>
 		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => {
 			if (tab && tab.id !== undefined && tab.openerTabId !== undefined
 				&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
@@ -235,7 +238,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		})
 	));
 
-	browser.tabs.onUpdated.addListener((tabId, changeInfo) => !changeInfo.url ? undefined :
+	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => !changeInfo.url ? undefined :
 		pageModifyRemote(changeInfo.url, tabId)
 	);
 })();
@@ -246,7 +249,7 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	if (isTabResearchPage(session.researchInstances, tabId)) {
 		const researchInstance = session.researchInstances[tabId];
 		researchInstance.highlightsShown = toggleHighlightsOn ?? !researchInstance.highlightsShown;
-		browser.tabs.sendMessage(tabId, {
+		chrome.tabs.sendMessage(tabId, {
 			toggleHighlightsOn: researchInstance.highlightsShown,
 			barControlsShown: sync.barControlsShown,
 		} as HighlightMessage);
@@ -254,8 +257,8 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	}
 };
 
-browser.commands.onCommand.addListener(commandString =>
-	browser.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
+chrome.commands.onCommand.addListener(commandString =>
+	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
 		const commandInfo = parseCommand(commandString);
 		switch (commandInfo.type) {
 		case CommandType.TOGGLE_ENABLED: {
@@ -271,14 +274,14 @@ browser.commands.onCommand.addListener(commandString =>
 				if (isTabResearchPage(session.researchInstances, tab.id as number)) {
 					// TODO: make this a function
 					delete session.researchInstances[tab.id as number];
-					browser.tabs.sendMessage(tab.id as number, { disable: true } as HighlightMessage);
+					chrome.tabs.sendMessage(tab.id as number, { disable: true } as HighlightMessage);
 				} else {
 					await createResearchInstance({ terms: [] }).then(async researchInstance => {
 						researchInstance.highlightsShown = true;
 						session.researchInstances[tab.id as number] = researchInstance;
 						await activateHighlightingInTab(tab.id as number,
 							createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook));
-						browser.tabs.sendMessage(tab.id as number, { termsFromSelection: true } as HighlightMessage);
+						chrome.tabs.sendMessage(tab.id as number, { termsFromSelection: true } as HighlightMessage);
 					});
 				}
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
@@ -290,24 +293,34 @@ browser.commands.onCommand.addListener(commandString =>
 			}
 			return;
 		}}
-		browser.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
+		chrome.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
 	})
 );
 
 (() => {
 	const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
 		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(async session => {
-			if (message.toggleResearchOn !== undefined) {
+			if (message.highlightMessage !== undefined) {
+				// TODO make this a function
+				const tabId = message.tabId as number;
+				if (message.executeInTab) {
+					await chrome.scripting.executeScript({
+						files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
+						target: { tabId },
+					});
+				}
+				chrome.tabs.sendMessage(tabId, message.highlightMessage);
+			} else if (message.toggleResearchOn !== undefined) {
 				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
 					.then(() => updateActionIcon(message.toggleResearchOn));
 			} else if (message.disableTabResearch) {
 				delete session.researchInstances[senderTabId];
-				browser.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
+				chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 			} else if (message.performSearch) {
-				browser.search.search({
-					query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
-					tabId: senderTabId
-				});
+				chrome.search.query({
+					text: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
+					tabId: senderTabId,
+				}, () => undefined);
 			} else {
 				if (!isTabResearchPage(session.researchInstances, senderTabId)) {
 					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
@@ -331,7 +344,7 @@ browser.commands.onCommand.addListener(commandString =>
 					highlightMessage.termToUpdateIdx = message.termChangedIdx;
 					Object.keys(session.researchInstances).forEach(tabId =>
 						session.researchInstances[tabId] === session.researchInstances[senderTabId]
-							? browser.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
+							? chrome.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
 					);
 				}
 			}
@@ -339,11 +352,11 @@ browser.commands.onCommand.addListener(commandString =>
 		})
 	;
 
-	browser.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
+	chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
 		if (sender.tab && sender.tab.id !== undefined) {
 			handleMessage(message, sender.tab.id);
 		} else {
-			browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
+			chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
 				handleMessage(message, tab.id as number)
 			);
 		}
@@ -351,11 +364,11 @@ browser.commands.onCommand.addListener(commandString =>
 	});
 })();
 
-browser.action.onClicked.addListener(() =>
-	browser.permissions.request({ permissions: [ "bookmarks" ] })
+chrome.action.onClicked.addListener(() =>
+	chrome.permissions.request({ permissions: [ "bookmarks" ] })
 );
 
-browser.permissions.onAdded.addListener(permissions =>
+chrome.permissions.onAdded.addListener(permissions =>
 	permissions && permissions.permissions && permissions.permissions.includes("bookmarks")
 		? manageEnginesCacheOnBookmarkUpdate() : undefined
 );

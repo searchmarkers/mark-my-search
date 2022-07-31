@@ -1,4 +1,4 @@
-type BrowserCommands = Array<browser.commands.Command>
+type BrowserCommands = Array<chrome.commands.Command>
 type HighlightTags = Record<string, RegExp>
 type TermHues = ReadonlyArray<number>
 type ButtonInfo = {
@@ -63,10 +63,6 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
-}
-
-if (browser) {
-	self["chrome" as string] = browser;
 }
 
 // Get a selector for element identification / classification / styling. Abbreviated due to prolific use.
@@ -183,13 +179,14 @@ const jumpToTerm = (() => {
 	};
 })();
 
-const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number) => {
+const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idxCode: number) => {
 	const controlContent = controlPad
 		.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement ?? controlPad;
 	const controlEdit = controlPad
 		.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement | undefined;
-	const term = terms[idx];
-	const replaces = idx !== TermChange.CREATE;
+	const term = terms[idxCode];
+	const replaces = idxCode !== TermChange.CREATE;
+	const getIdx = () => replaces ? terms.indexOf(term) : TermChange.CREATE;
 	const termInput = document.createElement("input");
 	termInput.type = "text";
 	termInput.disabled = true;
@@ -205,12 +202,12 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 		termInput.blur();
 		termInput.disabled = true;
 	};
-	const hideAndCommit = (inputValue?: string) => {
-		hide();
+	const commit = (inputValue?: string) => {
 		let message: BackgroundMessage | null = null;
 		inputValue = inputValue ?? termInput.value;
 		// TODO: clean up following code and associated handling
 		if (replaces) {
+			const idx = getIdx();
 			const termsUpdate: MatchTerms = [];
 			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
 			if (inputValue === "") {
@@ -239,14 +236,22 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 			};
 		}
 		if (message) {
-			browser.runtime.sendMessage(message);
+			chrome.runtime.sendMessage(message);
 		}
 	};
 	if (controlEdit) {
-		controlEdit.onclick = event => termInput.disabled ? show(event) : hideAndCommit("");
+		controlEdit.onclick = event => {
+			if (termInput.disabled) {
+				show(event);
+			} else {
+				hide();
+				commit("");
+			}
+		};
 		controlEdit.oncontextmenu = event => {
 			event.preventDefault();
-			hideAndCommit("");
+			hide();
+			commit("");
 		};
 		controlEdit.ondragstart = event => event.preventDefault();
 		controlContent.oncontextmenu = show;
@@ -255,21 +260,24 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 		controlPad.oncontextmenu = show;
 	}
 	(new ResizeObserver(entries =>
-		entries.forEach(entry =>
-			entry.contentRect.width === 0 && !termInput.disabled ? hideAndCommit() : undefined
-		)
+		entries.forEach(entry => {
+			if (entry.contentRect.width === 0 && !termInput.disabled) {
+				hide();
+				commit();
+			}
+		})
 	)).observe(termInput);
 	termInput.onkeydown = event => {
 		if (event.key === "Enter") {
-			hideAndCommit();
+			hide();
+			commit();
 		} else if (event.key === "Escape") {
 			hide();
 		} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-			const shiftLeft = event.key.includes("Left");
-			if ((shiftLeft && idx === 0)
-				|| (!shiftLeft && !replaces)
-				|| termInput.selectionStart !== termInput.selectionEnd
-				|| termInput.selectionStart !== (shiftLeft ? 0 : termInput.value.length)) {
+			const idx = getIdx();
+			const shiftRight = event.key === "ArrowRight";
+			if (termInput.selectionStart !== termInput.selectionEnd
+				|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
 				return;
 			}
 			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
@@ -278,14 +286,21 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idx: number
 				button.dispatchEvent(new Event("contextmenu"));
 				inputField.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 			};
-			if (!shiftLeft && idx === terms.length - 1) {
+			if (shiftRight && idx === terms.length - 1) {
 				const appendTerm = (document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
 					.firstElementChild as HTMLElement;
 				activateInput(appendTerm, appendTerm.querySelector("input") as HTMLElement);
 				return;
+			} else if (shiftRight && !replaces) {
+				commit();
+				termInput.value = "";
+				return;
+			} else if (!shiftRight && idx === 0) {
+				commit();
+				return;
 			}
 			const control = bar.getElementsByClassName(getSel(ElementClass.TERM, terms[replaces
-				? shiftLeft ? idx - 1 : idx + 1
+				? shiftRight ? idx + 1 : idx - 1
 				: terms.length - 1].selector))[0];
 			activateInput(
 				control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement,
@@ -441,11 +456,11 @@ input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
 	});
 };
 
-const getTermControl = (term?: MatchTerm, idx = -1): HTMLElement => {
+const getTermControl = (term?: MatchTerm, idx?: number): HTMLElement => {
 	const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
-	return (idx === -1 && term
+	return (idx === undefined && term
 		? barTerms.getElementsByClassName(getSel(ElementClass.TERM, term.selector))[0]
-		: barTerms.children[idx]
+		: Array.from(barTerms.children).at(idx ?? -1)
 	) as HTMLElement;
 };
 
@@ -496,6 +511,10 @@ const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: 
 			term.matchMode[getTermOptionMatchType(option.textContent as string, true)], (option.textContent as string)));
 };
 
+const removeTermControl = (idx: number) => {
+	getTermControl(undefined, idx).remove();
+};
+
 const insertTermControl = (() => {
 	const createTermOption = (terms: MatchTerms, idx: number, title: string) => {
 		const matchType = getTermOptionMatchType(title);
@@ -508,7 +527,7 @@ const insertTermControl = (() => {
 				termChanged: term,
 				termChangedIdx: idx,
 			};
-			browser.runtime.sendMessage(message);
+			chrome.runtime.sendMessage(message);
 		};
 		const option = document.createElement("button");
 		option.classList.add(getSel(ElementClass.OPTION));
@@ -520,7 +539,7 @@ const insertTermControl = (() => {
 
 	return (highlightTags: HighlightTags, terms: MatchTerms, idx: number, command: string, commandReverse: string,
 		controlsInfo: ControlsInfo) => {
-		const term = terms[idx];
+		const term = terms.at(idx) as MatchTerm;
 		const controlPad = document.createElement("span");
 		controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
 		controlPad.classList.add(getSel(ElementClass.DISABLED));
@@ -539,7 +558,7 @@ const insertTermControl = (() => {
 		controlEdit.tabIndex = -1;
 		const controlEditChange = document.createElement("img");
 		const controlEditRemove = document.createElement("span");
-		controlEditChange.src = browser.runtime.getURL("/icons/edit.svg");
+		controlEditChange.src = chrome.runtime.getURL("/icons/edit.svg");
 		controlEditRemove.textContent = " ☓ ";
 		controlEditChange.classList.add(getSel(ElementClass.PRIMARY));
 		controlEditRemove.classList.add(getSel(ElementClass.SECONDARY));
@@ -611,14 +630,14 @@ const addControls = (() => {
 				[BarControl.DISABLE_TAB_RESEARCH]: {
 					label: "☓",
 					containerId: ElementID.BAR_OPTIONS,	
-					onclick: () => browser.runtime.sendMessage({
+					onclick: () => chrome.runtime.sendMessage({
 						disableTabResearch: true,
 					} as BackgroundMessage),
 				},
 				[BarControl.PERFORM_SEARCH]: {
 					label: "🌐",
 					containerId: ElementID.BAR_OPTIONS,
-					onclick: () => browser.runtime.sendMessage({
+					onclick: () => chrome.runtime.sendMessage({
 						performSearch: true,
 					} as BackgroundMessage),
 				},
@@ -693,12 +712,14 @@ const insertScrollMarkers = (() => {
 	};
 
 	return (highlightTags: HighlightTags, terms: MatchTerms) => {
+		// TODO construct using template literal/s instead of invoking the HTML parser for each?
 		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}-\\w+\\b`);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 		const containersInfo: Array<{
 			container: HTMLElement,
 			termsAdded: Set<string>,
 		}> = [];
+		const gutterParent = gutter.parentElement as HTMLElement;
 		clearMarkers(gutter);
 		if (terms.length === 0) {
 			return;
@@ -732,6 +753,7 @@ const insertScrollMarkers = (() => {
 			}
 			gutter.appendChild(marker);
 		});
+		gutterParent.appendChild(gutter);
 	};
 })();
 
@@ -1041,7 +1063,7 @@ const insertHighlights = (() => {
 (() => {
 	// TODO: configuration
 	const refreshTermControls = (() => {
-		const insertInterface = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
+		const insertToolbar = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
 			style: HTMLElement, controlsInfo: ControlsInfo, hues: TermHues) => {
 			removeControls();
 			addControls(highlightTags, commands, terms, style, controlsInfo, hues);
@@ -1070,21 +1092,30 @@ const insertHighlights = (() => {
 					term.compile();
 					refreshTermControl(highlightTags, terms[termToUpdateIdx], termToUpdateIdx);
 				}
-			} else if (termsUpdate !== undefined
-				&& termToUpdateIdx === TermChange.REMOVE && itemsMatchLoosely(terms.slice(0, -2), termsUpdate)) {
-				// TODO works?
-				restoreNodes(getSel(ElementClass.TERM, terms.length ? (terms.at(-1) as MatchTerm).selector : ""));
-				terms.splice(-1, 1);
-				insertInterface(highlightTags, commands, terms, style, controlsInfo, hues);
-				return;
 			} else if (termsUpdate !== undefined) {
 				// TODO: retain colours?
-				terms.splice(0);
-				termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-				insertInterface(highlightTags, commands, terms, style, controlsInfo, hues);
+				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
+					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
+					if (termRemovedPreviousIdx === -1) {
+						console.warn(`Request received to delete term ${JSON.stringify(termUpdate)} which is not stored in this page`);
+					} else {
+						removeTermControl(termRemovedPreviousIdx);
+						terms.splice(termRemovedPreviousIdx, 1);
+						if (termRemovedPreviousIdx === terms.length) {
+							// Since it was the last term, simply removing its highlights is accurate (as they are the most recent)
+							restoreNodes(getSel(ElementClass.TERM, termUpdate.selector));
+							return;
+						}
+					}
+				} else {
+					terms.splice(0);
+					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
+					insertToolbar(highlightTags, commands, terms, style, controlsInfo, hues);
+				}
 			} else if (!disable && !termsFromSelection) {
 				return;
 			}
+			// TODO incrementally cheaper highlight insertion for adding/modifying/removing terms
 			if (!disable) {
 				insertStyle(terms, style, hues);
 			}
@@ -1146,7 +1177,7 @@ const insertHighlights = (() => {
 		}();
 		const observer = getObserverNodeHighlighter(requestRefreshMarkers, highlightTags, terms);
 		const style = insertStyleElement();
-		browser.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
+		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
 				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));

@@ -96,7 +96,7 @@ class Engine {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightMessage {
 	command?: CommandInfo
-	extensionCommands?: Array<browser.commands.Command>
+	extensionCommands?: Array<chrome.commands.Command>
 	terms?: MatchTerms
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
@@ -109,7 +109,10 @@ interface HighlightMessage {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface BackgroundMessage {
-	terms: MatchTerms
+	tabId?: number
+	highlightMessage?: HighlightMessage
+	executeInTab?: boolean
+	terms?: MatchTerms
 	termChanged?: MatchTerm
 	termChangedIdx?: number
 	makeUnique?: boolean
