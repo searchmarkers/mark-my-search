@@ -17,7 +17,7 @@ const keyToSelector = (key: string) =>
 (() => {
 	const style = document.createElement("style");
 	style.textContent = `
-body { margin: 0; padding: 0; border: 0; }
+body { margin: 0; padding: 0; border: 0; width: max-content; }
 #${keyToSelector(ButtonKey.PROBLEM_REPORT_DESCRIBE)} { display: grid; }
 body > div { display: grid; }
 button { background-color: hsl(0, 0%, 70%); text-align: left;
@@ -97,7 +97,7 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
-chrome.tabs.query = browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+chrome.tabs.query = window.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
 
 buttons.researchTogglePage.onclick = () =>
 	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :

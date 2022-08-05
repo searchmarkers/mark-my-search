@@ -76,7 +76,7 @@ const defaultOptions: StorageSyncValues = {
 	},
 };
 
-chrome.storage = browser ? browser.storage as typeof chrome.storage : chrome.storage;
+chrome.storage = window.browser ? browser.storage as typeof chrome.storage : chrome.storage;
 chrome.storage["session"] = chrome.storage["session"] ?? chrome.storage.local;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -89,10 +89,10 @@ const jumpToTerm = (() => {
 		const focusContainer = document.body
 			.getElementsByClassName(getSel(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
 		const selection = document.getSelection();
-		const anchor = selection && (!document.activeElement
+		const selectionFocus = selection && (!document.activeElement
 			|| document.activeElement === document.body || !document.body.contains(document.activeElement)
 			|| document.activeElement === focusBase || document.activeElement.contains(focusContainer))
-			? selection.anchorNode
+			? selection.focusNode
 			: document.activeElement ?? document.body;
 		if (focusBase) {
 			focusBase.classList.remove(getSel(ElementClass.FOCUS));
@@ -104,27 +104,27 @@ const jumpToTerm = (() => {
 				})
 			;
 		}
-		const anchorContainer = anchor
-			? getContainerBlock(highlightTags, anchor.nodeType === Node.ELEMENT_NODE || !anchor.parentElement
-				? anchor as HTMLElement
-				: anchor.parentElement)
+		const selectionFocusContainer = selectionFocus
+			? getContainerBlock(highlightTags, selectionFocus.nodeType === Node.ELEMENT_NODE || !selectionFocus.parentElement
+				? selectionFocus as HTMLElement
+				: selectionFocus.parentElement)
 			: undefined;
-		const acceptInAnchorContainer = { value: false };
+		const acceptInSelectionFocusContainer = { value: false };
 		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H"
 			&& (termSelector ? element.classList.contains(termSelector) : true)
 			&& isVisible(element)
-			&& (getContainerBlock(highlightTags, element) !== anchorContainer || acceptInAnchorContainer.value)
+			&& (getContainerBlock(highlightTags, element) !== selectionFocusContainer || acceptInSelectionFocusContainer.value)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
-		walk.currentNode = anchor ? anchor : document.body;
+		walk.currentNode = selectionFocus ? selectionFocus : document.body;
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 		let elementTerm = walk[nextNodeMethod]() as HTMLElement;
 		if (!elementTerm) {
 			walk.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
 			elementTerm = walk[nextNodeMethod]() as HTMLElement;
 			if (!elementTerm) {
-				acceptInAnchorContainer.value = true;
+				acceptInSelectionFocusContainer.value = true;
 				elementTerm = walk[nextNodeMethod]() as HTMLElement;
 				if (!elementTerm) {
 					return;
@@ -189,89 +189,88 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idxCode: nu
 	const getIdx = () => replaces ? terms.indexOf(term) : TermChange.CREATE;
 	const termInput = document.createElement("input");
 	termInput.type = "text";
-	termInput.disabled = true;
-	const show = (event: KeyboardEvent | MouseEvent) => {
-		event.preventDefault();
+	termInput.classList.add(getSel(ElementClass.DISABLED));
+	const resetInput = (termText = controlContent.textContent as string) => {
+		termInput.value = replaces ? termText : "";
+	};
+	termInput.onfocus = () => {
+		termInput.classList.remove(getSel(ElementClass.DISABLED));
+		resetInput();
 		purgeClass(getSel(ElementClass.ACTIVE), document.getElementById(getSel(ElementID.BAR)) as HTMLElement);
 		termInput.classList.add(getSel(ElementClass.ACTIVE));
-		termInput.value = replaces ? controlContent.textContent as string : "";
-		termInput.disabled = false;
+	};
+	termInput.onblur = () => {
+		commit();
+		termInput.classList.add(getSel(ElementClass.DISABLED));
+	};
+	const show = (event: MouseEvent) => {
+		event.preventDefault();
 		termInput.select();
 	};
 	const hide = () => {
 		termInput.blur();
-		termInput.disabled = true;
 	};
-	const commit = (inputValue?: string) => {
-		let message: BackgroundMessage | null = null;
-		inputValue = inputValue ?? termInput.value;
-		// TODO: clean up following code and associated handling
-		if (replaces) {
-			const idx = getIdx();
-			const termsUpdate: MatchTerms = [];
-			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
-			if (inputValue === "") {
-				termsUpdate.splice(idx, 1);
-				message = {
-					terms: termsUpdate,
-					termChanged: term,
-					termChangedIdx: TermChange.REMOVE,
-				};
-			} else if (inputValue !== term.phrase) {
-				termsUpdate[idx] = new MatchTerm(inputValue, term.matchMode);
-				message = {
-					terms: termsUpdate,
-					termChanged: termsUpdate[idx],
-					termChangedIdx: idx,
-				};
-			}
-		} else if (inputValue !== "") {
-			const termsUpdate: MatchTerms = [];
-			terms.forEach(termOriginal => termsUpdate.push(termOriginal));
-			termsUpdate.push(new MatchTerm(inputValue));
-			message = {
-				terms: termsUpdate,
-				termChanged: termsUpdate.at(-1),
+	const commit = () => {
+		const inputValue = termInput.value;
+		const idx = getIdx();
+		if (replaces && inputValue === "") {
+			chrome.runtime.sendMessage({
+				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
+				termChanged: term,
+				termChangedIdx: TermChange.REMOVE,
+			});
+		} else if (replaces && inputValue !== term.phrase) {
+			const termChanged = new MatchTerm(inputValue, term.matchMode);
+			chrome.runtime.sendMessage({
+				terms: terms.map((term, i) => i === idx ? termChanged : term),
+				termChanged,
+				termChangedIdx: idx,
+			});
+		} else if (!replaces && inputValue !== "") {
+			const termChanged = new MatchTerm(inputValue);
+			chrome.runtime.sendMessage({
+				terms: terms.concat(termChanged),
+				termChanged,
 				termChangedIdx: TermChange.CREATE,
-			};
-		}
-		if (message) {
-			chrome.runtime.sendMessage(message);
+			});
 		}
 	};
 	if (controlEdit) {
 		controlEdit.onclick = event => {
-			if (termInput.disabled) {
+			if (!termInput.classList.contains(getSel(ElementClass.ACTIVE)) || getComputedStyle(termInput).width === "0") {
 				show(event);
 			} else {
+				termInput.value = "";
+				commit();
 				hide();
-				commit("");
 			}
 		};
 		controlEdit.oncontextmenu = event => {
 			event.preventDefault();
+			termInput.value = "";
+			commit();
 			hide();
-			commit("");
 		};
-		controlEdit.ondragstart = event => event.preventDefault();
+		controlEdit.ondragstart = event => event.preventDefault(); // TODO alternative? (e.g. HTML)
 		controlContent.oncontextmenu = show;
 	} else if (!replaces) {
-		controlPad.onclick = show;
-		controlPad.oncontextmenu = show;
+		const button = controlPad.querySelector("button") as HTMLButtonElement;
+		button.onclick = show;
+		button.oncontextmenu = show;
 	}
 	(new ResizeObserver(entries =>
-		entries.forEach(entry => {
-			if (entry.contentRect.width === 0 && !termInput.disabled) {
-				hide();
-				commit();
-			}
-		})
+		entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
 	)).observe(termInput);
 	termInput.onkeydown = event => {
 		if (event.key === "Enter") {
-			hide();
-			commit();
+			if (event.shiftKey) {
+				hide();
+			} else {
+				commit();
+				resetInput(termInput.value);
+			}
 		} else if (event.key === "Escape") {
+			resetInput();
 			hide();
 		} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
 			const idx = getIdx();
@@ -280,16 +279,20 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idxCode: nu
 				|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
 				return;
 			}
-			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
-			const activateInput = (button: HTMLElement, inputField: HTMLElement) => {
-				inputField.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
+			event.preventDefault();
+			const getControlAppendTerm = () =>
+				(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
+					.firstElementChild as HTMLElement | undefined;
+			const activateInput = (control: HTMLElement, buttonSelector = "button", shiftCaret = true) => {
+				const button = control.querySelector(buttonSelector) as HTMLElement;
 				button.dispatchEvent(new Event("contextmenu"));
-				inputField.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				if (shiftCaret) {
+					const caretPosition = shiftRight ? 0 : -1;
+					(control.querySelector("input") as HTMLInputElement).setSelectionRange(caretPosition, caretPosition);
+				}
 			};
 			if (shiftRight && idx === terms.length - 1) {
-				const appendTerm = (document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
-					.firstElementChild as HTMLElement;
-				activateInput(appendTerm, appendTerm.querySelector("input") as HTMLElement);
+				activateInput(getControlAppendTerm() as HTMLElement);
 				return;
 			} else if (shiftRight && !replaces) {
 				commit();
@@ -297,15 +300,19 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idxCode: nu
 				return;
 			} else if (!shiftRight && idx === 0) {
 				commit();
+				if (termInput.value === "") {
+					const focusingControlAppendTerm = terms.length === 1;
+					const control = focusingControlAppendTerm
+						? getControlAppendTerm() as HTMLElement
+						: getTermControl(undefined, 1) as HTMLElement;
+					activateInput(control, focusingControlAppendTerm ? undefined : `.${getSel(ElementClass.CONTROL_CONTENT)}`);
+				}
 				return;
 			}
-			const control = bar.getElementsByClassName(getSel(ElementClass.TERM, terms[replaces
+			const control = getTermControl(undefined, replaces
 				? shiftRight ? idx + 1 : idx - 1
-				: terms.length - 1].selector))[0];
-			activateInput(
-				control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement,
-				control.querySelector("input") as HTMLElement,
-			);
+				: terms.length - 1) as HTMLElement;
+			activateInput(control, `.${getSel(ElementClass.CONTROL_CONTENT)}`);
 		}
 	};
 	return termInput;
@@ -341,14 +348,24 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
 	{ padding: 0 1px 0 1px !important; border: inherit; border-radius: inherit; text-transform: revert; height: 100%; margin: 0; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} img
-	{ display: block; height: 1.1em; width: 1.1em; }
+	{ height: 1.1em; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} *
-	{ margin: 0; filter: unset !important; background-color: unset; }
-.${getSel(ElementClass.CONTROL_PAD)} input:not(:disabled) + .${getSel(ElementClass.CONTROL_EDIT)}
-.${getSel(ElementClass.PRIMARY)}
+	{ display: block; width: 1.3em; margin: 0; filter: unset !important; background-color: unset; }
+.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: none; }
-.${getSel(ElementClass.CONTROL_PAD)} input:disabled + .${getSel(ElementClass.CONTROL_EDIT)}
-.${getSel(ElementClass.SECONDARY)}
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled
++ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus)
++ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
++ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
+	{ display: block; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled
++ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus)
++ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
++ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)}
 	{ display: none; }
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 4px !important; padding-block: 1px !important; }
@@ -360,29 +377,23 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px !important; border-inline: 2px solid hsla(0, 0%, 0%, 0.4); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ background: hsl(0, 0%, 80%) !important; padding: 1px 4px 1px 4px; }
+	{ background: hsl(0, 0%, 80%) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} button
-	{ padding: 0 !important; margin: 0; font: revert; background: none; border: none; }
+	{ margin: 0; font: revert; background: none; border: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} button > *
 	{ line-height: 120%; filter: grayscale(100%) contrast(10000%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
 	{ background: hsla(0, 0%, 80%, 0.6) !important; color: #000; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
-	{ all: revert; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; width: 100px; line-height: 120%;
+	{ all: revert; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; width: 60px; line-height: 120%;
 	box-sizing: unset !important; font-family: revert !important; color: #000 !important; height: fit-content; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)}
-input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:disabled,
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)}
-input:not(:focus):not(.${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input:disabled
-	{ display: none; }
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)}),
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
+	{ width: 0; padding: 0 !important; margin: 0; }
 #${getSel(ElementID.BAR_TERMS)} > *
 	{ all: revert; position: relative; display: inline-block; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL)},
@@ -456,16 +467,16 @@ input:not(:focus):not(.${getSel(ElementClass.ACTIVE)}),
 	});
 };
 
-const getTermControl = (term?: MatchTerm, idx?: number): HTMLElement => {
+const getTermControl = (term?: MatchTerm, idx?: number) => {
 	const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
 	return (idx === undefined && term
 		? barTerms.getElementsByClassName(getSel(ElementClass.TERM, term.selector))[0]
 		: Array.from(barTerms.children).at(idx ?? -1)
-	) as HTMLElement;
+	) as HTMLElement | undefined;
 };
 
 const updateTermTooltip = (term: MatchTerm) => {
-	const controlPad = getTermControl(term)
+	const controlPad = (getTermControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
 	const controlContent = controlPad
 		.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
@@ -498,7 +509,7 @@ const updateTermMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) 
 };
 
 const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: number) => {
-	const control = getTermControl(undefined, idx);
+	const control = getTermControl(undefined, idx) as HTMLElement;
 	control.className = "";
 	control.classList.add(getSel(ElementClass.CONTROL));
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
@@ -512,7 +523,7 @@ const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: 
 };
 
 const removeTermControl = (idx: number) => {
-	getTermControl(undefined, idx).remove();
+	(getTermControl(undefined, idx) as HTMLElement).remove();
 };
 
 const insertTermControl = (() => {
@@ -658,6 +669,15 @@ const addControls = (() => {
 		insertStyle(terms, style, hues);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
+		bar.onmouseenter = () => {
+			purgeClass(getSel(ElementClass.ACTIVE), bar);
+			const controlInput = document.activeElement;
+			if (controlInput && controlInput.tagName === "INPUT"
+				&& controlInput.closest(`#${getSel(ElementID.BAR)}`)) {
+				controlInput.classList.add(getSel(ElementClass.ACTIVE));
+			}
+		};
+		bar.onmouseleave = bar.onmouseenter;
 		if (controlsInfo.highlightsShown) {
 			bar.classList.add(getSel(ElementClass.HIGHLIGHTS_SHOWN));
 		}
