@@ -97,7 +97,7 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
-chrome.tabs.query = window.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+chrome.tabs.query = this.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
 
 buttons.researchTogglePage.onclick = () =>
 	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :

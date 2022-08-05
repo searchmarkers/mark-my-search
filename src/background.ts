@@ -1,5 +1,5 @@
-chrome.scripting = window.browser ? browser["scripting"] : chrome.scripting;
-chrome.tabs.query = window.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+chrome.scripting = this.browser ? browser["scripting"] : chrome.scripting;
+chrome.tabs.query = this.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
 
 const createResearchInstance = (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
@@ -161,7 +161,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	};
 
 	const setUp = () => {
-		if (window.browser) {
+		if (this.browser) {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			browser.commands.update({ name: "toggle-bar", shortcut: "Ctrl+Shift+F" });
 			browser.commands.update({ name: "toggle-research-global", shortcut: "Alt+Shift+J" });

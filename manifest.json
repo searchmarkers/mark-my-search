@@ -32,7 +32,7 @@
 	],
 
 	"background": {
-		"service_worker": [
+		"scripts": [
 			"/dist/manage-storage.js",
 			"/dist/stem-pattern-find.js",
 			"/dist/shared-content.js",
