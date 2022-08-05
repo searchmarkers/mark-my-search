@@ -1,5 +1,5 @@
-chrome.scripting = this.browser ? browser["scripting"] : chrome.scripting;
-chrome.tabs.query = this.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+chrome.scripting = window.browser ? browser["scripting"] : chrome.scripting;
+chrome.tabs.query = window.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
 
 const createResearchInstance = (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
@@ -99,7 +99,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	;
 
 	return () => {
-		if (!browser || !chrome.bookmarks) {
+		if (!this.browser || !chrome.bookmarks) {
 			return;
 		}
 		browser.bookmarks.getTree().then(nodes => getStorageSession(StorageSession.ENGINES).then(session => {
@@ -137,7 +137,10 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg" })
+		: chrome.action.setIcon({ path: this.browser
+			? enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
+			: enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
+		})
 ;
 
 (() => {
