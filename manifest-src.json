@@ -4,15 +4,20 @@
 	"description": "Find what you searched for anywhere on the web. Focus your research and find areas of interest with this intuitive instant word highlighter.",
 	"version": "1.2.2",
 
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "{3c87dcad-dbbd-4be1-b07b-b6d0739b0aec}"
+		}
+	},
+
 	"icons": {
-		"48": "/icons/mms-48.png",
-		"96": "/icons/mms-96.png"
+		"48": "/icons/mms.svg",
+		"96": "/icons/mms.svg"
 	},
 
 	"permissions": [
 		"scripting",
 		"tabs",
-		"webNavigation",
 		"storage",
 		"search",
 		"contextMenus"
@@ -27,7 +32,12 @@
 	],
 
 	"background": {
-		"service_worker": "/dist/background.js"
+		"scripts": [
+			"/dist/manage-storage.js",
+			"/dist/stem-pattern-find.js",
+			"/dist/shared-content.js",
+			"/dist/background.js"
+		]
 	},
 
 	"options_ui": {
@@ -36,10 +46,7 @@
 	},
 
 	"action": {
-		"default_icon": {
-			"16": "/icons/mms-16.png",
-			"32": "/icons/mms-32.png"
-		},
+		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
 	},
