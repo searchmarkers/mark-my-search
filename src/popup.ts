@@ -1,3 +1,5 @@
+chrome.tabs.query = !isBrowserChromium() /* Running in Chromium */  ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+
 enum ButtonKey {
 	RESEARCH_TOGGLE_PAGE = "researchTogglePage",
 	RESEARCH_TOGGLE = "researchToggle",
@@ -20,17 +22,17 @@ const keyToSelector = (key: string) =>
 body { margin: 0; padding: 0; border: 0; width: max-content; }
 #${keyToSelector(ButtonKey.PROBLEM_REPORT_DESCRIBE)} { display: grid; }
 body > div { display: grid; }
-button { background-color: hsl(0, 0%, 70%); text-align: left;
+button { background-color: hsl(0 0% 70%); text-align: left;
 	border-radius: 0; border-style: none; border-bottom-style: solid; border-color: black; border-width: 1px; }
 button:focus { outline-style: none; text-decoration: underline; }
-button:hover { background-color: hsl(0, 0%, 85%); }
-button:active { outline-style: none; background-color: hsl(0, 0%, 95%); }
-.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED} { background-color: hsl(90, 100%, 60%); }
-.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED}:hover { background-color: hsl(90, 100%, 75%); }
-.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED}:active { background-color: hsl(90, 100%, 85%); }
-.${ButtonClass.TOGGLE} { background-color: hsl(0, 100%, 75%); }
-.${ButtonClass.TOGGLE}:hover { background-color: hsl(0, 100%, 85%); }
-.${ButtonClass.TOGGLE}:active { background-color: hsl(0, 100%, 90%); }
+button:hover { background-color: hsl(0 0% 85%); }
+button:active { outline-style: none; background-color: hsl(0 0% 95%); }
+.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED} { background-color: hsl(90 100% 60%); }
+.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED}:hover { background-color: hsl(90 100% 75%); }
+.${ButtonClass.TOGGLE}.${ButtonClass.ENABLED}:active { background-color: hsl(90 100% 85%); }
+.${ButtonClass.TOGGLE} { background-color: hsl(0 100% 75%); }
+.${ButtonClass.TOGGLE}:hover { background-color: hsl(0 100% 85%); }
+.${ButtonClass.TOGGLE}:active { background-color: hsl(0 100% 90%); }
 input:active { outline-style: none; display: inline-block; }`
 	;
 	document.head.appendChild(style);
@@ -96,8 +98,6 @@ buttonArray.forEach((button, i) => {
 		}
 	};
 });
-
-chrome.tabs.query = this.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
 
 buttons.researchTogglePage.onclick = () =>
 	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :

@@ -1,3 +1,6 @@
+chrome.storage = !isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
+chrome.storage.session = chrome.storage.session ?? chrome.storage.local;
+
 type ResearchInstances = Record<number, ResearchInstance>
 type Stoplist = Array<string>
 type Engines = Record<string, Engine>
@@ -75,9 +78,6 @@ const defaultOptions: StorageSyncValues = {
 		showEditIcon: true,
 	},
 };
-
-chrome.storage = this.browser ? browser.storage as typeof chrome.storage : chrome.storage;
-chrome.storage["session"] = chrome.storage["session"] ?? chrome.storage.local;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSession = (items: StorageSessionValues) => {

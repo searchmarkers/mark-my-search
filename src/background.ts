@@ -1,5 +1,13 @@
-chrome.scripting = window.browser ? browser["scripting"] : chrome.scripting;
-chrome.tabs.query = window.browser ? browser.tabs.query as typeof chrome.tabs.query : chrome.tabs.query;
+if (isBrowserChromium()) {
+	// Firefox accepts a list of event page scripts, whereas Chromium only accepts service workers
+	this["importScripts"](
+		"/dist/manage-storage.js",
+		"/dist/stem-pattern-find.js",
+		"/dist/shared-content.js",
+	);
+}
+chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
+chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
 
 const createResearchInstance = (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
@@ -99,7 +107,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	;
 
 	return () => {
-		if (!this.browser || !chrome.bookmarks) {
+		if (isBrowserChromium() || !chrome.bookmarks) {
 			return;
 		}
 		browser.bookmarks.getTree().then(nodes => getStorageSession(StorageSession.ENGINES).then(session => {
@@ -137,9 +145,9 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: this.browser
-			? enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
-			: enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
+		: chrome.action.setIcon({ path: isBrowserChromium()
+			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
+			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
 ;
 
@@ -164,7 +172,9 @@ const updateActionIcon = (enabled?: boolean) =>
 	};
 
 	const setUp = () => {
-		if (this.browser) {
+		if (isBrowserChromium()) {
+			// TODO: instruct user how to assign the appropriate shortcuts
+		} else {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			browser.commands.update({ name: "toggle-bar", shortcut: "Ctrl+Shift+F" });
 			browser.commands.update({ name: "toggle-research-global", shortcut: "Alt+Shift+J" });
@@ -173,8 +183,6 @@ const updateActionIcon = (enabled?: boolean) =>
 				browser.commands.update({ name: `select-term-${i}`, shortcut: `Alt+Shift+${(i + 1) % 10}` });
 				browser.commands.update({ name: `select-term-${i}-reverse`, shortcut: `Ctrl+Shift+${(i + 1) % 10}` });
 			}
-		} else {
-			// TODO: instruct user how to assign the appropriate shortcuts
 		}
 	};
 
@@ -246,6 +254,14 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => !changeInfo.url ? undefined :
 		pageModifyRemote(changeInfo.url, tabId)
 	);
+
+	if (isBrowserChromium()) {
+		// Chromium emits no `tabs` event for tab reload
+		chrome.webNavigation.onCommitted.addListener(details =>
+			details.url === "" || details.transitionType !== "reload" ? undefined :
+				pageModifyRemote(details.url, details.tabId)
+		);
+	}
 })();
 
 const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean) => {

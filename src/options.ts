@@ -25,14 +25,14 @@ body { background-color: #bbb; }
 .${OptionClass.ERRONEOUS} { color: #e11; }
 .${OptionClass.MODIFIED} { font-weight: bold; }
 .${OptionClass.TAB_BUTTON} { border-radius: 0; display: none; }
-.${OptionClass.CONTAINER_TAB} { padding: 10px; }
+.${OptionClass.CONTAINER_TAB} { display: flex; flex-flow: column; }
 .${OptionClass.OPTION_SECTION} { background-color: #eee; box-shadow: 2px 2px 4px hsla(0, 0%, 0%, 0.4);
-	border-radius: 6px; padding: 8px; margin-block: 10px; width: fit-content; }
+	border-radius: 6px; padding: 6px; margin-block: 4px; }
 .${OptionClass.OPTION_LABEL} { color: #111; margin-bottom: 4px; }
-.${OptionClass.TABLE_PREFERENCES} { table-layout: fixed; border-spacing: 0; width: 100%; }
-.${OptionClass.TABLE_PREFERENCES} td { width: min-content; }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} { width: auto; }
-.${OptionClass.PREFERENCE_ROW} { color: #353535; }
+.${OptionClass.TABLE_PREFERENCES} { display: flex; flex-flow: column; width: 100%; }
+.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} { flex: 1; display: flex; align-items: center; }
+.${OptionClass.TABLE_PREFERENCES} input[type=text] { width: 110px; }
+.${OptionClass.PREFERENCE_ROW} { display: flex; color: #353535; }
 .${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN} { background-color: #ddd; }`
 	;
 	document.head.appendChild(style);
@@ -156,7 +156,7 @@ const loadTab = (tabContainer: HTMLElement, tabIdx: number) => getStorageSync().
 		optionLabel.textContent = optionInfo.label;
 		optionLabel.classList.add(OptionClass.OPTION_LABEL);
 		section.appendChild(optionLabel);
-		const table = document.createElement("table");
+		const table = document.createElement("div");
 		table.classList.add(OptionClass.TABLE_PREFERENCES);
 		section.appendChild(table);
 		container.appendChild(section);
@@ -168,9 +168,9 @@ const loadTab = (tabContainer: HTMLElement, tabIdx: number) => getStorageSync().
 		Object.keys(preferences).forEach((preferenceKey, i) => {
 			const preferenceInfo = preferences[preferenceKey];
 			const isSinglePreference = optionKey === preferenceKey; // TODO: replace heuristic of 'optionKey === preferenceKey'
-			const row = document.createElement("tr");
+			const row = document.createElement("div");
 			const addCell = (node: Node, isInFirstColumn = false) => {
-				const cell = document.createElement("td");
+				const cell = document.createElement("div");
 				cell.appendChild(node);
 				if (isInFirstColumn) {
 					cell.classList.add(OptionClass.PREFERENCE_CELL_LABEL);

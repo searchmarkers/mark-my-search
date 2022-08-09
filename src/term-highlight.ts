@@ -2,7 +2,8 @@ type BrowserCommands = Array<chrome.commands.Command>
 type HighlightTags = Record<string, RegExp>
 type TermHues = ReadonlyArray<number>
 type ButtonInfo = {
-	label: string
+	path?: string
+	label?: string
 	containerId: ElementID
 	onclick?: () => void
 	setUp?: (container: HTMLElement) => void
@@ -20,7 +21,6 @@ enum ElementClass {
 	BAR_HIDDEN = "bar-hidden",
 	CONTROL = "control",
 	CONTROL_PAD = "control-pad",
-	CONTROL_EXPAND = "control-expand",
 	CONTROL_CONTENT = "control-content",
 	CONTROL_EDIT = "control-edit",
 	BAR_CONTROL = "bar-control",
@@ -179,41 +179,30 @@ const jumpToTerm = (() => {
 	};
 })();
 
-const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idxCode: number) => {
-	const controlContent = controlPad
-		.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement ?? controlPad;
-	const controlEdit = controlPad
-		.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement | undefined;
-	const term = terms[idxCode];
-	const replaces = idxCode !== TermChange.CREATE;
-	const getIdx = () => replaces ? terms.indexOf(term) : TermChange.CREATE;
-	const termInput = document.createElement("input");
-	termInput.type = "text";
-	termInput.classList.add(getSel(ElementClass.DISABLED));
-	const resetInput = (termText = controlContent.textContent as string) => {
-		termInput.value = replaces ? termText : "";
+const createTermInput = (() => {
+	const getIdx = (term: MatchTerm | undefined, terms: MatchTerms) =>
+		term ? terms.indexOf(term) : TermChange.CREATE
+	;
+
+	const activateInput = (control: HTMLElement, shiftCaretRight?: boolean) => {
+		const input = control.querySelector("input") as HTMLInputElement;
+		input.select();
+		if (shiftCaretRight !== undefined) {
+			const caretPosition = shiftCaretRight ? 0 : -1;
+			input.setSelectionRange(caretPosition, caretPosition);
+		}
 	};
-	termInput.onfocus = () => {
-		termInput.classList.remove(getSel(ElementClass.DISABLED));
-		resetInput();
-		purgeClass(getSel(ElementClass.ACTIVE), document.getElementById(getSel(ElementID.BAR)) as HTMLElement);
-		termInput.classList.add(getSel(ElementClass.ACTIVE));
-	};
-	termInput.onblur = () => {
-		commit();
-		termInput.classList.add(getSel(ElementClass.DISABLED));
-	};
-	const show = (event: MouseEvent) => {
-		event.preventDefault();
-		termInput.select();
-	};
-	const hide = () => {
-		termInput.blur();
-	};
-	const commit = () => {
+
+	const commit = (term: MatchTerm | undefined, terms: MatchTerms) => {
+		const replaces = !!term;
+		const control = getTermControl(term) as HTMLElement;
+		const termInput = control.querySelector("input") as HTMLInputElement;
 		const inputValue = termInput.value;
-		const idx = getIdx();
+		const idx = getIdx(term, terms);
 		if (replaces && inputValue === "") {
+			if (document.activeElement === termInput) {
+				activateInput(getTermControl(undefined, idx + 1) as HTMLElement);
+			}
 			chrome.runtime.sendMessage({
 				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
 				termChanged: term,
@@ -235,122 +224,131 @@ const createTermInput = (terms: MatchTerms, controlPad: HTMLElement, idxCode: nu
 			});
 		}
 	};
-	if (controlEdit) {
-		controlEdit.onclick = event => {
-			if (!termInput.classList.contains(getSel(ElementClass.ACTIVE)) || getComputedStyle(termInput).width === "0") {
-				show(event);
-			} else {
-				termInput.value = "";
-				commit();
-				hide();
-			}
-		};
-		controlEdit.oncontextmenu = event => {
-			event.preventDefault();
+
+	const shiftTermFocus = (term: MatchTerm | undefined, shiftRight: boolean, onBeforeShift: () => void, terms: MatchTerms) => {
+		const replaces = !!term;
+		const control = getTermControl(term) as HTMLElement;
+		const termInput = control.querySelector("input") as HTMLInputElement;
+		const idx = getIdx(term, terms);
+		if (termInput.selectionStart !== termInput.selectionEnd
+			|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
+			return;
+		}
+		onBeforeShift();
+		if (shiftRight && idx === terms.length - 1) {
+			activateInput(getControlAppendTerm() as HTMLElement, shiftRight);
+			return;
+		} else if (shiftRight && !replaces) {
+			commit(term, terms);
 			termInput.value = "";
-			commit();
-			hide();
+			return;
+		} else if (!shiftRight && idx === 0) {
+			commit(term, terms);
+			if (termInput.value === "") {
+				const focusingControlAppendTerm = terms.length === 1;
+				const controlTarget = focusingControlAppendTerm
+					? getControlAppendTerm() as HTMLElement
+					: getTermControl(undefined, 1) as HTMLElement;
+				activateInput(controlTarget, shiftRight);
+			}
+			return;
+		}
+		const controlTarget = getTermControl(undefined, replaces
+			? shiftRight ? idx + 1 : idx - 1
+			: terms.length - 1) as HTMLElement;
+		activateInput(controlTarget, shiftRight);
+	};
+
+	return (terms: MatchTerms, controlPad: HTMLElement, idxCode: number) => {
+		const controlContent = controlPad
+			.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement ?? controlPad;
+		const controlEdit = controlPad
+			.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement | undefined;
+		const term = terms[idxCode] as MatchTerm | undefined;
+		const replaces = idxCode !== TermChange.CREATE;
+		const termInput = document.createElement("input");
+		termInput.type = "text";
+		termInput.classList.add(getSel(ElementClass.DISABLED));
+		const resetInput = (termText = controlContent.textContent as string) => {
+			termInput.value = replaces ? termText : "";
 		};
-		controlEdit.ondragstart = event => event.preventDefault(); // TODO alternative? (e.g. HTML)
-		controlContent.oncontextmenu = show;
-	} else if (!replaces) {
-		const button = controlPad.querySelector("button") as HTMLButtonElement;
-		button.onclick = show;
-		button.oncontextmenu = show;
-	}
-	(new ResizeObserver(entries =>
-		entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
-	)).observe(termInput);
-	termInput.onkeydown = event => {
-		if (event.key === "Enter") {
-			if (event.shiftKey) {
-				hide();
-			} else {
-				commit();
-				resetInput(termInput.value);
-			}
-		} else if (event.key === "Escape") {
+		termInput.onfocus = () => {
+			termInput.classList.remove(getSel(ElementClass.DISABLED));
 			resetInput();
-			hide();
-		} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-			const idx = getIdx();
-			const shiftRight = event.key === "ArrowRight";
-			if (termInput.selectionStart !== termInput.selectionEnd
-				|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
-				return;
-			}
+			purgeClass(getSel(ElementClass.ACTIVE), document.getElementById(getSel(ElementID.BAR)) as HTMLElement);
+			termInput.classList.add(getSel(ElementClass.ACTIVE));
+		};
+		termInput.onblur = () => {
+			commit(term, terms);
+			termInput.classList.add(getSel(ElementClass.DISABLED));
+		};
+		const show = (event: MouseEvent) => {
 			event.preventDefault();
-			const getControlAppendTerm = () =>
-				(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
-					.firstElementChild as HTMLElement | undefined;
-			const activateInput = (control: HTMLElement, buttonSelector = "button", shiftCaret = true) => {
-				const button = control.querySelector(buttonSelector) as HTMLElement;
-				button.dispatchEvent(new Event("contextmenu"));
-				if (shiftCaret) {
-					const caretPosition = shiftRight ? 0 : -1;
-					(control.querySelector("input") as HTMLInputElement).setSelectionRange(caretPosition, caretPosition);
+			termInput.select();
+		};
+		const hide = () => {
+			termInput.blur();
+		};
+		if (controlEdit) {
+			controlEdit.onclick = event => {
+				if (!termInput.classList.contains(getSel(ElementClass.ACTIVE)) || getComputedStyle(termInput).width === "0") {
+					show(event);
+				} else {
+					termInput.value = "";
+					commit(term, terms);
+					hide();
 				}
 			};
-			if (shiftRight && idx === terms.length - 1) {
-				activateInput(getControlAppendTerm() as HTMLElement);
-				return;
-			} else if (shiftRight && !replaces) {
-				commit();
+			controlEdit.oncontextmenu = event => {
+				event.preventDefault();
 				termInput.value = "";
-				return;
-			} else if (!shiftRight && idx === 0) {
-				commit();
-				if (termInput.value === "") {
-					const focusingControlAppendTerm = terms.length === 1;
-					const control = focusingControlAppendTerm
-						? getControlAppendTerm() as HTMLElement
-						: getTermControl(undefined, 1) as HTMLElement;
-					activateInput(control, focusingControlAppendTerm ? undefined : `.${getSel(ElementClass.CONTROL_CONTENT)}`);
-				}
-				return;
-			}
-			const control = getTermControl(undefined, replaces
-				? shiftRight ? idx + 1 : idx - 1
-				: terms.length - 1) as HTMLElement;
-			activateInput(control, `.${getSel(ElementClass.CONTROL_CONTENT)}`);
+				commit(term, terms);
+				hide();
+			};
+			controlContent.oncontextmenu = show;
+		} else if (!replaces) {
+			const button = controlPad.querySelector("button") as HTMLButtonElement;
+			button.onclick = show;
+			button.oncontextmenu = show;
 		}
+		(new ResizeObserver(entries =>
+			entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
+		)).observe(termInput);
+		termInput.onkeydown = event => {
+			if (event.key === "Enter") {
+				if (event.shiftKey) {
+					hide();
+				} else {
+					commit(term, terms);
+					resetInput(termInput.value);
+				}
+			} else if (event.key === "Escape") {
+				resetInput();
+				hide();
+			} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+				shiftTermFocus(term, event.key === "ArrowRight", () => event.preventDefault(), terms);
+			}
+		};
+		return termInput;
 	};
-	return termInput;
-};
+})();
 
 const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<number>) => {
 	const zIndexMax = 2147483647;
 	style.textContent = `
-@keyframes ${getSel(Keyframes.FLASH)}
-	{ from { background-color: hsla(0, 0%, 65%, 0.8); } to {}; }
-@keyframes ${getSel(Keyframes.MARKER_ON)}
-	{ from {} to { padding-right: 16px; }; }
-@keyframes ${getSel(Keyframes.MARKER_OFF)}
-	{ from { padding-right: 16px; } to { padding-right: 0; }; }
-.${getSel(ElementClass.FOCUS_CONTAINER)}
-	{ animation: ${getSel(Keyframes.FLASH)} 1s; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
-+ .${getSel(ElementClass.OPTION_LIST)}
-	{ all: revert; position: absolute; display: flex; flex-direction: column; width: max-content; left: -40px; z-index: 1; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ all: revert; display: inline-flex; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ all: revert; display: grid; grid-template-columns: repeat(3, auto); grid-auto-rows: 1fr; } /* TODO remove use of grid */
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)},
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)},
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:hover,
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ color: #000 !important; border-style: none; box-shadow: 1px 1px 5px; border-radius: 4px; align-items: center; }
-.${getSel(ElementClass.CONTROL_PAD)} button
-	{ background: none; border: none; padding-inline: 0; margin-block: 0; font: revert; line-height: 120%;
-	color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
-.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)},
-.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)}
-	{ padding: 0 1px 0 1px !important; border: inherit; border-radius: inherit; text-transform: revert; height: 100%; margin: 0; }
-.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} img
-	{ height: 1.1em; }
-.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} *
-	{ display: block; width: 1.3em; margin: 0; filter: unset !important; background-color: unset; }
+/* TODO reorganise and rename */
+/* TERM INPUT & BUTTONS */
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
+	{ all: revert; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; width: 60px; line-height: 120%;
+	box-sizing: unset !important; font-family: revert !important; color: #000 !important; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)}),
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
+	{ width: 0; padding: 0 !important; margin: 0; }
+#${getSel(ElementID.BAR)}
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled
@@ -367,103 +365,134 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)}
 	{ display: none; }
-.${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_CONTENT)}
-	{ padding-inline: 4px !important; padding-block: 1px !important; }
+/**/
+
+/* TERM MATCH MODES STYLE */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_CASE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-top: 0 !important; border-top: 1px dashed black; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
-	{ padding-inline: 2px !important; border-inline: 2px solid hsla(0, 0%, 0%, 0.4); }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ background: hsl(0, 0%, 80%) !important; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} button
-	{ margin: 0; font: revert; background: none; border: none; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} button > *
-	{ line-height: 120%; filter: grayscale(100%) contrast(10000%); }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ background: hsla(0, 0%, 80%, 0.6) !important; color: #000; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
-	{ all: revert; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; width: 60px; line-height: 120%;
-	box-sizing: unset !important; font-family: revert !important; color: #000 !important; height: fit-content; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)}),
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
-	{ width: 0; padding: 0 !important; margin: 0; }
-#${getSel(ElementID.BAR_TERMS)} > *
-	{ all: revert; position: relative; display: inline-block; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL)},
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
-	{ margin-left: 8px; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_EXPAND)}
-	{ all: revert; position: relative; font-weight: bold;
-	border: none; margin-left: 3px; width: 15px; height: 18px; background: none; color: white; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_EXPAND)}:hover,
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_EXPAND)}:active
-	{ color: transparent; }
+	{ padding-inline: 2px !important; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
+/**/
+
+/* BAR */
+#${getSel(ElementID.BAR)}
+	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; line-height: initial; font-size: 0; display: flex;
+	user-select: none; }
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
+	{ display: none; }
+#${getSel(ElementID.BAR)} *
+	{ all: revert; font: revert; display: inline-block; padding: 0; line-height: 120%; outline: none; }
+#${getSel(ElementID.BAR)} img
+	{ display: block; height: 1.05em; width: 1.05em; margin: 1px; }
+#${getSel(ElementID.BAR)} button
+	{ background: none; border: none; border-radius: inherit; padding-inline: 4px; margin-block: 0;
+	color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
+#${getSel(ElementID.BAR)} > *
+	{ display: flex; }
+#${getSel(ElementID.BAR)} > * > *
+	{ display: flex; margin-left: 8px; }
+#${getSel(ElementID.BAR)} > * > * > * > *
+	{ padding-block: 1px; }
+/**/
+
+/* TERM PULLDOWN */
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
++ .${getSel(ElementClass.OPTION_LIST)}
+	{ all: revert; position: absolute; display: flex; flex-direction: column; top: 100%; width: max-content; padding: 0; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
 	{ all: revert; display: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ all: revert; margin-left: 3px; background: hsl(0, 0%, 75%) !important; filter: grayscale(100%);
+	{ all: revert; margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
 	width: 100%; line-height: 120%; text-align: left; color: #111 !important;
-	border-color: hsl(0, 0%, 50%) !important; border-bottom-width: 1px !important;
+	border-color: hsl(0 0% 50%) !important; border-bottom-width: 1px !important;
 	border-style: none none solid solid !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
-	{ background: hsl(0, 0%, 90%) !important; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}:hover
-	{ background: hsl(0, 0%, 65%) !important; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}:active
-	{ background: hsl(0, 0%, 50%) !important; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.DISABLED)}:not(:active)
+	{ background: hsl(0 0% 90%) !important; }
+/**/
+
+/* BAR CONTROL PADS */
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
+	{ display: flex; border-radius: 4px; color: #000 !important; border-style: none; box-shadow: 1px 1px 5px; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
+	{ background: hsl(0 0% 90% / 0.8) !important; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:hover
+	{ background: hsl(0 0% 65%) !important; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:active
+	{ background: hsl(0 0% 50%) !important; }
+#${getSel(ElementID.BAR)} > * > .${getSel(ElementClass.DISABLED)}
 	{ display: none; }
-#${getSel(ElementID.BAR)}
-	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; line-height: initial; font-size: 0; display: none; }
-#${getSel(ElementID.BAR)}:not(.${getSel(ElementClass.BAR_HIDDEN)})
-	{ display: inline; }
+#${getSel(ElementID.BAR)} #${getSel(ElementID.BAR_TERMS)}
+.${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
+	{ display: flex; }
+#${getSel(ElementID.BAR)} #${getSel(ElementID.BAR_TERMS)}
+.${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
+	{ background: hsl(0 0% 80% / 0.6) !important; }
+/**/
+
+/* TERM SCROLL MARKERS */
+@keyframes ${getSel(Keyframes.MARKER_ON)}
+	{ from {} to { padding-right: 16px; }; }
+@keyframes ${getSel(Keyframes.MARKER_OFF)}
+	{ from { padding-right: 16px; } to { padding-right: 0; }; }
 #${getSel(ElementID.MARKER_GUTTER)}
 	{ z-index: ${zIndexMax}; display: block; right: 0; top: 0; width: 12px; height: 100%; }
 #${getSel(ElementID.MARKER_GUTTER)} div
 	{ width: 16px; height: 100%; top: 0; height: 1px; position: absolute; right: 0; border-left: solid black 1px; box-sizing: unset;
 	padding-right: 0; transition: padding-right 600ms; pointer-events: none; }
 #${getSel(ElementID.MARKER_GUTTER)}
-	{ position: fixed; background: linear-gradient(to right, transparent, hsla(0, 0%, 0%, 0.7) 70%); }
+	{ position: fixed; background: linear-gradient(to right, transparent, hsl(0 0% 0% / 0.7) 70%); }
 #${getSel(ElementID.MARKER_GUTTER)} div.${getSel(ElementClass.FOCUS)}
-	{ padding-right: 16px; transition: unset; }`
-	;
+	{ padding-right: 16px; transition: unset; }
+/**/
+
+/* TERM HIGHLIGHTS */
+@keyframes ${getSel(Keyframes.FLASH)}
+	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
+.${getSel(ElementClass.FOCUS_CONTAINER)}
+	{ animation: ${getSel(Keyframes.FLASH)} 1s; }
+/**/
+	`;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		const getBackgroundStyle = (colorA: string, colorB: string) =>
 			i < hues.length ? colorA : `repeating-linear-gradient(-45deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`;
 		style.textContent += `
+/* TERM HIGHLIGHTS */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
-	{ background: ${getBackgroundStyle(`hsla(${hue}, 100%, 60%, 0.4)`, `hsla(${hue}, 100%, 90%, 0.4)`)} !important;
-	border-radius: 2px !important; box-shadow: 0 0 0 1px hsla(${hue}, 100%, 20%, 0.35) !important; }
+	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 90% / 0.4)`)} !important;
+	border-radius: 2px !important; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35) !important; }
+/**/
+
+/* TERM MARKERS */
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)}
-	{ background: hsl(${hue}, 100%, 50%); }
+	{ background: hsl(${hue} 100% 50%); }
+/**/
+
+/* TERM BUTTONS */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(`hsla(${hue}, 70%, 70%, 0.8)`, `hsla(${hue}, 70%, 90%, 0.8)`)}; }
+	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 90% / 0.8)`)} !important; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_CONTENT)}:hover,
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_EDIT)}:hover:not(:disabled)
-	{ background: hsl(${hue}, 70%, 80%); }
+	{ background: hsl(${hue} 70% 80%) !important; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_CONTENT)}:active,
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_EDIT)}:active:not(:disabled)
-	{ background: hsl(${hue}, 70%, 70%); }
+	{ background: hsl(${hue} 70% 70%) !important; }
 #${getSel(ElementID.BAR_TERMS)}.${getSel(ElementClass.CONTROL_PAD, i)}
 .${getSel(ElementClass.TERM, term.selector)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: hsl(${hue}, 100%, 90%); }`
-		;
+	{ background: hsl(${hue} 100% 90%) !important; }
+/**/
+		`;
 	});
 };
 
@@ -471,9 +500,16 @@ const getTermControl = (term?: MatchTerm, idx?: number) => {
 	const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
 	return (idx === undefined && term
 		? barTerms.getElementsByClassName(getSel(ElementClass.TERM, term.selector))[0]
-		: Array.from(barTerms.children).at(idx ?? -1)
+		: idx === undefined || idx >= barTerms.children.length
+			? getControlAppendTerm()
+			: Array.from(barTerms.children).at(idx ?? -1)
 	) as HTMLElement | undefined;
 };
+
+const getControlAppendTerm = () =>
+	(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
+		.firstElementChild as HTMLElement | undefined
+;
 
 const updateTermTooltip = (term: MatchTerm) => {
 	const controlPad = (getTermControl(term) as HTMLElement)
@@ -568,9 +604,9 @@ const insertTermControl = (() => {
 		}
 		controlEdit.tabIndex = -1;
 		const controlEditChange = document.createElement("img");
-		const controlEditRemove = document.createElement("span");
+		const controlEditRemove = document.createElement("img");
 		controlEditChange.src = chrome.runtime.getURL("/icons/edit.svg");
-		controlEditRemove.textContent = " ☓ ";
+		controlEditRemove.src = chrome.runtime.getURL("/icons/delete.svg");
 		controlEditChange.classList.add(getSel(ElementClass.PRIMARY));
 		controlEditRemove.classList.add(getSel(ElementClass.SECONDARY));
 		controlEdit.appendChild(controlEditChange);
@@ -619,13 +655,24 @@ const addControls = (() => {
 			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant, use CSS to select class containing this
 			container.classList.add(getSel(ElementClass.BAR_CONTROL, id));
 			container.tabIndex = -1;
+			const pad = document.createElement("span");
+			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
+			pad.tabIndex = -1;
 			const button = document.createElement("button");
 			button.tabIndex = -1;
-			const text = document.createElement("span");
-			text.tabIndex = -1;
-			text.textContent = info.label;
-			button.appendChild(text);
-			container.appendChild(button);
+			if (info.path) {
+				const image = document.createElement("img");
+				image.src = chrome.runtime.getURL(info.path);
+				button.appendChild(image);
+			}
+			if (info.label) {
+				const text = document.createElement("span");
+				text.tabIndex = -1;
+				text.textContent = info.label;
+				button.appendChild(text);
+			}
+			pad.appendChild(button);
+			container.appendChild(pad);
 			if (hideWhenInactive) {
 				container.classList.add(getSel(ElementClass.DISABLED));
 			}
@@ -639,25 +686,26 @@ const addControls = (() => {
 		return (terms: MatchTerms, barControl: BarControl, hideWhenInactive: boolean) =>
 			create(barControl, ({
 				[BarControl.DISABLE_TAB_RESEARCH]: {
-					label: "☓",
+					path: "/icons/close.svg",
 					containerId: ElementID.BAR_OPTIONS,	
 					onclick: () => chrome.runtime.sendMessage({
 						disableTabResearch: true,
 					} as BackgroundMessage),
 				},
 				[BarControl.PERFORM_SEARCH]: {
-					label: "🌐",
+					path: "/icons/search.svg",
 					containerId: ElementID.BAR_OPTIONS,
 					onclick: () => chrome.runtime.sendMessage({
 						performSearch: true,
 					} as BackgroundMessage),
 				},
 				[BarControl.APPEND_TERM]: {
-					label: "🞣",
+					path: "/icons/add.svg",
 					containerId: ElementID.BAR_CONTROLS,
 					setUp: container => {
-						const termInput = createTermInput(terms, container, TermChange.CREATE);
-						container.appendChild(termInput);
+						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;
+						const termInput = createTermInput(terms, pad, TermChange.CREATE);
+						pad.appendChild(termInput);
 					},
 				},
 			} as Record<BarControl, ButtonInfo>)[barControl], hideWhenInactive)
@@ -669,6 +717,7 @@ const addControls = (() => {
 		insertStyle(terms, style, hues);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
+		bar.ondragstart = event => event.preventDefault();
 		bar.onmouseenter = () => {
 			purgeClass(getSel(ElementClass.ACTIVE), bar);
 			const controlInput = document.activeElement;
