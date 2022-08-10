@@ -21,7 +21,7 @@ Note that not all features are fully implemented, and a few may use temporary no
 * Highlight occurrences of your search terms in a 'research' page.
   * Highlight new occurrences as the page changes.
   * Allow editing, adding, and removing of terms.
-    * Provide a context menu item for 'researching' selected text.
+    * Provide methods to highlight the words in selected text.
   * Allow configuration of how a match is determined for a specific term.
   * Detect 'research' when a search occurs without requiring a new page to be loaded.
 * Provide a compact scrollbar view of where terms occur in a page.
@@ -43,12 +43,10 @@ Note that not all features are fully implemented, and a few may use temporary no
 
 ## Compatibility
 
-_As of 2022-05-31_
+**Mark My Search** is fully cross-browser. Its source is designed to produce the same experience across all *modern* browsers based on Firefox or Chromium. Any inconsistency between platforms should be considered a bug to be addressed fully or as far as reasonably possible. Unfortunately, Safari is unlikely to ever be supported.
 
-Releases are regularly ported between browsers.
-
-* **Mark My Search v1.0.14** is compatible with reasonably modern Firefox releases, and will remain so while Manifest V2 is supported (so for the foreseeable future). V3 will be supported once it is at a reasonable stage of development.
-* **Mark My Search v1.0.11** is compatible with browsers using very recent releases of Chromium; Manifest V3 is supported but V2 is not explicitly tested.
+* A version for modern Firefox releases exists using the Manifest V2 webextension technology. This is stable and contains all important features, and may receive bugfixes despite no longer being under active development. Though it should work in Chromium with a few tweaks, MV2 is on this close to full deprecation.
+* A version for modern Chromium releases and specifically very recent Firefox releases exists using Manifest V3. This may be unstable currently but is being developed for the highest stability and consistency, along with receiving future enhancements and features.
 
 
 ## Store Listings

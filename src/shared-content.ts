@@ -192,11 +192,6 @@ const itemsMatchLoosely = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compa
 ;
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const isBrowserChromium = () =>
-	!this.browser
-;
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 enum BarControl {
 	DISABLE_TAB_RESEARCH = "disableTabResearch",
 	PERFORM_SEARCH = "performSearch",

@@ -202,6 +202,7 @@ const createTermInput = (() => {
 		if (replaces && inputValue === "") {
 			if (document.activeElement === termInput) {
 				activateInput(getTermControl(undefined, idx + 1) as HTMLElement);
+				return;
 			}
 			chrome.runtime.sendMessage({
 				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
@@ -340,7 +341,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 /* TERM INPUT & BUTTONS */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
-	{ all: revert; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; width: 60px; line-height: 120%;
+	{ width: 5em; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; outline: revert;
 	box-sizing: unset !important; font-family: revert !important; color: #000 !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
@@ -379,21 +380,20 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 
 /* BAR */
 #${getSel(ElementID.BAR)}
-	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; line-height: initial; font-size: 0; display: flex;
-	user-select: none; }
+	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; line-height: initial; font-size: 0; user-select: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} *
-	{ all: revert; font: revert; display: inline-block; padding: 0; line-height: 120%; outline: none; }
+	{ all: revert; font: revert; font-size: initial; line-height: 120%; padding: 0; outline: none; }
 #${getSel(ElementID.BAR)} img
-	{ display: block; height: 1.05em; width: 1.05em; margin: 1px; }
+	{ height: 1.05em; width: 1.05em; }
 #${getSel(ElementID.BAR)} button
-	{ background: none; border: none; border-radius: inherit; padding-inline: 4px; margin-block: 0;
-	color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
+	{ display: flex; align-items: center; padding-inline: 4px; margin-block: 0; border: none; border-radius: inherit;
+	background: none; color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
 #${getSel(ElementID.BAR)} > *
-	{ display: flex; }
+	{ display: inline; }
 #${getSel(ElementID.BAR)} > * > *
-	{ display: flex; margin-left: 8px; }
+	{ display: inline-flex; vertical-align: top; margin-left: 0.5em; }
 #${getSel(ElementID.BAR)} > * > * > * > *
 	{ padding-block: 1px; }
 /**/
@@ -401,12 +401,12 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 /* TERM PULLDOWN */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
 + .${getSel(ElementClass.OPTION_LIST)}
-	{ all: revert; position: absolute; display: flex; flex-direction: column; top: 100%; width: max-content; padding: 0; z-index: 1; }
+	{ position: absolute; display: flex; flex-direction: column; top: 100%; width: max-content; padding: 0; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
-	{ all: revert; display: none; }
+	{ display: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ all: revert; margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
-	width: 100%; line-height: 120%; text-align: left; color: #111 !important;
+	{ margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
+	width: 100%; text-align: left; color: #111 !important;
 	border-color: hsl(0 0% 50%) !important; border-bottom-width: 1px !important;
 	border-style: none none solid solid !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
@@ -415,9 +415,8 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 
 /* BAR CONTROL PADS */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ display: flex; border-radius: 4px; color: #000 !important; border-style: none; box-shadow: 1px 1px 5px; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: hsl(0 0% 90% / 0.8) !important; }
+	{ display: flex; height: 1.2em;
+	background: hsl(0 0% 90% / 0.8) !important; color: #000 !important; border-style: none; border-radius: 4px; box-shadow: 1px 1px 5px; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:hover
 	{ background: hsl(0 0% 65%) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:active
@@ -457,15 +456,20 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 	`;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
+		const isAboveStyleLevel = (level: number) => i >= hues.length * level;
 		const getBackgroundStyle = (colorA: string, colorB: string) =>
-			i < hues.length ? colorA : `repeating-linear-gradient(-45deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`;
+			isAboveStyleLevel(1)
+				?  `repeating-linear-gradient(${
+					isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
+				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
+				: colorA;
 		style.textContent += `
 /* TERM HIGHLIGHTS */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 90% / 0.4)`)} !important;
+	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)} !important;
 	border-radius: 2px !important; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35) !important; }
 /**/
 
@@ -477,7 +481,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 /* TERM BUTTONS */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 90% / 0.8)`)} !important; }
+	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)} !important; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_CONTENT)}:hover,
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
@@ -700,7 +704,7 @@ const addControls = (() => {
 					} as BackgroundMessage),
 				},
 				[BarControl.APPEND_TERM]: {
-					path: "/icons/add.svg",
+					path: "/icons/create.svg",
 					containerId: ElementID.BAR_CONTROLS,
 					setUp: container => {
 						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;

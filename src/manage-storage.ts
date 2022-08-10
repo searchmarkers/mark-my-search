@@ -1,4 +1,8 @@
-chrome.storage = !isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
+const isBrowserChromium = () =>
+	!this.browser
+;
+
+chrome.storage = isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
 chrome.storage.session = chrome.storage.session ?? chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>

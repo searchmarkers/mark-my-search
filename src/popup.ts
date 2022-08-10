@@ -1,4 +1,4 @@
-chrome.tabs.query = !isBrowserChromium() /* Running in Chromium */  ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.tabs.query = isBrowserChromium() /* Running in Chromium */  ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
 
 enum ButtonKey {
 	RESEARCH_TOGGLE_PAGE = "researchTogglePage",
@@ -99,20 +99,23 @@ buttonArray.forEach((button, i) => {
 	};
 });
 
-buttons.researchTogglePage.onclick = () =>
-	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => tab.id === undefined ? undefined :
-		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => (tab.id as number) in session.researchInstances
-			? chrome.runtime.sendMessage({
-				disableTabResearch: true
-			} as BackgroundMessage)
-			: chrome.runtime.sendMessage({
+buttons.researchTogglePage.onclick = async () => {
+	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+	if (tab.id !== undefined) {
+		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		if ((tab.id as number) in session.researchInstances) {
+			chrome.runtime.sendMessage({
+				disableTabResearch: true,
+			} as BackgroundMessage);
+		} else {
+			chrome.runtime.sendMessage({
 				terms: [],
 				makeUnique: true,
-				toggleHighlightsOn: true
-			} as BackgroundMessage)
-		)
-	)
-;
+				toggleHighlightsOn: true,
+			} as BackgroundMessage);
+		}
+	}
+};
 
 buttons.researchToggle.onclick = () => {
 	const toggleResearchOn = !buttons.researchToggle.classList.contains(ButtonClass.ENABLED);
@@ -120,32 +123,34 @@ buttons.researchToggle.onclick = () => {
 	chrome.runtime.sendMessage({ toggleResearchOn });
 };
 
-const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
-	tab.id === undefined ? undefined : getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => {
-		const phrases = session.researchInstances[tab.id ?? -1]
-			? session.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
-			: "";
-		focusNext(-1, idx => (idx + 1) % buttonArray.length);
-		buttons.problemReportDescribe.textContent = (buttons.problemReportDescribe.textContent as string)
-			.replace(/🆗|!/g, "").trimEnd();
-		buttons.problemReport.disabled = true;
-		buttons.problemReportDescribe.disabled = true;
-		emailSend("service_mms_report", "template_mms_report", {
-			mmsVersion: chrome.runtime.getManifest().version,
-			url: tab.url,
-			phrases,
-			userMessage,
-		}, "NNElRuGiCXYr1E43j").then(() => {
-			buttons.problemReportDescribe.textContent += " 🆗";
-		}, (error: { status: number, text: string }) => {
-			buttons.problemReportDescribe.textContent += " !!";
-			buttons.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
-		}).then(() => {
-			buttons.problemReport.disabled = false;
-			buttons.problemReportDescribe.disabled = false;
+const problemReport = (userMessage = "") => chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) => {
+	if (tab.id !== undefined) {
+		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => {
+			const phrases = session.researchInstances[tab.id ?? -1]
+				? session.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+				: "";
+			focusNext(-1, idx => (idx + 1) % buttonArray.length);
+			buttons.problemReportDescribe.textContent = (buttons.problemReportDescribe.textContent as string)
+				.replace(/🆗|!/g, "").trimEnd();
+			buttons.problemReport.disabled = true;
+			buttons.problemReportDescribe.disabled = true;
+			emailSend("service_mms_report", "template_mms_report", {
+				mmsVersion: chrome.runtime.getManifest().version,
+				url: tab.url,
+				phrases,
+				userMessage,
+			}, "NNElRuGiCXYr1E43j").then(() => {
+				buttons.problemReportDescribe.textContent += " 🆗";
+			}, (error: { status: number, text: string }) => {
+				buttons.problemReportDescribe.textContent += " !!";
+				buttons.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
+			}).then(() => {
+				buttons.problemReport.disabled = false;
+				buttons.problemReportDescribe.disabled = false;
+			});
 		});
-	})
-);
+	}
+});
 
 buttons.problemReport.onclick = () =>
 	problemReport()

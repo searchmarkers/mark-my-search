@@ -8,6 +8,10 @@ if (isBrowserChromium()) {
 }
 chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
 chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.search.query = isBrowserChromium()
+	? (options: { query: string, tabId: number }) => chrome.search.query(options, () => undefined)
+	: browser.search.search;
+chrome.commands.getAll = isBrowserChromium() ? chrome.commands.getAll : browser.commands.getAll;
 
 const createResearchInstance = (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
@@ -38,7 +42,8 @@ const createResearchInstance = (args: {
 });
 
 const getSearchQuery = (url: string) =>
-	new URL(url).searchParams.get([ "q", "query" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
+	new URL(url).searchParams
+		.get([ "q", "query" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
 ;
 
 const isTabSearchPage = (engines: Engines, url: string): [ boolean, Engine? ] => {
@@ -80,7 +85,7 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 			} as BackgroundMessage);
 			window[executionDeniedIdentifier] = true;
 		},
-		args: [ targetTabId, highlightMessageToReceive ],
+		args: [ targetTabId, Object.assign({ extensionCommands: await chrome.commands.getAll() } as HighlightMessage, highlightMessageToReceive) ],
 		target: { tabId: targetTabId },
 	})
 ;
@@ -300,9 +305,13 @@ chrome.commands.onCommand.addListener(commandString =>
 					await createResearchInstance({ terms: [] }).then(async researchInstance => {
 						researchInstance.highlightsShown = true;
 						session.researchInstances[tab.id as number] = researchInstance;
-						await activateHighlightingInTab(tab.id as number,
-							createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook));
-						chrome.tabs.sendMessage(tab.id as number, { termsFromSelection: true } as HighlightMessage);
+						await activateHighlightingInTab(
+							tab.id as number,
+							Object.assign(
+								{ termsFromSelection: true } as HighlightMessage,
+								createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook),
+							),
+						);
 					});
 				}
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
@@ -338,10 +347,10 @@ chrome.commands.onCommand.addListener(commandString =>
 				delete session.researchInstances[senderTabId];
 				chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 			} else if (message.performSearch) {
-				chrome.search.query({
-					text: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
+				(chrome.search.query as typeof browser.search.search)({
+					query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
 					tabId: senderTabId,
-				}, () => undefined);
+				});
 			} else {
 				if (!isTabResearchPage(session.researchInstances, senderTabId)) {
 					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
