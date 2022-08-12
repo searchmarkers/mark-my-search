@@ -31,19 +31,28 @@ class MatchTerm {
 		}
 		const sanitize = (word: string, replacement = "\\$&") =>
 			word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement);
-		this.selector = sanitize(this.phrase.replace(/\W/g, "_"), "_");
+		this.selector = `${
+			sanitize(this.phrase, "_").replace(/\W/g, "_")
+		}-${
+			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
+		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const exp = (this.matchMode.stem ? getWordPatternString(this.phrase) : this.phrase);
+		const optionalHyphen = "(\\p{Pd})?";
 		const addOptionalHyphens = (word: string) =>
-			word.replace(/(\w\?|\w)/g,"(\\p{Pd})?$1");
+			word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
 		let patternString: string;
 		if (this.matchMode.stem) {
 			const dashedEnd = exp.search(/\(\?:/g);
-			patternString = exp[0] + addOptionalHyphens(exp.substring(1, dashedEnd)) + exp.substring(dashedEnd);
+			patternString = addOptionalHyphens(sanitize(exp.slice(0, dashedEnd))) + optionalHyphen + exp.slice(dashedEnd, -1);
 		} else {
-			patternString = sanitize(exp[0]) + addOptionalHyphens(sanitize(exp.substring(1)));
+			patternString = addOptionalHyphens(sanitize(exp.slice(0, -1))) + sanitize(exp.at(-1) as string);
 		}
-		this.pattern = new RegExp(this.matchMode.whole ? `\\b(?:${patternString})\\b` : patternString, flags);
+		const getWordBoundaryTest = (charBoundary: string) => /\w/g.test(charBoundary) ? "\\b" : "";
+		this.pattern = new RegExp(this.matchMode.whole
+			? `${getWordBoundaryTest(patternString[0])}(?:${patternString})${getWordBoundaryTest(patternString.at(-1) as string)}`
+			: patternString, flags);
+
 	}
 }
 
@@ -56,7 +65,6 @@ class Engine {
 	constructor (args?: { urlPatternString: string }) {
 		if (!args)
 			return;
-		// TODO: error checking?
 		const urlPattern = new URL(args.urlPatternString);
 		this.hostname = urlPattern.hostname;
 		if (urlPattern.pathname.includes("%s")) {

@@ -119,7 +119,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			nodes.forEach(node => setEngines(
 				session.engines, node => node.url ? updateEngine(session.engines, node.id, node.url) : undefined, node
 			));
-			setStorageSession({ engines: session.engines } as StorageSessionValues);
+			setStorageSession(session);
 		}));
 
 		browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
@@ -127,21 +127,21 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 				setEngines(
 					session.engines, node => delete session.engines[node.id], removeInfo.node
 				);
-				setStorageSession({ engines: session.engines } as StorageSessionValues);
+				setStorageSession(session);
 			})
 		);
 
 		browser.bookmarks.onCreated.addListener((id, createInfo) => createInfo.url ?
 			getStorageSession(StorageSession.ENGINES).then(session => {
 				updateEngine(session.engines, id, createInfo.url ?? "");
-				setStorageSession({ engines: session.engines } as StorageSessionValues);
+				setStorageSession(session);
 			}) : undefined
 		);
 
 		browser.bookmarks.onChanged.addListener((id, changeInfo) => changeInfo.url ?
 			getStorageSession(StorageSession.ENGINES).then(session => {
 				updateEngine(session.engines, id, changeInfo.url ?? "");
-				setStorageSession({ engines: session.engines } as StorageSessionValues);
+				setStorageSession(session);
 			}) : undefined
 		);
 	};
@@ -178,7 +178,7 @@ const updateActionIcon = (enabled?: boolean) =>
 
 	const setUp = () => {
 		if (isBrowserChromium()) {
-			// TODO: instruct user how to assign the appropriate shortcuts
+			// TODO instruct user how to assign the appropriate shortcuts
 		} else {
 			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
 			browser.commands.update({ name: "toggle-bar", shortcut: "Ctrl+Shift+F" });
@@ -227,15 +227,14 @@ const updateActionIcon = (enabled?: boolean) =>
 		const overrideHighlightsShown = (isSearchPage && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
 		if (isSearchPage) {
-			await createResearchInstance({ url: { stoplist: sync.stoplist, url, engine } }).then(researchInstance => {
-				if (!isResearchPage || !itemsMatchLoosely(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
-					session.researchInstances[tabId] = researchInstance;
-					setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
-					activateHighlightingInTab(tabId,
-						createResearchMessage(session.researchInstances[tabId], overrideHighlightsShown,
-							sync.barControlsShown, sync.barLook));
-				}
-			});
+			const researchInstance = await createResearchInstance({ url: { stoplist: sync.stoplist, url, engine } });
+			if (!isResearchPage || !itemsMatchLoosely(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
+				session.researchInstances[tabId] = researchInstance;
+				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
+				activateHighlightingInTab(tabId,
+					createResearchMessage(session.researchInstances[tabId], overrideHighlightsShown,
+						sync.barControlsShown, sync.barLook));
+			}
 		}
 		if (isResearchPage) {
 			activateHighlightingInTab(tabId,
@@ -244,17 +243,16 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	};
 	
-	chrome.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(sync =>
-		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(session => {
-			if (tab && tab.id !== undefined && tab.openerTabId !== undefined
-				&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
-				session.researchInstances[tab.id] = sync.linkResearchTabs
-					? session.researchInstances[tab.openerTabId]
-					: { ...session.researchInstances[tab.openerTabId] };
-				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
-			}
-		})
-	));
+	chrome.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(async sync => {
+		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		if (tab && tab.id !== undefined && tab.openerTabId !== undefined
+			&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
+			session.researchInstances[tab.id] = sync.linkResearchTabs
+				? session.researchInstances[tab.openerTabId]
+				: { ...session.researchInstances[tab.openerTabId] };
+			setStorageSession(session);
+		}
+	}));
 
 	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => !changeInfo.url ? undefined :
 		pageModifyRemote(changeInfo.url, tabId)
@@ -283,6 +281,13 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	}
 };
 
+const disableResearchInTab = async (tabId: number) => {
+	const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+	delete session.researchInstances[tabId];
+	chrome.tabs.sendMessage(tabId, { disable: true } as HighlightMessage);
+	setStorageSession(session);
+};
+
 chrome.commands.onCommand.addListener(commandString =>
 	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
 		const commandInfo = parseCommand(commandString);
@@ -298,13 +303,12 @@ chrome.commands.onCommand.addListener(commandString =>
 				const sync = await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN);
 				const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
 				if (isTabResearchPage(session.researchInstances, tab.id as number)) {
-					// TODO: make this a function
-					delete session.researchInstances[tab.id as number];
-					chrome.tabs.sendMessage(tab.id as number, { disable: true } as HighlightMessage);
+					disableResearchInTab(tab.id as number);
 				} else {
 					await createResearchInstance({ terms: [] }).then(async researchInstance => {
 						researchInstance.highlightsShown = true;
 						session.researchInstances[tab.id as number] = researchInstance;
+						setStorageSession(session);
 						await activateHighlightingInTab(
 							tab.id as number,
 							Object.assign(
@@ -314,7 +318,6 @@ chrome.commands.onCommand.addListener(commandString =>
 						);
 					});
 				}
-				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
 			}
 			return;
 		} case CommandType.TOGGLE_HIGHLIGHTS: {
@@ -328,59 +331,58 @@ chrome.commands.onCommand.addListener(commandString =>
 );
 
 (() => {
-	const handleMessage = (message: BackgroundMessage, senderTabId: number) =>
-		getStorageSession(StorageSession.RESEARCH_INSTANCES).then(async session => {
-			if (message.highlightMessage !== undefined) {
-				// TODO make this a function
-				const tabId = message.tabId as number;
-				if (message.executeInTab) {
-					await chrome.scripting.executeScript({
-						files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
-						target: { tabId },
-					});
-				}
-				chrome.tabs.sendMessage(tabId, message.highlightMessage);
-			} else if (message.toggleResearchOn !== undefined) {
-				setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
-					.then(() => updateActionIcon(message.toggleResearchOn));
-			} else if (message.disableTabResearch) {
-				delete session.researchInstances[senderTabId];
-				chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
-			} else if (message.performSearch) {
-				(chrome.search.query as typeof browser.search.search)({
-					query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
-					tabId: senderTabId,
+	const handleMessage = async (message: BackgroundMessage, senderTabId: number) => {
+		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		if (message.highlightMessage !== undefined) {
+			// TODO make this a function
+			const tabId = message.tabId as number;
+			if (message.executeInTab) {
+				await chrome.scripting.executeScript({
+					files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
+					target: { tabId },
 				});
-			} else {
-				if (!isTabResearchPage(session.researchInstances, senderTabId)) {
-					await createResearchInstance({ terms: message.terms }).then(researchInstance => {
-						session.researchInstances[senderTabId] = researchInstance;
-					});
-				}
-				if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-					await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
-						createResearchInstance({ terms: message.terms }).then(researchInstance => {
-							if (message.toggleHighlightsOn !== undefined) {
-								researchInstance.highlightsShown = message.toggleHighlightsOn;
-							}
-							session.researchInstances[senderTabId] = researchInstance;
-							activateHighlightingInTab(senderTabId,
-								createResearchMessage(researchInstance, false, sync.barControlsShown));
-						})
-					);
-				} else if (message.terms !== undefined) {
-					const highlightMessage = updateCachedResearchDetails(session.researchInstances, message.terms, senderTabId);
-					highlightMessage.termUpdate = message.termChanged;
-					highlightMessage.termToUpdateIdx = message.termChangedIdx;
-					Object.keys(session.researchInstances).forEach(tabId =>
-						session.researchInstances[tabId] === session.researchInstances[senderTabId]
-							? chrome.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
-					);
-				}
 			}
-			setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
-		})
-	;
+			chrome.tabs.sendMessage(tabId, message.highlightMessage);
+		} else if (message.toggleResearchOn !== undefined) {
+			setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
+				.then(() => updateActionIcon(message.toggleResearchOn));
+		} else if (message.disableTabResearch) {
+			delete session.researchInstances[senderTabId];
+			chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
+		} else if (message.performSearch) {
+			(chrome.search.query as typeof browser.search.search)({
+				query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
+				tabId: senderTabId,
+			});
+		} else {
+			if (!isTabResearchPage(session.researchInstances, senderTabId)) {
+				await createResearchInstance({ terms: message.terms }).then(researchInstance => {
+					session.researchInstances[senderTabId] = researchInstance;
+				});
+			}
+			if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
+				await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN).then(sync =>
+					createResearchInstance({ terms: message.terms }).then(researchInstance => {
+						if (message.toggleHighlightsOn !== undefined) {
+							researchInstance.highlightsShown = message.toggleHighlightsOn;
+						}
+						session.researchInstances[senderTabId] = researchInstance;
+						activateHighlightingInTab(senderTabId,
+							createResearchMessage(researchInstance, false, sync.barControlsShown));
+					})
+				);
+			} else if (message.terms !== undefined) {
+				const highlightMessage = updateCachedResearchDetails(session.researchInstances, message.terms, senderTabId);
+				highlightMessage.termUpdate = message.termChanged;
+				highlightMessage.termToUpdateIdx = message.termChangedIdx;
+				Object.keys(session.researchInstances).forEach(tabId =>
+					session.researchInstances[tabId] === session.researchInstances[senderTabId]
+						? chrome.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
+				);
+			}
+		}
+		setStorageSession(session);
+	};
 
 	chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
 		if (sender.tab && sender.tab.id !== undefined) {
@@ -390,7 +392,7 @@ chrome.commands.onCommand.addListener(commandString =>
 				handleMessage(message, tab.id as number)
 			);
 		}
-		sendResponse(); // Manifest V3 bug.
+		sendResponse(); // Manifest V3 bug
 	});
 })();
 

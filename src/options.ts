@@ -103,7 +103,8 @@ const optionsInfo: Array<{
 	},
 ];
 
-const loadTab = (tabContainer: HTMLElement, tabIdx: number) => getStorageSync().then(sync => {
+const loadTab = async (tabContainer: HTMLElement, tabIdx: number) => {
+	const sync = await getStorageSync();
 	const tabInfo = optionsInfo[tabIdx];
 	const tabButton = document.createElement("button");
 	tabButton.textContent = tabInfo.label;
@@ -120,7 +121,7 @@ const loadTab = (tabContainer: HTMLElement, tabIdx: number) => getStorageSync().
 	const valuesCurrent = {};
 	form.onsubmit = event => {
 		event.preventDefault();
-		// TODO: remove code duplication using function
+		// TODO remove code duplication using function
 		Object.keys(tabInfo.options).forEach(optionKey => {
 			const optionInfo = tabInfo.options[optionKey];
 			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
@@ -167,7 +168,7 @@ const loadTab = (tabContainer: HTMLElement, tabIdx: number) => getStorageSync().
 		const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
 		Object.keys(preferences).forEach((preferenceKey, i) => {
 			const preferenceInfo = preferences[preferenceKey];
-			const isSinglePreference = optionKey === preferenceKey; // TODO: replace heuristic of 'optionKey === preferenceKey'
+			const isSinglePreference = optionKey === preferenceKey; // TODO replace heuristic of 'optionKey === preferenceKey'
 			const row = document.createElement("div");
 			const addCell = (node: Node, isInFirstColumn = false) => {
 				const cell = document.createElement("div");
@@ -207,6 +208,6 @@ const loadTab = (tabContainer: HTMLElement, tabIdx: number) => getStorageSync().
 			}
 		});
 	});
-});
+};
 
 loadTab(document.body, 0);

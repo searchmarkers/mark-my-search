@@ -46,7 +46,7 @@ enum StorageLocal {
 }
 
 enum StorageSync {
-	IS_SET_UP = "isSetUp", // TODO: supplement with detection of unused keys
+	IS_SET_UP = "isSetUp", // TODO supplement with detection of unused keys
 	STOPLIST = "stoplist",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
@@ -86,7 +86,7 @@ const defaultOptions: StorageSyncValues = {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSession = (items: StorageSessionValues) => {
 	if (Object.keys(items).includes(StorageSession.RESEARCH_INSTANCES)) {
-		// TODO: disable object shallow copying when linking disabled in settings
+		// TODO disable object shallow copying when linking disabled in settings
 		const tabRInstances = items.researchInstances;
 		const tabs = Object.keys(tabRInstances);
 		const idRInstances: Array<ResearchInstance> = [];
@@ -142,7 +142,6 @@ const setStorageLocal = (items: StorageLocalValues) => {
 	return chrome.storage.local.set(items);
 };
 
-// TODO: make generic function for sync and local
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageLocal = (keysParam?: StorageLocal | Array<StorageLocal>): Promise<StorageLocalValues> => {
 	return chrome.storage.local.get(keysParam) as Promise<StorageLocalValues>;
@@ -153,7 +152,6 @@ const setStorageSync = (items: StorageSyncValues) => {
 	return chrome.storage.sync.set(items);
 };
 
-// TODO: make generic function for sync, local, session
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageSync = (keysParam?: StorageSync | Array<StorageSync>): Promise<StorageSyncValues> => {
 	return chrome.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
