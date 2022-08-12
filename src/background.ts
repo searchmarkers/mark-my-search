@@ -1,4 +1,4 @@
-if (isBrowserChromium()) {
+if (/*isBrowserChromium()*/ !this.browser) {
 	// Firefox accepts a list of event page scripts, whereas Chromium only accepts service workers
 	this["importScripts"](
 		"/dist/manage-storage.js",
