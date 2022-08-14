@@ -13,7 +13,7 @@ enum ButtonClass {
 }
 
 const keyToSelector = (key: string) =>
-	Array.from(key).map(char => char === char.toLocaleLowerCase() ? char : `-${char.toLocaleLowerCase()}`).toString()
+	Array.from(key).map(char => char === char.toLowerCase() ? char : `-${char.toLowerCase()}`).toString()
 ;
 
 (() => {

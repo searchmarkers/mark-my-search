@@ -19,7 +19,7 @@ class MatchTerm {
     
 	constructor (phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
-		this.matchMode = phrase.length > 2 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: true };
+		this.matchMode = phrase.length > 2 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: false };
 		if (matchMode)
 			Object.assign(this.matchMode, matchMode);
 		this.compile();
@@ -33,6 +33,8 @@ class MatchTerm {
 			word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement);
 		this.selector = `${
 			sanitize(this.phrase, "_").replace(/\W/g, "_")
+		}-${
+			Object.values(this.matchMode).map((matchFlag: boolean) => Number(matchFlag)).join("")
 		}-${
 			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
 		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour

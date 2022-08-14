@@ -1,7 +1,7 @@
 type BrowserCommands = Array<chrome.commands.Command>
 type HighlightTags = {
-	reject: RegExp,
-	flow: RegExp,
+	reject: Set<string>,
+	flow: Set<string>,
 }
 type TermHues = ReadonlyArray<number>
 type ButtonInfo = {
@@ -228,13 +228,11 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 @keyframes ${getSel(Keyframes.MARKER_OFF)}
 	{ from { padding-right: 16px; } to { padding-right: 0; }; }
 #${getSel(ElementID.MARKER_GUTTER)}
-	{ z-index: ${zIndexMax}; display: block; right: 0; top: 0; width: 12px; height: 100%; }
-#${getSel(ElementID.MARKER_GUTTER)} div
+	{ display: block; position: fixed; right: 0; top: 0; width: 0; height: 100%; z-index: ${zIndexMax}; }
+#${getSel(ElementID.MARKER_GUTTER)} *
 	{ width: 16px; top: 0; height: 1px; position: absolute; right: 0; border-left: solid hsl(0 0% 0% / 0.6) 1px; box-sizing: unset;
 	padding-right: 0; transition: padding-right 600ms; pointer-events: none; }
-#${getSel(ElementID.MARKER_GUTTER)}
-	{ position: fixed; }
-#${getSel(ElementID.MARKER_GUTTER)} div.${getSel(ElementClass.FOCUS)}
+#${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.FOCUS)}
 	{ padding-right: 16px; transition: unset; }
 /**/
 
@@ -292,7 +290,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 };
 
 const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-	highlightTags.flow.test(element.tagName) && element.parentElement
+	highlightTags.flow.has(element.tagName) && element.parentElement
 		? getContainerBlock(highlightTags, element.parentElement)
 		: element
 ;
@@ -611,7 +609,7 @@ const updateTermTooltip = (() => {
 const getTermOptionMatchType = (text: string, fromText = false) =>
 	(fromText
 		? text.substring(0, text.indexOf("\u00A0"))
-		: text.slice(0, text.indexOf("\u00A0"))).toLocaleLowerCase()
+		: text.slice(0, text.indexOf("\u00A0"))).toLowerCase()
 ;
 
 const getTermOptionText = (optionIsActive: boolean, title: string) =>
@@ -859,41 +857,31 @@ const insertScrollMarkers = (() => {
 		highlightClassName.slice(getSel(ElementClass.TERM).length + 1)
 	;
 
-	const clearMarkers = (gutter: HTMLElement) => {
-		gutter.replaceChildren();
-	};
-
 	return (highlightTags: HighlightTags, terms: MatchTerms) => {
-		// TODO construct using template literal/s instead of invoking the HTML parser for each?
-		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}-\\w+-\\w+\\b`);
+		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 		const containersInfo: Array<{
 			container: HTMLElement,
 			termsAdded: Set<string>,
 		}> = [];
-		const gutterParent = gutter.parentElement as HTMLElement;
-		clearMarkers(gutter);
 		if (terms.length === 0) {
 			return;
 		}
+		let markersHtml = "";
 		document.body.querySelectorAll(terms.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`
 		).join(", ")).forEach((highlight: HTMLElement) => {
 			const container = getContainerBlock(highlightTags, highlight);
 			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
 			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
-			const marker = document.createElement("div");
-			marker.classList.add(className);
 			const yRelative = getRectYRelative(container.getBoundingClientRect());
-			marker.style.top = `${yRelative * 100}%`;
-			marker.setAttribute("top", `${yRelative}`);
+			let markerCss = `top: ${yRelative * 100}%;`;
 			if (containerIdx !== -1) {
 				if (containersInfo[containerIdx].container === container) {
 					if (containersInfo[containerIdx].termsAdded.has(getTermSelector(className))) {
 						return;
 					} else {
 						const termsAddedCount = Array.from(containersInfo[containerIdx].termsAdded).length;
-						marker.style.zIndex = `${termsAddedCount * -1}`;
-						marker.style.paddingLeft = `${termsAddedCount * 5}px`;
+						markerCss += `padding-left: ${termsAddedCount * 5}px; z-index: ${termsAddedCount * -1}`;
 						containersInfo[containerIdx].termsAdded.add(getTermSelector(className));
 					}
 				} else {
@@ -903,19 +891,19 @@ const insertScrollMarkers = (() => {
 			} else {
 				containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
 			}
-			gutter.appendChild(marker);
+			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
 		});
-		gutterParent.appendChild(gutter);
+		gutter.innerHTML = markersHtml;
 	};
 })();
 
 /**
- * Finds occurrences of terms, highlights them, and marks their scroll position in the scrollbar, under a node in the DOM tree.
+ * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
  * @param terms Terms to find, highlight, and mark.
  * @param rootNode A node under which to find and highlight term occurrences.
  * @param highlightTags Regular expressions for identifying element tags to reject from highlighting or break up blocks of
-	 * consecutive text nodes.
- * @param requestRefreshIndicators A generator function for requesting that the term scrollbar markers are regenerated.
+ * consecutive text nodes.
+ * @param requestRefreshIndicators A generator function for requesting that the scrollbar markers are regenerated.
  */
 const generateTermHighlightsUnderNode = (() => {
 	/**
@@ -997,15 +985,16 @@ const generateTermHighlightsUnderNode = (() => {
 		const nodeItems: UnbrokenNodeList = new UnbrokenNodeList;
 		const breakLevels: Array<number> = [ 0 ];
 		let level = 0;
+		// TODO support for <iframe>?
 		// Logic carried over from 'walker'
 		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node => {
 			switch (node.nodeType) {
 			case (1): // Node.ELEMENT_NODE
 			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
-				if (highlightTags.reject.test((node as Element).tagName)) {
+				if (highlightTags.reject.has((node as Element).tagName)) {
 					return 2; // NodeFilter.FILTER_REJECT
 				}
-				if (highlightTags.flow.test((node as Element).tagName)) {
+				if (highlightTags.flow.has((node as Element).tagName)) {
 					return 1; // NodeFilter.FILTER_ACCEPT
 				}
 				if (node.hasChildNodes()) {
@@ -1024,13 +1013,17 @@ const generateTermHighlightsUnderNode = (() => {
 			return 2; // NodeFilter.FILTER_REJECT
 		} });
 		// Logic copied in 'walkerBreakHandler' (repetition allowed for critical optimisation)
-		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node =>
-			(node.nodeType === 1 || node.nodeType === 11) // Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
-				? highlightTags.reject.test((node as Element).tagName)
-					? 2 : 1 // NodeFilter.FILTER_REJECT, NodeFilter.FILTER_ACCEPT
-				: node.nodeType === 3 // Node.TEXT_NODE
-					? 1 : 2 // NodeFilter.FILTER_ACCEPT, NodeFilter.FILTER_REJECT
-		});
+		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node => {
+			switch (node.nodeType) {
+			case (1): // Node.ELEMENT_NODE
+			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
+				return highlightTags.reject.has((node as Element).tagName)
+					? 2 : 1; // NodeFilter.FILTER_REJECT, NodeFilter.FILTER_ACCEPT
+			} case (3): { // Node.TEXT_NODE
+				return 1; // NodeFilter.FILTER_ACCEPT
+			}}
+			return 2; // NodeFilter.FILTER_REJECT
+		}});
 		let node: Node | null = walkerBreakHandler.currentNode;
 		while (node) {
 			level++; // Down to child level
@@ -1084,7 +1077,7 @@ const purgeClass = (className: string, root: HTMLElement = document.body) =>
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
 	highlights.forEach(highlight => {
-		highlight.outerHTML = highlight.textContent ?? "";
+		highlight.outerHTML = highlight.textContent as string;
 	});
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 		root = (root as DocumentFragment).getRootNode() as HTMLElement;
@@ -1102,7 +1095,7 @@ const getObserverNodeHighlighter = (() => {
 	;
 
 	return (requestRefreshIndicators: RequestRefreshIndicators, highlightTags: HighlightTags, terms: MatchTerms) => {
-		const rejectSelector = highlightTags.reject.source.slice(5, -3).split("|").join(", ");
+		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
@@ -1310,12 +1303,12 @@ const insertHighlights = (() => {
 				showEditIcon: true,
 			},
 		};
-		const getHighlightTagsRegex = (tags: Array<HTMLElementTagName>) =>
-			new RegExp(`\\b(?:${tags.join("|")})\\b`, "i") // TODO replace this and similar with "[ ]"-like syntax in pattern
+		const getHighlightTagsSet = (tagsLower: Array<HTMLElementTagName>) =>
+			new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
 		;
 		const highlightTags: HighlightTags = {
-			reject: getHighlightTagsRegex([ "meta", "style", "script", "noscript", "title" ]),
-			flow: getHighlightTagsRegex([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
+			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title" ]),
+			flow: getHighlightTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
 				"mms-h" as HTMLElementTagName ]),
 			// break: any other class of element
 		};
