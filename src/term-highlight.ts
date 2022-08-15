@@ -88,7 +88,7 @@ class UnbrokenNodeList {
 		}
 	}
 
-	insertAfter (value?: Node | null, itemBefore?: UnbrokenNodeListItem | null) {
+	insertAfter (itemBefore?: UnbrokenNodeListItem | null, value?: Node | null) {
 		if (value) {
 			if (itemBefore) {
 				itemBefore.next = { next: itemBefore.next, value };
@@ -329,22 +329,22 @@ const jumpToTerm = (() => {
 				: selectionFocus.parentElement)
 			: undefined;
 		const acceptInSelectionFocusContainer = { value: false };
-		const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H"
 			&& (termSelector ? element.classList.contains(termSelector) : true)
 			&& isVisible(element)
 			&& (getContainerBlock(highlightTags, element) !== selectionFocusContainer || acceptInSelectionFocusContainer.value)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
-		walk.currentNode = selectionFocus ? selectionFocus : document.body;
+		walker.currentNode = selectionFocus ? selectionFocus : document.body;
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		let elementTerm = walk[nextNodeMethod]() as HTMLElement;
+		let elementTerm = walker[nextNodeMethod]() as HTMLElement;
 		if (!elementTerm) {
-			walk.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
-			elementTerm = walk[nextNodeMethod]() as HTMLElement;
+			walker.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
+			elementTerm = walker[nextNodeMethod]() as HTMLElement;
 			if (!elementTerm) {
 				acceptInSelectionFocusContainer.value = true;
-				elementTerm = walk[nextNodeMethod]() as HTMLElement;
+				elementTerm = walker[nextNodeMethod]() as HTMLElement;
 				if (!elementTerm) {
 					return;
 				}
@@ -901,9 +901,8 @@ const insertScrollMarkers = (() => {
  * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
  * @param terms Terms to find, highlight, and mark.
  * @param rootNode A node under which to find and highlight term occurrences.
- * @param highlightTags Regular expressions for identifying element tags to reject from highlighting or break up blocks of
- * consecutive text nodes.
- * @param requestRefreshIndicators A generator function for requesting that the scrollbar markers are regenerated.
+ * @param highlightTags Element tags to reject from highlighting or break up blocks of consecutive text nodes.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
  */
 const generateTermHighlightsUnderNode = (() => {
 	/**
@@ -912,8 +911,8 @@ const generateTermHighlightsUnderNode = (() => {
 	 * @param textEndNode The text node to highlight inside.
 	 * @param start The first character index of the match within the text node.
 	 * @param end The last character index of the match within the text node.
-	 * @param nodeItems The singly-linked list of consecutive text nodes being highlighted inside.
-	 * @param nodeItemPrevious The last highlighted item in the list of text nodes.
+	 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
+	 * @param nodeItemPrevious The last-highlighted item in the list of text nodes.
 	 */
 	const highlightInsideNode = (term: MatchTerm, textEndNode: Node, start: number, end: number,
 		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null) => {
@@ -927,20 +926,20 @@ const generateTermHighlightsUnderNode = (() => {
 		highlight.textContent = text.substring(start, end);
 		textEndNode.textContent = text.substring(end);
 		(textEndNode.parentNode as Node).insertBefore(highlight, textEndNode);
-		nodeItems.insertAfter(highlight.firstChild, nodeItemPrevious);
+		nodeItems.insertAfter(nodeItemPrevious, highlight.firstChild);
 		if (textStart !== "") {
 			const textStartNode = document.createTextNode(textStart);
 			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
-			nodeItems.insertAfter(textStartNode, nodeItemPrevious);
+			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
 		}
 	};
 
 	/**
 	 * Highlights terms in a block of consecutive text nodes.
-	 * @param nodeItems A singly-linked list of consecutive text nodes to highlight inside.
 	 * @param terms Terms to find and highlight.
+	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
 	 */
-	const highlightInBlock = (nodeItems: UnbrokenNodeList, terms: MatchTerms) => {
+	const highlightInBlock = (terms: MatchTerms, nodeItems: UnbrokenNodeList) => {
 		for (const term of terms) {
 			const textFlow = nodeItems.getText();
 			const matches = textFlow.matchAll(term.pattern);
@@ -952,6 +951,11 @@ const generateTermHighlightsUnderNode = (() => {
 				while (match && match.index as number < nextNodeStart) {
 					if (match.index as number + match[0].length >= currentNodeStart) {
 						const textLengthOriginal = (nodeItem.value.textContent as string).length;
+						if (nodeItemPrevious) {
+							while (nodeItemPrevious.next !== nodeItem) {
+								nodeItemPrevious = nodeItemPrevious.next as UnbrokenNodeListItem;
+							}
+						}
 						highlightInsideNode(
 							term,
 							nodeItem.value,
@@ -971,90 +975,53 @@ const generateTermHighlightsUnderNode = (() => {
 				nodeItemPrevious = nodeItem;
 			}
 		}
-		nodeItems.clear();
 	};
 
 	/**
 	 * Highlights occurrences of terms in text nodes under a node in the DOM tree.
-	 * @param rootNode A node under which to match terms and insert highlights.
-	 * @param highlightTags Regular expressions for identifying element tags to reject from highlighting or break up blocks of
-	 * consecutive text nodes.
+	 * @param node A node under which to match terms and insert highlights.
+	 * @param highlightTags Element tags to reject from highlighting or break up blocks of consecutive text nodes.
 	 * @param terms Terms to find and highlight.
 	 */
-	const insertHighlights = (rootNode: Node, highlightTags: HighlightTags, terms: MatchTerms) => {
-		const nodeItems: UnbrokenNodeList = new UnbrokenNodeList;
-		const breakLevels: Array<number> = [ 0 ];
-		let level = 0;
+	const insertHighlights = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
+		nodeItems = new UnbrokenNodeList, visitSiblings = true) => {
 		// TODO support for <iframe>?
-		// Logic carried over from 'walker'
-		const walkerBreakHandler = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node => {
+		do {
 			switch (node.nodeType) {
 			case (1): // Node.ELEMENT_NODE
 			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
-				if (highlightTags.reject.has((node as Element).tagName)) {
-					return 2; // NodeFilter.FILTER_REJECT
-				}
-				if (highlightTags.flow.has((node as Element).tagName)) {
-					return 1; // NodeFilter.FILTER_ACCEPT
-				}
-				if (node.hasChildNodes()) {
-					breakLevels.push(level);
-				}
-				if (nodeItems.first) {
-					highlightInBlock(nodeItems, terms);
-				}
-				return 1; // NodeFilter.FILTER_ACCEPT
-			} case (3): { // Node.TEXT_NODE
-				if (level > breakLevels[breakLevels.length - 1]) {
-					nodeItems.push(node);
-				}
-				return 1; // NodeFilter.FILTER_ACCEPT
-			}}
-			return 2; // NodeFilter.FILTER_REJECT
-		} });
-		// Logic copied in 'walkerBreakHandler' (repetition allowed for critical optimisation)
-		const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_ALL, { acceptNode: node => {
-			switch (node.nodeType) {
-			case (1): // Node.ELEMENT_NODE
-			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
-				return highlightTags.reject.has((node as Element).tagName)
-					? 2 : 1; // NodeFilter.FILTER_REJECT, NodeFilter.FILTER_ACCEPT
-			} case (3): { // Node.TEXT_NODE
-				return 1; // NodeFilter.FILTER_ACCEPT
-			}}
-			return 2; // NodeFilter.FILTER_REJECT
-		}});
-		let node: Node | null = walkerBreakHandler.currentNode;
-		while (node) {
-			level++; // Down to child level
-			node = walkerBreakHandler.firstChild();
-			if (!node) {
-				level--; // Up to sibling level
-				walker.currentNode = walkerBreakHandler.currentNode;
-				node = walker.nextSibling();
-				while (!node) {
-					level--; // Up to parent level
-					walker.parentNode();
-					walkerBreakHandler.currentNode = walker.currentNode;
-					if (level === breakLevels[breakLevels.length - 1]) {
-						breakLevels.pop();
-						if (nodeItems.first) {
-							highlightInBlock(nodeItems, terms);
+				if (!highlightTags.reject.has((node as Element).tagName)) {
+					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+					if (breaksFlow && nodeItems.first) {
+						highlightInBlock(terms, nodeItems);
+						nodeItems.clear();
+					}
+					if (node.firstChild) {
+						insertHighlights(terms, node.firstChild, highlightTags, nodeItems);
+						if (breaksFlow && nodeItems.first) {
+							highlightInBlock(terms, nodeItems);
+							nodeItems.clear();
 						}
 					}
-					if (level <= 0) {
-						return;
-					}
-					node = walker.nextSibling();
 				}
-				node = walkerBreakHandler.nextSibling();
-			}
-		}
+				break;
+			} case (3): { // Node.TEXT_NODE
+				nodeItems.push(node);
+				break;
+			}}
+			node = node.nextSibling as ChildNode; // May actually be null (checked by loop condition)
+		} while (node && visitSiblings);
 	};
 
 	return (terms: MatchTerms, rootNode: Node,
 		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators) => {
-		insertHighlights(rootNode, highlightTags, terms);
+		if (rootNode.nodeType === Node.TEXT_NODE) {
+			const nodeItems = new UnbrokenNodeList;
+			nodeItems.push(rootNode);
+			highlightInBlock(terms, nodeItems);
+		} else {
+			insertHighlights(terms, rootNode, highlightTags, new UnbrokenNodeList, false);
+		}
 		requestRefreshIndicators.next();
 	};
 })();
@@ -1077,7 +1044,7 @@ const purgeClass = (className: string, root: HTMLElement = document.body) =>
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
 	highlights.forEach(highlight => {
-		highlight.outerHTML = highlight.textContent as string;
+		highlight.innerHTML = highlight.textContent as string;
 	});
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 		root = (root as DocumentFragment).getRootNode() as HTMLElement;
@@ -1133,17 +1100,14 @@ const insertHighlights = (() => {
 				selectModeFocus = !selectModeFocus;
 				break;
 			} case CommandType.ADVANCE_GLOBAL: {
-				if (selectModeFocus)
+				if (selectModeFocus) {
 					jumpToTerm(highlightTags, commandInfo.reversed ?? false, terms[focusedIdx]);
-				else
+				} else {
 					jumpToTerm(highlightTags, commandInfo.reversed ?? false);
+				}
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
-				const termIdx = commandInfo.termIdx as number;
-				const control = document.querySelector(termIdx === -1
-					? `#${getSel(ElementID.BAR_CONTROLS)}`
-					: `#${getSel(ElementID.BAR)} .${getSel(ElementClass.TERM, terms[termIdx].selector)}`
-				) as HTMLElement;
+				const control = getTermControl(undefined, commandInfo.termIdx) as HTMLElement;
 				const input = control.querySelector("input") as HTMLInputElement;
 				const button = control.querySelector("button") as HTMLButtonElement;
 				input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
@@ -1155,8 +1119,9 @@ const insertHighlights = (() => {
 				barTerms.classList.remove(getSel(ElementClass.CONTROL_PAD, focusedIdx));
 				focusedIdx = getFocusedIdx(commandInfo.termIdx as number);
 				barTerms.classList.add(getSel(ElementClass.CONTROL_PAD, focusedIdx));
-				if (!selectModeFocus)
+				if (!selectModeFocus) {
 					jumpToTerm(highlightTags, commandInfo.reversed as boolean, terms[focusedIdx]);
+				}
 				break;
 			}}
 		};
@@ -1170,11 +1135,11 @@ const insertHighlights = (() => {
 		observer.disconnect();
 		if (termsFromSelection) {
 			const selection = document.getSelection();
+			terms = [];
 			if (selection && selection.anchorNode) {
 				const termsAll = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
 					.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 				const termSelectors: Set<string> = new Set;
-				terms = [];
 				termsAll.forEach(term => {
 					if (!termSelectors.has(term.selector)) {
 						termSelectors.add(term.selector);
@@ -1182,13 +1147,12 @@ const insertHighlights = (() => {
 					}
 				});
 				selection.collapseToStart();
-			} else {
-				terms = [];
 			}
 			chrome.runtime.sendMessage({
 				terms,
 				makeUnique: true,
 				toggleHighlightsOn: true,
+				highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
 			} as BackgroundMessage);
 		}
 		restoreNodes(purgeTermsGivenOnly ? terms.map(term => getSel(ElementClass.TERM, term.selector)) : []);
@@ -1251,11 +1215,9 @@ const insertHighlights = (() => {
 					} else {
 						removeTermControl(termRemovedPreviousIdx);
 						terms.splice(termRemovedPreviousIdx, 1);
-						if (termRemovedPreviousIdx === terms.length) {
-							// Since it was the last term, simply removing its highlights is accurate (as they are the most recent)
-							restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
-							return;
-						}
+						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
+						insertStyle(terms, style, hues);
+						return;
 					}
 				} else {
 					terms.splice(0);
@@ -1265,7 +1227,6 @@ const insertHighlights = (() => {
 			} else if (!disable && !termsFromSelection) {
 				return;
 			}
-			// TODO incrementally cheaper highlight insertion for adding/modifying/removing terms
 			if (!disable) {
 				insertStyle(terms, style, hues);
 			}
@@ -1334,9 +1295,6 @@ const insertHighlights = (() => {
 				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
-			if (message.command) {
-				processCommand.call(message.command);
-			}
 			if (message.barControlsShown) {
 				controlsInfo.barControlsShown = message.barControlsShown;
 			}
@@ -1351,15 +1309,18 @@ const insertHighlights = (() => {
 				&& (!itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase)
 				|| (!terms.length && !document.getElementById(ElementID.BAR))))) {
 				refreshTermControls(
-					highlightTags, terms, commands, style, observer, processCommand, requestRefreshIndicators,
-					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo, hues,
-					message.terms, message.termUpdate, message.termToUpdateIdx,
+					highlightTags, terms, commands, style, observer, processCommand, requestRefreshIndicators, //
+					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo, hues, //
+					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
+			}
+			if (message.command) {
+				processCommand.call(message.command);
 			}
 			// TODO improve handling of highlight setting
 			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 			bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
-			sendResponse(); // Manifest V3 bug
+			sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
 		});
 	};
 })()();

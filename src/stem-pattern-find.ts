@@ -9,8 +9,6 @@ const getWordPatternString = (() => {
 
 	const sortReverse = (a: string, b: string) => a > b ? -1 : 1;
 
-	const makeSomeCharDuplicatesOptional = (word: string) => word.replace(/(a|e|i|o|u)\1+/gi, "$1$1?");
-
 	return (() => {
 		const suffixes = [
 			"rison",
@@ -123,7 +121,7 @@ const getWordPatternString = (() => {
 			,	"tific", "tifics", "tist", "tists"
 			,	"iet", "iety", "ietal", "ietism", "ietific", "ieisfics", "ietist", "ietists",
 			"g", "gs", "ged", "ging", "gings", "ger", "gers",
-			"re", "res", "ring", "rings", "red", "rer", "rers",
+			"re", "res", "ring", "rings", "red", "rer", "rers", "ration", "rations",
 			"ate", "ates", "ated", "ater", "aters", "ating", "ation", "ations", "ative",
 			"all", "alls", "alled", "alling", "allings", "aller", "allers",
 			"ine", "ines", "ined", "ining", "inings", "iner", "iners",
@@ -231,8 +229,8 @@ const getWordPatternString = (() => {
 		return (word: string) => { // Currently, returned pattern must have exactly one pair of brackets.
 			const matches = reverse(word.slice(3)).match(replacePatternReverse);
 			if (!matches)
-				return makeSomeCharDuplicatesOptional(word) + highlightPatternString;
-			return makeSomeCharDuplicatesOptional(word.slice(0, word.length - matches[0].length)) + highlightPatternString;
+				return word + highlightPatternString;
+			return word.slice(0, word.length - matches[0].length) + highlightPatternString;
 		};
 	})();
 })();

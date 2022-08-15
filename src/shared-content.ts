@@ -121,6 +121,7 @@ interface HighlightMessage {
 interface BackgroundMessage {
 	tabId?: number
 	highlightMessage?: HighlightMessage
+	highlightCommand?: CommandInfo
 	executeInTab?: boolean
 	terms?: MatchTerms
 	termChanged?: MatchTerm
@@ -183,7 +184,7 @@ const parseCommand = (commandString: string): CommandInfo => {
 		case "term": {
 			switch (parts[2]) {
 			case "append": {
-				return { type: CommandType.FOCUS_TERM_INPUT, termIdx: -1 };
+				return { type: CommandType.FOCUS_TERM_INPUT };
 			}}
 		}}
 		break;

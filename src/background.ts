@@ -368,7 +368,8 @@ chrome.commands.onCommand.addListener(commandString =>
 						}
 						session.researchInstances[senderTabId] = researchInstance;
 						activateHighlightingInTab(senderTabId,
-							createResearchMessage(researchInstance, false, sync.barControlsShown));
+							Object.assign({ command: message.highlightCommand } as HighlightMessage,
+								createResearchMessage(researchInstance, false, sync.barControlsShown)));
 					})
 				);
 			} else if (message.terms !== undefined) {
@@ -392,7 +393,7 @@ chrome.commands.onCommand.addListener(commandString =>
 				handleMessage(message, tab.id as number)
 			);
 		}
-		sendResponse(); // Manifest V3 bug
+		sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
 	});
 })();
 
