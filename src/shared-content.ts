@@ -39,22 +39,18 @@ class MatchTerm {
 			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
 		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const exp = (this.matchMode.stem ? getWordPatternString(this.phrase) : this.phrase);
+		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem
+			? getWordPatternStrings(this.phrase) : [ this.phrase, "" ]);
 		const optionalHyphen = "(\\p{Pd})?";
-		const addOptionalHyphens = (word: string) =>
-			word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
-		let patternString: string;
-		if (this.matchMode.stem) {
-			const dashedEnd = exp.search(/\(\?:/g);
-			patternString = addOptionalHyphens(sanitize(exp.slice(0, dashedEnd))) + optionalHyphen + exp.slice(dashedEnd, -1);
-		} else {
-			patternString = addOptionalHyphens(sanitize(exp.slice(0, -1))) + sanitize(exp.at(-1) as string);
-		}
-		const getWordBoundaryTest = (charBoundary: string) => /\w/g.test(charBoundary) ? "\\b" : "";
-		this.pattern = new RegExp(this.matchMode.whole
-			? `${getWordBoundaryTest(patternString[0])}(?:${patternString})${getWordBoundaryTest(patternString.at(-1) as string)}`
-			: patternString, flags);
-
+		const addOptionalHyphens = (word: string) => word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
+		const getBoundaryTest = (charBoundary: string) => this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
+		const patternString = `${
+			getBoundaryTest(patternStringPrefix[0])}${
+			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))}${
+			sanitize(patternStringPrefix.at(-1) as string)}(?:${
+			patternStringSuffix.length ? optionalHyphen + patternStringSuffix + (this.matchMode.whole ? "\\b" : "") : ""}|${
+			getBoundaryTest(patternStringPrefix.at(-1) as string)})`;
+		this.pattern = new RegExp(patternString, flags);
 	}
 }
 
@@ -201,15 +197,3 @@ const parseCommand = (commandString: string): CommandInfo => {
 const itemsMatchLoosely = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a: T, b: T) => a === b) =>
 	as.length === bs.length && as.every((a, i) => compare(a, bs[i]))
 ;
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-enum BarControl {
-	DISABLE_TAB_RESEARCH = "disableTabResearch",
-	PERFORM_SEARCH = "performSearch",
-	APPEND_TERM = "appendTerm",
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-enum BarLook {
-	SHOW_EDIT_ICON = "showEditIcon",
-}

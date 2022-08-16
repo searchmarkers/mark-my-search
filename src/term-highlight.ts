@@ -1,7 +1,8 @@
 type BrowserCommands = Array<chrome.commands.Command>
+type TagName = HTMLElementTagName | Uppercase<HTMLElementTagName>
 type HighlightTags = {
-	reject: Set<string>,
-	flow: Set<string>,
+	reject: Set<TagName>,
+	flow: Set<TagName>,
 }
 type TermHues = ReadonlyArray<number>
 type ButtonInfo = {
@@ -69,8 +70,8 @@ interface ControlsInfo {
 }
 
 interface UnbrokenNodeListItem {
-	next?: UnbrokenNodeListItem
 	value: Node
+	next?: UnbrokenNodeListItem
 }
 
 // Singly linked list implementation for efficient highlight matching of node DOM 'flow' groups
@@ -290,7 +291,7 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 };
 
 const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-	highlightTags.flow.has(element.tagName) && element.parentElement
+	highlightTags.flow.has(element.tagName as TagName) && element.parentElement
 		? getContainerBlock(highlightTags, element.parentElement)
 		: element
 ;
@@ -492,8 +493,7 @@ const insertTermInput = (() => {
 		input.onfocus = () => {
 			input.addEventListener("keyup", (event) => {
 				if (event.key === "Tab") {
-					// Mitigate Chromium bug (lack of full selection on first focus of the input)
-					input.setSelectionRange(0, input.value.length);
+					selectInputFocused(input);
 				}
 			});
 			input.classList.remove(getSel(ElementClass.DISABLED));
@@ -508,8 +508,7 @@ const insertTermInput = (() => {
 		const show = (event: MouseEvent) => {
 			event.preventDefault();
 			input.select();
-			// Mitigate Chromium bug (lack of full selection on first focus of the input)
-			input.setSelectionRange(0, input.value.length);
+			selectInputFocused(input);
 		};
 		const hide = () => {
 			input.blur();
@@ -576,6 +575,10 @@ const getTermControl = (term?: MatchTerm, idx?: number) => {
 const getControlAppendTerm = () =>
 	(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
 		.firstElementChild as HTMLElement | undefined
+;
+
+const selectInputFocused = (input: HTMLInputElement) =>
+	input.setSelectionRange(0, input.value.length) // Mainly used to mitigate Chromium bug in which first focus does not select
 ;
 
 const updateTermOccurringStatus = (term: MatchTerm) => {
@@ -767,21 +770,21 @@ const addControls = (() => {
 
 		return (terms: MatchTerms, barControl: BarControl, hideWhenInactive: boolean) =>
 			create(barControl, ({
-				[BarControl.DISABLE_TAB_RESEARCH]: {
+				disableTabResearch: {
 					path: "/icons/close.svg",
 					containerId: ElementID.BAR_OPTIONS,	
 					onclick: () => chrome.runtime.sendMessage({
 						disableTabResearch: true,
 					} as BackgroundMessage),
 				},
-				[BarControl.PERFORM_SEARCH]: {
+				performSearch: {
 					path: "/icons/search.svg",
 					containerId: ElementID.BAR_OPTIONS,
 					onclick: () => chrome.runtime.sendMessage({
 						performSearch: true,
 					} as BackgroundMessage),
 				},
-				[BarControl.APPEND_TERM]: {
+				appendTerm: {
 					path: "/icons/create.svg",
 					containerId: ElementID.BAR_CONTROLS,
 					setUp: container => {
@@ -858,6 +861,7 @@ const insertScrollMarkers = (() => {
 	;
 
 	return (highlightTags: HighlightTags, terms: MatchTerms) => {
+		return;
 		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 		const containersInfo: Array<{
@@ -912,7 +916,7 @@ const generateTermHighlightsUnderNode = (() => {
 	 * @param start The first character index of the match within the text node.
 	 * @param end The last character index of the match within the text node.
 	 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
-	 * @param nodeItemPrevious The last-highlighted item in the list of text nodes.
+	 * @param nodeItemPrevious The last-highlighted item in the text node list.
 	 */
 	const highlightInsideNode = (term: MatchTerm, textEndNode: Node, start: number, end: number,
 		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null) => {
@@ -951,6 +955,9 @@ const generateTermHighlightsUnderNode = (() => {
 				while (match && match.index as number < nextNodeStart) {
 					if (match.index as number + match[0].length >= currentNodeStart) {
 						const textLengthOriginal = (nodeItem.value.textContent as string).length;
+						if (!nodeItemPrevious && nodeItems.first !== nodeItem) {
+							nodeItemPrevious = nodeItems.first as UnbrokenNodeListItem;
+						}
 						if (nodeItemPrevious) {
 							while (nodeItemPrevious.next !== nodeItem) {
 								nodeItemPrevious = nodeItemPrevious.next as UnbrokenNodeListItem;
@@ -990,8 +997,8 @@ const generateTermHighlightsUnderNode = (() => {
 			switch (node.nodeType) {
 			case (1): // Node.ELEMENT_NODE
 			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
-				if (!highlightTags.reject.has((node as Element).tagName)) {
-					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+				if (!highlightTags.reject.has((node as Element).tagName as TagName)) {
+					const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
 					if (breaksFlow && nodeItems.first) {
 						highlightInBlock(terms, nodeItems);
 						nodeItems.clear();
@@ -1009,7 +1016,7 @@ const generateTermHighlightsUnderNode = (() => {
 				nodeItems.push(node);
 				break;
 			}}
-			node = node.nextSibling as ChildNode; // May actually be null (checked by loop condition)
+			node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
 		} while (node && visitSiblings);
 	};
 
@@ -1043,9 +1050,13 @@ const purgeClass = (className: string, root: HTMLElement = document.body) =>
  */
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
-	highlights.forEach(highlight => {
-		highlight.innerHTML = highlight.textContent as string;
-	});
+	for (const highlight of Array.from(highlights)) {
+		const parentNode = highlight.parentNode as ParentNode;
+		while (highlight.firstChild) {
+			parentNode.insertBefore(highlight.firstChild, highlight);
+		}
+		highlight.remove();
+	}
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 		root = (root as DocumentFragment).getRootNode() as HTMLElement;
 		if (root.nodeType === Node.TEXT_NODE) {
@@ -1082,7 +1093,7 @@ const highlightInNodesOnMutation = (observer: MutationObserver) =>
 	observer.observe(document.body, {childList: true, subtree: true})
 ;
 
-const insertHighlights = (() => {
+const beginHighlighting = (() => {
 	const selectTermOnCommand = (highlightTags: HighlightTags, terms: MatchTerms,
 		processCommand: FnProcessCommand) => {
 		let selectModeFocus = false;
@@ -1109,10 +1120,8 @@ const insertHighlights = (() => {
 			} case CommandType.FOCUS_TERM_INPUT: {
 				const control = getTermControl(undefined, commandInfo.termIdx) as HTMLElement;
 				const input = control.querySelector("input") as HTMLInputElement;
-				const button = control.querySelector("button") as HTMLButtonElement;
-				input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
-				button.click();
-				input.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				input.select();
+				selectInputFocused(input);
 				break;
 			} case CommandType.SELECT_TERM: {
 				const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
@@ -1129,7 +1138,7 @@ const insertHighlights = (() => {
 
 	return (
 		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
-		terms: MatchTerms, purgeTermsGivenOnly: boolean, disable: boolean, termsFromSelection: boolean,
+		terms: MatchTerms, termsToPurge: MatchTerms, disable: boolean, termsFromSelection: boolean,
 		selectTermPtr: FnProcessCommand, observer: MutationObserver
 	) => {
 		observer.disconnect();
@@ -1152,18 +1161,17 @@ const insertHighlights = (() => {
 				terms,
 				makeUnique: true,
 				toggleHighlightsOn: true,
-				highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
 			} as BackgroundMessage);
 		}
-		restoreNodes(purgeTermsGivenOnly ? terms.map(term => getSel(ElementClass.TERM, term.selector)) : []);
+		restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
 		if (disable) {
 			removeControls();
 			return;
 		}
+		selectTermOnCommand(highlightTags, terms, selectTermPtr);
 		if (termsFromSelection) {
 			return;
 		}
-		selectTermOnCommand(highlightTags, terms, selectTermPtr);
 		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
@@ -1174,8 +1182,13 @@ const insertHighlights = (() => {
 	const refreshTermControls = (() => {
 		const insertToolbar = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
 			style: HTMLElement, controlsInfo: ControlsInfo, hues: TermHues) => {
+			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
+				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
 			removeControls();
 			addControls(highlightTags, commands, terms, style, controlsInfo, hues);
+			if (focusingControlAppend) {
+				((getTermControl() as HTMLElement).querySelector("input") as HTMLInputElement).select();
+			}
 		};
 	
 		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
@@ -1186,7 +1199,7 @@ const insertHighlights = (() => {
 			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number,
 		) => {
 			const termsToHighlight: MatchTerms = [];
-			let purgeTermsGivenOnly = false;
+			const termsToPurge: MatchTerms = [];
 			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
 				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
 				// 'message.disable' assumed false.
@@ -1196,15 +1209,15 @@ const insertHighlights = (() => {
 					const idx = terms.length - 1;
 					insertTermControl(highlightTags, terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo);
 					termsToHighlight.push(terms[idx]);
-					purgeTermsGivenOnly = true;
+					termsToPurge.push(terms[idx]);
 				} else {
 					const term = terms[termToUpdateIdx];
+					termsToPurge.push(Object.assign(new MatchTerm("_"), term));
 					term.matchMode = termUpdate.matchMode;
 					term.phrase = termUpdate.phrase;
 					term.compile();
 					refreshTermControl(highlightTags, terms[termToUpdateIdx], termToUpdateIdx);
 					termsToHighlight.push(term);
-					purgeTermsGivenOnly = true;
 				}
 			} else if (termsUpdate !== undefined) {
 				// TODO retain colours?
@@ -1230,11 +1243,11 @@ const insertHighlights = (() => {
 			if (!disable) {
 				insertStyle(terms, style, hues);
 			}
-			// Timeout seems to reduce freezing impact (by causing threading?)
-			setTimeout(() => insertHighlights(
-				highlightTags, requestRefreshIndicators, termsToHighlight.length ? termsToHighlight : terms, purgeTermsGivenOnly,
+			beginHighlighting(
+				highlightTags, requestRefreshIndicators,
+				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
 				disable, termsFromSelection, selectTermPtr, observer
-			));
+			);
 		};
 	})();
 
@@ -1265,7 +1278,7 @@ const insertHighlights = (() => {
 			},
 		};
 		const getHighlightTagsSet = (tagsLower: Array<HTMLElementTagName>) =>
-			new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
+			new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ])) as Set<TagName>
 		;
 		const highlightTags: HighlightTags = {
 			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title" ]),
@@ -1304,10 +1317,12 @@ const insertHighlights = (() => {
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
-			// TODO better way of identifying if extension is already active but with no terms
-			if (message.disable || message.termsFromSelection || message.termUpdate || (message.terms !== undefined
-				&& (!itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase)
-				|| (!terms.length && !document.getElementById(ElementID.BAR))))) {
+			if (
+				message.disable || message.termsFromSelection || message.termUpdate
+				|| (message.terms !== undefined
+					&& (!itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase)
+						|| (!terms.length && !document.getElementById(ElementID.BAR))))
+			) {
 				refreshTermControls(
 					highlightTags, terms, commands, style, observer, processCommand, requestRefreshIndicators, //
 					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo, hues, //
@@ -1318,8 +1333,10 @@ const insertHighlights = (() => {
 				processCommand.call(message.command);
 			}
 			// TODO improve handling of highlight setting
-			const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
-			bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
+			const bar = document.getElementById(getSel(ElementID.BAR));
+			if (bar) {
+				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
+			}
 			sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
 		});
 	};

@@ -1,5 +1,5 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getWordPatternString = (() => {
+const getWordPatternStrings = (() => {
 	const reverse = (chars: string) => {
 		for (let i = 0; i < chars.length; i += 2) {
 			chars = chars[i] + chars;
@@ -224,13 +224,13 @@ const getWordPatternString = (() => {
 		].sort(sortReverse);
 		const replacePatternReverse = new RegExp(
 			`\\b(?:${suffixes.map(suffix => reverse(suffix)).sort(sortReverse).join("|")})`, "gi");
-		const highlightPatternString = `(?:${suffixes.join("|")})?`;
+		const highlightPatternString = `(?:${suffixes.join("|")})`;
 
-		return (word: string) => { // Currently, returned pattern must have exactly one pair of brackets.
+		return (word: string): [ string, string ] => {
 			const matches = reverse(word.slice(3)).match(replacePatternReverse);
 			if (!matches)
-				return word + highlightPatternString;
-			return word.slice(0, word.length - matches[0].length) + highlightPatternString;
+				return [ word, highlightPatternString ];
+			return [ word.slice(0, word.length - matches[0].length), highlightPatternString ];
 		};
 	})();
 })();

@@ -40,45 +40,45 @@ body { background-color: #bbb; }
 
 const optionsInfo: Array<{
 	label: string
-	options: Record<string, {
+	options: Partial<Record<keyof StorageSyncValues, {
 		label: string
-		preferences?: Record<string, {
+		preferences?: Partial<Record<keyof StorageSyncValues["barControlsShown"] | keyof StorageSyncValues["barLook"] | keyof StorageSyncValues["showHighlights"], {
 			label: string
 			type: PreferenceType
-		}>
+		}>>
 		type?: PreferenceType
-	}>
+	}>>
 }> = [
 	{
 		label: "Behaviour",
 		options: {
-			[StorageSync.BAR_CONTROLS_SHOWN]: {
+			barControlsShown: {
 				label: "Controls to show in the toolbar",
 				preferences: {
-					[BarControl.DISABLE_TAB_RESEARCH]: {
+					disableTabResearch: {
 						label: "Disable research in the current tab",
 						type: PreferenceType.BOOLEAN,
 					},
-					[BarControl.PERFORM_SEARCH]: {
+					performSearch: {
 						label: "Perform a search using the current terms",
 						type: PreferenceType.BOOLEAN,
 					},
-					[BarControl.APPEND_TERM]: {
+					appendTerm: {
 						label: "Append a new term to the toolbar",
 						type: PreferenceType.BOOLEAN,
 					},
 				},
 			},
-			[StorageSync.BAR_LOOK]: {
+			barLook: {
 				label: "Toolbar style and icons",
 				preferences: {
-					[BarLook.SHOW_EDIT_ICON]: {
+					showEditIcon: {
 						label: "Show a pen button in buttons with editable text",
 						type: PreferenceType.BOOLEAN,
 					},
 				},
 			},
-			[StorageSync.SHOW_HIGHLIGHTS]: {
+			showHighlights: {
 				label: "Marking visibility when finding terms from a search",
 				preferences: {
 					default: {
@@ -91,11 +91,11 @@ const optionsInfo: Array<{
 					},
 				},
 			},
-			[StorageSync.STOPLIST]: {
+			stoplist: {
 				label: "Words not to highlight automatically when searched",
 				type: PreferenceType.ARRAY,
 			},
-			[StorageSync.IS_SET_UP]: {
+			isSetUp: {
 				label: "Do not perform initial setup on next browser restart",
 				type: PreferenceType.BOOLEAN,
 			},

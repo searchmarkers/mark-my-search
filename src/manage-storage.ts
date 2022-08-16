@@ -25,14 +25,18 @@ type StorageSyncValues = {
 		overrideResearchPages: boolean
 	}
 	[StorageSync.BAR_CONTROLS_SHOWN]: {
-		[BarControl.DISABLE_TAB_RESEARCH]: boolean
-		[BarControl.PERFORM_SEARCH]: boolean
-		[BarControl.APPEND_TERM]: boolean
+		disableTabResearch: boolean
+		performSearch: boolean
+		appendTerm: boolean
 	}
 	[StorageSync.BAR_LOOK]: {
-		[BarLook.SHOW_EDIT_ICON]: boolean
+		showEditIcon: boolean
 	}
 }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type BarControl = keyof StorageSyncValues["barControlsShown"]
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type BarLook = keyof StorageSyncValues["barLook"]
 
 enum StorageSession {
 	RESEARCH_INSTANCES = "researchInstances",
