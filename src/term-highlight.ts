@@ -71,20 +71,20 @@ interface ControlsInfo {
 
 interface UnbrokenNodeListItem {
 	value: Node
-	next?: UnbrokenNodeListItem
+	next: UnbrokenNodeListItem | null
 }
 
 // Singly linked list implementation for efficient highlight matching of node DOM 'flow' groups
 class UnbrokenNodeList {
-	first?: UnbrokenNodeListItem;
-	last?: UnbrokenNodeListItem;
+	first: UnbrokenNodeListItem | null;
+	last: UnbrokenNodeListItem | null;
 
 	push (value: Node) {
 		if (this.last) {
-			this.last.next = { value };
+			this.last.next = { value, next: null };
 			this.last = this.last.next;
 		} else {
-			this.first = { value };
+			this.first = { value, next: null };
 			this.last = this.first;
 		}
 	}
@@ -110,8 +110,8 @@ class UnbrokenNodeList {
 	}
 
 	clear () {
-		this.first = undefined;
-		this.last = undefined; 
+		this.first = null;
+		this.last = null;
 	}
 
 	*[Symbol.iterator] () {
@@ -411,13 +411,13 @@ const insertTermInput = (() => {
 
 	const commit = (term: MatchTerm | undefined, terms: MatchTerms) => {
 		const replaces = !!term;
-		const control = getTermControl(term) as HTMLElement;
+		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
 		const inputValue = termInput.value;
 		const idx = getTermIdx(term, terms);
 		if (replaces && inputValue === "") {
 			if (document.activeElement === termInput) {
-				activateInput(getTermControl(undefined, idx + 1) as HTMLElement);
+				activateInput(getControl(undefined, idx + 1) as HTMLElement);
 				return;
 			}
 			chrome.runtime.sendMessage({
@@ -444,7 +444,7 @@ const insertTermInput = (() => {
 
 	const shiftTermFocus = (term: MatchTerm | undefined, shiftRight: boolean, onBeforeShift: () => void, terms: MatchTerms) => {
 		const replaces = !!term;
-		const control = getTermControl(term) as HTMLElement;
+		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
 		const idx = getTermIdx(term, terms);
 		if (termInput.selectionStart !== termInput.selectionEnd
@@ -465,12 +465,12 @@ const insertTermInput = (() => {
 				const focusingControlAppendTerm = terms.length === 1;
 				const controlTarget = focusingControlAppendTerm
 					? getControlAppendTerm() as HTMLElement
-					: getTermControl(undefined, 1) as HTMLElement;
+					: getControl(undefined, 1) as HTMLElement;
 				activateInput(controlTarget, shiftRight);
 			}
 			return;
 		}
-		const controlTarget = getTermControl(undefined, replaces
+		const controlTarget = getControl(undefined, replaces
 			? shiftRight ? idx + 1 : idx - 1
 			: terms.length - 1) as HTMLElement;
 		activateInput(controlTarget, shiftRight);
@@ -562,19 +562,18 @@ const getTermIdx = (term: MatchTerm | undefined, terms: MatchTerms) =>
 	term ? terms.indexOf(term) : TermChange.CREATE
 ;
 
-const getTermControl = (term?: MatchTerm, idx?: number) => {
+const getControl = (term?: MatchTerm, idx?: number): Element | null => {
 	const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
 	return (idx === undefined && term
 		? barTerms.getElementsByClassName(getSel(ElementClass.TERM, term.selector))[0]
 		: idx === undefined || idx >= barTerms.children.length
 			? getControlAppendTerm()
-			: Array.from(barTerms.children).at(idx ?? -1)
-	) as HTMLElement | undefined;
+			: Array.from(barTerms.children).at(idx ?? -1) ?? null
+	);
 };
 
-const getControlAppendTerm = () =>
-	(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement)
-		.firstElementChild as HTMLElement | undefined
+const getControlAppendTerm = (): Element | null =>
+	(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement).firstElementChild
 ;
 
 const selectInputFocused = (input: HTMLInputElement) =>
@@ -582,7 +581,7 @@ const selectInputFocused = (input: HTMLInputElement) =>
 ;
 
 const updateTermOccurringStatus = (term: MatchTerm) => {
-	const controlPad = (getTermControl(term) as HTMLElement)
+	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
 	const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length != 0;
 	controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
@@ -596,7 +595,7 @@ const updateTermTooltip = (() => {
 	};
 
 	return (term: MatchTerm) => {
-		const controlPad = (getTermControl(term) as HTMLElement)
+		const controlPad = (getControl(term) as HTMLElement)
 			.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
 		const controlContent = controlPad
 			.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
@@ -628,7 +627,7 @@ const updateTermMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) 
 };
 
 const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: number) => {
-	const control = getTermControl(undefined, idx) as HTMLElement;
+	const control = getControl(undefined, idx) as HTMLElement;
 	control.className = "";
 	control.classList.add(getSel(ElementClass.CONTROL));
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
@@ -636,27 +635,30 @@ const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: 
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
 	controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
 	controlContent.textContent = term.phrase;
-	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach((option) =>
+	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
 		option.textContent = getTermOptionText(
-			term.matchMode[getTermOptionMatchType(option.textContent as string, true)], (option.textContent as string)));
+			term.matchMode[getTermOptionMatchType(option.textContent as string, true)],
+			option.textContent as string,
+		),
+	);
 };
 
 const removeTermControl = (idx: number) => {
-	(getTermControl(undefined, idx) as HTMLElement).remove();
+	(getControl(undefined, idx) as HTMLElement).remove();
 };
 
 const insertTermControl = (() => {
 	const createTermOption = (terms: MatchTerms, term: MatchTerm, title: string) => {
 		const matchType = getTermOptionMatchType(title);
 		const onActivated = () => {
-			term.matchMode[matchType] = !term.matchMode[matchType];
-			term.compile();
-			const message: BackgroundMessage = {
-				terms,
-				termChanged: term,
+			const termUpdate = Object.assign({}, term);
+			termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
+			termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
+			chrome.runtime.sendMessage({
+				terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
+				termChanged: termUpdate,
 				termChangedIdx: getTermIdx(term, terms),
-			};
-			chrome.runtime.sendMessage(message);
+			});
 		};
 		const option = document.createElement("button");
 		option.type = "button";
@@ -860,8 +862,7 @@ const insertScrollMarkers = (() => {
 		highlightClassName.slice(getSel(ElementClass.TERM).length + 1)
 	;
 
-	return (highlightTags: HighlightTags, terms: MatchTerms) => {
-		return;
+	return (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
 		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 		const containersInfo: Array<{
@@ -869,11 +870,14 @@ const insertScrollMarkers = (() => {
 			termsAdded: Set<string>,
 		}> = [];
 		if (terms.length === 0) {
-			return;
+			return; // No terms results in an empty selector, which is not allowed
 		}
 		let markersHtml = "";
-		document.body.querySelectorAll(terms.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`
-		).join(", ")).forEach((highlight: HTMLElement) => {
+		document.body.querySelectorAll(terms
+			.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
+			.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`)
+			.join(", ")
+		).forEach((highlight: HTMLElement) => {
 			const container = getContainerBlock(highlightTags, highlight);
 			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
 			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
@@ -916,14 +920,13 @@ const generateTermHighlightsUnderNode = (() => {
 	 * @param start The first character index of the match within the text node.
 	 * @param end The last character index of the match within the text node.
 	 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
-	 * @param nodeItemPrevious The last-highlighted item in the text node list.
+	 * @param nodeItemPrevious The previous item in the text node list.
+	 * @returns The new previous item (the item just highlighted).
 	 */
 	const highlightInsideNode = (term: MatchTerm, textEndNode: Node, start: number, end: number,
-		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null) => {
+		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null): UnbrokenNodeListItem => {
 		// TODO add strategy for mitigating damage (caused by programmatic changes by the website)
 		const text = textEndNode.textContent as string;
-		start = Math.max(0, start);
-		end = Math.min(text.length, end);
 		const textStart = text.substring(0, start);
 		const highlight = document.createElement("mms-h");
 		highlight.classList.add(getSel(ElementClass.TERM, term.selector));
@@ -935,7 +938,15 @@ const generateTermHighlightsUnderNode = (() => {
 			const textStartNode = document.createTextNode(textStart);
 			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
 			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
+			return (nodeItemPrevious
+				? (nodeItemPrevious.next as UnbrokenNodeListItem).next
+				: nodeItems.first
+			) as UnbrokenNodeListItem;
 		}
+		return (nodeItemPrevious
+			? nodeItemPrevious.next
+			: nodeItems.first
+		) as UnbrokenNodeListItem;
 	};
 
 	/**
@@ -944,42 +955,41 @@ const generateTermHighlightsUnderNode = (() => {
 	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
 	 */
 	const highlightInBlock = (terms: MatchTerms, nodeItems: UnbrokenNodeList) => {
+		const textFlow = nodeItems.getText();
 		for (const term of terms) {
-			const textFlow = nodeItems.getText();
-			const matches = textFlow.matchAll(term.pattern);
-			let currentNodeStart = 0;
-			let match: RegExpMatchArray = matches.next().value;
 			let nodeItemPrevious: UnbrokenNodeListItem | null = null;
-			for (const nodeItem of nodeItems) {
-				const nextNodeStart = currentNodeStart + (nodeItem.value.textContent as string).length;
-				while (match && match.index as number < nextNodeStart) {
-					if (match.index as number + match[0].length >= currentNodeStart) {
-						const textLengthOriginal = (nodeItem.value.textContent as string).length;
-						if (!nodeItemPrevious && nodeItems.first !== nodeItem) {
-							nodeItemPrevious = nodeItems.first as UnbrokenNodeListItem;
-						}
-						if (nodeItemPrevious) {
-							while (nodeItemPrevious.next !== nodeItem) {
-								nodeItemPrevious = nodeItemPrevious.next as UnbrokenNodeListItem;
-							}
-						}
-						highlightInsideNode(
-							term,
-							nodeItem.value,
-							match.index as number - currentNodeStart,
-							match.index as number - currentNodeStart + match[0].length,
-							nodeItems,
-							nodeItemPrevious,
-						);
-						currentNodeStart += textLengthOriginal - (nodeItem.value.textContent as string).length;
-						if ((match.index as number) + match[0].length > nextNodeStart) {
-							break;
-						}
-					}
-					match = matches.next().value;
+			let nodeItem: UnbrokenNodeListItem | null = nodeItems.first as UnbrokenNodeListItem;
+			let textStart = 0;
+			let textEnd = (nodeItem.value.textContent as string).length;
+			const matches = textFlow.matchAll(term.pattern);
+			for (const match of matches) {
+				let highlightStart = match.index as number;
+				const highlightEnd = highlightStart + match[0].length;
+				while (textEnd <= highlightStart) {
+					nodeItemPrevious = nodeItem;
+					nodeItem = nodeItem.next as UnbrokenNodeListItem;
+					textStart = textEnd;
+					textEnd += (nodeItem.value.textContent as string).length;
 				}
-				currentNodeStart = nextNodeStart;
-				nodeItemPrevious = nodeItem;
+				for (;;) {
+					nodeItemPrevious = highlightInsideNode(
+						term,
+						nodeItem.value,
+						highlightStart - textStart,
+						Math.min(highlightEnd - textStart, textEnd),
+						nodeItems,
+						nodeItemPrevious,
+					);
+					highlightStart = textEnd;
+					textStart = highlightEnd;
+					if (highlightEnd <= textEnd) {
+						break;
+					}
+					nodeItemPrevious = nodeItem;
+					nodeItem = nodeItem.next as UnbrokenNodeListItem;
+					textStart = textEnd;
+					textEnd += (nodeItem.value.textContent as string).length;
+				}
 			}
 		}
 	};
@@ -1051,11 +1061,7 @@ const purgeClass = (className: string, root: HTMLElement = document.body) =>
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
 	for (const highlight of Array.from(highlights)) {
-		const parentNode = highlight.parentNode as ParentNode;
-		while (highlight.firstChild) {
-			parentNode.insertBefore(highlight.firstChild, highlight);
-		}
-		highlight.remove();
+		highlight.outerHTML = highlight.innerHTML;
 	}
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 		root = (root as DocumentFragment).getRootNode() as HTMLElement;
@@ -1118,7 +1124,7 @@ const beginHighlighting = (() => {
 				}
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
-				const control = getTermControl(undefined, commandInfo.termIdx) as HTMLElement;
+				const control = getControl(undefined, commandInfo.termIdx) as HTMLElement;
 				const input = control.querySelector("input") as HTMLInputElement;
 				input.select();
 				selectInputFocused(input);
@@ -1187,7 +1193,7 @@ const beginHighlighting = (() => {
 			removeControls();
 			addControls(highlightTags, commands, terms, style, controlsInfo, hues);
 			if (focusingControlAppend) {
-				((getTermControl() as HTMLElement).querySelector("input") as HTMLInputElement).select();
+				((getControl() as HTMLElement).querySelector("input") as HTMLInputElement).select();
 			}
 		};
 	
@@ -1212,7 +1218,7 @@ const beginHighlighting = (() => {
 					termsToPurge.push(terms[idx]);
 				} else {
 					const term = terms[termToUpdateIdx];
-					termsToPurge.push(Object.assign(new MatchTerm("_"), term));
+					termsToPurge.push(Object.assign({}, term));
 					term.matchMode = termUpdate.matchMode;
 					term.phrase = termUpdate.phrase;
 					term.compile();
@@ -1287,16 +1293,30 @@ const beginHighlighting = (() => {
 			// break: any other class of element
 		};
 		const requestRefreshIndicators: RequestRefreshIndicators = function* () {
+			const requestWaitDuration = 1000;
+			const reschedulingDelayMax = 5000;
+			const reschedulingRequestCountMargin = 1;
 			let timeRequestAcceptedLast = 0;
+			let requestCount = 0;
+			const scheduleRefresh = () =>
+				setTimeout(() => {
+					const dateMs = Date.now();
+					if (requestCount > reschedulingRequestCountMargin
+						&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax) {
+						requestCount = 0;
+						scheduleRefresh();
+						return;
+					}
+					requestCount = 0;
+					insertScrollMarkers(terms, highlightTags, hues);
+					terms.forEach(term => updateTermTooltip(term));
+				}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates)
 			while (true) {
-				const requestWaitDuration = 1000;
-				const date = Date.now();
-				if (date > timeRequestAcceptedLast + requestWaitDuration) {
-					timeRequestAcceptedLast = date;
-					setTimeout(() => {
-						insertScrollMarkers(highlightTags, terms);
-						terms.forEach(term => updateTermTooltip(term));
-					}, requestWaitDuration + 50);
+				requestCount++;
+				const dateMs = Date.now();
+				if (dateMs > timeRequestAcceptedLast + requestWaitDuration) {
+					timeRequestAcceptedLast = dateMs;
+					scheduleRefresh();
 				}
 				yield;
 			}

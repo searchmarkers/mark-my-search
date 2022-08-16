@@ -73,16 +73,16 @@ const optionsInfo: Array<{
 				label: "Toolbar style and icons",
 				preferences: {
 					showEditIcon: {
-						label: "Show a pen button in buttons with editable text",
+						label: "Show a pen button in controls with editable text",
 						type: PreferenceType.BOOLEAN,
 					},
 				},
 			},
 			showHighlights: {
-				label: "Marking visibility when finding terms from a search",
+				label: "Visibility when highlighting search engine keywords",
 				preferences: {
 					default: {
-						label: "Highlights start visible",
+						label: "Highlights begin visible",
 						type: PreferenceType.BOOLEAN,
 					},
 					overrideSearchPages: {
