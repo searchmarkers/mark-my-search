@@ -43,7 +43,7 @@ const createResearchInstance = (args: {
 
 const getSearchQuery = (url: string) =>
 	new URL(url).searchParams
-		.get([ "q", "query" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
+		.get([ "q", "query", "search" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
 ;
 
 const isTabSearchPage = (engines: Engines, url: string): [ boolean, Engine? ] => {

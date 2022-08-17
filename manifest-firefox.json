@@ -1,12 +1,12 @@
 {
 	"manifest_version": 3,
 	"name": "Mark My Search",
-	"description": "Find what you searched for anywhere on the web. Focus your research and find areas of interest with this intuitive instant keyword highlighter.",
+	"description": "Highlight search engine keywords. Jump between terms instantly.",
 	"version": "1.3.0",
 
 	"browser_specific_settings": {
 		"gecko": {
-			"id": "{3c87dcad-dbbd-4be1-b07b-b6d0739b0aec}"
+			"id": "mark-my-search@ator-dev"
 		}
 	},
 
