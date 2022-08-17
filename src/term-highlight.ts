@@ -5,7 +5,7 @@ type HighlightTags = {
 	flow: Set<TagName>,
 }
 type TermHues = ReadonlyArray<number>
-type ButtonInfo = {
+type ControlButtonInfo = {
 	path?: string
 	label?: string
 	containerId: ElementID
@@ -14,7 +14,7 @@ type ButtonInfo = {
 }
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
 
-enum Keyframes {
+enum AtRuleIdent {
 	FLASH = "flash",
 	MARKER_ON = "marker-on",
 	MARKER_OFF = "marker-off",
@@ -70,7 +70,7 @@ interface ControlsInfo {
 }
 
 interface UnbrokenNodeListItem {
-	value: Node
+	value: Text
 	next: UnbrokenNodeListItem | null
 }
 
@@ -79,7 +79,7 @@ class UnbrokenNodeList {
 	first: UnbrokenNodeListItem | null;
 	last: UnbrokenNodeListItem | null;
 
-	push (value: Node) {
+	push (value: Text) {
 		if (this.last) {
 			this.last.next = { value, next: null };
 			this.last = this.last.next;
@@ -89,7 +89,7 @@ class UnbrokenNodeList {
 		}
 	}
 
-	insertAfter (itemBefore?: UnbrokenNodeListItem | null, value?: Node | null) {
+	insertAfter (itemBefore: UnbrokenNodeListItem | null, value: Text | null) {
 		if (value) {
 			if (itemBefore) {
 				itemBefore.next = { next: itemBefore.next, value };
@@ -123,12 +123,24 @@ class UnbrokenNodeList {
 	}
 }
 
-// Get a selector for element identification / classification / styling. Abbreviated due to prolific use.
-const getSel = (identifier: ElementID | ElementClass | Keyframes, argument?: string | number) =>
+/**
+ * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
+ * __Always__ use for ID, class, and at-rule identifiers.
+ * @param identifier The extension-level unique ID, class, or at-rule identifier.
+ * @param argument An optional secondary component to the identifier.
+ * @returns The selector string, being a constant selector prefix and both components joined by hyphens.
+ */
+const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: string | number): string =>
 	argument === undefined ? `markmysearch-${identifier}` : `markmysearch-${identifier}-${argument}`
 ;
 
-const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<number>) => {
+/**
+ * Fills a CSS stylesheet element to style all UI elements we insert.
+ * @param terms Terms to account for and style.
+ * @param style A style element to fill with the current style state.
+ * @param hues An array of color hues for term styles to cycle through.
+ */
+const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues: TermHues) => {
 	const zIndexMax = 2147483647;
 	style.textContent = `
 /* TODO reorganise and rename */
@@ -224,9 +236,9 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 /**/
 
 /* TERM SCROLL MARKERS */
-@keyframes ${getSel(Keyframes.MARKER_ON)}
+@keyframes ${getSel(AtRuleIdent.MARKER_ON)}
 	{ from {} to { padding-right: 16px; }; }
-@keyframes ${getSel(Keyframes.MARKER_OFF)}
+@keyframes ${getSel(AtRuleIdent.MARKER_OFF)}
 	{ from { padding-right: 16px; } to { padding-right: 0; }; }
 #${getSel(ElementID.MARKER_GUTTER)}
 	{ display: block; position: fixed; right: 0; top: 0; width: 0; height: 100%; z-index: ${zIndexMax}; }
@@ -238,10 +250,10 @@ const insertStyle = (terms: MatchTerms, style: HTMLElement, hues: ReadonlyArray<
 /**/
 
 /* TERM HIGHLIGHTS */
-@keyframes ${getSel(Keyframes.FLASH)}
+@keyframes ${getSel(AtRuleIdent.FLASH)}
 	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
-	{ animation: ${getSel(Keyframes.FLASH)} 1s; }
+	{ animation: ${getSel(AtRuleIdent.FLASH)} 1s; }
 /**/
 	`;
 	terms.forEach((term, i) => {
@@ -736,7 +748,7 @@ const getTermCommands = (commands: BrowserCommands) => {
 
 const addControls = (() => {
 	const createButton = (() => {
-		const create = (id: BarControl, info: ButtonInfo, hideWhenInactive: boolean) => {
+		const create = (id: BarControl, info: ControlButtonInfo, hideWhenInactive: boolean) => {
 			const container = document.createElement("span"); // TODO find how vscode knows the type produced by the argument
 			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant, use CSS to select class containing this
 			container.classList.add(getSel(ElementClass.BAR_CONTROL, id));
@@ -794,13 +806,13 @@ const addControls = (() => {
 						insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
 					},
 				},
-			} as Record<BarControl, ButtonInfo>)[barControl], hideWhenInactive)
+			} as Record<BarControl, ControlButtonInfo>)[barControl], hideWhenInactive)
 		;
 	})();
 
 	return (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-		style: HTMLElement, controlsInfo: ControlsInfo, hues: TermHues) => {
-		insertStyle(terms, style, hues);
+		style: HTMLStyleElement, controlsInfo: ControlsInfo, hues: TermHues) => {
+		fillStylesheetContent(terms, style, hues);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
 		bar.ondragstart = event => event.preventDefault();
@@ -837,6 +849,9 @@ const addControls = (() => {
 	};
 })();
 
+/**
+ * Empty the custom stylesheet, and remove the control bar and marker gutter.
+ */
 const removeControls = () => {
 	const style = document.getElementById(getSel(ElementID.STYLE));
 	if (!style || style.textContent === "") {
@@ -933,20 +948,15 @@ const generateTermHighlightsUnderNode = (() => {
 		highlight.textContent = text.substring(start, end);
 		textEndNode.textContent = text.substring(end);
 		(textEndNode.parentNode as Node).insertBefore(highlight, textEndNode);
-		nodeItems.insertAfter(nodeItemPrevious, highlight.firstChild);
+		nodeItems.insertAfter(nodeItemPrevious, highlight.firstChild as Text);
 		if (textStart !== "") {
 			const textStartNode = document.createTextNode(textStart);
 			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
 			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
-			return (nodeItemPrevious
-				? (nodeItemPrevious.next as UnbrokenNodeListItem).next
-				: nodeItems.first
-			) as UnbrokenNodeListItem;
+			return ((nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem)
+				.next as UnbrokenNodeListItem;
 		}
-		return (nodeItemPrevious
-			? nodeItemPrevious.next
-			: nodeItems.first
-		) as UnbrokenNodeListItem;
+		return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem;
 	};
 
 	/**
@@ -960,7 +970,7 @@ const generateTermHighlightsUnderNode = (() => {
 			let nodeItemPrevious: UnbrokenNodeListItem | null = null;
 			let nodeItem: UnbrokenNodeListItem | null = nodeItems.first as UnbrokenNodeListItem;
 			let textStart = 0;
-			let textEnd = (nodeItem.value.textContent as string).length;
+			let textEnd = nodeItem.value.length;
 			const matches = textFlow.matchAll(term.pattern);
 			for (const match of matches) {
 				let highlightStart = match.index as number;
@@ -969,7 +979,7 @@ const generateTermHighlightsUnderNode = (() => {
 					nodeItemPrevious = nodeItem;
 					nodeItem = nodeItem.next as UnbrokenNodeListItem;
 					textStart = textEnd;
-					textEnd += (nodeItem.value.textContent as string).length;
+					textEnd += nodeItem.value.length;
 				}
 				for (;;) {
 					nodeItemPrevious = highlightInsideNode(
@@ -988,7 +998,7 @@ const generateTermHighlightsUnderNode = (() => {
 					nodeItemPrevious = nodeItem;
 					nodeItem = nodeItem.next as UnbrokenNodeListItem;
 					textStart = textEnd;
-					textEnd += (nodeItem.value.textContent as string).length;
+					textEnd += nodeItem.value.length;
 				}
 			}
 		}
@@ -1023,7 +1033,7 @@ const generateTermHighlightsUnderNode = (() => {
 				}
 				break;
 			} case (3): { // Node.TEXT_NODE
-				nodeItems.push(node);
+				nodeItems.push(node as Text);
 				break;
 			}}
 			node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
@@ -1034,7 +1044,7 @@ const generateTermHighlightsUnderNode = (() => {
 		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators) => {
 		if (rootNode.nodeType === Node.TEXT_NODE) {
 			const nodeItems = new UnbrokenNodeList;
-			nodeItems.push(rootNode);
+			nodeItems.push(rootNode as Text);
 			highlightInBlock(terms, nodeItems);
 		} else {
 			insertHighlights(terms, rootNode, highlightTags, new UnbrokenNodeList, false);
@@ -1187,7 +1197,7 @@ const beginHighlighting = (() => {
 (() => {
 	const refreshTermControls = (() => {
 		const insertToolbar = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-			style: HTMLElement, controlsInfo: ControlsInfo, hues: TermHues) => {
+			style: HTMLStyleElement, controlsInfo: ControlsInfo, hues: TermHues) => {
 			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
 				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
 			removeControls();
@@ -1197,7 +1207,7 @@ const beginHighlighting = (() => {
 			}
 		};
 	
-		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLElement,
+		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
 			observer: MutationObserver, selectTermPtr: FnProcessCommand,
 			requestRefreshIndicators: RequestRefreshIndicators,
 			termsFromSelection: boolean, disable: boolean,
@@ -1235,7 +1245,7 @@ const beginHighlighting = (() => {
 						removeTermControl(termRemovedPreviousIdx);
 						terms.splice(termRemovedPreviousIdx, 1);
 						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
-						insertStyle(terms, style, hues);
+						fillStylesheetContent(terms, style, hues);
 						return;
 					}
 				} else {
@@ -1247,7 +1257,7 @@ const beginHighlighting = (() => {
 				return;
 			}
 			if (!disable) {
-				insertStyle(terms, style, hues);
+				fillStylesheetContent(terms, style, hues);
 			}
 			beginHighlighting(
 				highlightTags, requestRefreshIndicators,
@@ -1258,7 +1268,7 @@ const beginHighlighting = (() => {
 	})();
 
 	const insertStyleElement = () => {
-		let style = document.getElementById(getSel(ElementID.STYLE)) as HTMLElement;
+		let style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
 		if (!style) {
 			style = document.createElement("style");
 			style.id = getSel(ElementID.STYLE);

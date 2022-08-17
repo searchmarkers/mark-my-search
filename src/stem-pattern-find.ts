@@ -1,5 +1,16 @@
+/**
+ * Gets prefix and suffix regex strings for any word.
+ * Only yields meaningful results for English words which fit standard word form patterns.
+ * @param word A word.
+ * @returns A tuple of the prefix and suffix determined to best fit the word and its forms.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getWordPatternStrings = (() => {
+	/**
+	 * Reverses the characters in a string.
+	 * @param chars A string.
+	 * @returns The reverse of the string given.
+	 */
 	const reverse = (chars: string) => {
 		for (let i = 0; i < chars.length; i += 2) {
 			chars = chars[i] + chars;
@@ -7,7 +18,13 @@ const getWordPatternStrings = (() => {
 		return chars.substring(0, chars.length / 2);
 	};
 
-	const sortReverse = (a: string, b: string) => a > b ? -1 : 1;
+	/**
+	 * Compares a pair of strings. Passed into an Array<string> sort function in order to sort the array into reverse alphabetical order.
+	 * @param a The first of the string pair.
+	 * @param b The second of the string pair.
+	 * @returns -1 (sort a before b) if a is alphabetically greater than b, otherwise 1 (sort b before a).
+	 */
+	const sortCompareFnReverse = (a: string, b: string) => a > b ? -1 : 1;
 
 	return (() => {
 		const suffixes = [
@@ -221,9 +238,9 @@ const getWordPatternStrings = (() => {
 			"y",
 			"ys",
 			"ies",
-		].sort(sortReverse);
+		].sort(sortCompareFnReverse);
 		const replacePatternReverse = new RegExp(
-			`\\b(?:${suffixes.map(suffix => reverse(suffix)).sort(sortReverse).join("|")})`, "gi");
+			`\\b(?:${suffixes.map(suffix => reverse(suffix)).sort(sortCompareFnReverse).join("|")})`, "gi");
 		const highlightPatternString = `(?:${suffixes.join("|")})`;
 
 		return (word: string): [ string, string ] => {
