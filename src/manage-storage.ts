@@ -16,7 +16,6 @@ type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
 }
 type StorageSyncValues = {
-	[StorageSync.IS_SET_UP]: boolean
 	[StorageSync.STOPLIST]: Stoplist
 	[StorageSync.LINK_RESEARCH_TABS]: boolean
 	[StorageSync.SHOW_HIGHLIGHTS]: {
@@ -65,7 +64,6 @@ interface ResearchInstance {
 }
 
 const defaultOptions: StorageSyncValues = {
-	isSetUp: true,
 	stoplist: [
 		"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
 		"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",

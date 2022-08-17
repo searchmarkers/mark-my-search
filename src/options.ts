@@ -232,10 +232,6 @@ body { background-color: #bbb; }
 					label: "Words not to highlight automatically when searched",
 					type: PreferenceType.ARRAY,
 				},
-				isSetUp: {
-					label: "Do not perform initial setup on next browser restart",
-					type: PreferenceType.BOOLEAN,
-				},
 			},
 		},
 	];

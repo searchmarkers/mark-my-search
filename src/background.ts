@@ -201,10 +201,10 @@ const updateActionIcon = (enabled?: boolean) =>
 		updateActionIcon();
 	};
 
-	chrome.runtime.onInstalled.addListener(() => {
-		getStorageSync(StorageSync.IS_SET_UP).then(items =>
-			items.isSetUp ? undefined : setUp()
-		);
+	chrome.runtime.onInstalled.addListener(details => {
+		if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+			setUp();
+		}
 		repairOptions();
 		initialize();
 	});
