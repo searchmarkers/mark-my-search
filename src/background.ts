@@ -6,10 +6,10 @@ if (/*isBrowserChromium()*/ !this.browser) {
 		"/dist/shared-content.js",
 	);
 }
-chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
+chrome.tabs.executeScript = isBrowserChromium() ? chrome.tabs.executeScript : browser.tabs.executeScript;
 chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
-chrome.search.query = isBrowserChromium()
-	? (options: { query: string, tabId: number }) => chrome.search.query(options, () => undefined)
+chrome.search["query"] = isBrowserChromium()
+	? (options: { query: string, tabId: number }) => chrome.search["query"](options, () => undefined)
 	: browser.search.search;
 chrome.commands.getAll = isBrowserChromium() ? chrome.commands.getAll : browser.commands.getAll;
 
@@ -74,24 +74,19 @@ const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms
 	return { terms } as HighlightMessage;
 };
 
-const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) =>
-	chrome.scripting.executeScript({
-		func: (tabId, highlightMessage) => {
-			const executionDeniedIdentifier = "executionUnnecessary";
-			chrome.runtime.sendMessage({
-				executeInTab: !window[executionDeniedIdentifier],
-				tabId,
-				highlightMessage,
-			} as BackgroundMessage);
-			window[executionDeniedIdentifier] = true;
-		},
-		args: [ targetTabId, Object.assign(
-			{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
-			highlightMessageToReceive,
-		) ],
-		target: { tabId: targetTabId },
-	})
-;
+const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) => {
+	highlightMessageToReceive = Object.assign(
+		{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
+		highlightMessageToReceive,
+	);
+	chrome.tabs.executeScript(targetTabId, { file: "/dist/stem-pattern-find.js" }).then(async () => {
+		await chrome.tabs.executeScript(targetTabId, { file: "/dist/shared-content.js" });
+		await chrome.tabs.executeScript(targetTabId, { file: "/dist/term-highlight.js" });
+		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
+	}).catch(() => {
+		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
+	});
+};
 
 const manageEnginesCacheOnBookmarkUpdate = (() => {
 	const updateEngine = (engines: Engines, id: string, urlPatternString: string) => {
@@ -153,7 +148,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: isBrowserChromium()
+		: chrome.browserAction.setIcon({ path: isBrowserChromium()
 			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -247,7 +242,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				session.researchInstances[tabId],
 				overrideHighlightsShown,
 				sync.barControlsShown,
-				sync.barLook
+				sync.barLook,
 			));
 		}
 	};
@@ -345,10 +340,9 @@ chrome.commands.onCommand.addListener(commandString =>
 			// TODO make this a function
 			const tabId = message.tabId as number;
 			if (message.executeInTab) {
-				await chrome.scripting.executeScript({
-					files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
-					target: { tabId },
-				});
+				await chrome.tabs.executeScript(tabId, { file: "/dist/stem-pattern-find.js" });
+				await chrome.tabs.executeScript(tabId, { file: "/dist/shared-content.js" });
+				await chrome.tabs.executeScript(tabId, { file: "/dist/term-highlight.js" });
 			}
 			chrome.tabs.sendMessage(tabId, message.highlightMessage);
 		} else if (message.toggleResearchOn !== undefined) {
@@ -358,7 +352,7 @@ chrome.commands.onCommand.addListener(commandString =>
 			delete session.researchInstances[senderTabId];
 			chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
 		} else if (message.performSearch) {
-			(chrome.search.query as typeof browser.search.search)({
+			(chrome.search["query"] as typeof browser.search.search)({
 				query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
 				tabId: senderTabId,
 			});
@@ -400,7 +394,7 @@ chrome.commands.onCommand.addListener(commandString =>
 	});
 })();
 
-chrome.action.onClicked.addListener(() =>
+chrome.browserAction.onClicked.addListener(() =>
 	chrome.permissions.request({ permissions: [ "bookmarks" ] })
 );
 

@@ -3,7 +3,7 @@ const isBrowserChromium = () =>
 ;
 
 chrome.storage = isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
-chrome.storage.session = chrome.storage.session ?? chrome.storage.local;
+chrome.storage["session"] = chrome.storage["session"] ?? chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
 type Stoplist = Array<string>
@@ -106,7 +106,7 @@ const setStorageSession = (items: StorageSessionValues) => {
 		items[StorageSession._ID_R_INSTANCES] = idRInstances;
 		items[StorageSession._TAB_R_INSTANCE_IDS] = tabRInstanceIds;
 	}
-	return chrome.storage.session.set(items);
+	return chrome.storage["session"].set(items);
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -120,7 +120,7 @@ const getStorageSession = async (keysParam?: StorageSession | Array<StorageSessi
 		keys.push(StorageSession._ID_R_INSTANCES);
 		keys.push(StorageSession._TAB_R_INSTANCE_IDS);
 	}
-	const session = await chrome.storage.session.get(keys) as StorageSessionValues;
+	const session = await chrome.storage["session"].get(keys) as StorageSessionValues;
 	if (gettingRInstances) {
 		const idRInstances = session[StorageSession._ID_R_INSTANCES];
 		const tabRInstanceIds = session[StorageSession._TAB_R_INSTANCE_IDS];

@@ -916,7 +916,8 @@ const insertScrollMarkers = (() => {
 			}
 			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
 		});
-		gutter.innerHTML = markersHtml;
+		// Generates and inserts HTML directly in order to increase performance, rather than appending individual elements.
+		gutter.insertAdjacentHTML("afterbegin", markersHtml);
 	};
 })();
 
@@ -1071,6 +1072,7 @@ const purgeClass = (className: string, root: HTMLElement = document.body) =>
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
 	for (const highlight of Array.from(highlights)) {
+		// Direct assignation to `outerHTML` prevents the mutation observer from triggering excess highlighting
 		highlight.outerHTML = highlight.innerHTML;
 	}
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
