@@ -141,7 +141,7 @@ const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: s
  * @param hues An array of color hues for term styles to cycle through.
  */
 const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues: TermHues) => {
-	const zIndexMax = 2147483647;
+	const zIndexMax = 2**31 - 1;
 	style.textContent = `
 /* TODO reorganise and rename */
 /* TERM INPUT & BUTTONS */
@@ -195,7 +195,7 @@ const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues:
 	{ height: 1.1em; width: 1.1em; }
 #${getSel(ElementID.BAR)} button
 	{ display: flex; align-items: center; padding-inline: 4px; margin-block: 0; border: none; border-radius: inherit;
-	background: none; color: #000 !important; cursor: initial; letter-spacing: normal; transition: unset; }
+	background: none; color: #000 !important; cursor: pointer; letter-spacing: normal; transition: unset; }
 #${getSel(ElementID.BAR)} > *
 	{ display: inline; }
 #${getSel(ElementID.BAR)} > * > *
