@@ -247,14 +247,14 @@ const updateActionIcon = (enabled?: boolean) =>
 				session.researchInstances[tabId],
 				overrideHighlightsShown,
 				sync.barControlsShown,
-				sync.barLook
+				sync.barLook,
 			));
 		}
 	};
 	
 	chrome.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(async sync => {
 		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
-		if (tab && tab.id !== undefined && tab.openerTabId !== undefined
+		if (tab && tab.id !== undefined && tab.openerTabId !== undefined && tab.pendingUrl !== "chrome://newtab/"
 			&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
 			session.researchInstances[tab.id] = sync.linkResearchTabs
 				? session.researchInstances[tab.openerTabId]
