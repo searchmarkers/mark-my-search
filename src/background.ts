@@ -161,19 +161,17 @@ const updateActionIcon = (enabled?: boolean) =>
 
 (() => {
 	const createContextMenuItems = () => {
-		const getMenuSwitchId = () =>
-			"activate-research-mode"
-		;
-	
-		chrome.contextMenus.onClicked.addListener((info, tab) => !tab || tab.id === undefined ? undefined :
-			activateHighlightingInTab(tab.id, { termsFromSelection: true } as HighlightMessage)
-		);
+		chrome.contextMenus.onClicked.addListener((info, tab) => {
+			if (tab && tab.id !== undefined) {
+				enableResearchInTab(tab.id);
+			}
+		});
 	
 		return (() => {
 			chrome.contextMenus.removeAll();
 			chrome.contextMenus.create({
 				title: "&Highlight Selection",
-				id: getMenuSwitchId(),
+				id: "enable-research-tab",
 				contexts: [ "selection", "page" ],
 			});
 		})();
@@ -254,7 +252,8 @@ const updateActionIcon = (enabled?: boolean) =>
 	
 	chrome.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(async sync => {
 		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
-		if (tab && tab.id !== undefined && tab.openerTabId !== undefined && tab.pendingUrl !== "chrome://newtab/"
+		if (tab && tab.id !== undefined && tab.openerTabId !== undefined
+			&& (!tab.pendingUrl || !/\b\w+:\/\/newtab\//.test(tab.pendingUrl))
 			&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
 			session.researchInstances[tab.id] = sync.linkResearchTabs
 				? session.researchInstances[tab.openerTabId]
@@ -290,6 +289,22 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	}
 };
 
+const enableResearchInTab = async (tabId: number) => {
+	const sync = await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN);
+	const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+	const researchInstance = await createResearchInstance({ terms: [] });
+	researchInstance.highlightsShown = true;
+	session.researchInstances[tabId] = researchInstance;
+	setStorageSession(session);
+	await activateHighlightingInTab(
+		tabId,
+		Object.assign(
+			{ termsFromSelection: true, command: { type: CommandType.FOCUS_TERM_INPUT } } as HighlightMessage,
+			createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook),
+		),
+	);
+};
+
 const disableResearchInTab = async (tabId: number) => {
 	const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
 	delete session.researchInstances[tabId];
@@ -297,60 +312,46 @@ const disableResearchInTab = async (tabId: number) => {
 	setStorageSession(session);
 };
 
-chrome.commands.onCommand.addListener(commandString =>
-	chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(async ([ tab ]) => {
-		const commandInfo = parseCommand(commandString);
-		switch (commandInfo.type) {
-		case CommandType.TOGGLE_ENABLED: {
-			getStorageLocal(StorageLocal.ENABLED).then(local => {
-				setStorageLocal({ enabled: !local.enabled } as StorageLocalValues);
-				updateActionIcon(!local.enabled);
-			});
-			return;
-		} case CommandType.TOGGLE_IN_TAB: {
-			if (tab.id !== undefined) {
-				const sync = await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN);
-				const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
-				if (isTabResearchPage(session.researchInstances, tab.id as number)) {
-					disableResearchInTab(tab.id as number);
-				} else {
-					const researchInstance = await createResearchInstance({ terms: [] });
-					researchInstance.highlightsShown = true;
-					session.researchInstances[tab.id as number] = researchInstance;
-					setStorageSession(session);
-					await activateHighlightingInTab(
-						tab.id as number,
-						Object.assign(
-							{ termsFromSelection: true, command: { type: CommandType.FOCUS_TERM_INPUT } } as HighlightMessage,
-							createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook),
-						),
-					);
-				}
-			}
-			return;
-		} case CommandType.TOGGLE_HIGHLIGHTS: {
-			if (tab.id !== undefined) {
-				toggleHighlightsInTab(tab.id);
-			}
-			return;
-		}}
-		chrome.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
+const executeScriptsInTab = (tabId: number) =>
+	chrome.scripting.executeScript({
+		files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
+		target: { tabId },
 	})
-);
+;
+
+chrome.commands.onCommand.addListener(async commandString => {
+	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); // `tab.id` always defined for this case
+	const commandInfo = parseCommand(commandString);
+	switch (commandInfo.type) {
+	case CommandType.TOGGLE_ENABLED: {
+		getStorageLocal(StorageLocal.ENABLED).then(local => {
+			setStorageLocal({ enabled: !local.enabled } as StorageLocalValues);
+			updateActionIcon(!local.enabled);
+		});
+		return;
+	} case CommandType.TOGGLE_IN_TAB: {
+		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		if (isTabResearchPage(session.researchInstances, tab.id as number)) {
+			disableResearchInTab(tab.id as number);
+		} else {
+			enableResearchInTab(tab.id as number);
+		}
+		return;
+	} case CommandType.TOGGLE_HIGHLIGHTS: {
+		toggleHighlightsInTab(tab.id as number);
+		return;
+	}}
+	chrome.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
+});
 
 (() => {
 	const handleMessage = async (message: BackgroundMessage, senderTabId: number) => {
 		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
 		if (message.highlightMessage !== undefined) {
-			// TODO make this a function
-			const tabId = message.tabId as number;
 			if (message.executeInTab) {
-				await chrome.scripting.executeScript({
-					files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
-					target: { tabId },
-				});
+				await executeScriptsInTab(message.tabId as number);
 			}
-			chrome.tabs.sendMessage(tabId, message.highlightMessage);
+			chrome.tabs.sendMessage(message.tabId as number, message.highlightMessage);
 		} else if (message.toggleResearchOn !== undefined) {
 			setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
 				.then(() => updateActionIcon(message.toggleResearchOn));

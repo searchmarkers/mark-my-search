@@ -222,7 +222,7 @@ const getWordPatternStrings = (() => {
 			"tomy",
 			"trophy",
 			"tude",
-			"t", "ts", "tive", "tives",
+			"t", "ts", "ting", "tings", "ter", "ters", "tive", "tives",
 			"ty",
 			"ties",
 			"ular",
