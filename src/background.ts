@@ -13,10 +13,16 @@ chrome.search.query = isBrowserChromium()
 	: browser.search.search;
 chrome.commands.getAll = isBrowserChromium() ? chrome.commands.getAll : browser.commands.getAll;
 
-const createResearchInstance = (args: {
+/**
+ * Creates an object storing highlighting information about a tab, for application to pages within that tab.
+ * @param args Arguments for building the initial research instance. Variables in storage may also be used.
+ * @returns The resulting research instance.
+ */
+const createResearchInstance = async (args: {
 	url?: { stoplist: Stoplist, url: string, engine?: Engine }
 	terms?: MatchTerms
-}): Promise<ResearchInstance> => getStorageSync(StorageSync.SHOW_HIGHLIGHTS).then(sync => {
+}): Promise<ResearchInstance> => {
+	const sync = await getStorageSync([ StorageSync.SHOW_HIGHLIGHTS ]);
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : getSearchQuery(args.url.url).split("\"");
 		const termsRaw = args.url.engine
@@ -39,120 +45,158 @@ const createResearchInstance = (args: {
 		terms: args.terms,
 		highlightsShown: sync.showHighlights.default,
 	};
-});
+};
 
-const getSearchQuery = (url: string) =>
+/**
+ * Gets the query string of a potential search.
+ * @param url A URL to be tested.
+ * @returns The URL segment determined to be the search query, or the empty string if none is found.
+ */
+const getSearchQuery = (url: string): string  =>
 	new URL(url).searchParams
 		.get([ "q", "query", "search" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
 ;
 
-const isTabSearchPage = (engines: Engines, url: string): [ boolean, Engine? ] => {
+/**
+ * Gets heuristically whether or not a URL specifies a search on an arbitrary search engine.
+ * @param engines An array of objects representing search engine URLs and how to extract contained search queries.
+ * @param url A URL to be tested.
+ * @returns An object containing a flag for whether or not the URL specifies a search,
+ * and the first object which matched the URL (if any).
+ */
+const isTabSearchPage = (engines: Engines, url: string): { isSearch: boolean, engine?: Engine } => {
 	if (getSearchQuery(url)) {
-		return [ true, undefined ];
+		return { isSearch: true };
 	} else {
 		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
-		return [ !!engine, engine ];
+		return { isSearch: !!engine, engine };
 	}
 };
 
-const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number) =>
+/**
+ * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.
+ * @param researchInstances An array of objects each representing an instance of highlighting.
+ * @param tabId The ID of a tab.
+ * @returns `true` if the tab is considered highlighted, `false` otherwise.
+ */
+const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number): boolean =>
 	tabId in researchInstances
 ;
 
-const createResearchMessage = (researchInstance: ResearchInstance, overrideHighlightsShown?: boolean,
+/**
+ * Creates a message for sending to an injected highlighting script in order for it to store and highlight an array of terms.
+ * This is an intermediary interface which parametises common components of such a message, not all contingencies are covered.
+ * @param researchInstance An object representing an instance of highlighting.
+ * @param overrideHighlightsShown A flag which, if specified, indicates the visiblity of highlights to be on if `true`
+ * or the appropriate flag in `researchInstance` is `true`, off otherwise. If unspecified, highlight visibility is not changed.
+ * @param barControlsShown An object of flags indicating the visibility of each toolbar option module.
+ * @param barLook An object of details about the style and layout of the toolbar.
+ * @returns A research message which, when sent to a highlighting script, will produce the desired effect within that page.
+ */
+const createResearchMessage = (
+	researchInstance: ResearchInstance,
+	overrideHighlightsShown?: boolean,
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
-	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]) => ({
+	barLook?: StorageSyncValues[StorageSync.BAR_LOOK],
+) => ({
 	terms: researchInstance.terms,
-	toggleHighlightsOn: overrideHighlightsShown === undefined ? undefined :
-		researchInstance.highlightsShown || overrideHighlightsShown,
+	toggleHighlightsOn: overrideHighlightsShown === undefined
+		? undefined
+		: researchInstance.highlightsShown || overrideHighlightsShown,
 	barControlsShown,
 	barLook,
 } as HighlightMessage);
 
-const updateCachedResearchDetails = (researchInstances: ResearchInstances, terms: MatchTerms, tabId: number) => {
-	researchInstances[tabId].terms = terms;
-	return { terms } as HighlightMessage;
-};
-
-const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) =>
-	chrome.scripting.executeScript({
-		func: (tabId, highlightMessage) => {
-			const executionDeniedIdentifier = "executionUnnecessary";
-			chrome.runtime.sendMessage({
-				executeInTab: !window[executionDeniedIdentifier],
-				tabId,
-				highlightMessage,
-			} as BackgroundMessage);
-			window[executionDeniedIdentifier] = true;
-		},
-		args: [ targetTabId, Object.assign(
-			{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
-			highlightMessageToReceive,
-		) ],
-		target: { tabId: targetTabId },
-	})
-;
-
+/**
+ * Continuously caches objects, representing search engine URLs and how to extract contained search queries, to session storage.
+ * These objects are inferred from heuristics such as details of dynamic bookmarks stored by the user.
+ */
 const manageEnginesCacheOnBookmarkUpdate = (() => {
-	const updateEngine = (engines: Engines, id: string, urlPatternString: string) => {
-		if (!urlPatternString) return;
-		if (!urlPatternString.includes("%s")) {
+	/**
+	 * Updates an array of user search engines with respect to a particular engine ID, based on a potentially dynamic URL.
+	 * @param engines An array of user search engines.
+	 * @param id The unique ID of a potential or existing engine.
+	 * @param urlDynamicString The string of a URL which may be dynamic (contains `%s` as in a dynamic bookmark).
+	 */
+	const updateEngine = (engines: Engines, id: string, urlDynamicString: string) => {
+		if (!urlDynamicString) {
+			return;
+		}
+		if (!urlDynamicString.includes("%s")) {
 			delete engines[id];
 			return;
 		}
-		const engine = new Engine({ urlPatternString });
-		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) return;
+		const engine = new Engine({ urlDynamicString });
+		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) {
+			return;
+		}
 		engines[id] = engine;
-		setStorageSession({ engines } as StorageSessionValues);
 	};
 
+	/**
+	 * Uses a function accepting a single bookmark tree node to modify user search engines in storage.
+	 * Accepts all such nodes under a root node.
+	 * @param engines An array of user search engine objects.
+	 * @param setEngine A function to modify user search engines in storage based on a bookmark tree node.
+	 * @param node A root node under which to accept descendant nodes (inclusive).
+	 */
 	const setEngines = (engines: Engines, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void,
-		node: browser.bookmarks.BookmarkTreeNode) =>
-		node.type === "bookmark"
-			? setEngine(node)
-			: node.type === "folder"
-				? (node.children ?? []).forEach(child => setEngines(engines, setEngine, child)): undefined
-	;
+		node: browser.bookmarks.BookmarkTreeNode) => {
+		if (node.type === "bookmark") {
+			setEngine(node);
+		}
+		(node.children ?? []).forEach(child => setEngines(engines, setEngine, child));
+	};
 
 	return () => {
 		if (isBrowserChromium() || !chrome.bookmarks) {
 			return;
 		}
-		browser.bookmarks.getTree().then(nodes => getStorageSession(StorageSession.ENGINES).then(session => {
-			nodes.forEach(node => setEngines(
-				session.engines, node => node.url ? updateEngine(session.engines, node.id, node.url) : undefined, node
-			));
+		browser.bookmarks.getTree().then(async nodes => {
+			const session = await getStorageSession([ StorageSession.ENGINES ]);
+			nodes.forEach(node =>
+				setEngines(session.engines, node => {
+					if (node.url) {
+						updateEngine(session.engines, node.id, node.url);
+					}
+				}, node)
+			);
 			setStorageSession(session);
-		}));
+		});
 
-		browser.bookmarks.onRemoved.addListener((id, removeInfo) =>
-			getStorageSession(StorageSession.ENGINES).then(session => {
-				setEngines(
-					session.engines, node => delete session.engines[node.id], removeInfo.node
-				);
-				setStorageSession(session);
-			})
-		);
+		browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
+			const session = await getStorageSession([ StorageSession.ENGINES ]);
+			setEngines(session.engines, node => {
+				delete session.engines[node.id];
+			}, removeInfo.node);
+			setStorageSession(session);
+		});
 
-		browser.bookmarks.onCreated.addListener((id, createInfo) => createInfo.url ?
-			getStorageSession(StorageSession.ENGINES).then(session => {
-				updateEngine(session.engines, id, createInfo.url ?? "");
+		browser.bookmarks.onCreated.addListener(async (id, createInfo) => {
+			if (createInfo.url) {
+				const session = await getStorageSession([ StorageSession.ENGINES ]);
+				updateEngine(session.engines, id, createInfo.url);
 				setStorageSession(session);
-			}) : undefined
-		);
+			}
+		});
 
-		browser.bookmarks.onChanged.addListener((id, changeInfo) => changeInfo.url ?
-			getStorageSession(StorageSession.ENGINES).then(session => {
-				updateEngine(session.engines, id, changeInfo.url ?? "");
+		browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
+			if (changeInfo.url) {
+				const session = await getStorageSession([ StorageSession.ENGINES ]);
+				updateEngine(session.engines, id, changeInfo.url);
 				setStorageSession(session);
-			}) : undefined
-		);
+			}
+		});
 	};
 })();
 
+/**
+ * Updates the action icon to reflect the extension's enabled/disabled status.
+ * @param enabled If specified, overrides the extension's enabled/disabled status.
+ */
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
-		? getStorageLocal(StorageLocal.ENABLED).then(local => updateActionIcon(local.enabled))
+		? getStorageLocal([ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
 		: chrome.action.setIcon({ path: isBrowserChromium()
 			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
@@ -160,10 +204,13 @@ const updateActionIcon = (enabled?: boolean) =>
 ;
 
 (() => {
+	/**
+	 * Registers items to selectively appear in context menus. These items serve as shortcuts for managing the extension.
+	 */
 	const createContextMenuItems = () => {
 		chrome.contextMenus.onClicked.addListener((info, tab) => {
 			if (tab && tab.id !== undefined) {
-				enableResearchInTab(tab.id);
+				activateResearchInTab(tab.id);
 			}
 		});
 	
@@ -171,12 +218,15 @@ const updateActionIcon = (enabled?: boolean) =>
 			chrome.contextMenus.removeAll();
 			chrome.contextMenus.create({
 				title: "&Highlight Selection",
-				id: "enable-research-tab",
+				id: "activate-research-tab",
 				contexts: [ "selection", "page" ],
 			});
 		})();
 	};
 
+	/**
+	 * Prepares non-volatile extension components on install.
+	 */
 	const setUp = () => {
 		if (isBrowserChromium()) {
 			// TODO instruct user how to assign the appropriate shortcuts
@@ -192,10 +242,13 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	};
 
+	/**
+	 * Prepares volatile extension components in a new browser session.
+	 */
 	const initialize = () => {
 		manageEnginesCacheOnBookmarkUpdate();
 		createContextMenuItems();
-		initStorage();
+		initializeStorage();
 		updateActionIcon();
 	};
 
@@ -211,6 +264,12 @@ const updateActionIcon = (enabled?: boolean) =>
 })();
 
 (() => {
+	/**
+	 * Compares an updated tab with its associated storage in order to identify necessary storage and highlighting changes,
+	 * then carries out these changes.
+	 * @param url The current URL of the tab, used to infer desired highlighting.
+	 * @param tabId The ID of a tab to check and interact with.
+	 */
 	const pageModifyRemote = async (url: string, tabId: number) => {
 		const sync = await getStorageSync([
 			StorageSync.STOPLIST,
@@ -218,18 +277,24 @@ const updateActionIcon = (enabled?: boolean) =>
 			StorageSync.BAR_CONTROLS_SHOWN,
 			StorageSync.BAR_LOOK,
 		]);
-		const local = await getStorageLocal(StorageLocal.ENABLED);
+		const local = await getStorageLocal([ StorageLocal.ENABLED ]);
 		const session = await getStorageSession([
 			StorageSession.RESEARCH_INSTANCES,
 			StorageSession.ENGINES,
 		]);
-		const [ isSearchPage, engine ] = local.enabled ? isTabSearchPage(session.engines, url) : [ false, undefined ];
+		const searchDetails: ReturnType<typeof isTabSearchPage> = local.enabled
+			? isTabSearchPage(session.engines, url)
+			: { isSearch: false };
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
-		const overrideHighlightsShown = (isSearchPage && sync.showHighlights.overrideSearchPages)
+		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
-		if (isSearchPage) {
-			const researchInstance = await createResearchInstance({ url: { stoplist: sync.stoplist, url, engine } });
-			if (!isResearchPage || !itemsMatchLoosely(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
+		if (searchDetails.isSearch) {
+			const researchInstance = await createResearchInstance({ url: {
+				stoplist: sync.stoplist,
+				url,
+				engine: searchDetails.engine
+			} });
+			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
 				session.researchInstances[tabId] = researchInstance;
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
 				activateHighlightingInTab(tabId, createResearchMessage(
@@ -250,8 +315,8 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	};
 	
-	chrome.tabs.onCreated.addListener(tab => getStorageSync(StorageSync.LINK_RESEARCH_TABS).then(async sync => {
-		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+	chrome.tabs.onCreated.addListener(tab => getStorageSync([ StorageSync.LINK_RESEARCH_TABS ]).then(async sync => {
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (tab && tab.id !== undefined && tab.openerTabId !== undefined
 			&& (!tab.pendingUrl || !/\b\w+:\/\/newtab\//.test(tab.pendingUrl))
 			&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
@@ -275,23 +340,38 @@ const updateActionIcon = (enabled?: boolean) =>
 	}
 })();
 
-const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean) => {
-	const sync = await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN);
-	const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
-	if (isTabResearchPage(session.researchInstances, tabId)) {
-		const researchInstance = session.researchInstances[tabId];
-		researchInstance.highlightsShown = toggleHighlightsOn ?? !researchInstance.highlightsShown;
-		chrome.tabs.sendMessage(tabId, {
-			toggleHighlightsOn: researchInstance.highlightsShown,
-			barControlsShown: sync.barControlsShown,
-		} as HighlightMessage);
-		setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
-	}
-};
+/**
+ * Activates highlighting within a tab.
+ * @param targetTabId The ID of a tab to highlight within.
+ * @param highlightMessageToReceive A message to be received by the tab's highlighting script.
+ * This script will first be injected if not already present.
+ */
+const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) =>
+	chrome.scripting.executeScript({
+		func: (tabId, highlightMessage) => {
+			const executionDeniedIdentifier = "executionUnnecessary";
+			chrome.runtime.sendMessage({
+				executeInTab: !window[executionDeniedIdentifier],
+				tabId,
+				highlightMessage,
+			} as BackgroundMessage);
+			window[executionDeniedIdentifier] = true;
+		},
+		args: [ targetTabId, Object.assign(
+			{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
+			highlightMessageToReceive,
+		) ],
+		target: { tabId: targetTabId },
+	})
+;
 
-const enableResearchInTab = async (tabId: number) => {
-	const sync = await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN);
-	const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+/**
+ * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
+ * @param tabId The ID of a tab to be linked and within which to highlight.
+ */
+const activateResearchInTab = async (tabId: number) => {
+	const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
+	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = await createResearchInstance({ terms: [] });
 	researchInstance.highlightsShown = true;
 	session.researchInstances[tabId] = researchInstance;
@@ -305,13 +385,40 @@ const enableResearchInTab = async (tabId: number) => {
 	);
 };
 
-const disableResearchInTab = async (tabId: number) => {
-	const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+/**
+ * Removes highlighting within a tab, deleting the associated highlighting information.
+ * @param tabId The ID of a tab to be forgotten and within which to deactivate highlighting.
+ */
+const deactivateResearchInTab = async (tabId: number) => {
+	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	delete session.researchInstances[tabId];
 	chrome.tabs.sendMessage(tabId, { disable: true } as HighlightMessage);
 	setStorageSession(session);
 };
 
+/**
+ * Toggles highlighting visibility within a tab.
+ * @param tabId The ID of a tab to change the highlighting visibility of.
+ * @param toggleHighlightsOn If specified, indicates target visibility. If unspecified, inverse of current visibility is used.
+ */
+const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean) => {
+	const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
+	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+	if (isTabResearchPage(session.researchInstances, tabId)) {
+		const researchInstance = session.researchInstances[tabId];
+		researchInstance.highlightsShown = toggleHighlightsOn ?? !researchInstance.highlightsShown;
+		chrome.tabs.sendMessage(tabId, {
+			toggleHighlightsOn: researchInstance.highlightsShown,
+			barControlsShown: sync.barControlsShown,
+		} as HighlightMessage);
+		setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
+	}
+};
+
+/**
+ * Injects a highlighting script, composed of the highlighting code preceded by its dependencies, into a tab.
+ * @param tabId The ID of a tab to execute the script in.
+ */
 const executeScriptsInTab = (tabId: number) =>
 	chrome.scripting.executeScript({
 		files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
@@ -324,17 +431,17 @@ chrome.commands.onCommand.addListener(async commandString => {
 	const commandInfo = parseCommand(commandString);
 	switch (commandInfo.type) {
 	case CommandType.TOGGLE_ENABLED: {
-		getStorageLocal(StorageLocal.ENABLED).then(local => {
+		getStorageLocal([ StorageLocal.ENABLED ]).then(local => {
 			setStorageLocal({ enabled: !local.enabled } as StorageLocalValues);
 			updateActionIcon(!local.enabled);
 		});
 		return;
 	} case CommandType.TOGGLE_IN_TAB: {
-		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (isTabResearchPage(session.researchInstances, tab.id as number)) {
-			disableResearchInTab(tab.id as number);
+			deactivateResearchInTab(tab.id as number);
 		} else {
-			enableResearchInTab(tab.id as number);
+			activateResearchInTab(tab.id as number);
 		}
 		return;
 	} case CommandType.TOGGLE_HIGHLIGHTS: {
@@ -345,8 +452,13 @@ chrome.commands.onCommand.addListener(async commandString => {
 });
 
 (() => {
+	/**
+	 * Decodes a message involving backend extension management.
+	 * @param message A message intended for the background script.
+	 * @param senderTabId The ID of a tab assumed to be the message sender.
+	 */
 	const handleMessage = async (message: BackgroundMessage, senderTabId: number) => {
-		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (message.highlightMessage !== undefined) {
 			if (message.executeInTab) {
 				await executeScriptsInTab(message.tabId as number);
@@ -369,7 +481,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 				session.researchInstances[senderTabId] = researchInstance;
 			}
 			if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-				const sync = await getStorageSync(StorageSync.BAR_CONTROLS_SHOWN);
+				const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
 				const researchInstance = await createResearchInstance({ terms: message.terms });
 				if (message.toggleHighlightsOn !== undefined) {
 					researchInstance.highlightsShown = message.toggleHighlightsOn;
@@ -377,7 +489,8 @@ chrome.commands.onCommand.addListener(async commandString => {
 				session.researchInstances[senderTabId] = researchInstance;
 				activateHighlightingInTab(senderTabId, createResearchMessage(researchInstance, false, sync.barControlsShown));
 			} else if (message.terms !== undefined) {
-				const highlightMessage = updateCachedResearchDetails(session.researchInstances, message.terms, senderTabId);
+				session.researchInstances[senderTabId].terms = message.terms;
+				const highlightMessage: HighlightMessage = { terms: message.terms };
 				highlightMessage.termUpdate = message.termChanged;
 				highlightMessage.termToUpdateIdx = message.termChangedIdx;
 				Object.keys(session.researchInstances).forEach(tabId =>

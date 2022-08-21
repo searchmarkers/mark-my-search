@@ -85,6 +85,10 @@ const defaultOptions: StorageSyncValues = {
 	},
 };
 
+/**
+ * Stores items to browser session storage.
+ * @param items An object of items to create or update.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSession = (items: StorageSessionValues) => {
 	if (Object.keys(items).includes(StorageSession.RESEARCH_INSTANCES)) {
@@ -109,8 +113,13 @@ const setStorageSession = (items: StorageSessionValues) => {
 	return chrome.storage.session.set(items);
 };
 
+/**
+ * Retrieves items from browser session storage.
+ * @param keysParam An array of storage keys for which to retrieve the items.
+ * @returns A promise that resolves with an object containing the requested items.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageSession = async (keysParam?: StorageSession | Array<StorageSession>): Promise<StorageSessionValues> => {
+const getStorageSession = async (keysParam?: Array<StorageSession>): Promise<StorageSessionValues> => {
 	const keys = keysParam === undefined
 		? undefined
 		: typeof(keysParam) === "string" ? [ keysParam ] : Array.from(new Set(keysParam));
@@ -139,29 +148,50 @@ const getStorageSession = async (keysParam?: StorageSession | Array<StorageSessi
 	return session;
 };
 
+/**
+ * Stores items to browser local storage.
+ * @param items An object of items to create or update.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageLocal = (items: StorageLocalValues) => {
 	return chrome.storage.local.set(items);
 };
 
+/**
+ * Retrieves items from browser local storage.
+ * @param keysParam An array of storage keys for which to retrieve the items.
+ * @returns A promise that resolves with an object containing the requested items.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageLocal = (keysParam?: StorageLocal | Array<StorageLocal>): Promise<StorageLocalValues> => {
+const getStorageLocal = (keysParam?: Array<StorageLocal>): Promise<StorageLocalValues> => {
 	return chrome.storage.local.get(keysParam) as Promise<StorageLocalValues>;
 };
 
+/**
+ * Stores items to browser sync storage.
+ * @param items An object of items to create or update.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSync = (items: StorageSyncValues) => {
 	return chrome.storage.sync.set(items);
 };
 
+/**
+ * Retrieves items from browser synced storage.
+ * @param keysParam An array of storage keys for which to retrieve the items.
+ * @returns A promise that resolves with an object containing the requested items.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageSync = (keysParam?: StorageSync | Array<StorageSync>): Promise<StorageSyncValues> => {
+const getStorageSync = (keysParam?: Array<StorageSync>): Promise<StorageSyncValues> => {
 	return chrome.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
 };
 
+/**
+ * Set internal storage to its default working values.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const initStorage = async () => {
-	const local = await getStorageLocal(StorageLocal.ENABLED);
+const initializeStorage = async () => {
+	const local = await getStorageLocal([ StorageLocal.ENABLED ]);
 	await setStorageLocal({
 		enabled: local.enabled ?? true,
 	});
@@ -171,24 +201,32 @@ const initStorage = async () => {
 	});
 };
 
+/**
+ * Makes an object conform to an object of defaults.
+ * Missing default items are assigned, and items with no corresponding default are removed. Items within arrays are ignored.
+ * @param object An object to repair.
+ * @param defaults An object of default items to be compared with the first object.
+ * @param toRemove An empty array to be filled with deleted top-level keys.
+ * @param atTopLevel Indicates whether or not the function is currently at the top level of the object.
+ */
 const fixObjectWithDefaults = (
 	object: Record<string, unknown>,
 	defaults: Record<string, unknown>,
 	toRemove: Array<string>,
-	atTopLevel = false,
+	atTopLevel = true,
 ) => {
 	Object.keys(object).forEach(objectKey => {
 		if (defaults[objectKey] === undefined) {
+			delete object[objectKey];
 			if (atTopLevel) {
 				toRemove.push(objectKey);
-			} else {
-				delete object[objectKey];
 			}
-		} else if (typeof(object[objectKey]) === "object" && Array.isArray(object[objectKey])) {
+		} else if (typeof(object[objectKey]) === "object" && !Array.isArray(object[objectKey])) {
 			fixObjectWithDefaults(
 				object[objectKey] as Record<string, unknown>,
 				defaults[objectKey] as Record<string, unknown>,
 				toRemove,
+				false,
 			);
 		}
 	});
@@ -200,10 +238,14 @@ const fixObjectWithDefaults = (
 	});
 };
 
+/**
+ * Checks persistent options storage for unwanted or misconfigured values, then restores it to a normal state.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const repairOptions = () => getStorageSync().then(sync => {
+const repairOptions = async () => {
+	const sync = await getStorageSync();
 	const toRemove = [];
-	fixObjectWithDefaults(sync, defaultOptions, toRemove, true);
+	fixObjectWithDefaults(sync, defaultOptions, toRemove);
 	setStorageSync(sync);
 	chrome.storage.sync.remove(toRemove);
-});
+};

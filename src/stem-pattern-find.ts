@@ -22,7 +22,7 @@ const getWordPatternStrings = (() => {
 	 * Compares a pair of strings. Passed into an Array<string> sort function in order to sort the array into reverse alphabetical order.
 	 * @param a The first of the string pair.
 	 * @param b The second of the string pair.
-	 * @returns -1 (sort a before b) if a is alphabetically greater than b, otherwise 1 (sort b before a).
+	 * @returns -1 (sort a before b) if a is alphabetically greater than b, 1 (sort b before a) otherwise.
 	 */
 	const sortCompareFnReverse = (a: string, b: string) => a > b ? -1 : 1;
 
