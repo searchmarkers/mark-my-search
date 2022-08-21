@@ -63,7 +63,7 @@ input:active { outline-style: none; display: inline-block; }
 	 * @param service The name of a service category for the email.
 	 * @param template The name of a template under the service for the email.
 	 * @param details Custom template field entries.
-	 * @param key The EmailJS API key to use.
+	 * @param key The API key to use.
 	 */
 	const sendEmail: (
 		service: string,
