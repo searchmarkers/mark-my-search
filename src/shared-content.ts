@@ -138,6 +138,7 @@ interface HighlightMessage {
 	toggleHighlightsOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
+	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -4,7 +4,7 @@ type HighlightTags = {
 	reject: ReadonlySet<TagName>,
 	flow: ReadonlySet<TagName>,
 }
-type TermHues = ReadonlyArray<number>
+type TermHues = Array<number>
 type ControlButtonInfo = {
 	path?: string
 	label?: string
@@ -330,13 +330,16 @@ const getContainerBlock = (element: HTMLElement, highlightTags: HighlightTags, s
  * Sets their `tabIndex` to -1.
  * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
  */
-const revertElementsUnfocusable = (root = document.body) =>
-	(root.parentNode as ParentNode).querySelectorAll(`.${getSel(ElementClass.FOCUS_REVERT)}`)
+const revertElementsUnfocusable = (root = document.body) => {
+	if (!root.parentNode) {
+		return;
+	}
+	root.parentNode.querySelectorAll(`.${getSel(ElementClass.FOCUS_REVERT)}`)
 		.forEach((element: HTMLElement) => {
 			element.tabIndex = -1;
 			element.classList.remove(getSel(ElementClass.FOCUS_REVERT));
-		})
-;
+		});
+};
 
 /**
  * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
@@ -1596,7 +1599,7 @@ const beginHighlighting = (
 	return () => {
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
-		const hues: TermHues = [ 60, 300, 110, 220, 0, 190, 30 ];
+		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = {
 			highlightsShown: false,
 			barControlsShown: {
@@ -1629,6 +1632,10 @@ const beginHighlighting = (
 			}
 			if (message.barLook) {
 				controlsInfo.barLook = message.barLook;
+			}
+			if (message.highlightLook) {
+				hues.splice(0);
+				message.highlightLook.hues.forEach(hue => hues.push(hue));
 			}
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;

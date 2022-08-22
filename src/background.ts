@@ -19,12 +19,13 @@ chrome.commands.getAll = isBrowserChromium() ? chrome.commands.getAll : browser.
  * @returns The resulting research instance.
  */
 const createResearchInstance = async (args: {
-	url?: { stoplist: Stoplist, url: string, engine?: Engine }
+	url?: { stoplist: Array<string>, url: string, engine?: Engine }
 	terms?: MatchTerms
+	autoOverwritable: boolean
 }): Promise<ResearchInstance> => {
 	const sync = await getStorageSync([ StorageSync.SHOW_HIGHLIGHTS ]);
 	if (args.url) {
-		const phraseGroups = args.url.engine ? [] : getSearchQuery(args.url.url).split("\"");
+		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
 			? args.url.engine.extract(args.url.url ?? "")
 			: phraseGroups.flatMap(phraseGroups.length % 2
@@ -37,6 +38,7 @@ const createResearchInstance = async (args: {
 			phrases: terms.map(term => term.phrase),
 			terms,
 			highlightsShown: sync.showHighlights.default,
+			autoOverwritable: args.autoOverwritable,
 		};
 	}
 	args.terms = args.terms ?? [];
@@ -44,6 +46,7 @@ const createResearchInstance = async (args: {
 		phrases: args.terms.map(term => term.phrase),
 		terms: args.terms,
 		highlightsShown: sync.showHighlights.default,
+		autoOverwritable: args.autoOverwritable,
 	};
 };
 
@@ -52,10 +55,12 @@ const createResearchInstance = async (args: {
  * @param url A URL to be tested.
  * @returns The URL segment determined to be the search query, or the empty string if none is found.
  */
-const getSearchQuery = (url: string): string  =>
-	new URL(url).searchParams
-		.get([ "q", "query", "search" ].find(param => new URL(url).searchParams.has(param)) ?? "") ?? ""
-;
+const getSearchQuery = async (url: string): Promise<string> => {
+	const sync = await getStorageSync([ StorageSync.AUTO_FIND_OPTIONS ]);
+	return new URL(url).searchParams.get(
+		sync.autoFindOptions.searchParams.find(param => new URL(url).searchParams.has(param)) ?? ""
+	) ?? "";
+};
 
 /**
  * Gets heuristically whether or not a URL specifies a search on an arbitrary search engine.
@@ -64,8 +69,8 @@ const getSearchQuery = (url: string): string  =>
  * @returns An object containing a flag for whether or not the URL specifies a search,
  * and the first object which matched the URL (if any).
  */
-const isTabSearchPage = (engines: Engines, url: string): { isSearch: boolean, engine?: Engine } => {
-	if (getSearchQuery(url)) {
+const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearch: boolean, engine?: Engine }> => {
+	if (await getSearchQuery(url)) {
 		return { isSearch: true };
 	} else {
 		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
@@ -85,10 +90,11 @@ const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number):
 
 /**
  * Creates a message for sending to an injected highlighting script in order for it to store and highlight an array of terms.
- * This is an intermediary interface which parametises common components of such a message, not all contingencies are covered.
+ * This is an intermediary interface which parametises common components of such a message.
+ * Not all contingencies are covered, but additional arguments may be applied to the resulting message.
  * @param researchInstance An object representing an instance of highlighting.
- * @param overrideHighlightsShown A flag which, if specified, indicates the visiblity of highlights to be on if `true`
- * or the appropriate flag in `researchInstance` is `true`, off otherwise. If unspecified, highlight visibility is not changed.
+ * @param overrideHighlightsShown A flag which, if specified, indicates the visiblity of highlights to be __on__ if `true`
+ * or the appropriate flag in the highlighting instance is `true`, __off__ otherwise. If unspecified, highlight visibility is not changed.
  * @param barControlsShown An object of flags indicating the visibility of each toolbar option module.
  * @param barLook An object of details about the style and layout of the toolbar.
  * @returns A research message which, when sent to a highlighting script, will produce the desired effect within that page.
@@ -98,6 +104,7 @@ const createResearchMessage = (
 	overrideHighlightsShown?: boolean,
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK],
+	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK],
 ) => ({
 	terms: researchInstance.terms,
 	toggleHighlightsOn: overrideHighlightsShown === undefined
@@ -105,6 +112,7 @@ const createResearchMessage = (
 		: researchInstance.highlightsShown || overrideHighlightsShown,
 	barControlsShown,
 	barLook,
+	highlightLook,
 } as HighlightMessage);
 
 /**
@@ -272,28 +280,32 @@ const updateActionIcon = (enabled?: boolean) =>
 	 */
 	const pageModifyRemote = async (url: string, tabId: number) => {
 		const sync = await getStorageSync([
-			StorageSync.STOPLIST,
+			StorageSync.AUTO_FIND_OPTIONS,
 			StorageSync.SHOW_HIGHLIGHTS,
 			StorageSync.BAR_CONTROLS_SHOWN,
 			StorageSync.BAR_LOOK,
+			StorageSync.HIGHLIGHT_LOOK,
 		]);
 		const local = await getStorageLocal([ StorageLocal.ENABLED ]);
 		const session = await getStorageSession([
 			StorageSession.RESEARCH_INSTANCES,
 			StorageSession.ENGINES,
 		]);
-		const searchDetails: ReturnType<typeof isTabSearchPage> = local.enabled
-			? isTabSearchPage(session.engines, url)
+		const searchDetails: { isSearch: boolean, engine?: Engine } = local.enabled
+			? await isTabSearchPage(session.engines, url)
 			: { isSearch: false };
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
-		if (searchDetails.isSearch) {
-			const researchInstance = await createResearchInstance({ url: {
-				stoplist: sync.stoplist,
-				url,
-				engine: searchDetails.engine
-			} });
+		if (searchDetails.isSearch && (isResearchPage ? session.researchInstances[tabId].autoOverwritable : true)) {
+			const researchInstance = await createResearchInstance({
+				url: {
+					stoplist: sync.autoFindOptions.stoplist,
+					url,
+					engine: searchDetails.engine,
+				},
+				autoOverwritable: true,
+			});
 			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
 				session.researchInstances[tabId] = researchInstance;
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
@@ -302,6 +314,7 @@ const updateActionIcon = (enabled?: boolean) =>
 					overrideHighlightsShown,
 					sync.barControlsShown,
 					sync.barLook,
+					sync.highlightLook,
 				));
 			}
 		}
@@ -311,6 +324,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				overrideHighlightsShown,
 				sync.barControlsShown,
 				sync.barLook,
+				sync.highlightLook,
 			));
 		}
 	};
@@ -318,7 +332,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.tabs.onCreated.addListener(tab => getStorageSync([ StorageSync.LINK_RESEARCH_TABS ]).then(async sync => {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (tab && tab.id !== undefined && tab.openerTabId !== undefined
-			&& (!tab.pendingUrl || !/\b\w+:\/\/newtab\//.test(tab.pendingUrl))
+			&& (!/\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? ""))
 			&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
 			session.researchInstances[tab.id] = sync.linkResearchTabs
 				? session.researchInstances[tab.openerTabId]
@@ -370,18 +384,31 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
  * @param tabId The ID of a tab to be linked and within which to highlight.
  */
 const activateResearchInTab = async (tabId: number) => {
-	const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
+	const sync = await getStorageSync([
+		StorageSync.BAR_CONTROLS_SHOWN,
+		StorageSync.BAR_LOOK,
+		StorageSync.HIGHLIGHT_LOOK,
+	]);
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-	const researchInstance = await createResearchInstance({ terms: [] });
+	const researchInstance = await createResearchInstance({
+		terms: [],
+		autoOverwritable: false,
+	});
 	researchInstance.highlightsShown = true;
 	session.researchInstances[tabId] = researchInstance;
 	setStorageSession(session);
 	await activateHighlightingInTab(
-		tabId,
+		tabId, //
 		Object.assign(
 			{ termsFromSelection: true, command: { type: CommandType.FOCUS_TERM_INPUT } } as HighlightMessage,
-			createResearchMessage(researchInstance, false, sync.barControlsShown, sync.barLook),
-		),
+			createResearchMessage(
+				researchInstance,
+				false,
+				sync.barControlsShown,
+				sync.barLook,
+				sync.highlightLook,
+			),
+		), //
 	);
 };
 
@@ -477,12 +504,18 @@ chrome.commands.onCommand.addListener(async commandString => {
 			});
 		} else {
 			if (!isTabResearchPage(session.researchInstances, senderTabId)) {
-				const researchInstance = await createResearchInstance({ terms: message.terms });
+				const researchInstance = await createResearchInstance({
+					terms: message.terms,
+					autoOverwritable: false,
+				});
 				session.researchInstances[senderTabId] = researchInstance;
 			}
 			if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
 				const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
-				const researchInstance = await createResearchInstance({ terms: message.terms });
+				const researchInstance = await createResearchInstance({
+					terms: message.terms,
+					autoOverwritable: false,
+				});
 				if (message.toggleHighlightsOn !== undefined) {
 					researchInstance.highlightsShown = message.toggleHighlightsOn;
 				}

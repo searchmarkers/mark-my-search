@@ -6,7 +6,6 @@ chrome.storage = isBrowserChromium() /* Running in Chromium */  ? chrome.storage
 chrome.storage.session = chrome.storage.session ?? chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
-type Stoplist = Array<string>
 type Engines = Record<string, Engine>
 type StorageSessionValues = {
 	[StorageSession.RESEARCH_INSTANCES]: ResearchInstances
@@ -16,7 +15,10 @@ type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
 }
 type StorageSyncValues = {
-	[StorageSync.STOPLIST]: Stoplist
+	[StorageSync.AUTO_FIND_OPTIONS]: {
+		stoplist: Array<string>
+		searchParams: Array<string>
+	}
 	[StorageSync.LINK_RESEARCH_TABS]: boolean
 	[StorageSync.SHOW_HIGHLIGHTS]: {
 		default: boolean
@@ -30,6 +32,9 @@ type StorageSyncValues = {
 	}
 	[StorageSync.BAR_LOOK]: {
 		showEditIcon: boolean
+	}
+	[StorageSync.HIGHLIGHT_LOOK]: {
+		hues: Array<number>
 	}
 }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -50,25 +55,40 @@ enum StorageLocal {
 
 enum StorageSync {
 	IS_SET_UP = "isSetUp", // TODO supplement with detection of unused keys
-	STOPLIST = "stoplist",
+	AUTO_FIND_OPTIONS = "autoFindOptions",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
+	HIGHLIGHT_LOOK = "highlightLook",
 }
 
 interface ResearchInstance {
 	phrases: ReadonlyArray<string>
 	terms: MatchTerms
 	highlightsShown: boolean
+	autoOverwritable: boolean
 }
 
 const defaultOptions: StorageSyncValues = {
-	stoplist: [
-		"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
-		"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-		"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's"
-	],
+	autoFindOptions: {
+		searchParams: [ // Order of specificity
+			"searchTerms",
+			"searchTerm",
+			"search",
+			"query",
+			"keywords",
+			"keyword",
+			"terms",
+			"term",
+			"q", "s", "k",
+		],
+		stoplist: [
+			"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
+			"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
+			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's",
+		],
+	},
 	linkResearchTabs: false,
 	showHighlights: {
 		default: true,
@@ -82,6 +102,9 @@ const defaultOptions: StorageSyncValues = {
 	},
 	barLook: {
 		showEditIcon: true,
+	},
+	highlightLook: {
+		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 };
 
