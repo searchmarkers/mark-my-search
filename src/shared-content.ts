@@ -9,7 +9,7 @@ interface MatchMode {
 }
 
 /**
- * Represents a search term. Used internally by the page finding algorithm and supporting components.
+ * Represents a search term with regex matching options. Used by the DOM text finding algorithm and supporting components.
  */
 class MatchTerm {
 	phrase: string;

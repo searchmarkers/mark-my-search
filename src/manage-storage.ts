@@ -33,7 +33,7 @@ type StorageSyncValues = {
 	}
 }
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-type BarControl = keyof StorageSyncValues["barControlsShown"]
+type ControlButtonName = keyof StorageSyncValues["barControlsShown"]
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type BarLook = keyof StorageSyncValues["barLook"]
 
