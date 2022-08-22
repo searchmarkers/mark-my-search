@@ -1530,13 +1530,13 @@ const beginHighlighting = (
 				terms.forEach(term => updateTermTooltip(term));
 			}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates)
 		while (true) {
-			yield;
 			requestCount++;
 			const dateMs = Date.now();
 			if (dateMs > timeRequestAcceptedLast + requestWaitDuration) {
 				timeRequestAcceptedLast = dateMs;
 				scheduleRefresh();
 			}
+			yield;
 		}
 	};
 
