@@ -4,7 +4,9 @@ type OptionsInfo = Array<{
 		label: string
 		preferences?: Partial<Record<keyof StorageSyncValues["barControlsShown"]
 			| keyof StorageSyncValues["barLook"]
-			| keyof StorageSyncValues["showHighlights"], {
+			| keyof StorageSyncValues["highlightLook"]
+			| keyof StorageSyncValues["showHighlights"]
+			| keyof StorageSyncValues["autoFindOptions"], {
 			label: string
 			type: PreferenceType
 		}>>
@@ -215,6 +217,15 @@ body { background-color: #bbb; }
 						},
 					},
 				},
+				highlightLook: {
+					label: "Keyword highlighting style",
+					preferences: {
+						hues: {
+							label: "Keyword color hues to cycle through",
+							type: PreferenceType.ARRAY,
+						},
+					},
+				},
 				showHighlights: {
 					label: "Visibility when highlighting search engine keywords",
 					preferences: {
@@ -228,9 +239,18 @@ body { background-color: #bbb; }
 						},
 					},
 				},
-				stoplist: {
-					label: "Words not to highlight automatically when searched",
-					type: PreferenceType.ARRAY,
+				autoFindOptions: {
+					label: "Options for highlighting search engine keywords",
+					preferences: {
+						searchParams: {
+							label: "URL parameters containing keywords",
+							type: PreferenceType.ARRAY,
+						},
+						stoplist: {
+							label: "Keywords to exclude",
+							type: PreferenceType.ARRAY,
+						},
+					},
 				},
 			},
 		},

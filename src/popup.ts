@@ -63,7 +63,7 @@ input:active { outline-style: none; display: inline-block; }
 	 * @param service The name of a service category for the email.
 	 * @param template The name of a template under the service for the email.
 	 * @param details Custom template field entries.
-	 * @param key The EmailJS API key to use.
+	 * @param key The API key to use.
 	 */
 	const sendEmail: (
 		service: string,
@@ -82,7 +82,7 @@ input:active { outline-style: none; display: inline-block; }
 		if (tab.id === undefined) {
 			return;
 		}
-		const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		const phrases = session.researchInstances[tab.id ?? -1]
 			? session.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
@@ -117,7 +117,7 @@ input:active { outline-style: none; display: inline-block; }
 		buttons.researchTogglePage.onclick = async () => {
 			const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 			if (tab.id !== undefined) {
-				const session = await getStorageSession(StorageSession.RESEARCH_INSTANCES);
+				const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 				if ((tab.id as number) in session.researchInstances) {
 					chrome.runtime.sendMessage({
 						disableTabResearch: true,
@@ -167,7 +167,7 @@ input:active { outline-style: none; display: inline-block; }
 			});
 			return buttons as PopupButtons;
 		})();
-		getStorageLocal(StorageLocal.ENABLED).then(local =>
+		getStorageLocal([ StorageLocal.ENABLED ]).then(local =>
 			local.enabled ? buttons.researchToggle.classList.add(PopupButtonClass.ENABLED) : undefined
 		);
 		(popup.firstElementChild as HTMLElement).focus();

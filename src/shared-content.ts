@@ -8,6 +8,9 @@ interface MatchMode {
 	whole: boolean
 }
 
+/**
+ * Represents a search term with regex matching options. Used by the DOM text finding algorithm and supporting components.
+ */
 class MatchTerm {
 	phrase: string;
 	selector: string;
@@ -16,7 +19,7 @@ class MatchTerm {
 	hue: number;
 	command: string;
 	commandReverse: string;
-    
+
 	constructor (phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
 		this.matchMode = phrase.length > 2 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: false };
@@ -24,7 +27,10 @@ class MatchTerm {
 			Object.assign(this.matchMode, matchMode);
 		this.compile();
 	}
-    
+
+	/**
+	 * Construct a regex based on the stored search term information, assigning it to `this.pattern`.
+	 */
 	compile () {
 		if (/\W/g.test(this.phrase)) {
 			this.matchMode.stem = false;
@@ -54,28 +60,39 @@ class MatchTerm {
 	}
 }
 
+/**
+ * Represents the set of URLs used by a particular search engine and how to extract the dynamic search query section.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class Engine {
+	// All appropriate attributes must be compared in `this.equals`
 	hostname: string;
 	pathname: [ string, string ];
 	param: string;
 
-	constructor (args?: { urlPatternString: string }) {
+	constructor (args?: { urlDynamicString: string }) {
 		if (!args)
 			return;
-		const urlPattern = new URL(args.urlPatternString);
-		this.hostname = urlPattern.hostname;
-		if (urlPattern.pathname.includes("%s")) {
-			const parts = urlPattern.pathname.split("%s");
+		const urlDynamic = new URL(args.urlDynamicString);
+		this.hostname = urlDynamic.hostname;
+		if (urlDynamic.pathname.includes("%s")) {
+			const parts = urlDynamic.pathname.split("%s");
 			this.pathname = [ parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined) ];
 		} else {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			const [ param, arg ] = Array.from(urlPattern.searchParams).find(param => param[1].includes("%s")) ?? [ "", "" ];
+			const [ param, arg ] = Array.from(urlDynamic.searchParams).find(param => param[1].includes("%s")) ?? [ "", "" ];
 			this.param = param;
 		}
 	}
 
-	extract (urlString: string, matchOnly = false) {
+	/**
+	 * Extracts the search query from a URL matching the pattern of this user search engine.
+	 * @param urlString The string of a URL to extract from.
+	 * @param matchOnly Indicates whether to return an empty array if an array of phrases would otherwise be returned.
+	 * @returns An array of the phrases extracted from the URL dynamic query section, or null if the URL does not match the engine.
+	 */
+	extract (urlString: string, matchOnly = false): Array<string> | null {
+		// TODO generalise functionality? Allow for phrase groups?
 		const url = new URL(urlString);
 		return url.hostname !== this.hostname ? null : this.pathname
 			? url.pathname.startsWith(this.pathname[0]) && url.pathname.slice(this.pathname[0].length).includes(this.pathname[1])
@@ -88,10 +105,20 @@ class Engine {
 				: null;
 	}
 
+	/**
+	 * Gets whether or not a URL matches the pattern of this user search engine.
+	 * @param urlString The string of a URL to match.
+	 * @returns `true` if the URL string matches, `false` otherwise.
+	 */
 	match (urlString: string) {
 		return !!this.extract(urlString, true);
 	}
 
+	/**
+	 * Compares this user search engine to another for strict equality of appropriate attributes.
+	 * @param engine The other user search engine.
+	 * @returns `true` if considered equal, `false` otherwise.
+	 */
 	equals (engine: Engine) {
 		return engine.hostname === this.hostname
 			&& engine.param === this.param
@@ -111,6 +138,7 @@ interface HighlightMessage {
 	toggleHighlightsOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
+	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -147,6 +175,11 @@ interface CommandInfo {
 	reversed?: boolean
 }
 
+/**
+ * Transforms a command string into a command object understood by the extension.
+ * @param commandString The string identifying a user command in `manifest.json`.
+ * @returns The corresponding command object.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const parseCommand = (commandString: string): CommandInfo => {
 	const parts = commandString.split("-");
@@ -193,7 +226,15 @@ const parseCommand = (commandString: string): CommandInfo => {
 	return { type: CommandType.NONE };
 };
 
+/**
+ * Compares two arrays using an item comparison function.
+ * @param as An array of items of a single type.
+ * @param bs An array of items of the same type.
+ * @param compare A function comparing a corresponding pair of items from the arrays.
+ * If unspecified, the items are compared with strict equality.
+ * @returns `true` if each item pair matches and arrays are of equal cardinality, `false` otherwise.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const itemsMatchLoosely = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a: T, b: T) => a === b) =>
+const itemsMatch = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a: T, b: T) => a === b) =>
 	as.length === bs.length && as.every((a, i) => compare(a, bs[i]))
 ;

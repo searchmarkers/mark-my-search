@@ -1,10 +1,10 @@
 type BrowserCommands = Array<chrome.commands.Command>
 type TagName = HTMLElementTagName | Uppercase<HTMLElementTagName>
 type HighlightTags = {
-	reject: Set<TagName>,
-	flow: Set<TagName>,
+	reject: ReadonlySet<TagName>,
+	flow: ReadonlySet<TagName>,
 }
-type TermHues = ReadonlyArray<number>
+type TermHues = Array<number>
 type ControlButtonInfo = {
 	path?: string
 	label?: string
@@ -13,6 +13,7 @@ type ControlButtonInfo = {
 	setUp?: (container: HTMLElement) => void
 }
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
+type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
 
 enum AtRuleIdent {
 	FLASH = "flash",
@@ -41,7 +42,6 @@ enum ElementClass {
 	MATCH_WHOLE = "match-whole",
 	PRIMARY = "primary",
 	SECONDARY = "secondary",
-	ACTIVE = "active",
 	OVERRIDE_VISIBILITY = "override-visibility",
 }
 
@@ -57,10 +57,6 @@ enum ElementID {
 enum TermChange {
 	REMOVE = -1,
 	CREATE = -2,
-}
-
-interface FnProcessCommand {
-	call: (command: CommandInfo) => void
 }
 
 interface ControlsInfo {
@@ -137,10 +133,10 @@ const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: s
 /**
  * Fills a CSS stylesheet element to style all UI elements we insert.
  * @param terms Terms to account for and style.
- * @param style A style element to fill with the current style state.
- * @param hues An array of color hues for term styles to cycle through.
+ * @param hues Color hues for term styles to cycle through.
  */
-const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues: TermHues) => {
+const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
+	const style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
 	const zIndexMax = 2**31 - 1;
 	style.textContent = `
 /* TODO reorganise and rename */
@@ -151,9 +147,11 @@ const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues:
 	box-sizing: unset !important; font-family: revert !important; color: #000 !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)}),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ width: 0; padding: 0 !important; margin: 0; }
 #${getSel(ElementID.BAR)}
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
@@ -162,14 +160,16 @@ const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues:
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus)
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: block; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus)
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.ACTIVE)})
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)}
 	{ display: none; }
 /**/
@@ -302,13 +302,57 @@ const fillStylesheetContent = (terms: MatchTerms, style: HTMLStyleElement, hues:
 	});
 };
 
-const getContainerBlock = (highlightTags: HighlightTags, element: HTMLElement): HTMLElement =>
-	highlightTags.flow.has(element.tagName as TagName) && element.parentElement
-		? getContainerBlock(highlightTags, element.parentElement)
-		: element
+/**
+ * Gets a selector string for the container block of an element.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @returns The container block selector corresponding to the highlight tags supplied.
+ */
+const getContainerBlockSelector = (highlightTags: HighlightTags) =>
+	`:not(${Array.from(highlightTags.flow).join(", ")})`
 ;
 
+/**
+ * Gets the containing block of an element.
+ * This is its closest ancestor which has no tag name counted as `flow` in a highlight tags object.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param element An element to find the first container block of (inclusive).
+ * @param selector If supplied, a container block selector.
+ * Normally generated by the appropriate function using the highlight tags supplied. This may be used for efficiency.
+ * @returns The closest container block above the element (inclusive).
+ */
+const getContainerBlock = (element: HTMLElement, highlightTags: HighlightTags, selector = ""): HTMLElement =>
+	// Always returns an element since "body" is not a flow tag.
+	element.closest(selector ? selector : getContainerBlockSelector(highlightTags)) as HTMLElement
+;
+
+/**
+ * Reverts the focusability of elements made temporarily focusable and marked as such using a class name.
+ * Sets their `tabIndex` to -1.
+ * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
+ */
+const revertElementsUnfocusable = (root = document.body) => {
+	if (!root.parentNode) {
+		return;
+	}
+	root.parentNode.querySelectorAll(`.${getSel(ElementClass.FOCUS_REVERT)}`)
+		.forEach((element: HTMLElement) => {
+			element.tabIndex = -1;
+			element.classList.remove(getSel(ElementClass.FOCUS_REVERT));
+		});
+};
+
+/**
+ * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
+ * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
+ */
 const jumpToTerm = (() => {
+	/**
+	 * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
+	 * @param element An element.
+	 * @returns `true` if visible, `false` otherwise.
+	 */
 	const isVisible = (element: HTMLElement) => // TODO improve
 		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
 		&& getComputedStyle(element).visibility !== "hidden"
@@ -329,24 +373,21 @@ const jumpToTerm = (() => {
 		if (focusBase) {
 			focusBase.classList.remove(getSel(ElementClass.FOCUS));
 			purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
-			Array.from(document.body.getElementsByClassName(getSel(ElementClass.FOCUS_REVERT)))
-				.forEach((element: HTMLElement) => {
-					element.tabIndex = -1;
-					element.classList.remove(getSel(ElementClass.FOCUS_REVERT));
-				})
-			;
+			revertElementsUnfocusable();
 		}
 		const selectionFocusContainer = selectionFocus
-			? getContainerBlock(highlightTags, selectionFocus.nodeType === Node.ELEMENT_NODE || !selectionFocus.parentElement
-				? selectionFocus as HTMLElement
-				: selectionFocus.parentElement)
+			? getContainerBlock(
+				selectionFocus.nodeType === Node.ELEMENT_NODE || !selectionFocus.parentElement
+					? selectionFocus as HTMLElement
+					: selectionFocus.parentElement,
+				highlightTags)
 			: undefined;
 		const acceptInSelectionFocusContainer = { value: false };
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H"
 			&& (termSelector ? element.classList.contains(termSelector) : true)
 			&& isVisible(element)
-			&& (getContainerBlock(highlightTags, element) !== selectionFocusContainer || acceptInSelectionFocusContainer.value)
+			&& (getContainerBlock(element, highlightTags) !== selectionFocusContainer || acceptInSelectionFocusContainer.value)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
 		walker.currentNode = selectionFocus ? selectionFocus : document.body;
@@ -363,11 +404,11 @@ const jumpToTerm = (() => {
 				}
 			}
 		}
-		const container = getContainerBlock(highlightTags, elementTerm.parentElement as HTMLElement);
+		const container = getContainerBlock(elementTerm.parentElement as HTMLElement, highlightTags);
 		container.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
 		elementTerm.classList.add(getSel(ElementClass.FOCUS));
 		let elementToSelect = Array.from(container.getElementsByTagName("mms-h"))
-			.every(thisElement => getContainerBlock(highlightTags, thisElement.parentElement as HTMLElement) === container)
+			.every(thisElement => getContainerBlock(thisElement.parentElement as HTMLElement, highlightTags) === container)
 			? container
 			: elementTerm;
 		if (elementToSelect.tabIndex === -1) {
@@ -411,8 +452,22 @@ const jumpToTerm = (() => {
 	};
 })();
 
+/**
+ * Creates an interactive term editing input. Inserts it into a term control.
+ * @param terms Terms being controlled and highlighted.
+ * @param controlPad The visible pad of the control. Contains the inline buttons and inputs.
+ * @param idxCode The append term constant if the control is used to append a term,
+ * or the index of a term if used to edit that term.
+ * @param insertInput A function accepting the input element that inserts it into its term control.
+ * @returns The input element created.
+ */
 const insertTermInput = (() => {
-	const activateInput = (control: HTMLElement, shiftCaretRight?: boolean) => {
+	/**
+	 * Focuses and selects the text of a term control input. Note that focus causes a term input to be visible.
+	 * @param control A term control element.
+	 * @param shiftCaretRight If supplied, whether to shift the caret to the right or the left. If unsupplied, all text is selected.
+	 */
+	const selectInput = (control: HTMLElement, shiftCaretRight?: boolean) => {
 		const input = control.querySelector("input") as HTMLInputElement;
 		input.select();
 		if (shiftCaretRight !== undefined) {
@@ -421,15 +476,21 @@ const insertTermInput = (() => {
 		}
 	};
 
+	/**
+	 * Executes the change indicated by the current input text of a term control.
+	 * Operates by sending a background message to this effect provided that the text was altered.
+	 * @param term A term to attempt committing the control input text of.
+	 * @param terms Terms being controlled and highlighted.
+	 */
 	const commit = (term: MatchTerm | undefined, terms: MatchTerms) => {
-		const replaces = !!term;
+		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
 		const inputValue = termInput.value;
 		const idx = getTermIdx(term, terms);
 		if (replaces && inputValue === "") {
 			if (document.activeElement === termInput) {
-				activateInput(getControl(undefined, idx + 1) as HTMLElement);
+				selectInput(getControl(undefined, idx + 1) as HTMLElement);
 				return;
 			}
 			chrome.runtime.sendMessage({
@@ -454,8 +515,16 @@ const insertTermInput = (() => {
 		}
 	};
 
-	const shiftTermFocus = (term: MatchTerm | undefined, shiftRight: boolean, onBeforeShift: () => void, terms: MatchTerms) => {
-		const replaces = !!term;
+	/**
+	 * Shifts the control focus to another control if the caret is at the input end corresponding to the requested direction.
+	 * A control is considered focused if its input is focused.
+	 * @param term The term of the currently focused control.
+	 * @param shiftRight Whether to shift rightwards or leftwards.
+	 * @param onBeforeShift A function to execute once the shift is confirmed but 
+	 * @param terms Terms being controlled and highlighted.
+	 */
+	const tryShiftTermFocus = (term: MatchTerm | undefined, shiftRight: boolean, onBeforeShift: () => void, terms: MatchTerms) => {
+		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
 		const idx = getTermIdx(term, terms);
@@ -465,7 +534,7 @@ const insertTermInput = (() => {
 		}
 		onBeforeShift();
 		if (shiftRight && idx === terms.length - 1) {
-			activateInput(getControlAppendTerm() as HTMLElement, shiftRight);
+			selectInput(getControlAppendTerm() as HTMLElement, shiftRight);
 			return;
 		} else if (shiftRight && !replaces) {
 			commit(term, terms);
@@ -478,23 +547,24 @@ const insertTermInput = (() => {
 				const controlTarget = focusingControlAppendTerm
 					? getControlAppendTerm() as HTMLElement
 					: getControl(undefined, 1) as HTMLElement;
-				activateInput(controlTarget, shiftRight);
+				selectInput(controlTarget, shiftRight);
 			}
 			return;
 		}
 		const controlTarget = getControl(undefined, replaces
 			? shiftRight ? idx + 1 : idx - 1
 			: terms.length - 1) as HTMLElement;
-		activateInput(controlTarget, shiftRight);
+		selectInput(controlTarget, shiftRight);
 	};
 
-	return (terms: MatchTerms, controlPad: HTMLElement, idxCode: number,
+	return (terms: MatchTerms, controlPad: HTMLElement, idxCode: TermChange.CREATE | number,
 		insertInput: (termInput: HTMLInputElement) => void) => {
 		const controlContent = controlPad
 			.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement ?? controlPad;
 		const controlEdit = controlPad
 			.getElementsByClassName(getSel(ElementClass.CONTROL_EDIT))[0] as HTMLElement | undefined;
 		const term = terms[idxCode] as MatchTerm | undefined;
+		// Whether a commit in this control replaces an existing term or appends a new one.
 		const replaces = idxCode !== TermChange.CREATE;
 		const input = document.createElement("input");
 		input.type = "text";
@@ -505,13 +575,13 @@ const insertTermInput = (() => {
 		input.onfocus = () => {
 			input.addEventListener("keyup", (event) => {
 				if (event.key === "Tab") {
-					selectInputFocused(input);
+					selectInputTextAll(input);
 				}
 			});
 			input.classList.remove(getSel(ElementClass.DISABLED));
 			resetInput();
-			purgeClass(getSel(ElementClass.ACTIVE), document.getElementById(getSel(ElementID.BAR)) as HTMLElement);
-			input.classList.add(getSel(ElementClass.ACTIVE));
+			resetTermControlInputsVisibility();
+			input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 		};
 		input.onblur = () => {
 			commit(term, terms);
@@ -520,14 +590,14 @@ const insertTermInput = (() => {
 		const show = (event: MouseEvent) => {
 			event.preventDefault();
 			input.select();
-			selectInputFocused(input);
+			selectInputTextAll(input);
 		};
 		const hide = () => {
 			input.blur();
 		};
 		if (controlEdit) {
 			controlEdit.onclick = event => {
-				if (!input.classList.contains(getSel(ElementClass.ACTIVE)) || getComputedStyle(input).width === "0") {
+				if (!input.classList.contains(getSel(ElementClass.OVERRIDE_VISIBILITY)) || getComputedStyle(input).width === "0") {
 					show(event);
 				} else {
 					input.value = "";
@@ -554,6 +624,7 @@ const insertTermInput = (() => {
 			if (event.key === "Enter") {
 				if (event.shiftKey) {
 					hide();
+					resetTermControlInputsVisibility();
 				} else {
 					commit(term, terms);
 					resetInput(input.value);
@@ -561,8 +632,9 @@ const insertTermInput = (() => {
 			} else if (event.key === "Escape") {
 				resetInput();
 				hide();
+				resetTermControlInputsVisibility();
 			} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-				shiftTermFocus(term, event.key === "ArrowRight", () => event.preventDefault(), terms);
+				tryShiftTermFocus(term, event.key === "ArrowRight", () => event.preventDefault(), terms);
 			}
 		};
 		insertInput(input);
@@ -570,10 +642,24 @@ const insertTermInput = (() => {
 	};
 })();
 
-const getTermIdx = (term: MatchTerm | undefined, terms: MatchTerms) =>
+/**
+ * Gets the index of a term within an array of terms.
+ * @param term A term to find.
+ * @param terms Terms to search in.
+ * @returns The append term constant index if not found, the term's index otherwise.
+ */
+const getTermIdx = (term: MatchTerm | undefined, terms: MatchTerms): TermChange.CREATE | number =>
 	term ? terms.indexOf(term) : TermChange.CREATE
 ;
 
+/**
+ * Gets the control of a term or at an index.
+ * @param term A term to identify the control by, if supplied.
+ * @param idx An index to identify the control by, if supplied.
+ * @returns The control matching `term` if supplied and `idx` is `undefined`,
+ * OR the control matching `idx` if supplied and less than the number of terms,
+ * OR the append term control otherwise.
+ */
 const getControl = (term?: MatchTerm, idx?: number): Element | null => {
 	const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
 	return (idx === undefined && term
@@ -584,14 +670,27 @@ const getControl = (term?: MatchTerm, idx?: number): Element | null => {
 	);
 };
 
+/**
+ * Gets the control for appending a new term.
+ * @returns The control if present, `null` otherwise.
+ */
 const getControlAppendTerm = (): Element | null =>
 	(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement).firstElementChild
 ;
 
-const selectInputFocused = (input: HTMLInputElement) =>
-	input.setSelectionRange(0, input.value.length) // Mainly used to mitigate Chromium bug in which first focus does not select
+/**
+ * Selects all of the text in an input. Does not affect focus.
+ * Mainly a helper for mitigating a Chromium bug which causes `select()` during the initial focus to not select all text.
+ * @param input An input element to select the text of.
+ */
+const selectInputTextAll = (input: HTMLInputElement) =>
+	input.setSelectionRange(0, input.value.length)
 ;
 
+/**
+ * Updates the look of a term control to reflect whether or not it occurs within the document.
+ * @param term A term to update the term control status for.
+ */
 const updateTermOccurringStatus = (term: MatchTerm) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
@@ -599,8 +698,17 @@ const updateTermOccurringStatus = (term: MatchTerm) => {
 	controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
 };
 
+/**
+ * Updates the tooltip of a term control to reflect current highlighting or extension information as appropriate.
+ * @param term A term to update the tooltip for.
+ */
 const updateTermTooltip = (() => {
-	const getOccurrenceCount = (term: MatchTerm) => {
+	/**
+	 * Gets the number of matches for a term in the document.
+	 * @param term A term to get the occurrence count for.
+	 * @returns The occurrence count for the term.
+	 */
+	const getOccurrenceCount = (term: MatchTerm) => { // TODO make accurate
 		const occurrences = Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)));
 		const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
 		return matches ? matches.length : 0;
@@ -620,48 +728,88 @@ const updateTermTooltip = (() => {
 	};
 })();
 
-const getTermOptionMatchType = (text: string, fromText = false) =>
-	(fromText
-		? text.substring(0, text.indexOf("\u00A0"))
-		: text.slice(0, text.indexOf("\u00A0"))).toLowerCase()
+/**
+ * Gets the term match type identifier for a match option.
+ * @param text The text of a match option.
+ * @returns The corresponding match type identifier string.
+ */
+const getTermOptionMatchType = (text: string): string => // TODO rework system to not rely on option text
+	text.slice(0, text.indexOf("\u00A0")).toLowerCase()
 ;
 
-const getTermOptionText = (optionIsActive: boolean, title: string) =>
-	optionIsActive
+/**
+ * Transforms the current text of a term match option to reflect whether or not it is currently enabled.
+ * @param optionIsEnabled Indicates whether the option text should display enablement.
+ * @param title Option text in an unknown previous state.
+ * @returns The option text reflecting the given enablement.
+ */
+const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
+	optionIsEnabled
 		? title.includes("🗹") ? title : `${title}\u00A0🗹`
 		: title.includes("🗹") ? title.slice(0, -2) : title
 ;
 
-const updateTermMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) => {
+/**
+ * Updates the class list of a term control to reflect the term's matching modes.
+ * @param mode An object of term matching mode flags.
+ * @param classList The control element class list for a term.
+ */
+const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) => {
 	classList[mode.case ? "add" : "remove"](getSel(ElementClass.MATCH_CASE));
 	classList[mode.stem ? "add" : "remove"](getSel(ElementClass.MATCH_STEM));
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
 };
 
-const refreshTermControl = (highlightTags: HighlightTags, term: MatchTerm, idx: number) => {
+/**
+ * Refreshes the control of a term to reflect its current state.
+ * @param term A term with an existing control.
+ * @param idx The index of the term.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ */
+const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: HighlightTags) => {
 	const control = getControl(undefined, idx) as HTMLElement;
 	control.className = "";
 	control.classList.add(getSel(ElementClass.CONTROL));
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
-	updateTermMatchModeClassList(term.matchMode, control.classList);
+	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
 	controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
 	controlContent.textContent = term.phrase;
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
 		option.textContent = getTermOptionText(
-			term.matchMode[getTermOptionMatchType(option.textContent as string, true)],
+			term.matchMode[getTermOptionMatchType(option.textContent as string)],
 			option.textContent as string,
 		),
 	);
 };
 
+/**
+ * Removes a term control element.
+ * @param idx The index of an existing control to remove.
+ */
 const removeTermControl = (idx: number) => {
 	(getControl(undefined, idx) as HTMLElement).remove();
 };
 
+/**
+ * Inserts an interactive term control element.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param terms Terms being controlled and highlighted.
+ * @param idx The index in `terms` of a term to assign.
+ * @param command The string of a command to display as a shortcut hint for jumping to the next term.
+ * @param commandReverse The string of a command to display as a shortcut hint for jumping to the previous term.
+ * @param controlsInfo Details of controls inserted.
+ */
 const insertTermControl = (() => {
-	const createTermOption = (terms: MatchTerms, term: MatchTerm, title: string) => {
-		const matchType = getTermOptionMatchType(title);
+	/**
+	 * Creates an element for a term matching option.
+	 * @param terms Terms being controlled and highlighted.
+	 * @param term A term for which to create the option.
+	 * @param text Text content for the option, which is also used to determine the matching mode it controls.
+	 * @returns The resulting option element.
+	 */
+	const createTermOption = (terms: MatchTerms, term: MatchTerm, text: string): HTMLButtonElement => {
+		const matchType = getTermOptionMatchType(text);
 		const onActivated = () => {
 			const termUpdate = Object.assign({}, term);
 			termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
@@ -676,13 +824,13 @@ const insertTermControl = (() => {
 		option.type = "button";
 		option.classList.add(getSel(ElementClass.OPTION));
 		option.tabIndex = -1;
-		option.textContent = getTermOptionText(term.matchMode[matchType], title);
+		option.textContent = getTermOptionText(term.matchMode[matchType], text);
 		option.onmouseup = onActivated;
 		return option;
 	};
 
-	return (highlightTags: HighlightTags, terms: MatchTerms, idx: number, command: string, commandReverse: string,
-		controlsInfo: ControlsInfo) => {
+	return (terms: MatchTerms, idx: number, command: string, commandReverse: string,
+		controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
 		const term = terms.at(idx) as MatchTerm;
 		const controlPad = document.createElement("span");
 		controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
@@ -724,12 +872,17 @@ const insertTermControl = (() => {
 		control.classList.add(getSel(ElementClass.TERM, term.selector));
 		control.appendChild(controlPad);
 		control.appendChild(menu);
-		updateTermMatchModeClassList(term.matchMode, control.classList);
+		updateTermControlMatchModeClassList(term.matchMode, control.classList);
 		(document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement).appendChild(control);
 	};
 })();
 
-const getTermCommands = (commands: BrowserCommands) => {
+/**
+ * Extracts assigned shortcut strings from browser commands.
+ * @param commands Commands as returned by the browser.
+ * @returns An object containing the extracted command shortcut strings.
+ */
+const getTermCommands = (commands: BrowserCommands): { down: Array<string>, up: Array<string> } => {
 	const commandsDetail = commands.map(command => ({
 		info: command.name ? parseCommand(command.name) : { type: CommandType.NONE },
 		shortcut: command.shortcut ?? "",
@@ -746,12 +899,33 @@ const getTermCommands = (commands: BrowserCommands) => {
 	};
 };
 
-const addControls = (() => {
-	const createButton = (() => {
-		const create = (id: BarControl, info: ControlButtonInfo, hideWhenInactive: boolean) => {
-			const container = document.createElement("span"); // TODO find how vscode knows the type produced by the argument
-			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant, use CSS to select class containing this
-			container.classList.add(getSel(ElementClass.BAR_CONTROL, id));
+/**
+ * Inserts constant bar controls into the toolbar.
+ * @param terms Terms highlighted in the page to mark the scroll position of.
+ * @param controlsInfo Details of controls to insert.
+ * @param commands Browser commands to use in shortcut hints.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param hues Color hues for term styles to cycle through.
+ */
+const insertControls = (() => {
+	/**
+	 * Inserts a control.
+	 * @param terms Terms to be controlled and highlighted.
+	 * @param barControlName A standard name for the control.
+	 * @param hideWhenInactive Indicates whether to hide the control while not in interaction.
+	 */
+	const insertControl = (() => {
+		/**
+		 * Inserts a control given control button details.
+		 * @param barControlName A standard name for the control.
+		 * @param info Details about the control button to create.
+		 * @param hideWhenInactive Indicates whether to hide the control while not in interaction.
+		 */
+		const insertControlWithInfo = (barControlName: ControlButtonName, info: ControlButtonInfo,
+			hideWhenInactive: boolean) => {
+			const container = document.createElement("span");
+			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant? can use CSS to select partial class
+			container.classList.add(getSel(ElementClass.BAR_CONTROL, barControlName));
 			container.tabIndex = -1;
 			const pad = document.createElement("span");
 			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
@@ -782,8 +956,8 @@ const addControls = (() => {
 			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(container);
 		};
 
-		return (terms: MatchTerms, barControl: BarControl, hideWhenInactive: boolean) =>
-			create(barControl, ({
+		return (terms: MatchTerms, barControlName: ControlButtonName, hideWhenInactive: boolean) =>
+			insertControlWithInfo(barControlName, ({
 				disableTabResearch: {
 					path: "/icons/close.svg",
 					containerId: ElementID.BAR_OPTIONS,	
@@ -806,22 +980,22 @@ const addControls = (() => {
 						insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
 					},
 				},
-			} as Record<BarControl, ControlButtonInfo>)[barControl], hideWhenInactive)
+			} as Record<ControlButtonName, ControlButtonInfo>)[barControlName], hideWhenInactive)
 		;
 	})();
 
-	return (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-		style: HTMLStyleElement, controlsInfo: ControlsInfo, hues: TermHues) => {
-		fillStylesheetContent(terms, style, hues);
+	return (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
+		highlightTags: HighlightTags, hues: TermHues) => {
+		fillStylesheetContent(terms, hues);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
 		bar.ondragstart = event => event.preventDefault();
 		bar.onmouseenter = () => {
-			purgeClass(getSel(ElementClass.ACTIVE), bar);
+			resetTermControlInputsVisibility();
 			const controlInput = document.activeElement;
 			if (controlInput && controlInput.tagName === "INPUT"
 				&& controlInput.closest(`#${getSel(ElementID.BAR)}`)) {
-				controlInput.classList.add(getSel(ElementClass.ACTIVE));
+				controlInput.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 			}
 		};
 		bar.onmouseleave = bar.onmouseenter;
@@ -838,11 +1012,11 @@ const addControls = (() => {
 		bar.appendChild(barTerms);
 		bar.appendChild(barControls);
 		document.body.insertAdjacentElement("beforebegin", bar);
-		Object.keys(controlsInfo.barControlsShown).forEach((barControl: BarControl) =>
-			createButton(terms, barControl, !controlsInfo.barControlsShown[barControl]));
+		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) =>
+			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName]));
 		const termCommands = getTermCommands(commands);
-		terms.forEach((term, i) => insertTermControl(highlightTags, terms, i, termCommands.down[i], termCommands.up[i],
-			controlsInfo));
+		terms.forEach((term, i) => insertTermControl(terms, i, termCommands.down[i], termCommands.up[i],
+			controlsInfo, highlightTags));
 		const gutter = document.createElement("div");
 		gutter.id = getSel(ElementID.MARKER_GUTTER);
 		document.body.insertAdjacentElement("afterend", gutter);
@@ -850,7 +1024,7 @@ const addControls = (() => {
 })();
 
 /**
- * Empty the custom stylesheet, and remove the control bar and marker gutter.
+ * Empty the custom stylesheet, remove the control bar and marker gutter, and purge term focus class names.
  */
 const removeControls = () => {
 	const style = document.getElementById(getSel(ElementID.STYLE));
@@ -866,34 +1040,65 @@ const removeControls = () => {
 	if (gutter) {
 		gutter.remove();
 	}
+	purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
+	purgeClass(getSel(ElementClass.FOCUS));
+	revertElementsUnfocusable();
 };
 
+/**
+ * Removes the visibility classes of all term control inputs, reseting their visibility.
+ */
+const resetTermControlInputsVisibility = () =>
+	purgeClass(
+		getSel(ElementClass.OVERRIDE_VISIBILITY),
+		document.getElementById(getSel(ElementID.BAR)) as HTMLElement,
+		"input",
+	)
+;
+
+/**
+ * Gets the central y-position of a DOM rect relative to the document scroll container.
+ * @param rect A DOM rect.
+ * @returns The relative y-position.
+ */
 const getRectYRelative = (rect: DOMRect) =>
 	(rect.y + document.documentElement.scrollTop) / document.documentElement.scrollHeight
 ;
 
+/**
+ * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
+ * @param terms Terms highlighted in the page to mark the scroll position of.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param hues Color hues for term styles to cycle through.
+ */
 const insertScrollMarkers = (() => {
+	/**
+	 * Extracts the selector of a term from its prefixed class name form.
+	 * @param highlightClassName The single class name of a term highlight.
+	 * @returns The corresponding term selector.
+	 */
 	const getTermSelector = (highlightClassName: string) =>
 		highlightClassName.slice(getSel(ElementClass.TERM).length + 1)
 	;
 
 	return (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
+		if (terms.length === 0) {
+			return; // No terms results in an empty selector, which is not allowed
+		}
 		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
+		const containerBlockSelector = getContainerBlockSelector(highlightTags);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 		const containersInfo: Array<{
 			container: HTMLElement,
 			termsAdded: Set<string>,
 		}> = [];
-		if (terms.length === 0) {
-			return; // No terms results in an empty selector, which is not allowed
-		}
 		let markersHtml = "";
 		document.body.querySelectorAll(terms
 			.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
 			.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`)
 			.join(", ")
 		).forEach((highlight: HTMLElement) => {
-			const container = getContainerBlock(highlightTags, highlight);
+			const container = getContainerBlock(highlight, highlightTags, containerBlockSelector);
 			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
 			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
 			const yRelative = getRectYRelative(container.getBoundingClientRect());
@@ -925,7 +1130,7 @@ const insertScrollMarkers = (() => {
  * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
  * @param terms Terms to find, highlight, and mark.
  * @param rootNode A node under which to find and highlight term occurrences.
- * @param highlightTags Element tags to reject from highlighting or break up blocks of consecutive text nodes.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
  */
 const generateTermHighlightsUnderNode = (() => {
@@ -1008,7 +1213,7 @@ const generateTermHighlightsUnderNode = (() => {
 	/**
 	 * Highlights occurrences of terms in text nodes under a node in the DOM tree.
 	 * @param node A node under which to match terms and insert highlights.
-	 * @param highlightTags Element tags to reject from highlighting or break up blocks of consecutive text nodes.
+	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param terms Terms to find and highlight.
 	 */
 	const insertHighlights = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
@@ -1058,14 +1263,15 @@ const generateTermHighlightsUnderNode = (() => {
  * Remove all uses of a class name in elements under a root node in the DOM tree.
  * @param className A class name to purge.
  * @param root A root node under which to purge the class (non-inclusive).
+ * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
  */
-const purgeClass = (className: string, root: HTMLElement = document.body) =>
-	Array.from(root.getElementsByClassName(className)).forEach(element => element.classList.remove(className))
+const purgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "") =>
+	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(element => element.classList.remove(className))
 ;
 
 /**
- * Revert all direct changes to the DOM tree introduced by the extension, under a root node. Circumstantial and non-direct
- * alterations may remain.
+ * Revert all direct DOM tree changes under a root node introduced by the extension.
+ * Circumstantial and non-direct alterations may remain.
  * @param classNames Class names of the highlights to remove. If left empty, all highlights are removed.
  * @param root A root node under which to remove highlights.
  */
@@ -1081,13 +1287,23 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
 			return;
 		}
 	}
+	purgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
 	purgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
-	purgeClass(getSel(ElementClass.FOCUS_REVERT), root as HTMLElement);
+	revertElementsUnfocusable(root as HTMLElement);
 };
 
+/**
+ * Gets a mutation observer which listens to document changes and performs partial highlights where necessary.
+ */
 const getObserverNodeHighlighter = (() => {
-	const canHighlightNode = (rejectSelector: string, node: Element): boolean =>
-		!node.closest(rejectSelector) && node.tagName !== "MMS-H"
+	/**
+	 * Determines whether or not the highlighting algorithm should be run on an element.
+	 * @param rejectSelector A selector string for ancestor tags to cause rejection.
+	 * @param element An element to test for highlighting viability.
+	 * @returns `true` if determined highlightable, `false` otherwise.
+	 */
+	const canHighlightElement = (rejectSelector: string, element: Element): boolean =>
+		!element.closest(rejectSelector) && element.tagName !== "MMS-H"
 	;
 
 	return (requestRefreshIndicators: RequestRefreshIndicators, highlightTags: HighlightTags, terms: MatchTerms) => {
@@ -1096,7 +1312,7 @@ const getObserverNodeHighlighter = (() => {
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
 					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
-					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightNode(rejectSelector, node as Element)) {
+					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
 						restoreNodes([], node as HTMLElement | DocumentFragment);
 						generateTermHighlightsUnderNode(terms, node, highlightTags, requestRefreshIndicators);
 					}
@@ -1107,23 +1323,242 @@ const getObserverNodeHighlighter = (() => {
 	};
 })();
 
+/**
+ * Starts a mutation observer for highlighting, listening for DOM mutations then selectively highlighting under affected nodes.
+ * @param observer An observer which selectively performs highlighting on observing changes.
+ */
 const highlightInNodesOnMutation = (observer: MutationObserver) =>
-	observer.observe(document.body, {childList: true, subtree: true})
+	observer.observe(document.body, { childList: true, subtree: true })
 ;
 
-const beginHighlighting = (() => {
-	const selectTermOnCommand = (highlightTags: HighlightTags, terms: MatchTerms,
-		processCommand: FnProcessCommand) => {
+/**
+ * Stops a mutation observer for highlighting, thus halting continuous highlighting.
+ * @param observer An observer which selectively performs highlighting on observing changes.
+ */
+const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
+	observer.disconnect()
+;
+
+/**
+ * Removes previous highlighting, then highlights the document using the terms supplied.
+ * Disables then restarts continuous highlighting.
+ * @param terms Terms to be continuously found and highlighted within the DOM.
+ * @param termsToPurge Terms for which to remove previous highlights.
+ * @param disable Indicates whether to skip all highlighting and remove the controls,
+ * thus visibly and functionally deactivating the extension within the page.
+ * @param termsFromSelection Indicates whether to skip all highlighting,
+ * sending a message to the background script containing details of terms from the current selection.
+ * This flag causes a later highlighting message with possibly different terms to be received,
+ * so highlighting in this run is pointless.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
+ * @param observer An observer which selectively performs highlighting on observing changes.
+ */
+const beginHighlighting = (
+	terms: MatchTerms, termsToPurge: MatchTerms, disable: boolean, termsFromSelection: boolean,
+	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
+) => {
+	highlightInNodesOnMutationDisconnect(observer);
+	if (termsFromSelection) {
+		const selection = document.getSelection();
+		terms = [];
+		if (selection && selection.anchorNode) {
+			const termsAll = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
+				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
+			const termSelectors: Set<string> = new Set;
+			termsAll.forEach(term => {
+				if (!termSelectors.has(term.selector)) {
+					termSelectors.add(term.selector);
+					terms.push(term);
+				}
+			});
+			selection.collapseToStart();
+		}
+		chrome.runtime.sendMessage({
+			terms,
+			makeUnique: true,
+			toggleHighlightsOn: true,
+		} as BackgroundMessage);
+	}
+	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
+	if (disable) {
+		removeControls();
+	} else if (!termsFromSelection) {
+		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
+		terms.forEach(term => updateTermOccurringStatus(term));
+		highlightInNodesOnMutation(observer);
+	}
+};
+
+(() => {
+	/**
+	 * Inserts the toolbar with term controls and begins continuously highlighting terms in the document.
+	 * All controls necessary are first removed. Refreshes executed may be whole or partial according to requirements.
+	 * @param terms Terms to highlight and display in the toolbar.
+	 * @param termsFromSelection Indicates whether to skip all highlighting.
+	 * This flag is handled externally to the effect of causing a later highlighting message with possibly different terms to be received,
+	 * so highlighting in this run is pointless.
+	 * @param disable Indicates whether to skip control and highlight insertion stages but run removal stages,
+	 * thus visibly and functionally deactivating the extension within the page.
+	 * @param controlsInfo Details of controls to insert.
+	 * @param commands Browser commands to use in shortcut hints.
+	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+	 * @param hues Color hues for term styles to cycle through.
+	 * @param observer An observer which selectively performs highlighting on observing changes.
+	 * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
+	 * @param termsUpdate An array of terms to which to update the existing terms, if change is necessary.
+	 * @param termUpdate A new term to insert, a term to be removed, or a changed version of a term, if supplied.
+	 * @param termToUpdateIdx The create term constant, the remove term constant, or the index of a term to update, if supplied.
+	 * The argument type from these determines how the single term update is interpreted.
+	 */
+	const refreshTermControlsAndBeginHighlighting = (() => {
+		/**
+		 * Insert the toolbar and appropriate controls.
+		 * @param terms Terms to highlight and display in the toolbar.
+		 * @param controlsInfo Details of controls to insert.
+		 * @param commands Browser commands to use in shortcut hints.
+		 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+		 * @param hues Color hues for term styles to cycle through.
+		 */
+		const insertToolbar = (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
+			highlightTags: HighlightTags, hues: TermHues) => {
+			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
+				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
+			removeControls();
+			insertControls(terms, controlsInfo, commands, highlightTags, hues);
+			if (focusingControlAppend) {
+				((getControl() as HTMLElement).querySelector("input") as HTMLInputElement).select();
+			}
+		};
+	
+		return (terms: MatchTerms, termsFromSelection: boolean, disable: boolean,
+			controlsInfo: ControlsInfo, commands: BrowserCommands,
+			highlightTags: HighlightTags, hues: TermHues,
+			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
+			termsUpdate?: MatchTerms, termUpdate?: MatchTerm,
+			termToUpdateIdx?: TermChange.CREATE | TermChange.REMOVE | number,
+		) => {
+			const termsToHighlight: MatchTerms = [];
+			const termsToPurge: MatchTerms = [];
+			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
+				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
+				// 'message.disable' assumed false.
+				if (termToUpdateIdx === TermChange.CREATE) {
+					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
+					const termCommands = getTermCommands(commands);
+					const idx = terms.length - 1;
+					insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
+					termsToHighlight.push(terms[idx]);
+					termsToPurge.push(terms[idx]);
+				} else {
+					const term = terms[termToUpdateIdx];
+					termsToPurge.push(Object.assign({}, term));
+					term.matchMode = termUpdate.matchMode;
+					term.phrase = termUpdate.phrase;
+					term.compile();
+					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags);
+					termsToHighlight.push(term);
+				}
+			} else if (termsUpdate !== undefined) {
+				// TODO retain colors?
+				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
+					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
+					if (termRemovedPreviousIdx === -1) {
+						console.warn(`Request received to delete term ${JSON.stringify(termUpdate)} which is not stored in this page.`);
+					} else {
+						removeTermControl(termRemovedPreviousIdx);
+						terms.splice(termRemovedPreviousIdx, 1);
+						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
+						fillStylesheetContent(terms, hues);
+						return;
+					}
+				} else {
+					terms.splice(0);
+					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
+					insertToolbar(terms, controlsInfo, commands, highlightTags, hues);
+				}
+			} else if (!disable && !termsFromSelection) {
+				return;
+			}
+			if (!disable) {
+				fillStylesheetContent(terms, hues);
+			}
+			beginHighlighting(
+				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+				disable, termsFromSelection,
+				highlightTags, requestRefreshIndicators, observer,
+			);
+		};
+	})();
+
+	/**
+	 * Inserts a uniquely identified CSS stylesheet to perform all extension styling.
+	 */
+	const insertStyleElement = () => {
+		let style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
+		if (!style) {
+			style = document.createElement("style");
+			style.id = getSel(ElementID.STYLE);
+			document.head.appendChild(style);
+		}
+	};
+
+	/**
+	 * Returns a generator function to consume empty requests for reinserting term scrollbar markers.
+	 * Request fulfillment may be variably delayed based on activity.
+	 * @param terms Terms being highlighted and marked.
+	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+	 * @param hues Color hues for term styles to cycle through.
+	 */
+	const requestRefreshIndicatorsFn = function* (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
+		const requestWaitDuration = 1000;
+		const reschedulingDelayMax = 5000;
+		const reschedulingRequestCountMargin = 1;
+		let timeRequestAcceptedLast = 0;
+		let requestCount = 0;
+		const scheduleRefresh = () =>
+			setTimeout(() => {
+				const dateMs = Date.now();
+				if (requestCount > reschedulingRequestCountMargin
+					&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax) {
+					requestCount = 0;
+					scheduleRefresh();
+					return;
+				}
+				requestCount = 0;
+				insertScrollMarkers(terms, highlightTags, hues);
+				terms.forEach(term => updateTermTooltip(term));
+			}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates)
+		while (true) {
+			yield;
+			requestCount++;
+			const dateMs = Date.now();
+			if (dateMs > timeRequestAcceptedLast + requestWaitDuration) {
+				timeRequestAcceptedLast = dateMs;
+				scheduleRefresh();
+			}
+		}
+	};
+
+	/**
+	 * Returns a generator function to consume individual command objects and produce their desired effect.
+	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+	 * @param terms Terms being controlled, highlighted, and jumped to.
+	 */
+	const produceEffectOnCommandFn = function* (terms: MatchTerms, highlightTags: HighlightTags) {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
-		processCommand.call = (commandInfo: CommandInfo) => {
+		while (true) {
+			const commandInfo: CommandInfo = yield;
+			if (!commandInfo) {
+				continue; // Requires an initial empty call before working (TODO otherwise mitigate)
+			}
 			const getFocusedIdx = (idx: number) => Math.min(terms.length - 1, idx);
 			focusedIdx = getFocusedIdx(focusedIdx);
 			switch (commandInfo.type) {
 			case CommandType.TOGGLE_BAR: {
 				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
-				bar.classList[bar.classList.contains(getSel(ElementClass.BAR_HIDDEN))
-					? "remove" : "add"](getSel(ElementClass.BAR_HIDDEN));
+				bar.classList.toggle(getSel(ElementClass.BAR_HIDDEN));
 				break;
 			} case CommandType.TOGGLE_SELECT: {
 				selectModeFocus = !selectModeFocus;
@@ -1139,7 +1574,7 @@ const beginHighlighting = (() => {
 				const control = getControl(undefined, commandInfo.termIdx) as HTMLElement;
 				const input = control.querySelector("input") as HTMLInputElement;
 				input.select();
-				selectInputFocused(input);
+				selectInputTextAll(input);
 				break;
 			} case CommandType.SELECT_TERM: {
 				const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
@@ -1151,139 +1586,22 @@ const beginHighlighting = (() => {
 				}
 				break;
 			}}
-		};
+		}
 	};
 
-	return (
-		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
-		terms: MatchTerms, termsToPurge: MatchTerms, disable: boolean, termsFromSelection: boolean,
-		selectTermPtr: FnProcessCommand, observer: MutationObserver
-	) => {
-		observer.disconnect();
-		if (termsFromSelection) {
-			const selection = document.getSelection();
-			terms = [];
-			if (selection && selection.anchorNode) {
-				const termsAll = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
-					.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-				const termSelectors: Set<string> = new Set;
-				termsAll.forEach(term => {
-					if (!termSelectors.has(term.selector)) {
-						termSelectors.add(term.selector);
-						terms.push(term);
-					}
-				});
-				selection.collapseToStart();
-			}
-			chrome.runtime.sendMessage({
-				terms,
-				makeUnique: true,
-				toggleHighlightsOn: true,
-			} as BackgroundMessage);
-		}
-		restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
-		if (disable) {
-			removeControls();
-			return;
-		}
-		selectTermOnCommand(highlightTags, terms, selectTermPtr);
-		if (termsFromSelection) {
-			return;
-		}
-		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
-		terms.forEach(term => updateTermOccurringStatus(term));
-		highlightInNodesOnMutation(observer);
-	};
-})();
-
-(() => {
-	const refreshTermControls = (() => {
-		const insertToolbar = (highlightTags: HighlightTags, commands: BrowserCommands, terms: MatchTerms,
-			style: HTMLStyleElement, controlsInfo: ControlsInfo, hues: TermHues) => {
-			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
-				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
-			removeControls();
-			addControls(highlightTags, commands, terms, style, controlsInfo, hues);
-			if (focusingControlAppend) {
-				((getControl() as HTMLElement).querySelector("input") as HTMLInputElement).select();
-			}
-		};
-	
-		return (highlightTags: HighlightTags, terms: MatchTerms, commands: BrowserCommands, style: HTMLStyleElement,
-			observer: MutationObserver, selectTermPtr: FnProcessCommand,
-			requestRefreshIndicators: RequestRefreshIndicators,
-			termsFromSelection: boolean, disable: boolean,
-			controlsInfo: ControlsInfo, hues: TermHues,
-			termsUpdate?: MatchTerms, termUpdate?: MatchTerm, termToUpdateIdx?: number,
-		) => {
-			const termsToHighlight: MatchTerms = [];
-			const termsToPurge: MatchTerms = [];
-			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
-				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
-				// 'message.disable' assumed false.
-				if (termToUpdateIdx === TermChange.CREATE) {
-					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
-					const termCommands = getTermCommands(commands);
-					const idx = terms.length - 1;
-					insertTermControl(highlightTags, terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo);
-					termsToHighlight.push(terms[idx]);
-					termsToPurge.push(terms[idx]);
-				} else {
-					const term = terms[termToUpdateIdx];
-					termsToPurge.push(Object.assign({}, term));
-					term.matchMode = termUpdate.matchMode;
-					term.phrase = termUpdate.phrase;
-					term.compile();
-					refreshTermControl(highlightTags, terms[termToUpdateIdx], termToUpdateIdx);
-					termsToHighlight.push(term);
-				}
-			} else if (termsUpdate !== undefined) {
-				// TODO retain colours?
-				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
-					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
-					if (termRemovedPreviousIdx === -1) {
-						console.warn(`Request received to delete term ${JSON.stringify(termUpdate)} which is not stored in this page.`);
-					} else {
-						removeTermControl(termRemovedPreviousIdx);
-						terms.splice(termRemovedPreviousIdx, 1);
-						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
-						fillStylesheetContent(terms, style, hues);
-						return;
-					}
-				} else {
-					terms.splice(0);
-					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-					insertToolbar(highlightTags, commands, terms, style, controlsInfo, hues);
-				}
-			} else if (!disable && !termsFromSelection) {
-				return;
-			}
-			if (!disable) {
-				fillStylesheetContent(terms, style, hues);
-			}
-			beginHighlighting(
-				highlightTags, requestRefreshIndicators,
-				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				disable, termsFromSelection, selectTermPtr, observer
-			);
-		};
-	})();
-
-	const insertStyleElement = () => {
-		let style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
-		if (!style) {
-			style = document.createElement("style");
-			style.id = getSel(ElementID.STYLE);
-			document.head.appendChild(style);
-		}
-		return style;
-	};
+	/**
+	 * Gets a set of highlight tags in all forms reasonably required.
+	 * @param tagsLower An array of tag names in their lowercase form.
+	 * @returns The corresponding set of tag names in all forms necessary.
+	 */
+	const getHighlightTagsSet = (tagsLower: Array<HTMLElementTagName>) =>
+		new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ])) as ReadonlySet<TagName>
+	;
 
 	return () => {
 		const commands: BrowserCommands = [];
-		const processCommand: FnProcessCommand = { call: command => { command; } };
 		const terms: MatchTerms = [];
-		const hues: TermHues = [ 60, 300, 110, 220, 0, 190, 30 ];
+		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = {
 			highlightsShown: false,
 			barControlsShown: {
@@ -1295,46 +1613,17 @@ const beginHighlighting = (() => {
 				showEditIcon: true,
 			},
 		};
-		const getHighlightTagsSet = (tagsLower: Array<HTMLElementTagName>) =>
-			new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ])) as Set<TagName>
-		;
 		const highlightTags: HighlightTags = {
 			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title" ]),
 			flow: getHighlightTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
 				"mms-h" as HTMLElementTagName ]),
 			// break: any other class of element
 		};
-		const requestRefreshIndicators: RequestRefreshIndicators = function* () {
-			const requestWaitDuration = 1000;
-			const reschedulingDelayMax = 5000;
-			const reschedulingRequestCountMargin = 1;
-			let timeRequestAcceptedLast = 0;
-			let requestCount = 0;
-			const scheduleRefresh = () =>
-				setTimeout(() => {
-					const dateMs = Date.now();
-					if (requestCount > reschedulingRequestCountMargin
-						&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax) {
-						requestCount = 0;
-						scheduleRefresh();
-						return;
-					}
-					requestCount = 0;
-					insertScrollMarkers(terms, highlightTags, hues);
-					terms.forEach(term => updateTermTooltip(term));
-				}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates)
-			while (true) {
-				requestCount++;
-				const dateMs = Date.now();
-				if (dateMs > timeRequestAcceptedLast + requestWaitDuration) {
-					timeRequestAcceptedLast = dateMs;
-					scheduleRefresh();
-				}
-				yield;
-			}
-		}();
+		const requestRefreshIndicators: RequestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
+		const produceEffectOnCommand: ProduceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, highlightTags, terms);
-		const style = insertStyleElement();
+		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate)
+		insertStyleElement();
 		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
 			if (message.extensionCommands) {
 				commands.splice(0);
@@ -1346,23 +1635,29 @@ const beginHighlighting = (() => {
 			if (message.barLook) {
 				controlsInfo.barLook = message.barLook;
 			}
+			if (message.highlightLook) {
+				hues.splice(0);
+				message.highlightLook.hues.forEach(hue => hues.push(hue));
+			}
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
 			if (
 				message.disable || message.termsFromSelection || message.termUpdate
 				|| (message.terms !== undefined
-					&& (!itemsMatchLoosely(terms, message.terms, (a: MatchTerm, b: MatchTerm) => a.phrase === b.phrase)
+					&& (!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
 						|| (!terms.length && !document.getElementById(ElementID.BAR))))
 			) {
-				refreshTermControls(
-					highlightTags, terms, commands, style, observer, processCommand, requestRefreshIndicators, //
-					message.termsFromSelection ?? false, message.disable ?? false, controlsInfo, hues, //
+				refreshTermControlsAndBeginHighlighting(
+					terms, message.termsFromSelection ?? false, message.disable ?? false, //
+					controlsInfo, commands, //
+					highlightTags, hues, //
+					observer, requestRefreshIndicators, //
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
 			}
 			if (message.command) {
-				processCommand.call(message.command);
+				produceEffectOnCommand.next(message.command);
 			}
 			// TODO improve handling of highlight setting
 			const bar = document.getElementById(getSel(ElementID.BAR));
