@@ -1186,7 +1186,8 @@ const generateTermHighlightsUnderNode = (() => {
 					textStart = textEnd;
 					textEnd += nodeItem.value.length;
 				}
-				for (;;) {
+				// eslint-disable-next-line no-constant-condition
+				while (true) {
 					nodeItemPrevious = highlightInsideNode(
 						term,
 						nodeItem.value,
@@ -1458,7 +1459,6 @@ const beginHighlighting = (
 					termsToHighlight.push(term);
 				}
 			} else if (termsUpdate !== undefined) {
-				// TODO retain colors?
 				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
 					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
 					if (termRemovedPreviousIdx === -1) {
@@ -1657,7 +1657,6 @@ const beginHighlighting = (
 			if (message.command) {
 				produceEffectOnCommand.next(message.command);
 			}
-			// TODO improve handling of highlight setting
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
 				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));

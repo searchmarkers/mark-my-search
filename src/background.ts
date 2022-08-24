@@ -329,17 +329,19 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	};
 	
-	chrome.tabs.onCreated.addListener(tab => getStorageSync([ StorageSync.LINK_RESEARCH_TABS ]).then(async sync => {
+	chrome.tabs.onCreated.addListener(async tab => {
+		if (tab.id === undefined || tab.openerTabId === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
+			return;
+		}
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		if (tab && tab.id !== undefined && tab.openerTabId !== undefined
-			&& (!/\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? ""))
-			&& isTabResearchPage(session.researchInstances, tab.openerTabId)) {
+		if (isTabResearchPage(session.researchInstances, tab.openerTabId)) {
+			const sync = await getStorageSync([ StorageSync.LINK_RESEARCH_TABS ]);
 			session.researchInstances[tab.id] = sync.linkResearchTabs
 				? session.researchInstances[tab.openerTabId]
 				: { ...session.researchInstances[tab.openerTabId] };
 			setStorageSession(session);
 		}
-	}));
+	});
 
 	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => !changeInfo.url ? undefined :
 		pageModifyRemote(changeInfo.url, tabId)
@@ -503,7 +505,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 				tabId: senderTabId,
 			});
 		} else {
-			if (!isTabResearchPage(session.researchInstances, senderTabId)) {
+			if (message.makeUnique || !isTabResearchPage(session.researchInstances, senderTabId)) {
 				const researchInstance = await createResearchInstance({
 					terms: message.terms,
 					autoOverwritable: false,
@@ -511,25 +513,22 @@ chrome.commands.onCommand.addListener(async commandString => {
 				session.researchInstances[senderTabId] = researchInstance;
 			}
 			if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
+				const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
 				const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
-				const researchInstance = await createResearchInstance({
-					terms: message.terms,
-					autoOverwritable: false,
-				});
 				if (message.toggleHighlightsOn !== undefined) {
 					researchInstance.highlightsShown = message.toggleHighlightsOn;
 				}
-				session.researchInstances[senderTabId] = researchInstance;
 				activateHighlightingInTab(senderTabId, createResearchMessage(researchInstance, false, sync.barControlsShown));
 			} else if (message.terms !== undefined) {
 				session.researchInstances[senderTabId].terms = message.terms;
 				const highlightMessage: HighlightMessage = { terms: message.terms };
 				highlightMessage.termUpdate = message.termChanged;
 				highlightMessage.termToUpdateIdx = message.termChangedIdx;
-				Object.keys(session.researchInstances).forEach(tabId =>
-					session.researchInstances[tabId] === session.researchInstances[senderTabId]
-						? chrome.tabs.sendMessage(Number(tabId), highlightMessage) : undefined
-				);
+				Object.keys(session.researchInstances).forEach(tabId => {
+					if (session.researchInstances[tabId] === session.researchInstances[senderTabId]) {
+						chrome.tabs.sendMessage(Number(tabId), highlightMessage);
+					}
+				});
 			}
 		}
 		setStorageSession(session);

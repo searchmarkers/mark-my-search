@@ -54,7 +54,6 @@ enum StorageLocal {
 }
 
 enum StorageSync {
-	IS_SET_UP = "isSetUp", // TODO supplement with detection of unused keys
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
