@@ -24,6 +24,7 @@ const createResearchInstance = async (args: {
 	autoOverwritable: boolean
 }): Promise<ResearchInstance> => {
 	const sync = await getStorageSync([ StorageSync.SHOW_HIGHLIGHTS ]);
+	const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
@@ -39,6 +40,8 @@ const createResearchInstance = async (args: {
 			terms,
 			highlightsShown: sync.showHighlights.default,
 			autoOverwritable: args.autoOverwritable,
+			persistent: local.persistResearchInstances,
+			enabled: true,
 		};
 	}
 	args.terms = args.terms ?? [];
@@ -47,6 +50,8 @@ const createResearchInstance = async (args: {
 		terms: args.terms,
 		highlightsShown: sync.showHighlights.default,
 		autoOverwritable: args.autoOverwritable,
+		persistent: local.persistResearchInstances,
+		enabled: true,
 	};
 };
 
@@ -79,16 +84,6 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
 };
 
 /**
- * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.
- * @param researchInstances An array of objects each representing an instance of highlighting.
- * @param tabId The ID of a tab.
- * @returns `true` if the tab is considered highlighted, `false` otherwise.
- */
-const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number): boolean =>
-	tabId in researchInstances
-;
-
-/**
  * Creates a message for sending to an injected highlighting script in order for it to store and highlight an array of terms.
  * This is an intermediary interface which parametises common components of such a message.
  * Not all contingencies are covered, but additional arguments may be applied to the resulting message.
@@ -101,10 +96,10 @@ const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number):
  */
 const createResearchMessage = (
 	researchInstance: ResearchInstance,
-	overrideHighlightsShown?: boolean,
-	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
-	barLook?: StorageSyncValues[StorageSync.BAR_LOOK],
-	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK],
+	overrideHighlightsShown: boolean | undefined,
+	barControlsShown: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
+	barLook: StorageSyncValues[StorageSync.BAR_LOOK],
+	highlightLook: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK],
 ) => ({
 	terms: researchInstance.terms,
 	toggleHighlightsOn: overrideHighlightsShown === undefined
@@ -330,7 +325,9 @@ const updateActionIcon = (enabled?: boolean) =>
 	};
 	
 	chrome.tabs.onCreated.addListener(async tab => {
-		if (tab.id === undefined || tab.openerTabId === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
+		const local = await getStorageLocal([ StorageLocal.FOLLOW_LINKS ]);
+		if (!local.followLinks
+			|| tab.id === undefined || tab.openerTabId === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
 			return;
 		}
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
@@ -343,16 +340,19 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	});
 
-	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => !changeInfo.url ? undefined :
-		pageModifyRemote(changeInfo.url, tabId)
-	);
+	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+		if (changeInfo.url) {
+			pageModifyRemote(changeInfo.url, tabId);
+		}
+	});
 
 	if (isBrowserChromium()) {
 		// Chromium emits no `tabs` event for tab reload
-		chrome.webNavigation.onCommitted.addListener(details =>
-			details.url === "" || details.transitionType !== "reload" ? undefined :
-				pageModifyRemote(details.url, details.tabId)
-		);
+		chrome.webNavigation.onCommitted.addListener(details => {
+			if (details.url !== "" && details.transitionType === "reload") {
+				pageModifyRemote(details.url, details.tabId);
+			}
+		});
 	}
 })();
 
@@ -392,37 +392,71 @@ const activateResearchInTab = async (tabId: number) => {
 		StorageSync.HIGHLIGHT_LOOK,
 	]);
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-	const researchInstance = await createResearchInstance({
-		terms: [],
-		autoOverwritable: false,
-	});
+	const researchInstance = await (async () => {
+		const researchInstance = session.researchInstances[tabId];
+		if (researchInstance && researchInstance.persistent) {
+			researchInstance.enabled = true;
+			return researchInstance;
+		}
+		return await createResearchInstance({
+			terms: [],
+			autoOverwritable: false,
+		});
+	})();
 	researchInstance.highlightsShown = true;
-	session.researchInstances[tabId] = researchInstance;
-	setStorageSession(session);
-	await activateHighlightingInTab(
-		tabId, //
-		Object.assign(
-			{ termsFromSelection: true, command: { type: CommandType.FOCUS_TERM_INPUT } } as HighlightMessage,
-			createResearchMessage(
-				researchInstance,
-				false,
-				sync.barControlsShown,
-				sync.barLook,
-				sync.highlightLook,
-			),
-		), //
-	);
+	if (researchInstance.terms.length) {
+		handleMessage({
+			terms: researchInstance.terms,
+			makeUnique: true,
+			toggleHighlightsOn: true,
+			highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
+		} as BackgroundMessage, tabId);
+	} else {
+		session.researchInstances[tabId] = researchInstance;
+		await setStorageSession(session);
+		activateHighlightingInTab(
+			tabId, //
+			Object.assign(
+				{
+					termsFromSelection: true,
+					command: { type: CommandType.FOCUS_TERM_INPUT },
+				} as HighlightMessage,
+				createResearchMessage(
+					researchInstance,
+					false,
+					sync.barControlsShown,
+					sync.barLook,
+					sync.highlightLook,
+				),
+			), //
+		);
+	}
 };
 
 /**
- * Removes highlighting within a tab, deleting the associated highlighting information.
+ * Disables the highlighting information about a tab.
+ * @param tabId The ID of a tab to be forgotten.
+ */
+const disableResearchInstanceInTab = async (tabId: number) => {
+	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+	const researchInstance = session.researchInstances[tabId];
+	if (researchInstance) {
+		if (researchInstance.persistent) {
+			researchInstance.enabled = false;
+		} else {
+			delete session.researchInstances[tabId];
+		}
+		setStorageSession(session);
+	}
+};
+
+/**
+ * Removes highlighting within a tab, disabling the associated highlighting information.
  * @param tabId The ID of a tab to be forgotten and within which to deactivate highlighting.
  */
-const deactivateResearchInTab = async (tabId: number) => {
-	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-	delete session.researchInstances[tabId];
+const deactivateResearchInTab = (tabId: number) => {
+	disableResearchInstanceInTab(tabId);
 	chrome.tabs.sendMessage(tabId, { disable: true } as HighlightMessage);
-	setStorageSession(session);
 };
 
 /**
@@ -480,71 +514,83 @@ chrome.commands.onCommand.addListener(async commandString => {
 	chrome.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
 });
 
-(() => {
-	/**
-	 * Decodes a message involving backend extension management.
-	 * @param message A message intended for the background script.
-	 * @param senderTabId The ID of a tab assumed to be the message sender.
-	 */
-	const handleMessage = async (message: BackgroundMessage, senderTabId: number) => {
+/**
+ * Decodes a message involving backend extension management.
+ * @param message A message intended for the background script.
+ * @param senderTabId The ID of a tab assumed to be the message sender.
+ */
+const handleMessage = async (message: BackgroundMessage, senderTabId: number) => {
+	if (message.highlightMessage !== undefined) {
+		if (message.executeInTab) {
+			await executeScriptsInTab(message.tabId as number);
+		}
+		chrome.tabs.sendMessage(message.tabId as number, message.highlightMessage);
+	} else if (message.toggleResearchOn !== undefined) {
+		setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
+			.then(() => updateActionIcon(message.toggleResearchOn));
+	} else if (message.disableTabResearch) {
+		deactivateResearchInTab(senderTabId);
+	} else if (message.performSearch) {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		if (message.highlightMessage !== undefined) {
-			if (message.executeInTab) {
-				await executeScriptsInTab(message.tabId as number);
-			}
-			chrome.tabs.sendMessage(message.tabId as number, message.highlightMessage);
-		} else if (message.toggleResearchOn !== undefined) {
-			setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
-				.then(() => updateActionIcon(message.toggleResearchOn));
-		} else if (message.disableTabResearch) {
-			delete session.researchInstances[senderTabId];
-			chrome.tabs.sendMessage(senderTabId, { disable: true } as HighlightMessage);
-		} else if (message.performSearch) {
-			(chrome.search.query as typeof browser.search.search)({
-				query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
-				tabId: senderTabId,
+		(chrome.search.query as typeof browser.search.search)({
+			query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
+			tabId: senderTabId,
+		});
+	} else {
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+		if (message.makeUnique || !isTabResearchPage(session.researchInstances, senderTabId)) {
+			const researchInstance = await createResearchInstance({
+				terms: message.terms,
+				autoOverwritable: false,
 			});
-		} else {
-			if (message.makeUnique || !isTabResearchPage(session.researchInstances, senderTabId)) {
-				const researchInstance = await createResearchInstance({
-					terms: message.terms,
-					autoOverwritable: false,
-				});
-				session.researchInstances[senderTabId] = researchInstance;
+			session.researchInstances[senderTabId] = researchInstance;
+			setStorageSession(session);
+		}
+		if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
+			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
+			const sync = await getStorageSync([
+				StorageSync.BAR_CONTROLS_SHOWN,
+				StorageSync.BAR_LOOK,
+				StorageSync.HIGHLIGHT_LOOK,
+			]);
+			if (message.toggleHighlightsOn !== undefined) {
+				researchInstance.highlightsShown = message.toggleHighlightsOn;
 			}
-			if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
-				const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
-				const sync = await getStorageSync([ StorageSync.BAR_CONTROLS_SHOWN ]);
-				if (message.toggleHighlightsOn !== undefined) {
-					researchInstance.highlightsShown = message.toggleHighlightsOn;
+			activateHighlightingInTab(senderTabId, Object.assign(
+				{ command: message.highlightCommand },
+				createResearchMessage(
+					researchInstance,
+					false,
+					sync.barControlsShown,
+					sync.barLook,
+					sync.highlightLook,
+				),
+			));
+		} else if (message.terms !== undefined) {
+			session.researchInstances[senderTabId].terms = message.terms;
+			setStorageSession(session);
+			const highlightMessage: HighlightMessage = { terms: message.terms };
+			highlightMessage.termUpdate = message.termChanged;
+			highlightMessage.termToUpdateIdx = message.termChangedIdx;
+			Object.keys(session.researchInstances).forEach(tabId => {
+				if (session.researchInstances[tabId] === session.researchInstances[senderTabId]) {
+					chrome.tabs.sendMessage(Number(tabId), highlightMessage);
 				}
-				activateHighlightingInTab(senderTabId, createResearchMessage(researchInstance, false, sync.barControlsShown));
-			} else if (message.terms !== undefined) {
-				session.researchInstances[senderTabId].terms = message.terms;
-				const highlightMessage: HighlightMessage = { terms: message.terms };
-				highlightMessage.termUpdate = message.termChanged;
-				highlightMessage.termToUpdateIdx = message.termChangedIdx;
-				Object.keys(session.researchInstances).forEach(tabId => {
-					if (session.researchInstances[tabId] === session.researchInstances[senderTabId]) {
-						chrome.tabs.sendMessage(Number(tabId), highlightMessage);
-					}
-				});
-			}
+			});
 		}
-		setStorageSession(session);
-	};
+	}
+};
 
-	chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
-		if (sender.tab && sender.tab.id !== undefined) {
-			handleMessage(message, sender.tab.id);
-		} else {
-			chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
-				handleMessage(message, tab.id as number)
-			);
-		}
-		sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
-	});
-})();
+chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
+	if (sender.tab && sender.tab.id !== undefined) {
+		handleMessage(message, sender.tab.id);
+	} else {
+		chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([ tab ]) =>
+			handleMessage(message, tab.id as number)
+		);
+	}
+	sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
+});
 
 chrome.action.onClicked.addListener(() =>
 	chrome.permissions.request({ permissions: [ "bookmarks" ] })

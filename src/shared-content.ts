@@ -238,3 +238,14 @@ const parseCommand = (commandString: string): CommandInfo => {
 const itemsMatch = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a: T, b: T) => a === b) =>
 	as.length === bs.length && as.every((a, i) => compare(a, bs[i]))
 ;
+
+/**
+ * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.
+ * @param researchInstances An array of objects each representing an instance of highlighting.
+ * @param tabId The ID of a tab.
+ * @returns `true` if the tab is considered highlighted, `false` otherwise.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number): boolean =>
+	(tabId in researchInstances) && researchInstances[tabId].enabled
+;

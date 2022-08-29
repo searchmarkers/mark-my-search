@@ -358,6 +358,13 @@ const jumpToTerm = (() => {
 		&& getComputedStyle(element).visibility !== "hidden"
 	;
 
+	const focusElement = (element: HTMLElement) =>
+		element.focus({
+			preventScroll: true,
+			focusVisible: true, // Very sparse browser compatibility
+		} as FocusOptions)
+	;
+
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
 		const termSelector = term ? getSel(ElementClass.TERM, term.selector) : "";
 		const focusBase = document.body
@@ -415,14 +422,14 @@ const jumpToTerm = (() => {
 			elementToSelect.classList.add(getSel(ElementClass.FOCUS_REVERT));
 			elementToSelect.tabIndex = 0;
 		}
-		elementToSelect.focus({ preventScroll: true });
+		focusElement(elementToSelect);
 		if (document.activeElement !== elementToSelect) {
 			const element = document.createElement("div");
 			element.tabIndex = 0;
 			element.classList.add(getSel(ElementClass.REMOVE));
 			elementToSelect.insertAdjacentElement(reverse ? "afterbegin" : "beforeend", element);
 			elementToSelect = element;
-			elementToSelect.focus({ preventScroll: true });
+			focusElement(elementToSelect);
 		}
 		elementToSelect.scrollIntoView({ behavior: "smooth", block: "center" });
 		if (selection) {
@@ -1089,8 +1096,8 @@ const insertScrollMarkers = (() => {
 		const containerBlockSelector = getContainerBlockSelector(highlightTags);
 		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 		const containersInfo: Array<{
-			container: HTMLElement,
-			termsAdded: Set<string>,
+			container: HTMLElement
+			termsAdded: Set<string>
 		}> = [];
 		let markersHtml = "";
 		document.body.querySelectorAll(terms
@@ -1468,6 +1475,7 @@ const beginHighlighting = (
 						terms.splice(termRemovedPreviousIdx, 1);
 						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
 						fillStylesheetContent(terms, hues);
+						requestRefreshIndicators.next();
 						return;
 					}
 				} else {
@@ -1639,6 +1647,9 @@ const beginHighlighting = (
 			}
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
+			}
+			if (message.disable) {
+				terms.splice(0);
 			}
 			if (
 				message.disable || message.termsFromSelection || message.termUpdate

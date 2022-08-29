@@ -13,6 +13,8 @@ type StorageSessionValues = {
 }
 type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
+	[StorageLocal.FOLLOW_LINKS]: boolean
+	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
 }
 type StorageSyncValues = {
 	[StorageSync.AUTO_FIND_OPTIONS]: {
@@ -51,6 +53,8 @@ enum StorageSession {
 
 enum StorageLocal {
 	ENABLED = "enabled",
+	FOLLOW_LINKS = "followLinks",
+	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
 }
 
 enum StorageSync {
@@ -67,6 +71,8 @@ interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
 	autoOverwritable: boolean
+	persistent: boolean
+	enabled: boolean
 }
 
 const defaultOptions: StorageSyncValues = {
@@ -113,6 +119,7 @@ const defaultOptions: StorageSyncValues = {
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSession = (items: StorageSessionValues) => {
+	items = { ...items };
 	if (Object.keys(items).includes(StorageSession.RESEARCH_INSTANCES)) {
 		// TODO disable object shallow copying when linking disabled in settings
 		const tabRInstances = items.researchInstances;
@@ -214,9 +221,14 @@ const getStorageSync = (keysParam?: Array<StorageSync>): Promise<StorageSyncValu
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const initializeStorage = async () => {
 	const local = await getStorageLocal([ StorageLocal.ENABLED ]);
-	await setStorageLocal({
-		enabled: local.enabled ?? true,
-	});
+	const toRemove: Array<string> = [];
+	fixObjectWithDefaults(local, {
+		enabled: true,
+		followLinks: true,
+		persistResearchInstances: true,
+	} as StorageLocalValues, toRemove);
+	await setStorageLocal(local);
+	await chrome.storage.local.remove(toRemove);
 	await setStorageSession({
 		researchInstances: {},
 		engines: {},
