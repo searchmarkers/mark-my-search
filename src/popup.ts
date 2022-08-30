@@ -134,6 +134,8 @@ textarea
 	{ padding-block: 0; }
 .panel.panel-general .interaction .label, .alert
 	{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(300 10% 80%); }
+.panel.panel-general .interaction.option label.label[for]:hover
+	{ color: hsl(300 10% 66%); }
 .panel.panel-general .interaction .submitter
 	{ padding-block: 3px; }
 .panel.panel-general .interaction .submitter:disabled
@@ -154,8 +156,6 @@ textarea
 	{ flex: 1; }
 .panel.panel-general .interaction:is(.action, .link)
 	{ flex-direction: column; padding-block: 4px; }
-.panel.panel-general .interaction.option > label.label[for]
-	{ cursor: pointer; }
 .panel.panel-general .interaction.link a
 	{ color: hsl(200 100% 80%); }
 .panel.panel-general .interaction.link a:visited
