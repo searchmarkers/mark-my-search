@@ -141,6 +141,8 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 	style.textContent = `
 /* TODO reorganise and rename */
 /* TERM INPUT & BUTTONS */
+#${getSel(ElementID.BAR)} ::selection
+	{ background: Highlight; color: HighlightText; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
 	{ width: 5em; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; outline: revert;

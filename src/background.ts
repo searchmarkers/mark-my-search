@@ -44,7 +44,7 @@ const createResearchInstance = async (args: {
 			enabled: true,
 		};
 	}
-	args.terms = args.terms ?? [];
+	args.terms ??= [];
 	return {
 		phrases: args.terms.map(term => term.phrase),
 		terms: args.terms,

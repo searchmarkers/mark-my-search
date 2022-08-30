@@ -7,7 +7,7 @@ type PopupInteractionInfo = {
 		url: string
 		text: string
 	}
-	submit?: {
+	submitter?: {
 		text: string
 		onClick: (
 			messageText: string,
@@ -22,7 +22,7 @@ type PopupInteractionInfo = {
 	}
 	checkbox?: {
 		id?: string
-		onLoad?: (checkbox: HTMLInputElement) => Promise<void>
+		onLoad?: (setChecked: (checked: boolean) => void) => Promise<void>
 		onToggle?: (checked: boolean) => void
 	}
 	note?: {
@@ -62,7 +62,7 @@ const loadPopup = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 530px; margin: 0; margin-bottom: 2px; font-family: ubuntu; background: black; user-select: none; }
+	{ width: 300px; height: 510px; margin: 0; font-family: ubuntu; background: hsl(300 100% 11%); user-select: none; }
 *
 	{ font-size: 16; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -77,7 +77,7 @@ textarea
 	{ resize: none; }
 #frame
 	{ display: flex; flex-direction: column; height: 100%;
-	background: hsl(300 100% 11%); border: 1px solid black; border-radius: 10px; }
+	background: inherit; /* border-radius: 10px; */ }
 #frame > .filler
 	{ flex: 1; }
 .brand
@@ -105,6 +105,8 @@ textarea
 	{ .container-panel { overflow-y: overlay; }; }
 .container-panel > .panel
 	{ display: none; flex-direction: column; border-radius: inherit; }
+.warning
+	{ padding: 4px; margin: 4px; border-radius: 2px; background: hsl(60 60% 70% / 0.8); color: hsl(0 0% 8%); }
 /**/
 
 .panel-general .container-tab > .tab.panel-general,
@@ -119,8 +121,7 @@ textarea
 	{ display: flex; flex-direction: column;
 	border-bottom: 1px solid hsl(0 0% 100% / 0.3); border-radius: inherit; background: hsl(300 100% 7%); }
 .panel.panel-general .section > .title
-	{ padding-inline: 8px; padding-block: 4px; text-align: center; font-size: 15; white-space: nowrap; overflow: hidden;
-	color: hsl(300 20% 60%); }
+	{ padding-inline: 8px; padding-block: 4px; text-align: center; font-size: 15; color: hsl(300 20% 60%); }
 .panel.panel-general .section > .container
 	{ height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
@@ -133,19 +134,19 @@ textarea
 	{ padding-block: 0; }
 .panel.panel-general .interaction .label, .alert
 	{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(300 10% 80%); }
-.panel.panel-general .interaction .submit
-	{ padding-block: 3px; white-space: nowrap; overflow: hidden; }
-.panel.panel-general .interaction .submit:disabled
+.panel.panel-general .interaction .submitter
+	{ padding-block: 3px; }
+.panel.panel-general .interaction .submitter:disabled
 	{ pointer-events: none; color: hsl(0 0% 60%); }
 .panel.panel-general .interaction .message,
-.panel.panel-general .interaction .submit
+.panel.panel-general .interaction .submitter
 	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); }
 .panel.panel-general .interaction .alert,
-.panel.panel-general .interaction .submit
+.panel.panel-general .interaction .submitter
 	{ padding-inline: 2px; }
-.panel.panel-general .interaction .submit:hover
+.panel.panel-general .interaction .submitter:hover
 	{ background: hsl(300 60% 20%); }
-.panel.panel-general .interaction .submit:active
+.panel.panel-general .interaction .submitter:active
 	{ background: hsl(300 60% 14%); }
 .panel.panel-general .interaction .note
 	{ font-size: 14; color: hsl(300 6% 60%); }
@@ -153,6 +154,8 @@ textarea
 	{ flex: 1; }
 .panel.panel-general .interaction:is(.action, .link)
 	{ flex-direction: column; padding-block: 4px; }
+.panel.panel-general .interaction.option > label.label[for]
+	{ cursor: pointer; }
 .panel.panel-general .interaction.link a
 	{ color: hsl(200 100% 80%); }
 .panel.panel-general .interaction.link a:visited
@@ -202,7 +205,7 @@ textarea
 	const getId = (function* () {
 		let id = 0;
 		while (true) {
-			yield (id++).toString();
+			yield `input-${id++}`;
 		}
 	})();
 
@@ -270,40 +273,39 @@ textarea
 			anchor.textContent = interactionInfo.anchor.text ?? anchor.href;
 			interaction.appendChild(anchor);
 		}
-		if (interactionInfo.submit) {
+		if (interactionInfo.submitter) {
+			const submitterInfo = interactionInfo.submitter;
 			const button = document.createElement("button");
 			button.type = "button";
-			button.classList.add("submit");
-			button.textContent = interactionInfo.submit.text;
+			button.classList.add("submitter");
+			button.textContent = interactionInfo.submitter.text;
 			interaction.appendChild(button);
 			let getMessageText = () => "";
 			button.onclick = () => {
 				button.disabled = true;
-				clearAlerts(interaction, [ "pending", "failure" ]);
-				interactionInfo.submit = interactionInfo.submit as typeof interactionInfo.submit;
-				interactionInfo.submit.onClick = interactionInfo.submit.onClick as typeof interactionInfo.submit.onClick;
-				interactionInfo.submit.onClick(
+				clearAlerts(interaction, [ PopupAlertType.PENDING, PopupAlertType.FAILURE ]);
+				submitterInfo.onClick(
 					getMessageText(),
 					() => {
-						clearAlerts(interaction, [ "pending" ]);
-						insertAlert(PopupAlertType.SUCCESS, (interactionInfo.submit ?? {}).alerts, button, 3000);
+						clearAlerts(interaction, [ PopupAlertType.PENDING ]);
+						insertAlert(PopupAlertType.SUCCESS, (submitterInfo ?? {}).alerts, button, 3000);
 						button.disabled = false;
 					},
 					error => {
-						clearAlerts(interaction, [ "pending" ]);
+						clearAlerts(interaction, [ PopupAlertType.PENDING ]);
 						const errorText = error.text || "(no error message)";
-						insertAlert(PopupAlertType.FAILURE, (interactionInfo.submit ?? {}).alerts, button, -1,
+						insertAlert(PopupAlertType.FAILURE, (submitterInfo ?? {}).alerts, button, -1,
 							errorText, text => text.replace("{status}", error.status.toString()).replace("{text}", errorText));
 						button.disabled = false;
 					},
 				);
-				insertAlert(PopupAlertType.PENDING, interactionInfo.submit.alerts, button);
+				insertAlert(PopupAlertType.PENDING, submitterInfo.alerts, button);
 			};
-			if (interactionInfo.submit.message) {
+			if (interactionInfo.submitter.message) {
 				const messageBox = document.createElement("textarea");
 				messageBox.classList.add("message");
-				messageBox.rows = interactionInfo.submit.message.rows;
-				messageBox.placeholder = interactionInfo.submit.message.placeholder;
+				messageBox.rows = interactionInfo.submitter.message.rows;
+				messageBox.placeholder = interactionInfo.submitter.message.placeholder;
 				interaction.appendChild(messageBox);
 				getMessageText = () => messageBox.value;
 			}
@@ -317,7 +319,7 @@ textarea
 			(async () => {
 				const checkboxInfo = interactionInfo.checkbox ?? {};
 				if (checkboxInfo.onLoad) {
-					await checkboxInfo.onLoad(checkbox);
+					await checkboxInfo.onLoad(checked => checkbox.checked = checked);
 				}
 				if (checkboxInfo.onToggle) {
 					checkbox.onchange = () => (checkboxInfo.onToggle ?? (() => undefined))(checkbox.checked);
@@ -365,9 +367,9 @@ textarea
 							text: "Highlight web searches",
 						},
 						checkbox: {
-							onLoad: async checkbox => {
+							onLoad: async setChecked => {
 								const local = await getStorageLocal([ StorageLocal.ENABLED ]);
-								checkbox.checked = local.enabled;
+								setChecked(local.enabled);
 							},
 							onToggle: checked => {
 								chrome.runtime.sendMessage({
@@ -382,9 +384,9 @@ textarea
 							text: "Follow links",
 						},
 						checkbox: {
-							onLoad: async checkbox => {
+							onLoad: async setChecked => {
 								const local = await getStorageLocal([ StorageLocal.FOLLOW_LINKS ]);
-								checkbox.checked = local.followLinks;
+								setChecked(local.followLinks);
 							},
 							onToggle: checked => {
 								setStorageLocal({
@@ -399,9 +401,9 @@ textarea
 							text: "Restore keywords in tabs",
 						},
 						checkbox: {
-							onLoad: async checkbox => {
+							onLoad: async setChecked => {
 								const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
-								checkbox.checked = local.persistResearchInstances;
+								setChecked(local.persistResearchInstances);
 							},
 							onToggle: checked => {
 								setStorageLocal({
@@ -423,10 +425,10 @@ textarea
 							text: "Active",
 						},
 						checkbox: {
-							onLoad: async checkbox => {
+							onLoad: async setChecked => {
 								const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 								const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-								checkbox.checked = isTabResearchPage(session.researchInstances, tab.id as number);
+								setChecked(isTabResearchPage(session.researchInstances, tab.id as number));
 							},
 							onToggle: checked => {
 								if (checked) {
@@ -456,13 +458,14 @@ textarea
 							text: "Restores keywords",
 						},
 						checkbox: {
-							onLoad: async checkbox => {
+							onLoad: async setChecked => {
 								const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 								const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 								const researchInstance = session.researchInstances[tab.id as number];
-								checkbox.checked = researchInstance
+								setChecked(researchInstance
 									? researchInstance.persistent
-									: (await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ])).persistResearchInstances;
+									: (await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ])).persistResearchInstances
+								);
 							},
 							onToggle: checked => {
 								getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
@@ -488,7 +491,7 @@ textarea
 						label: {
 							text: "Report a problem",
 						},
-						submit: {
+						submitter: {
 							text: "Submit anonymously",
 							onClick: (messageText, onSuccess, onError) => {
 								sendProblemReport(messageText)
@@ -512,7 +515,7 @@ textarea
 							},
 						},
 						note: {
-							text: "Submits: version, url, terms, optional message",
+							text: "Submits: version, url, keywords, message",
 						},
 					},
 					{
@@ -544,47 +547,69 @@ textarea
 			(document.querySelector(`.panel.${className} input`) as HTMLInputElement).focus();
 		};
 		const getTabs = () => document.querySelectorAll(".container-tab .tab");
-		const shiftTabFromTab = (toRight: boolean, tabCurrent: HTMLButtonElement) => {
+		const shiftTabFromTab = (tabCurrent: HTMLButtonElement, toRight: boolean, cycle: boolean) => {
 			const tabNext = (
 				tabCurrent[toRight ? "nextElementSibling" : "previousElementSibling"]
-				?? (tabCurrent.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"]
-			) as HTMLButtonElement;
-			tabNext.focus();
-			tabNext.click();
+				?? (cycle ? (tabCurrent.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"] : null)
+			) as HTMLButtonElement | null;
+			if (tabNext) {
+				tabNext.focus();
+				tabNext.dispatchEvent(new MouseEvent("mousedown"));
+			}
 		};
 		getTabs().forEach((tab: HTMLButtonElement) => {
-			tab.addEventListener("click", () => {
+			tab.addEventListener("mousedown", () => {
 				frame.classList.forEach(className => {
 					if (classNameIsPanel(className)) {
 						frame.classList.remove(className);
 					}
 				});
 				frame.classList.add(getPanelClassName(Array.from(tab.classList)));
-				tab.style.width = "60px";
 			});
 			tab.addEventListener("keydown", event => {
-				if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-					shiftTabFromTab(false, tab);
-				} else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-					shiftTabFromTab(true, tab);
+				if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+					shiftTabFromTab(tab, true, true);
+				} else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+					shiftTabFromTab(tab, false, true);
 				}
 			});
 		});
 		document.addEventListener("keydown", event => {
-			const shiftTab = (toRight: boolean) => {
+			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
 					.querySelector(`.container-tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
-				shiftTabFromTab(toRight, currentTab);
+				shiftTabFromTab(currentTab, toRight, cycle);
 				focusActivePanel();
 			};
-			if (event.key === "PageUp") {
-				shiftTab(false);
-			}
 			if (event.key === "PageDown") {
-				shiftTab(true);
+				shiftTab(true, false);
+			} else if (event.key === "PageUp") {
+				shiftTab(false, false);
 			}
 		});
-		focusActivePanel();
+		(getTabs()[0] as HTMLButtonElement).dispatchEvent(new MouseEvent("mousedown"));
+		const reload = () => {
+			sectionsInfo.forEach(sectionInfo => {
+				sectionInfo.interactions.forEach(interactionInfo => {
+					if (!interactionInfo.checkbox) {
+						return;
+					}
+					const checkbox = document.getElementById(interactionInfo.checkbox.id as string) as HTMLInputElement;
+					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+					interactionInfo.checkbox.onLoad!(checked => checkbox.checked = checked);
+				});
+			});
+		};
+		chrome.storage.onChanged.addListener(reload);
+		chrome.tabs.onActivated.addListener(reload);
+		// Unrelated
+		const warning = document.createElement("div");
+		warning.classList.add("warning");
+		warning.textContent = 
+`This interface is a work in progress.
+It will allow editing keyword lists which can be stored, highlighted, and assigned webpages for automatic highlighting.`
+		;
+		document.querySelector(".panel-lists")?.insertAdjacentElement("afterbegin", warning);
 	};
 
 	/**
@@ -607,32 +632,16 @@ textarea
 	 */
 	const sendProblemReport = async (userMessage = "") => {
 		const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-		if (tab.id === undefined) {
-			return;
-		}
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		const phrases = session.researchInstances[tab.id ?? -1]
-			? session.researchInstances[tab.id ?? -1].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+		const phrases = session.researchInstances[tab.id as number]
+			? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 			: "";
-		//buttons.problemReportDescribe.textContent = (buttons.problemReportDescribe.textContent as string)
-		//	.replace(/🆗|!/g, "").trimEnd();
-		//buttons.problemReport.disabled = true;
-		//buttons.problemReportDescribe.disabled = true;
 		return sendEmail("service_mms_report", "template_mms_report", {
 			mmsVersion: chrome.runtime.getManifest().version,
 			url: tab.url,
 			phrases,
 			userMessage,
-		}, "NNElRuGiCXYr1E43j");//.then(() => {
-		//	buttons.problemReportDescribe.textContent += " 🆗";
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		//}, (error: { status: number, text: string }) => {
-		//	buttons.problemReportDescribe.textContent += " !!";
-		//	buttons.problemReportDescribe.title = `[STATUS ${error.status}] '${error.text}'`;
-		//}).then(() => {
-		//	buttons.problemReport.disabled = false;
-		//	buttons.problemReportDescribe.disabled = false;
-		//});
+		}, "NNElRuGiCXYr1E43j");
 	};
 
 	return () => {

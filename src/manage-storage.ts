@@ -3,7 +3,7 @@ const isBrowserChromium = () =>
 ;
 
 chrome.storage = isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
-chrome.storage.session = chrome.storage.session ?? chrome.storage.local;
+chrome.storage.session ??= chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
 type Engines = Record<string, Engine>
@@ -44,7 +44,7 @@ type ControlButtonName = keyof StorageSyncValues["barControlsShown"]
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type BarLook = keyof StorageSyncValues["barLook"]
 
-enum StorageSession {
+enum StorageSession { // Keys assumed to be unique across all storage areas (excluding "managed")
 	RESEARCH_INSTANCES = "researchInstances",
 	_ID_R_INSTANCES = "idResearchInstances",
     _TAB_R_INSTANCE_IDS = "tabResearchInstanceIds",
