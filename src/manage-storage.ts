@@ -3,7 +3,7 @@ const isBrowserChromium = () =>
 ;
 
 chrome.storage = isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
-chrome.storage["session"] = chrome.storage["session"] ?? chrome.storage.local;
+chrome.storage.session ??= chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
 type Engines = Record<string, Engine>
@@ -13,6 +13,8 @@ type StorageSessionValues = {
 }
 type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
+	[StorageLocal.FOLLOW_LINKS]: boolean
+	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
 }
 type StorageSyncValues = {
 	[StorageSync.AUTO_FIND_OPTIONS]: {
@@ -42,7 +44,7 @@ type ControlButtonName = keyof StorageSyncValues["barControlsShown"]
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type BarLook = keyof StorageSyncValues["barLook"]
 
-enum StorageSession {
+enum StorageSession { // Keys assumed to be unique across all storage areas (excluding "managed")
 	RESEARCH_INSTANCES = "researchInstances",
 	_ID_R_INSTANCES = "idResearchInstances",
     _TAB_R_INSTANCE_IDS = "tabResearchInstanceIds",
@@ -51,10 +53,11 @@ enum StorageSession {
 
 enum StorageLocal {
 	ENABLED = "enabled",
+	FOLLOW_LINKS = "followLinks",
+	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
 }
 
 enum StorageSync {
-	IS_SET_UP = "isSetUp", // TODO supplement with detection of unused keys
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
@@ -68,6 +71,8 @@ interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
 	autoOverwritable: boolean
+	persistent: boolean
+	enabled: boolean
 }
 
 const defaultOptions: StorageSyncValues = {
@@ -114,6 +119,7 @@ const defaultOptions: StorageSyncValues = {
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSession = (items: StorageSessionValues) => {
+	items = { ...items };
 	if (Object.keys(items).includes(StorageSession.RESEARCH_INSTANCES)) {
 		// TODO disable object shallow copying when linking disabled in settings
 		const tabRInstances = items.researchInstances;
@@ -215,9 +221,14 @@ const getStorageSync = (keysParam?: Array<StorageSync>): Promise<StorageSyncValu
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const initializeStorage = async () => {
 	const local = await getStorageLocal([ StorageLocal.ENABLED ]);
-	await setStorageLocal({
-		enabled: local.enabled ?? true,
-	});
+	const toRemove: Array<string> = [];
+	fixObjectWithDefaults(local, {
+		enabled: true,
+		followLinks: true,
+		persistResearchInstances: true,
+	} as StorageLocalValues, toRemove);
+	await setStorageLocal(local);
+	await chrome.storage.local.remove(toRemove);
 	await setStorageSession({
 		researchInstances: {},
 		engines: {},

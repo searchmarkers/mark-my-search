@@ -257,6 +257,7 @@ body { background-color: #bbb; }
 	];
 
 	return () => {
+		// TODO use storage.onChanged to refresh rather than manually updating page
 		loadOptions(getOptionsInfo());
 	};
 })()();
