@@ -9,8 +9,8 @@ if (/*isBrowserChromium()*/ !this.browser) {
 chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
 chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
 chrome.tabs.get = isBrowserChromium() ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
-chrome.search.query = isBrowserChromium()
-	? (options: { query: string, tabId: number }) => chrome.search.query(options, () => undefined)
+chrome.search["query"] = isBrowserChromium()
+	? (options: { query: string, tabId: number }) => chrome.search["query"](options, () => undefined)
 	: browser.search.search;
 chrome.commands.getAll = isBrowserChromium() ? chrome.commands.getAll : browser.commands.getAll;
 
@@ -562,7 +562,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 		deactivateResearchInTab(senderTabId);
 	} else if (message.performSearch) {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		(chrome.search.query as typeof browser.search.search)({
+		(chrome.search["query"] as typeof browser.search.search)({
 			query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
 			tabId: senderTabId,
 		});
