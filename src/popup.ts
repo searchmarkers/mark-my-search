@@ -62,7 +62,7 @@ const loadPopup = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 510px; margin: 0; font-family: ubuntu; background: hsl(300 100% 11%); user-select: none; }
+	{ width: 300px; height: 520px; margin: 0; font-family: ubuntu; background: hsl(300 100% 11%); user-select: none; }
 *
 	{ font-size: 16; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -76,8 +76,7 @@ body
 textarea
 	{ resize: none; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%;
-	background: inherit; /* border-radius: 10px; */ }
+	{ display: flex; flex-direction: column; height: 100%; background: inherit; /* border-radius: 10px; */ }
 #frame > .filler
 	{ flex: 1; }
 .brand
@@ -90,8 +89,8 @@ textarea
 	{ display: flex;
 	border-top: 2px solid hsl(300 30% 36%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container-tab > .tab
-	{ flex: 1; font-size: 14; border: none; border-bottom: 2px solid transparent; border-radius: inherit; outline: none;
-	background: hsl(300 20% 26%); color: hsl(300 20% 80%); }
+	{ flex: 1 1 auto; font-size: 14; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
+	outline: none; background: hsl(300 20% 26%); color: hsl(300 20% 80%); }
 .container-tab > .tab:focus
 	{ color: hsl(0 0% 100%); }
 #frame .container-tab > .tab:hover
@@ -109,58 +108,69 @@ textarea
 	{ padding: 4px; margin: 4px; border-radius: 2px; background: hsl(60 60% 70% / 0.8); color: hsl(0 0% 8%); }
 /**/
 
-.panel-general .container-tab > .tab.panel-general,
-.panel-lists .container-tab > .tab.panel-lists
+.panel-sites_search .container-tab > .tab.panel-sites_search,
+.panel-sites_research .container-tab > .tab.panel-sites_research,
+.panel-term_lists .container-tab > .tab.panel-term_lists,
+.panel-general .container-tab > .tab.panel-general
 	{ border-bottom: 2px solid deeppink; background: hsl(300 20% 36%); }
-.panel-general .container-panel > .panel.panel-general,
-.panel-lists .container-panel > .panel.panel-lists
+.panel-sites_search .container-panel > .panel.panel-sites_search,
+.panel-sites_research .container-panel > .panel.panel-sites_research,
+.panel-term_lists .container-panel > .panel.panel-term_lists,
+.panel-general .container-panel > .panel.panel-general
 	{ display: flex; }
 /**/
 
-.panel.panel-general .section
+.panel .section
 	{ display: flex; flex-direction: column;
 	border-bottom: 1px solid hsl(0 0% 100% / 0.3); border-radius: inherit; background: hsl(300 100% 7%); }
-.panel.panel-general .section > .title
-	{ padding-inline: 8px; padding-block: 4px; text-align: center; font-size: 15; color: hsl(300 20% 60%); }
-.panel.panel-general .section > .container
-	{ height: auto; overflow-y: auto; }
+.panel .section > .title
+	{ border: none; background: none; text-align: center; font-size: 15; color: hsl(300 20% 60%); }
+.panel.panel .section > .container
+	{ display: flex; flex-direction: column; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
-	{ .panel.panel-general .section > .container { overflow-y: overlay; }; }
-.panel.panel-general .interaction
-	{ display: flex; padding-inline: 8px; }
-.panel.panel-general .interaction > *
+	{ .panel.panel .section > .container { overflow-y: overlay; }; }
+/**/
+
+.panel.panel-general .section > .title
+	{ padding-inline: 8px; padding-block: 4px; }
+/**/
+
+.panel .interaction
+	{ display: flex; flex-direction: column; padding-inline: 8px; padding-block: 4px; }
+.panel .interaction.option
+	{ flex-direction: row; padding-block: 0; }
+.panel .interaction > *
 	{ margin-block: 2px; border-radius: 2px; padding-block: 4px; }
-.panel.panel-general .interaction:is(.action, .link) > *
-	{ padding-block: 0; }
-.panel.panel-general .interaction .label, .alert
-	{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(300 10% 80%); }
-.panel.panel-general .interaction.option label.label[for]:hover
-	{ color: hsl(300 10% 66%); }
-.panel.panel-general .interaction .submitter
-	{ padding-block: 3px; }
-.panel.panel-general .interaction .submitter:disabled
-	{ pointer-events: none; color: hsl(0 0% 60%); }
-.panel.panel-general .interaction .message,
-.panel.panel-general .interaction .submitter
+.panel .interaction input[type=text],
+.panel .interaction textarea,
+.panel .interaction .submitter
 	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); }
-.panel.panel-general .interaction .alert,
-.panel.panel-general .interaction .submitter
+.panel .interaction:is(.action, .link) > *
+	{ padding-block: 0; }
+.panel .interaction .label, .alert
+	{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(300 10% 80%); }
+.panel .interaction.option label.label[for]:hover
+	{ color: hsl(300 10% 66%); }
+.panel .interaction .submitter
+	{ padding-block: 3px; }
+.panel .interaction .submitter:disabled
+	{ pointer-events: none; color: hsl(0 0% 60%); }
+.panel .interaction .alert,
+.panel .interaction .submitter
 	{ padding-inline: 2px; }
-.panel.panel-general .interaction .submitter:hover
+.panel .interaction .submitter:hover
 	{ background: hsl(300 60% 20%); }
-.panel.panel-general .interaction .submitter:active
+.panel .interaction .submitter:active
 	{ background: hsl(300 60% 14%); }
-.panel.panel-general .interaction .note
+.panel .interaction .note
 	{ font-size: 14; color: hsl(300 6% 60%); }
-.panel.panel-general .interaction.option .label
+.panel .interaction.option .label
 	{ flex: 1; }
-.panel.panel-general .interaction:is(.action, .link)
-	{ flex-direction: column; padding-block: 4px; }
-.panel.panel-general .interaction.link a
+.panel .interaction.link a
 	{ color: hsl(200 100% 80%); }
-.panel.panel-general .interaction.link a:visited
+.panel .interaction.link a:visited
 	{ color: hsl(260 100% 80%); }
-.panel.panel-general .interaction.link a:active
+.panel .interaction.link a:active
 	{ color: hsl(0 100% 60%); }
 /**/
 
@@ -176,26 +186,23 @@ textarea
 	{ background: hsl(60 50% 24%); }
 /**/
 
-.panel.panel-lists .section
-	{ display: flex; flex-direction: column;
-	border-bottom: 1px solid hsl(0 0% 100% / 0.3); border-radius: inherit; background: hsl(300 100% 7%); }
-.panel.panel-lists .section > .title
-	{ margin: 4px; text-align: center; border: none; background: none; color: white; }
-.panel.panel-lists .section > .container
-	{ display: flex; flex-direction: column; padding: 4px; }
-.panel.panel-lists .container-terms .term
+.panel:not(.panel-general) .section > .title
+	{ margin: 4px; }
+.panel.panel-term_lists .section > .container
+	{ padding: 4px; }
+.panel.panel-term_lists .container-terms .term
 	{ display: flex; padding: 4px; margin-block: 2px; border-radius: 10px; background: hsl(300 30% 15%); }
-.panel.panel-lists .container-terms .term .phrase-input
+.panel.panel-term_lists .container-terms .term .phrase-input
 	{ width: 80px; border: none; background: none; color: white; }
-.panel.panel-lists .container-terms .term .matching
+.panel.panel-term_lists .container-terms .term .matching
 	{ flex: 1; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
-	{ .panel.panel-lists .container-terms .term .matching { overflow-y: overlay; }; }
-.panel.panel-lists .container-terms .term .matching .type
+	{ .panel.panel-term_lists .container-terms .term .matching { overflow-y: overlay; }; }
+.panel.panel-term_lists .container-terms .term .matching .type
 	{ display: flex; }
-.panel.panel-lists .container-terms .term .matching .type .label
+.panel.panel-term_lists .container-terms .term .matching .type .label
 	{ flex: 1; align-self: center; font-size: 11; color: white; }
-.panel.panel-lists .container-urls .url-input
+.panel.panel-term_lists .container-urls .url-input
 	{ border: none; background: none; color: white; }
 /**/
 		`;
@@ -306,6 +313,7 @@ textarea
 				messageBox.classList.add("message");
 				messageBox.rows = interactionInfo.submitter.message.rows;
 				messageBox.placeholder = interactionInfo.submitter.message.placeholder;
+				messageBox.spellcheck = true;
 				interaction.appendChild(messageBox);
 				getMessageText = () => messageBox.value;
 			}
@@ -500,7 +508,7 @@ textarea
 							},
 							message: {
 								rows: 3,
-								placeholder: "no message",
+								placeholder: "Message",
 							},
 							alerts: {
 								[PopupAlertType.SUCCESS]: {
@@ -533,7 +541,7 @@ textarea
 						}
 					},
 				],
-			}
+			},
 		];
 		sectionsInfo.forEach(sectionInfo => {
 			panel.appendChild(createSection(sectionInfo));
@@ -603,13 +611,19 @@ textarea
 		chrome.storage.onChanged.addListener(reload);
 		chrome.tabs.onActivated.addListener(reload);
 		// Unrelated
-		const warning = document.createElement("div");
-		warning.classList.add("warning");
-		warning.textContent = 
-`This interface is a work in progress.
-It will allow editing keyword lists which can be stored, highlighted, and assigned webpages for automatic highlighting.`
-		;
-		document.querySelector(".panel-lists")?.insertAdjacentElement("afterbegin", warning);
+		const insertWarning = (panelName: string, text: string) => {
+			const warning = document.createElement("div");
+			warning.classList.add("warning");
+			warning.textContent = text;
+			document.querySelector(`.panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
+		};
+		insertWarning("sites_search", "This interface is a work in progress.");
+		insertWarning("sites_research", "This interface is a work in progress.");
+		insertWarning(
+			"term_lists",
+			`This interface will allow editing keyword lists
+			which can be stored, highlighted, and assigned sites for automatic highlighting.`,
+		);
 	};
 
 	/**

@@ -38,11 +38,15 @@ type StorageSyncValues = {
 	[StorageSync.HIGHLIGHT_LOOK]: {
 		hues: Array<number>
 	}
+	[StorageSync.URL_FILTERS]: {
+		noPageModify: URLFilter
+		nonSearch: URLFilter
+	}
 }
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type ControlButtonName = keyof StorageSyncValues["barControlsShown"]
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type BarLook = keyof StorageSyncValues["barLook"]
+type URLFilter = Array<{
+	hostname: string,
+	pathname: string,
+}>
 
 enum StorageSession { // Keys assumed to be unique across all storage areas (excluding "managed")
 	RESEARCH_INSTANCES = "researchInstances",
@@ -64,6 +68,7 @@ enum StorageSync {
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
 	HIGHLIGHT_LOOK = "highlightLook",
+	URL_FILTERS = "urlFilters",
 }
 
 interface ResearchInstance {
@@ -111,16 +116,19 @@ const defaultOptions: StorageSyncValues = {
 	highlightLook: {
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
+	urlFilters: {
+		noPageModify: [],
+		nonSearch: [],
+	},
 };
 
 /**
  * Stores items to browser session storage.
  * @param items An object of items to create or update.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSession = (items: StorageSessionValues) => {
 	items = { ...items };
-	if (Object.keys(items).includes(StorageSession.RESEARCH_INSTANCES)) {
+	if (StorageSession.RESEARCH_INSTANCES in items) {
 		// TODO disable object shallow copying when linking disabled in settings
 		const tabRInstances = items.researchInstances;
 		const tabs = Object.keys(tabRInstances);
@@ -181,7 +189,6 @@ const getStorageSession = async (keysParam?: Array<StorageSession>): Promise<Sto
  * Stores items to browser local storage.
  * @param items An object of items to create or update.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageLocal = (items: StorageLocalValues) => {
 	return chrome.storage.local.set(items);
 };
@@ -191,7 +198,6 @@ const setStorageLocal = (items: StorageLocalValues) => {
  * @param keysParam An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageLocal = (keysParam?: Array<StorageLocal>): Promise<StorageLocalValues> => {
 	return chrome.storage.local.get(keysParam) as Promise<StorageLocalValues>;
 };
@@ -200,7 +206,6 @@ const getStorageLocal = (keysParam?: Array<StorageLocal>): Promise<StorageLocalV
  * Stores items to browser sync storage.
  * @param items An object of items to create or update.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const setStorageSync = (items: StorageSyncValues) => {
 	return chrome.storage.sync.set(items);
 };
@@ -210,7 +215,6 @@ const setStorageSync = (items: StorageSyncValues) => {
  * @param keysParam An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getStorageSync = (keysParam?: Array<StorageSync>): Promise<StorageSyncValues> => {
 	return chrome.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
 };

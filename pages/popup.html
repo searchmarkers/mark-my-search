@@ -8,12 +8,32 @@
 			</div>
 			<div class="container-panel">
 				<div class="panel panel-general"></div>
-				<div class="panel panel-lists">
+				<div class="panel panel-sites_search">
 					<div class="section">
-						<input type="text" class="title" value="My cool list">
+						<div class="title">Do Not Auto Highlight</div>
+						<div class="container container-urls">
+							<div class="interaction">
+								<input type="text" class="url-input" placeholder="example.com/optional-path" spellcheck="false">
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="panel panel-sites_research">
+					<div class="section">
+						<div class="title">Never Highlight</div>
+						<div class="container container-urls">
+							<div class="interaction">
+								<input type="text" class="url-input" placeholder="example.com/optional-path" spellcheck="false">
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="panel panel-term_lists">
+					<div class="section">
+						<input type="text" class="title" placeholder="List Name">
 						<div class="container container-terms">
 							<div class="term">
-								<input type="text" class="phrase-input" value="keyword" placeholder="none">
+								<input type="text" class="phrase-input" placeholder="keyword" spellcheck="false">
 								<div class="matching">
 									<div class="type">
 										<div class="label">Match Whole Words</div>
@@ -31,9 +51,7 @@
 							</div>
 						</div>
 						<div class="container container-urls">
-							<input type="text" class="url-input" value="*://developer.mozilla.org/*" placeholder="none">
-							<input type="text" class="url-input" value="https://godotengine.org/*" placeholder="none">
-							<input type="text" class="url-input" value="" placeholder="none">
+							<input type="text" class="url-input" value="" placeholder="example.com/optional-path" spellcheck="false">
 						</div>
 					</div>
 				</div>
@@ -41,7 +59,9 @@
 			<div class="filler"></div>
 			<div class="container-tab">
 				<button type="button" class="tab panel-general">Options</button>
-				<button type="button" class="tab panel-lists">Keyword Lists</button>
+				<button type="button" class="tab panel-sites_search">Search</button>
+				<button type="button" class="tab panel-sites_research">Highlight</button>
+				<button type="button" class="tab panel-term_lists">Keyword Lists</button>
 			</div>
 		</div>
         <script src="/lib/email.min.js"></script>

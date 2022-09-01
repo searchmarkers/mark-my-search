@@ -8,6 +8,7 @@ if (/*isBrowserChromium()*/ !this.browser) {
 }
 chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
 chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.tabs.get = isBrowserChromium() ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
 chrome.search.query = isBrowserChromium()
 	? (options: { query: string, tabId: number }) => chrome.search.query(options, () => undefined)
 	: browser.search.search;
@@ -83,6 +84,25 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
 	}
 };
 
+// TODO document
+const isUrlFilteredIn = (() => {
+	const sanitize = (urlComponent: string) =>
+		sanitizeForRegex(urlComponent).replace("\\*", ".*")
+	;
+
+	return (url: URL, urlFilter: URLFilter): boolean =>
+		!!urlFilter.find(({ hostname, pathname }) =>
+			(new RegExp(sanitize(hostname) + "\\b")).test(url.hostname)
+			&& (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1))
+		)
+	;
+})();
+
+// TODO document
+const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
+	!isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify)
+;
+
 /**
  * Creates a message for sending to an injected highlighting script in order for it to store and highlight an array of terms.
  * This is an intermediary interface which parametises common components of such a message.
@@ -92,14 +112,18 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
  * or the appropriate flag in the highlighting instance is `true`, __off__ otherwise. If unspecified, highlight visibility is not changed.
  * @param barControlsShown An object of flags indicating the visibility of each toolbar option module.
  * @param barLook An object of details about the style and layout of the toolbar.
+ * @param highlightLook 
+ * @param enablePageModify 
  * @returns A research message which, when sent to a highlighting script, will produce the desired effect within that page.
  */
+// TODO document
 const createResearchMessage = (
 	researchInstance: ResearchInstance,
 	overrideHighlightsShown: boolean | undefined,
 	barControlsShown: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
 	barLook: StorageSyncValues[StorageSync.BAR_LOOK],
 	highlightLook: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK],
+	enablePageModify: boolean,
 ) => ({
 	terms: researchInstance.terms,
 	toggleHighlightsOn: overrideHighlightsShown === undefined
@@ -108,6 +132,7 @@ const createResearchMessage = (
 	barControlsShown,
 	barLook,
 	highlightLook,
+	enablePageModify,
 } as HighlightMessage);
 
 /**
@@ -270,16 +295,17 @@ const updateActionIcon = (enabled?: boolean) =>
 	/**
 	 * Compares an updated tab with its associated storage in order to identify necessary storage and highlighting changes,
 	 * then carries out these changes.
-	 * @param url The current URL of the tab, used to infer desired highlighting.
+	 * @param urlString The current URL of the tab, used to infer desired highlighting.
 	 * @param tabId The ID of a tab to check and interact with.
 	 */
-	const pageModifyRemote = async (url: string, tabId: number) => {
+	const pageModifyRemote = async (urlString: string, tabId: number) => {
 		const sync = await getStorageSync([
 			StorageSync.AUTO_FIND_OPTIONS,
 			StorageSync.SHOW_HIGHLIGHTS,
 			StorageSync.BAR_CONTROLS_SHOWN,
 			StorageSync.BAR_LOOK,
 			StorageSync.HIGHLIGHT_LOOK,
+			StorageSync.URL_FILTERS,
 		]);
 		const local = await getStorageLocal([ StorageLocal.ENABLED ]);
 		const session = await getStorageSession([
@@ -287,7 +313,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			StorageSession.ENGINES,
 		]);
 		const searchDetails: { isSearch: boolean, engine?: Engine } = local.enabled
-			? await isTabSearchPage(session.engines, url)
+			? await isTabSearchPage(session.engines, urlString)
 			: { isSearch: false };
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
@@ -296,7 +322,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			const researchInstance = await createResearchInstance({
 				url: {
 					stoplist: sync.autoFindOptions.stoplist,
-					url,
+					url: urlString,
 					engine: searchDetails.engine,
 				},
 				autoOverwritable: true,
@@ -310,6 +336,7 @@ const updateActionIcon = (enabled?: boolean) =>
 					sync.barControlsShown,
 					sync.barLook,
 					sync.highlightLook,
+					isUrlPageModifyAllowed(urlString, sync.urlFilters),
 				));
 			}
 		}
@@ -320,6 +347,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				sync.barControlsShown,
 				sync.barLook,
 				sync.highlightLook,
+				isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			));
 		}
 	};
@@ -390,6 +418,7 @@ const activateResearchInTab = async (tabId: number) => {
 		StorageSync.BAR_CONTROLS_SHOWN,
 		StorageSync.BAR_LOOK,
 		StorageSync.HIGHLIGHT_LOOK,
+		StorageSync.URL_FILTERS,
 	]);
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = await (async () => {
@@ -427,6 +456,7 @@ const activateResearchInTab = async (tabId: number) => {
 					sync.barControlsShown,
 					sync.barLook,
 					sync.highlightLook,
+					isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
 				),
 			), //
 		);
@@ -456,7 +486,7 @@ const disableResearchInstanceInTab = async (tabId: number) => {
  */
 const deactivateResearchInTab = (tabId: number) => {
 	disableResearchInstanceInTab(tabId);
-	chrome.tabs.sendMessage(tabId, { disable: true } as HighlightMessage);
+	chrome.tabs.sendMessage(tabId, { deactivate: true } as HighlightMessage);
 };
 
 /**
@@ -552,6 +582,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				StorageSync.BAR_CONTROLS_SHOWN,
 				StorageSync.BAR_LOOK,
 				StorageSync.HIGHLIGHT_LOOK,
+				StorageSync.URL_FILTERS,
 			]);
 			if (message.toggleHighlightsOn !== undefined) {
 				researchInstance.highlightsShown = message.toggleHighlightsOn;
@@ -564,6 +595,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 					sync.barControlsShown,
 					sync.barLook,
 					sync.highlightLook,
+					isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
 				),
 			));
 		} else if (message.terms !== undefined) {

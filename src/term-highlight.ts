@@ -5,6 +5,7 @@ type HighlightTags = {
 	flow: ReadonlySet<TagName>,
 }
 type TermHues = Array<number>
+type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 type ControlButtonInfo = {
 	path?: string
 	label?: string
@@ -60,6 +61,7 @@ enum TermChange {
 }
 
 interface ControlsInfo {
+	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
@@ -221,13 +223,15 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 
 /* BAR CONTROL PADS */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ display: flex; height: 1.3em;
-	background: hsl(0 0% 90% / 0.8) !important; color: #000 !important; border-style: none; border-radius: 4px; box-shadow: 1px 1px 5px; }
+	{ display: flex; height: 1.3em; border-style: none; border-radius: 4px; box-shadow: 1px 1px 5px;
+	background: hsl(0 0% 90% / 0.8) !important; color: #000 !important; }
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.CONTROL_PAD)}
+	{ background: hsl(0 0% 90% / 0.4) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:hover
 	{ background: hsl(0 0% 65%) !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:active
 	{ background: hsl(0 0% 50%) !important; }
-#${getSel(ElementID.BAR)} > * > .${getSel(ElementClass.DISABLED)}
+#${getSel(ElementID.BAR)} > :not(#${getSel(ElementID.BAR_TERMS)}) > .${getSel(ElementClass.DISABLED)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
@@ -286,6 +290,9 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)} !important; }
+#${getSel(ElementID.BAR_TERMS)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.TERM, term.selector)}
+.${getSel(ElementClass.CONTROL_PAD)}
+	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.4)`, `hsl(${hue} 70% 88% / 0.4)`)} !important; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_CONTENT)}:hover,
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
@@ -1011,6 +1018,9 @@ const insertControls = (() => {
 		if (controlsInfo.highlightsShown) {
 			bar.classList.add(getSel(ElementClass.HIGHLIGHTS_SHOWN));
 		}
+		if (!controlsInfo.pageModifyEnabled) {
+			bar.classList.add(getSel(ElementClass.DISABLED));
+		}
 		const barOptions = document.createElement("span");
 		barOptions.id = getSel(ElementID.BAR_OPTIONS);
 		const barTerms = document.createElement("span");
@@ -1491,11 +1501,13 @@ const beginHighlighting = (
 			if (!disable) {
 				fillStylesheetContent(terms, hues);
 			}
-			beginHighlighting(
-				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				disable, termsFromSelection,
-				highlightTags, requestRefreshIndicators, observer,
-			);
+			if (controlsInfo.pageModifyEnabled) {
+				beginHighlighting(
+					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+					disable, termsFromSelection,
+					highlightTags, requestRefreshIndicators, observer,
+				);
+			}
 		};
 	})();
 
@@ -1611,6 +1623,7 @@ const beginHighlighting = (
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = {
+			pageModifyEnabled: false,
 			highlightsShown: false,
 			barControlsShown: {
 				disableTabResearch: true,
@@ -1650,17 +1663,20 @@ const beginHighlighting = (
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
-			if (message.disable) {
+			if (message.deactivate) {
 				terms.splice(0);
 			}
+			if (message.enablePageModify !== undefined) {
+				controlsInfo.pageModifyEnabled = message.enablePageModify;
+			}
 			if (
-				message.disable || message.termsFromSelection || message.termUpdate
+				message.deactivate || message.termsFromSelection || message.termUpdate
 				|| (message.terms !== undefined
 					&& (!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
 						|| (!terms.length && !document.getElementById(ElementID.BAR))))
 			) {
 				refreshTermControlsAndBeginHighlighting(
-					terms, message.termsFromSelection ?? false, message.disable ?? false, //
+					terms, message.termsFromSelection ?? false, message.deactivate ?? false, //
 					controlsInfo, commands, //
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //
