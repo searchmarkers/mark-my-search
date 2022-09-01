@@ -35,10 +35,8 @@ class MatchTerm {
 		if (/\W/g.test(this.phrase)) {
 			this.matchMode.stem = false;
 		}
-		const sanitize = (word: string, replacement = "\\$&") =>
-			word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement);
 		this.selector = `${
-			sanitize(this.phrase, "_").replace(/\W/g, "_")
+			sanitizeForRegex(this.phrase, "_").replace(/\W/g, "_")
 		}-${
 			Object.values(this.matchMode).map((matchFlag: boolean) => Number(matchFlag)).join("")
 		}-${
@@ -52,8 +50,8 @@ class MatchTerm {
 		const getBoundaryTest = (charBoundary: string) => this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
 		const patternString = `${
 			getBoundaryTest(patternStringPrefix[0])}${
-			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))}${
-			sanitize(patternStringPrefix.at(-1) as string)}(?:${
+			addOptionalHyphens(sanitizeForRegex(patternStringPrefix.slice(0, -1)))}${
+			sanitizeForRegex(patternStringPrefix.at(-1) as string)}(?:${
 			patternStringSuffix.length ? optionalHyphen + patternStringSuffix + (this.matchMode.whole ? "\\b" : "") : ""}|${
 			getBoundaryTest(patternStringPrefix.at(-1) as string)})`;
 		this.pattern = new RegExp(patternString, flags);
@@ -133,7 +131,8 @@ interface HighlightMessage {
 	terms?: MatchTerms
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
-	disable?: boolean
+	deactivate?: boolean
+	enablePageModify?: boolean
 	termsFromSelection?: boolean
 	toggleHighlightsOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
@@ -174,6 +173,29 @@ interface CommandInfo {
 	termIdx?: number
 	reversed?: boolean
 }
+
+// TODO document
+const sanitizeForRegex = (word: string, replacement = "\\$&") =>
+	word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement)
+;
+
+// TODO document
+const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
+	urlStrings.map((urlString): URLFilter[0] => {
+		try {
+			const url = new URL(urlString.replace(/\s/g, "").replace(/.*:\/\//g, "protocol://"));
+			return {
+				hostname: url.hostname,
+				pathname: url.pathname,
+			};
+		} catch {
+			return {
+				hostname: "",
+				pathname: "",
+			};
+		}
+	}).filter(({ hostname }) => !!hostname)
+;
 
 /**
  * Transforms a command string into a command object understood by the extension.
