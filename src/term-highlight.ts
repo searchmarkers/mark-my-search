@@ -38,6 +38,7 @@ enum ElementClass {
 	FOCUS_REVERT = "focus-revert",
 	REMOVE = "remove",
 	DISABLED = "disabled",
+	MATCH_REGEX = "match-regex",
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
 	MATCH_WHOLE = "match-whole",
@@ -179,9 +180,12 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* TERM MATCH MODES STYLE */
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
+	{ font-weight: bold; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_CASE)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-top: 0 !important; border-top: 1px dashed black; }
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
+#${getSel(ElementID.BAR_TERMS)}
+.${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)}, .${getSel(ElementClass.MATCH_REGEX)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
@@ -213,7 +217,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
 	{ position: absolute; flex-direction: column; top: 100%; width: max-content; padding: 0; margin: 0; z-index: 1; display: none; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ font-size: small; margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
+	{ font-size: small; padding-block: 2px; margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
 	width: 100%; text-align: left; color: #111 !important;
 	border-color: hsl(0 0% 50%) !important; border-bottom-width: 1px !important;
 	border-style: none none solid solid !important; }
@@ -539,38 +543,28 @@ const insertTermInput = (() => {
 	 * @param onBeforeShift A function to execute once the shift is confirmed but 
 	 * @param terms Terms being controlled and highlighted.
 	 */
-	const tryShiftTermFocus = (term: MatchTerm | undefined, shiftRight: boolean, onBeforeShift: () => void, terms: MatchTerms) => {
+	const tryShiftTermFocus = (term: MatchTerm | undefined, idxTarget: number | undefined, shiftRight: boolean | undefined,
+		onBeforeShift: () => void, terms: MatchTerms) => {
 		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
-		const idx = getTermIdx(term, terms);
+		const idx = replaces ? getTermIdx(term, terms) : terms.length;
+		shiftRight ??= (idxTarget ?? idx) > idx;
 		if (termInput.selectionStart !== termInput.selectionEnd
 			|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
 			return;
 		}
 		onBeforeShift();
-		if (shiftRight && idx === terms.length - 1) {
-			selectInput(getControlAppendTerm() as HTMLElement, shiftRight);
-			return;
-		} else if (shiftRight && !replaces) {
+		idxTarget ??= Math.max(0, Math.min(shiftRight ? idx + 1 : idx - 1, terms.length));
+		if (idx === idxTarget) {
 			commit(term, terms);
-			termInput.value = "";
-			return;
-		} else if (!shiftRight && idx === 0) {
-			commit(term, terms);
-			if (termInput.value === "") {
-				const focusingControlAppendTerm = terms.length === 1;
-				const controlTarget = focusingControlAppendTerm
-					? getControlAppendTerm() as HTMLElement
-					: getControl(undefined, 1) as HTMLElement;
-				selectInput(controlTarget, shiftRight);
+			if (!replaces) {
+				termInput.value = "";
 			}
-			return;
+		} else {
+			const controlTarget = getControl(undefined, idxTarget) as HTMLElement;
+			selectInput(controlTarget, shiftRight);
 		}
-		const controlTarget = getControl(undefined, replaces
-			? shiftRight ? idx + 1 : idx - 1
-			: terms.length - 1) as HTMLElement;
-		selectInput(controlTarget, shiftRight);
 	};
 
 	return (terms: MatchTerms, controlPad: HTMLElement, idxCode: TermChange.CREATE | number,
@@ -650,7 +644,9 @@ const insertTermInput = (() => {
 				hide();
 				resetTermControlInputsVisibility();
 			} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-				tryShiftTermFocus(term, event.key === "ArrowRight", () => event.preventDefault(), terms);
+				tryShiftTermFocus(term, undefined, event.key === "ArrowRight", () => event.preventDefault(), terms);
+			} else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+				tryShiftTermFocus(term, (event.key === "ArrowUp") ? 0 : terms.length, undefined, () => event.preventDefault(), terms);
 			}
 		};
 		insertInput(input);
@@ -750,7 +746,7 @@ const updateTermTooltip = (() => {
  * @returns The corresponding match type identifier string.
  */
 const getTermOptionMatchType = (text: string): string => // TODO rework system to not rely on option text
-	text.slice(0, text.indexOf("\u00A0")).toLowerCase()
+	text.slice(0, text.indexOf(" ")).toLowerCase()
 ;
 
 /**
@@ -761,7 +757,7 @@ const getTermOptionMatchType = (text: string): string => // TODO rework system t
  */
 const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
 	optionIsEnabled
-		? title.includes("🗹") ? title : `${title}\u00A0🗹`
+		? title.includes("🗹") ? title : `${title} 🗹`
 		: title.includes("🗹") ? title.slice(0, -2) : title
 ;
 
@@ -771,6 +767,7 @@ const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
  * @param classList The control element class list for a term.
  */
 const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) => {
+	classList[mode.regex ? "add" : "remove"](getSel(ElementClass.MATCH_REGEX));
 	classList[mode.case ? "add" : "remove"](getSel(ElementClass.MATCH_CASE));
 	classList[mode.stem ? "add" : "remove"](getSel(ElementClass.MATCH_STEM));
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
@@ -880,9 +877,10 @@ const insertTermControl = (() => {
 		term.commandReverse = commandReverse;
 		const menu = document.createElement("menu");
 		menu.classList.add(getSel(ElementClass.OPTION_LIST));
-		menu.appendChild(createTermOption(terms, term, "Case\u00A0Sensitive"));
-		menu.appendChild(createTermOption(terms, term, "Stem\u00A0Word"));
-		menu.appendChild(createTermOption(terms, term, "Whole\u00A0Word"));
+		menu.appendChild(createTermOption(terms, term, "Case Sensitive"));
+		menu.appendChild(createTermOption(terms, term, "Stem Word"));
+		menu.appendChild(createTermOption(terms, term, "Whole Word"));
+		menu.appendChild(createTermOption(terms, term, "Regex Mode"));
 		const control = document.createElement("span");
 		control.classList.add(getSel(ElementClass.CONTROL));
 		control.classList.add(getSel(ElementClass.TERM, term.selector));

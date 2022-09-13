@@ -3,6 +3,7 @@ type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>
 
 interface MatchMode {
+	regex: boolean
 	case: boolean
 	stem: boolean
 	whole: boolean
@@ -22,9 +23,18 @@ class MatchTerm {
 
 	constructor (phrase: string, matchMode?: MatchMode) {
 		this.phrase = phrase;
-		this.matchMode = phrase.length > 2 ? { case: false, stem: true, whole: false } : { case: false, stem: false, whole: false };
-		if (matchMode)
+		this.matchMode = {
+			regex: false,
+			case: false,
+			stem: false,
+			whole: false,
+		};
+		if (phrase.length > 2) {
+			this.matchMode.stem = true;
+		}
+		if (matchMode) {
 			Object.assign(this.matchMode, matchMode);
+		}
 		this.compile();
 	}
 
@@ -35,8 +45,11 @@ class MatchTerm {
 		if (/\W/g.test(this.phrase)) {
 			this.matchMode.stem = false;
 		}
+		const sanitize: (phrase: string, replacement?: string) => string = this.matchMode.regex
+			? phrase => phrase
+			: (phrase, replacement) => sanitizeForRegex(phrase, replacement);
 		this.selector = `${
-			sanitizeForRegex(this.phrase, "_").replace(/\W/g, "_")
+			sanitize(this.phrase, "_").replace(/\W/g, "_")
 		}-${
 			Object.values(this.matchMode).map((matchFlag: boolean) => Number(matchFlag)).join("")
 		}-${
@@ -45,13 +58,13 @@ class MatchTerm {
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem
 			? getWordPatternStrings(this.phrase) : [ this.phrase, "" ]);
-		const optionalHyphen = "(\\p{Pd})?";
+		const optionalHyphen = this.matchMode.regex ? "" : "(\\p{Pd})?";
 		const addOptionalHyphens = (word: string) => word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
 		const getBoundaryTest = (charBoundary: string) => this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
 		const patternString = `${
 			getBoundaryTest(patternStringPrefix[0])}${
-			addOptionalHyphens(sanitizeForRegex(patternStringPrefix.slice(0, -1)))}${
-			sanitizeForRegex(patternStringPrefix.at(-1) as string)}(?:${
+			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))}${
+			sanitize(patternStringPrefix.at(-1) as string)}(?:${
 			patternStringSuffix.length ? optionalHyphen + patternStringSuffix + (this.matchMode.whole ? "\\b" : "") : ""}|${
 			getBoundaryTest(patternStringPrefix.at(-1) as string)})`;
 		this.pattern = new RegExp(patternString, flags);
