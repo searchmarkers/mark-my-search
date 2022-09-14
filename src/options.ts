@@ -268,6 +268,10 @@ body { background-color: #bbb; }
 							label: "Default whole word matching",
 							type: PreferenceType.BOOLEAN,
 						},
+						regex: {
+							label: "Use custom regular expressions by default (advanced)",
+							type: PreferenceType.BOOLEAN,
+						},
 					},
 				},
 			},

@@ -38,6 +38,7 @@ enum ElementClass {
 	FOCUS_REVERT = "focus-revert",
 	REMOVE = "remove",
 	DISABLED = "disabled",
+	MATCH_REGEX = "match-regex",
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
 	MATCH_WHOLE = "match-whole",
@@ -180,12 +181,18 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* TERM MATCH MODES STYLE */
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
+	{ font-weight: bold; }
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
+.${getSel(ElementClass.CONTROL_PAD)} button::before
+	{ content: "(.*)"; margin-right: 2px; font-weight: bold; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
 .${getSel(ElementClass.CONTROL_PAD)} button
 	{ padding-top: 0 !important; border-top: 1px dashed black; }
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
+#${getSel(ElementID.BAR_TERMS)}
+.${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)}, .${getSel(ElementClass.MATCH_REGEX)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
@@ -224,9 +231,9 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus .${getSel(ElementClass.OPTION)}::first-letter
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
-	{ display: none; position: absolute; flex-direction: column; top: 100%; width: max-content; padding: 0; margin: 0; z-index: 1; }
+	{ display: none; position: absolute; flex-direction: column; width: max-content; padding: 0; margin: 0; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ display: block; font-size: small; margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
+	{ display: block; padding-block: 2px; margin-left: 3px; font-size: small; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
 	width: 100%; text-align: left; color: #111 !important;
 	border-color: hsl(0 0% 50%) !important; border-bottom-width: 1px !important;
 	border-style: none none solid solid !important; }
@@ -537,7 +544,9 @@ const insertTermInput = (() => {
 				termChangedIdx: idx,
 			});
 		} else if (!replaces && inputValue !== "") {
-			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList));
+			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
+				allowStemOverride: true,
+			});
 			chrome.runtime.sendMessage({
 				terms: terms.concat(termChanged),
 				termChanged,
@@ -554,38 +563,28 @@ const insertTermInput = (() => {
 	 * @param onBeforeShift A function to execute once the shift is confirmed but 
 	 * @param terms Terms being controlled and highlighted.
 	 */
-	const tryShiftTermFocus = (term: MatchTerm | undefined, shiftRight: boolean, onBeforeShift: () => void, terms: MatchTerms) => {
+	const tryShiftTermFocus = (term: MatchTerm | undefined, idxTarget: number | undefined, shiftRight: boolean | undefined,
+		onBeforeShift: () => void, terms: MatchTerms) => {
 		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
-		const idx = getTermIdx(term, terms);
+		const idx = replaces ? getTermIdx(term, terms) : terms.length;
+		shiftRight ??= (idxTarget ?? idx) > idx;
 		if (termInput.selectionStart !== termInput.selectionEnd
 			|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
 			return;
 		}
 		onBeforeShift();
-		if (shiftRight && idx === terms.length - 1) {
-			selectInput(getControlAppendTerm() as HTMLElement, shiftRight);
-			return;
-		} else if (shiftRight && !replaces) {
+		idxTarget ??= Math.max(0, Math.min(shiftRight ? idx + 1 : idx - 1, terms.length));
+		if (idx === idxTarget) {
 			commit(term, terms);
-			termInput.value = "";
-			return;
-		} else if (!shiftRight && idx === 0) {
-			commit(term, terms);
-			if (termInput.value === "") {
-				const focusingControlAppendTerm = terms.length === 1;
-				const controlTarget = focusingControlAppendTerm
-					? getControlAppendTerm() as HTMLElement
-					: getControl(undefined, 1) as HTMLElement;
-				selectInput(controlTarget, shiftRight);
+			if (!replaces) {
+				termInput.value = "";
 			}
-			return;
+		} else {
+			const controlTarget = getControl(undefined, idxTarget) as HTMLElement;
+			selectInput(controlTarget, shiftRight);
 		}
-		const controlTarget = getControl(undefined, replaces
-			? shiftRight ? idx + 1 : idx - 1
-			: terms.length - 1) as HTMLElement;
-		selectInput(controlTarget, shiftRight);
 	};
 
 	return (terms: MatchTerms, controlPad: HTMLElement, idxCode: TermChange.CREATE | number,
@@ -671,7 +670,12 @@ const insertTermInput = (() => {
 			}
 			case "ArrowLeft":
 			case "ArrowRight": {
-				tryShiftTermFocus(term, event.key === "ArrowRight", () => event.preventDefault(), terms);
+				tryShiftTermFocus(term, undefined, event.key === "ArrowRight", () => event.preventDefault(), terms);
+				return;
+			}
+			case "ArrowUp":
+			case "ArrowDown": {
+				tryShiftTermFocus(term, (event.key === "ArrowUp") ? 0 : terms.length, undefined, () => event.preventDefault(), terms);
 				return;
 			}
 			case " ": {
@@ -746,7 +750,7 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 const updateTermOccurringStatus = (term: MatchTerm) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-	const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length != 0;
+	const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length !== 0;
 	controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
 };
 
@@ -786,7 +790,7 @@ const updateTermTooltip = (() => {
  * @returns The corresponding match type identifier string.
  */
 const getTermOptionMatchType = (text: string): string => // TODO rework system to not rely on option text
-	text.slice(0, text.indexOf("\u00A0")).toLowerCase()
+	text.slice(0, text.indexOf(" ")).toLowerCase()
 ;
 
 /**
@@ -797,7 +801,7 @@ const getTermOptionMatchType = (text: string): string => // TODO rework system t
  */
 const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
 	optionIsEnabled
-		? title.includes("🗹") ? title : `${title}\u00A0🗹`
+		? title.includes("🗹") ? title : `${title} 🗹`
 		: title.includes("🗹") ? title.slice(0, -2) : title
 ;
 
@@ -807,6 +811,7 @@ const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
  * @param classList The control element class list for a term.
  */
 const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) => {
+	classList[mode.regex ? "add" : "remove"](getSel(ElementClass.MATCH_REGEX));
 	classList[mode.case ? "add" : "remove"](getSel(ElementClass.MATCH_CASE));
 	classList[mode.stem ? "add" : "remove"](getSel(ElementClass.MATCH_STEM));
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
@@ -814,6 +819,7 @@ const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMToke
 
 // TODO document
 const getTermControlMatchModeFromClassList = (classList: DOMTokenList): MatchMode => ({
+	regex: classList.contains(getSel(ElementClass.MATCH_REGEX)),
 	case: classList.contains(getSel(ElementClass.MATCH_CASE)),
 	stem: classList.contains(getSel(ElementClass.MATCH_STEM)),
 	whole: classList.contains(getSel(ElementClass.MATCH_WHOLE)),
@@ -889,22 +895,30 @@ const createTermOptionMenu = (
 ) => {
 	const menu = document.createElement("menu");
 	menu.classList.add(getSel(ElementClass.OPTION_LIST));
-	menu.appendChild(createTermOption(term, terms, "Case\u00A0Sensitive", onActivated));
-	menu.appendChild(createTermOption(term, terms, "Stem\u00A0Word", onActivated));
-	menu.appendChild(createTermOption(term, terms, "Whole\u00A0Word", onActivated));
-	menu.onkeyup = event => {
+	menu.appendChild(createTermOption(term, terms, "Case Sensitive", onActivated));
+	menu.appendChild(createTermOption(term, terms, "Stem Word", onActivated));
+	menu.appendChild(createTermOption(term, terms, "Whole Word", onActivated));
+	menu.appendChild(createTermOption(term, terms, "Regex Mode", onActivated));
+	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
+		event.preventDefault();
+		if (!executeResult) {
+			return;
+		}
+		if (event.key === "Escape") {
+			focusReturnElement.focus();
+		}
 		if (event.key === " " || event.key.length !== 1) {
 			return;
 		}
-		console.log(event);
 		menu.querySelectorAll(`.${getSel(ElementClass.OPTION)}`).forEach((option: HTMLButtonElement) => {
 			if ((option.textContent ?? "").toLowerCase().startsWith(event.key)) {
-				console.log(option);
 				option.click();
 			}
 		});
 		focusReturnElement.focus();
 	};
+	menu.onkeydown = event => handleKeyEvent(event, false);
+	menu.onkeyup = event => handleKeyEvent(event);
 	return menu;
 };
 
@@ -1060,8 +1074,9 @@ const insertControls = (() => {
 					setUp: container => {
 						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;
 						const termInput = insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
+						updateTermControlMatchModeClassList(controlsInfo.matchMode, container.classList);
 						container.appendChild(createTermOptionMenu(
-							new MatchTerm("+", controlsInfo.matchMode),
+							new MatchTerm("_", controlsInfo.matchMode),
 							terms,
 							termInput,
 							matchType => {
@@ -1716,6 +1731,7 @@ const beginHighlighting = (
 				showEditIcon: true,
 			},
 			matchMode: {
+				regex: false,
 				case: false,
 				stem: false,
 				whole: false,
