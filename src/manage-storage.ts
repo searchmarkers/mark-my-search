@@ -119,8 +119,9 @@ const defaultOptions: StorageSyncValues = {
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 	matchModeDefaults: {
+		regex: false,
 		case: false,
-		stem: false,
+		stem: true,
 		whole: false,
 	},
 	urlFilters: {

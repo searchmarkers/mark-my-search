@@ -21,19 +21,21 @@ class MatchTerm {
 	command: string;
 	commandReverse: string;
 
-	constructor (phrase: string, matchMode?: MatchMode) {
+	constructor (phrase: string, matchMode?: Partial<MatchMode>, options: Partial<{
+		allowStemOverride: boolean
+	}> = {}) {
 		this.phrase = phrase;
 		this.matchMode = {
 			regex: false,
 			case: false,
-			stem: false,
+			stem: true,
 			whole: false,
 		};
-		if (phrase.length > 2) {
-			this.matchMode.stem = true;
-		}
 		if (matchMode) {
 			Object.assign(this.matchMode, matchMode);
+		}
+		if (options.allowStemOverride && phrase.length < 3) {
+			this.matchMode.stem = false;
 		}
 		this.compile();
 	}

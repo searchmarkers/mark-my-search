@@ -541,7 +541,9 @@ const insertTermInput = (() => {
 				termChangedIdx: idx,
 			});
 		} else if (!replaces && inputValue !== "") {
-			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList));
+			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
+				allowStemOverride: true,
+			});
 			chrome.runtime.sendMessage({
 				terms: terms.concat(termChanged),
 				termChanged,
@@ -745,7 +747,7 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 const updateTermOccurringStatus = (term: MatchTerm) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-	const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length != 0;
+	const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length !== 0;
 	controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
 };
 
@@ -891,22 +893,29 @@ const createTermOptionMenu = (
 	const menu = document.createElement("menu");
 	menu.classList.add(getSel(ElementClass.OPTION_LIST));
 	menu.appendChild(createTermOption(term, terms, "Case Sensitive", onActivated));
-	menu.appendChild(createTermOption(term, terms, "StemWord", onActivated));
+	menu.appendChild(createTermOption(term, terms, "Stem Word", onActivated));
 	menu.appendChild(createTermOption(term, terms, "Whole Word", onActivated));
 	menu.appendChild(createTermOption(term, terms, "Regex Mode", onActivated));
-	menu.onkeyup = event => {
+	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
+		event.preventDefault();
+		if (!executeResult) {
+			return;
+		}
+		if (event.key === "Escape") {
+			focusReturnElement.focus();
+		}
 		if (event.key === " " || event.key.length !== 1) {
 			return;
 		}
-		console.log(event);
 		menu.querySelectorAll(`.${getSel(ElementClass.OPTION)}`).forEach((option: HTMLButtonElement) => {
 			if ((option.textContent ?? "").toLowerCase().startsWith(event.key)) {
-				console.log(option);
 				option.click();
 			}
 		});
 		focusReturnElement.focus();
 	};
+	menu.onkeydown = event => handleKeyEvent(event, false);
+	menu.onkeyup = event => handleKeyEvent(event);
 	return menu;
 };
 
@@ -1062,8 +1071,9 @@ const insertControls = (() => {
 					setUp: container => {
 						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;
 						const termInput = insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
+						updateTermControlMatchModeClassList(controlsInfo.matchMode, container.classList);
 						container.appendChild(createTermOptionMenu(
-							new MatchTerm("+", controlsInfo.matchMode),
+							new MatchTerm("_", controlsInfo.matchMode),
 							terms,
 							termInput,
 							matchType => {
