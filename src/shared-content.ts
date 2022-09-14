@@ -138,6 +138,7 @@ interface HighlightMessage {
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
+	matchMode?: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
