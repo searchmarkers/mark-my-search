@@ -8,6 +8,9 @@ if (/*isBrowserChromium()*/ !this.browser) {
 }
 chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
 chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.tabs.sendMessage = isBrowserChromium()
+	? chrome.tabs.sendMessage
+	: browser.tabs.sendMessage as typeof chrome.tabs.sendMessage;
 chrome.tabs.get = isBrowserChromium() ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
 chrome.search["query"] = isBrowserChromium()
 	? (options: { query: string, tabId: number }) => chrome.search["query"](options, () => undefined)
@@ -429,7 +432,10 @@ const activateResearchInTab = async (tabId: number) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = await (async () => {
 		const researchInstance = session.researchInstances[tabId];
-		if (researchInstance && researchInstance.persistent) {
+		if (researchInstance
+			&& researchInstance.persistent
+			&& await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, { getDetails: { termsFromSelection: true } } as HighlightMessage)
+				.then((response: HighlightDetails) => (response.terms ?? []).length === 0)) {
 			researchInstance.enabled = true;
 			return researchInstance;
 		}
