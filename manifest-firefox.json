@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight search engine keywords. Jump between terms instantly.",
-	"version": "1.4.0",
+	"version": "1.5.0",
 
 	"browser_specific_settings": {
 		"gecko": {
