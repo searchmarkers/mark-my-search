@@ -62,7 +62,7 @@ const loadPopup = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 520px; margin: 0; font-family: ubuntu; background: hsl(300 100% 11%); user-select: none; }
+	{ width: 300px; height: 530px; margin: 0; font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
 *
 	{ font-size: 16; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -81,10 +81,14 @@ textarea
 	{ flex: 1; }
 .brand
 	{ display: flex; }
+.brand > *
+	{ margin: 6px; }
 .brand > .name
-	{ flex: 1; align-self: center; text-align: center; font-weight: bold; color: hsl(0 0% 80%); }
+	{ flex: 1; align-self: center; text-align: right; font-weight: bold; color: hsl(0 0% 80%); }
+.brand > .version
+	{ align-self: center; font-size: 14; color: hsl(0 0% 80% / 0.5); }
 .brand > .logo
-	{ width: 32px; height: 32px; margin: 6px; }
+	{ width: 32px; height: 32px; }
 .container-tab
 	{ display: flex;
 	border-top: 2px solid hsl(300 30% 36%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
@@ -144,7 +148,7 @@ textarea
 .panel .interaction input[type=text],
 .panel .interaction textarea,
 .panel .interaction .submitter
-	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); }
+	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); font-family: inherit; }
 .panel .interaction:is(.action, .link) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
@@ -362,6 +366,8 @@ textarea
 	};
 
 	const temp = () => {
+		(document.querySelector(".brand .version") as HTMLElement).textContent = `v${chrome.runtime.getManifest().version}`;
+
 		const panel = document.querySelector(".panel.panel-general") as HTMLElement;
 		const sectionsInfo: Array<PopupSectionInfo> = [
 			{
@@ -508,7 +514,7 @@ textarea
 							},
 							message: {
 								rows: 3,
-								placeholder: "Message",
+								placeholder: "Optional message",
 							},
 							alerts: {
 								[PopupAlertType.SUCCESS]: {
@@ -590,9 +596,9 @@ textarea
 				focusActivePanel();
 			};
 			if (event.key === "PageDown") {
-				shiftTab(true, false);
+				shiftTab(true, true);
 			} else if (event.key === "PageUp") {
-				shiftTab(false, false);
+				shiftTab(false, true);
 			}
 		});
 		(getTabs()[0] as HTMLButtonElement).dispatchEvent(new MouseEvent("mousedown"));

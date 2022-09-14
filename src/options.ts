@@ -6,7 +6,8 @@ type OptionsInfo = Array<{
 			| keyof StorageSyncValues["barLook"]
 			| keyof StorageSyncValues["highlightLook"]
 			| keyof StorageSyncValues["showHighlights"]
-			| keyof StorageSyncValues["autoFindOptions"], {
+			| keyof StorageSyncValues["autoFindOptions"]
+			| keyof StorageSyncValues["matchModeDefaults"], {
 			label: string
 			type: PreferenceType
 		}>>
@@ -249,6 +250,27 @@ body { background-color: #bbb; }
 						stoplist: {
 							label: "Keywords to exclude",
 							type: PreferenceType.ARRAY,
+						},
+					},
+				},
+				matchModeDefaults: {
+					label: "Matching options for new manually-added terms",
+					preferences: {
+						case: {
+							label: "Default case sensitivity",
+							type: PreferenceType.BOOLEAN,
+						},
+						stem: {
+							label: "Default word stemming",
+							type: PreferenceType.BOOLEAN,
+						},
+						whole: {
+							label: "Default whole word matching",
+							type: PreferenceType.BOOLEAN,
+						},
+						regex: {
+							label: "Use custom regular expressions by default (advanced)",
+							type: PreferenceType.BOOLEAN,
 						},
 					},
 				},

@@ -123,6 +123,7 @@ const createResearchMessage = (
 	barControlsShown: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
 	barLook: StorageSyncValues[StorageSync.BAR_LOOK],
 	highlightLook: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK],
+	matchMode: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS],
 	enablePageModify: boolean,
 ) => ({
 	terms: researchInstance.terms,
@@ -132,6 +133,7 @@ const createResearchMessage = (
 	barControlsShown,
 	barLook,
 	highlightLook,
+	matchMode,
 	enablePageModify,
 } as HighlightMessage);
 
@@ -305,6 +307,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			StorageSync.BAR_CONTROLS_SHOWN,
 			StorageSync.BAR_LOOK,
 			StorageSync.HIGHLIGHT_LOOK,
+			StorageSync.MATCH_MODE_DEFAULTS,
 			StorageSync.URL_FILTERS,
 		]);
 		const local = await getStorageLocal([ StorageLocal.ENABLED ]);
@@ -336,6 +339,7 @@ const updateActionIcon = (enabled?: boolean) =>
 					sync.barControlsShown,
 					sync.barLook,
 					sync.highlightLook,
+					sync.matchModeDefaults,
 					isUrlPageModifyAllowed(urlString, sync.urlFilters),
 				));
 			}
@@ -347,6 +351,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				sync.barControlsShown,
 				sync.barLook,
 				sync.highlightLook,
+				sync.matchModeDefaults,
 				isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			));
 		}
@@ -413,6 +418,7 @@ const activateResearchInTab = async (tabId: number) => {
 		StorageSync.BAR_CONTROLS_SHOWN,
 		StorageSync.BAR_LOOK,
 		StorageSync.HIGHLIGHT_LOOK,
+		StorageSync.MATCH_MODE_DEFAULTS,
 		StorageSync.URL_FILTERS,
 	]);
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
@@ -451,6 +457,7 @@ const activateResearchInTab = async (tabId: number) => {
 					sync.barControlsShown,
 					sync.barLook,
 					sync.highlightLook,
+					sync.matchModeDefaults,
 					isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
 				),
 			), //
@@ -576,6 +583,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				StorageSync.BAR_CONTROLS_SHOWN,
 				StorageSync.BAR_LOOK,
 				StorageSync.HIGHLIGHT_LOOK,
+				StorageSync.MATCH_MODE_DEFAULTS,
 				StorageSync.URL_FILTERS,
 			]);
 			if (message.toggleHighlightsOn !== undefined) {
@@ -589,6 +597,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 					sync.barControlsShown,
 					sync.barLook,
 					sync.highlightLook,
+					sync.matchModeDefaults,
 					isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
 				),
 			));
