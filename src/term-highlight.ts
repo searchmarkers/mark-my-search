@@ -1477,20 +1477,8 @@ const beginHighlighting = (
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
 	if (termsFromSelection) {
-		const selection = document.getSelection();
 		terms = [];
-		if (selection && selection.anchorNode) {
-			const termsAll = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
-				.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-			const termSelectors: Set<string> = new Set;
-			termsAll.forEach(term => {
-				if (!termSelectors.has(term.selector)) {
-					termSelectors.add(term.selector);
-					terms.push(term);
-				}
-			});
-			selection.collapseToStart();
-		}
+		getTermsFromSelection().forEach(term => terms.push(term));
 		chrome.runtime.sendMessage({
 			terms,
 			makeUnique: true,
@@ -1505,6 +1493,24 @@ const beginHighlighting = (
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
 	}
+};
+
+// TODO document
+const getTermsFromSelection = () => {
+	const selection = document.getSelection();
+	const terms: MatchTerms = [];
+	if (selection && selection.anchorNode) {
+		const termsAll = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
+			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
+		const termSelectors: Set<string> = new Set;
+		termsAll.forEach(term => {
+			if (!termSelectors.has(term.selector)) {
+				termSelectors.add(term.selector);
+				terms.push(term);
+			}
+		});
+	}
+	return terms;
 };
 
 (() => {
@@ -1750,7 +1756,14 @@ const beginHighlighting = (
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, highlightTags, terms);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate)
 		insertStyleElement();
-		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender, sendResponse) => {
+		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
+			sendResponse: (response: HighlightDetails) => void) => {
+			if (message.getDetails) {
+				// This is a much more maintainable pattern. Maybe convert more extension logic to this getter/setter message design?
+				if (message.getDetails.termsFromSelection) {
+					sendResponse({ terms: getTermsFromSelection() });
+				}
+			}
 			if (message.extensionCommands) {
 				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));
@@ -1798,7 +1811,7 @@ const beginHighlighting = (
 			if (bar) {
 				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
 			}
-			sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
+			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message
 		});
 	};
 })()();

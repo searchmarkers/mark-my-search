@@ -46,7 +46,7 @@ const loadOptions = (() => {
 	const fillAndInsertStylesheet = () => {
 		const style = document.createElement("style");
 		style.textContent = `
-body { background-color: #bbb; }
+body { padding: 6px; margin: 0; background: #bbb; }
 .${OptionClass.ERRONEOUS} { color: #e11; }
 .${OptionClass.MODIFIED} { font-weight: bold; }
 .${OptionClass.TAB_BUTTON} { border-radius: 0; display: none; }

@@ -141,6 +141,9 @@ class Engine {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightMessage {
+	getDetails?: {
+		termsFromSelection?: boolean
+	}
 	command?: CommandInfo
 	extensionCommands?: Array<chrome.commands.Command>
 	terms?: MatchTerms
@@ -154,6 +157,11 @@ interface HighlightMessage {
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
 	matchMode?: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface HighlightDetails {
+	terms?: MatchTerms
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
