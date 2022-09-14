@@ -58,7 +58,7 @@ class MatchTerm {
 			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
 		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem
+		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex
 			? getWordPatternStrings(this.phrase) : [ this.phrase, "" ]);
 		const optionalHyphen = this.matchMode.regex ? "" : "(\\p{Pd})?";
 		const addOptionalHyphens = (word: string) => word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);

@@ -183,6 +183,9 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* TERM MATCH MODES STYLE */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-weight: bold; }
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
+.${getSel(ElementClass.CONTROL_PAD)} button::before
+	{ content: "(.*)"; margin-right: 2px; font-weight: bold; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
@@ -228,7 +231,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus .${getSel(ElementClass.OPTION)}::first-letter
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
-	{ display: none; position: absolute; flex-direction: column; top: 100%; width: max-content; padding: 0; margin: 0; z-index: 1; }
+	{ display: none; position: absolute; flex-direction: column; width: max-content; padding: 0; margin: 0; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
 	{ display: block; padding-block: 2px; margin-left: 3px; font-size: small; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
 	width: 100%; text-align: left; color: #111 !important;
