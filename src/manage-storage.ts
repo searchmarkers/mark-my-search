@@ -42,6 +42,7 @@ type StorageSyncValues = {
 		noPageModify: URLFilter
 		nonSearch: URLFilter
 	}
+	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
 }
 type URLFilter = Array<{
 	hostname: string,
@@ -63,6 +64,7 @@ enum StorageLocal {
 
 enum StorageSync {
 	AUTO_FIND_OPTIONS = "autoFindOptions",
+	MATCH_MODE_DEFAULTS = "matchModeDefaults",
 	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
@@ -115,6 +117,11 @@ const defaultOptions: StorageSyncValues = {
 	},
 	highlightLook: {
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
+	},
+	matchModeDefaults: {
+		case: false,
+		stem: false,
+		whole: false,
 	},
 	urlFilters: {
 		noPageModify: [],
