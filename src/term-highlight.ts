@@ -66,6 +66,7 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
+	matchMode: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
 }
 
 interface UnbrokenNodeListItem {
@@ -149,7 +150,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
 	{ width: 5em; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; outline: revert;
-	box-sizing: unset !important; font-family: revert !important; color: #000 !important; }
+	box-sizing: unset !important; font-family: revert !important; white-space: pre; color: #000 !important; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
@@ -182,13 +183,22 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* TERM MATCH MODES STYLE */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-weight: bold; }
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_CASE)} .${getSel(ElementClass.CONTROL_CONTENT)}
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
+.${getSel(ElementClass.CONTROL_CONTENT)},
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
+.${getSel(ElementClass.CONTROL_PAD)} button
 	{ padding-top: 0 !important; border-top: 1px dashed black; }
 #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)}, .${getSel(ElementClass.MATCH_REGEX)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ text-decoration: underline; }
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_WHOLE)} .${getSel(ElementClass.CONTROL_CONTENT)}
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
+.${getSel(ElementClass.CONTROL_PAD)} button
+	{ border-bottom: 3px solid #666; }
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
+.${getSel(ElementClass.CONTROL_CONTENT)},
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
+.${getSel(ElementClass.CONTROL_PAD)} button
 	{ padding-inline: 2px !important; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
 /**/
 
@@ -211,13 +221,16 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* TERM PULLDOWN */
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
-+ .${getSel(ElementClass.OPTION_LIST)}
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus,
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}.${getSel(ElementClass.OVERRIDE_VISIBILITY)},
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover) + .${getSel(ElementClass.OPTION_LIST)}
 	{ display: flex; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus .${getSel(ElementClass.OPTION)}::first-letter
+	{ text-decoration: underline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
-	{ position: absolute; flex-direction: column; top: 100%; width: max-content; padding: 0; margin: 0; z-index: 1; display: none; }
+	{ display: none; position: absolute; flex-direction: column; top: 100%; width: max-content; padding: 0; margin: 0; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ font-size: small; padding-block: 2px; margin-left: 3px; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
+	{ display: block; padding-block: 2px; margin-left: 3px; font-size: small; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
 	width: 100%; text-align: left; color: #111 !important;
 	border-color: hsl(0 0% 50%) !important; border-bottom-width: 1px !important;
 	border-style: none none solid solid !important; }
@@ -225,7 +238,9 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ background: hsl(0 0% 90%) !important; }
 /**/
 
-/* BAR CONTROL PADS */
+/* BAR CONTROLS */
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}
+	{ white-space: pre; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 	{ display: flex; height: 1.3em; border-style: none; border-radius: 4px; box-shadow: 1px 1px 5px;
 	background: hsl(0 0% 90% / 0.8) !important; color: #000 !important; }
@@ -526,7 +541,7 @@ const insertTermInput = (() => {
 				termChangedIdx: idx,
 			});
 		} else if (!replaces && inputValue !== "") {
-			const termChanged = new MatchTerm(inputValue);
+			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList));
 			chrome.runtime.sendMessage({
 				terms: terms.concat(termChanged),
 				termChanged,
@@ -631,7 +646,8 @@ const insertTermInput = (() => {
 			entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
 		)).observe(input);
 		input.onkeydown = event => {
-			if (event.key === "Enter") {
+			switch (event.key) {
+			case "Enter": {
 				if (event.shiftKey) {
 					hide();
 					resetTermControlInputsVisibility();
@@ -639,14 +655,37 @@ const insertTermInput = (() => {
 					commit(term, terms);
 					resetInput(input.value);
 				}
-			} else if (event.key === "Escape") {
+				return;
+			}
+			case "Escape": {
 				resetInput();
 				hide();
 				resetTermControlInputsVisibility();
-			} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+				return;
+			}
+			case "ArrowLeft":
+			case "ArrowRight": {
 				tryShiftTermFocus(term, undefined, event.key === "ArrowRight", () => event.preventDefault(), terms);
-			} else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+				return;
+			}
+			case "ArrowUp":
+			case "ArrowDown": {
 				tryShiftTermFocus(term, (event.key === "ArrowUp") ? 0 : terms.length, undefined, () => event.preventDefault(), terms);
+				return;
+			}
+			case " ": {
+				if (!event.shiftKey) {
+					return;
+				}
+				event.preventDefault();
+				const control = controlPad.parentElement as HTMLElement;
+				const optionList = control.querySelector(`.${getSel(ElementClass.OPTION_LIST)}`) as HTMLElement;
+				optionList.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				optionList.tabIndex = 0;
+				optionList.focus();
+				optionList.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				return;
+			}
 			}
 		};
 		insertInput(input);
@@ -773,6 +812,14 @@ const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMToke
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
 };
 
+// TODO document
+const getTermControlMatchModeFromClassList = (classList: DOMTokenList): MatchMode => ({
+	regex: classList.contains(getSel(ElementClass.MATCH_REGEX)),
+	case: classList.contains(getSel(ElementClass.MATCH_CASE)),
+	stem: classList.contains(getSel(ElementClass.MATCH_STEM)),
+	whole: classList.contains(getSel(ElementClass.MATCH_WHOLE)),
+});
+
 /**
  * Refreshes the control of a term to reflect its current state.
  * @param term A term with an existing control.
@@ -788,6 +835,7 @@ const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: Highlig
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
 	controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
 	controlContent.textContent = term.phrase;
+	// TODO make function
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
 		option.textContent = getTermOptionText(
 			term.matchMode[getTermOptionMatchType(option.textContent as string)],
@@ -805,6 +853,64 @@ const removeTermControl = (idx: number) => {
 };
 
 /**
+ * Creates an element for a term matching option.
+ * @param terms Terms being controlled and highlighted.
+ * @param term A term for which to create the option.
+ * @param text Text content for the option, which is also used to determine the matching mode it controls.
+ * @returns The resulting option element.
+ */
+const createTermOption = (term: MatchTerm, terms: MatchTerms, text: string,
+	onActivated: (matchType: string) => void): HTMLButtonElement => {
+	const matchType = getTermOptionMatchType(text);
+	const option = document.createElement("button");
+	option.type = "button";
+	option.classList.add(getSel(ElementClass.OPTION));
+	option.tabIndex = -1;
+	option.textContent = getTermOptionText(term.matchMode[matchType], text);
+	option.onmouseup = () => onActivated(matchType);
+	option.onclick = () => onActivated(matchType);
+	return option;
+};
+
+// TODO document
+const createTermOptionMenu = (
+	term: MatchTerm,
+	terms: MatchTerms,
+	focusReturnElement: HTMLElement,
+	onActivated = (matchType: string) => {
+		const termUpdate = Object.assign({}, term);
+		termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
+		termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
+		chrome.runtime.sendMessage({
+			terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
+			termChanged: termUpdate,
+			termChangedIdx: getTermIdx(term, terms),
+		});
+	},
+) => {
+	const menu = document.createElement("menu");
+	menu.classList.add(getSel(ElementClass.OPTION_LIST));
+	menu.appendChild(createTermOption(term, terms, "Case Sensitive", onActivated));
+	menu.appendChild(createTermOption(term, terms, "StemWord", onActivated));
+	menu.appendChild(createTermOption(term, terms, "Whole Word", onActivated));
+	menu.appendChild(createTermOption(term, terms, "Regex Mode", onActivated));
+	menu.onkeyup = event => {
+		if (event.key === " " || event.key.length !== 1) {
+			return;
+		}
+		console.log(event);
+		menu.querySelectorAll(`.${getSel(ElementClass.OPTION)}`).forEach((option: HTMLButtonElement) => {
+			if ((option.textContent ?? "").toLowerCase().startsWith(event.key)) {
+				console.log(option);
+				option.click();
+			}
+		});
+		focusReturnElement.focus();
+	};
+	return menu;
+};
+
+/**
  * Inserts an interactive term control element.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param terms Terms being controlled and highlighted.
@@ -813,83 +919,46 @@ const removeTermControl = (idx: number) => {
  * @param commandReverse The string of a command to display as a shortcut hint for jumping to the previous term.
  * @param controlsInfo Details of controls inserted.
  */
-const insertTermControl = (() => {
-	/**
-	 * Creates an element for a term matching option.
-	 * @param terms Terms being controlled and highlighted.
-	 * @param term A term for which to create the option.
-	 * @param text Text content for the option, which is also used to determine the matching mode it controls.
-	 * @returns The resulting option element.
-	 */
-	const createTermOption = (terms: MatchTerms, term: MatchTerm, text: string): HTMLButtonElement => {
-		const matchType = getTermOptionMatchType(text);
-		const onActivated = () => {
-			const termUpdate = Object.assign({}, term);
-			termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
-			termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
-			chrome.runtime.sendMessage({
-				terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
-				termChanged: termUpdate,
-				termChangedIdx: getTermIdx(term, terms),
-			});
-		};
-		const option = document.createElement("button");
-		option.type = "button";
-		option.classList.add(getSel(ElementClass.OPTION));
-		option.tabIndex = -1;
-		option.textContent = getTermOptionText(term.matchMode[matchType], text);
-		option.onmouseup = onActivated;
-		return option;
-	};
-
-	return (terms: MatchTerms, idx: number, command: string, commandReverse: string,
-		controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
-		const term = terms.at(idx) as MatchTerm;
-		const controlPad = document.createElement("span");
-		controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
-		controlPad.classList.add(getSel(ElementClass.DISABLED));
-		controlPad.tabIndex = -1;
-		const controlContent = document.createElement("button");
-		controlContent.type = "button";
-		controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
-		controlContent.tabIndex = -1;
-		controlContent.textContent = term.phrase;
-		controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
-		controlPad.appendChild(controlContent);
-		const controlEdit = document.createElement("button");
-		controlEdit.type = "button";
-		controlEdit.classList.add(getSel(ElementClass.CONTROL_EDIT));
-		if (!controlsInfo.barLook.showEditIcon) {
-			controlEdit.disabled = true;
-		}
-		controlEdit.tabIndex = -1;
-		const controlEditChange = document.createElement("img");
-		const controlEditRemove = document.createElement("img");
-		controlEditChange.src = chrome.runtime.getURL("/icons/edit.svg");
-		controlEditRemove.src = chrome.runtime.getURL("/icons/delete.svg");
-		controlEditChange.classList.add(getSel(ElementClass.PRIMARY));
-		controlEditRemove.classList.add(getSel(ElementClass.SECONDARY));
-		controlEdit.appendChild(controlEditChange);
-		controlEdit.appendChild(controlEditRemove);
-		controlPad.appendChild(controlEdit);
-		insertTermInput(terms, controlPad, idx, input => controlPad.insertBefore(input, controlEdit));
-		term.command = command;
-		term.commandReverse = commandReverse;
-		const menu = document.createElement("menu");
-		menu.classList.add(getSel(ElementClass.OPTION_LIST));
-		menu.appendChild(createTermOption(terms, term, "Case Sensitive"));
-		menu.appendChild(createTermOption(terms, term, "Stem Word"));
-		menu.appendChild(createTermOption(terms, term, "Whole Word"));
-		menu.appendChild(createTermOption(terms, term, "Regex Mode"));
-		const control = document.createElement("span");
-		control.classList.add(getSel(ElementClass.CONTROL));
-		control.classList.add(getSel(ElementClass.TERM, term.selector));
-		control.appendChild(controlPad);
-		control.appendChild(menu);
-		updateTermControlMatchModeClassList(term.matchMode, control.classList);
-		(document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement).appendChild(control);
-	};
-})();
+const insertTermControl = (terms: MatchTerms, idx: number, command: string, commandReverse: string,
+	controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
+	const term = terms.at(idx) as MatchTerm;
+	const controlPad = document.createElement("div");
+	controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
+	controlPad.classList.add(getSel(ElementClass.DISABLED));
+	const controlContent = document.createElement("button");
+	controlContent.type = "button";
+	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
+	controlContent.tabIndex = -1;
+	controlContent.textContent = term.phrase;
+	controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
+	controlPad.appendChild(controlContent);
+	const controlEdit = document.createElement("button");
+	controlEdit.type = "button";
+	controlEdit.classList.add(getSel(ElementClass.CONTROL_EDIT));
+	if (!controlsInfo.barLook.showEditIcon) {
+		controlEdit.disabled = true;
+	}
+	controlEdit.tabIndex = -1;
+	const controlEditChange = document.createElement("img");
+	const controlEditRemove = document.createElement("img");
+	controlEditChange.src = chrome.runtime.getURL("/icons/edit.svg");
+	controlEditRemove.src = chrome.runtime.getURL("/icons/delete.svg");
+	controlEditChange.classList.add(getSel(ElementClass.PRIMARY));
+	controlEditRemove.classList.add(getSel(ElementClass.SECONDARY));
+	controlEdit.appendChild(controlEditChange);
+	controlEdit.appendChild(controlEditRemove);
+	controlPad.appendChild(controlEdit);
+	const termInput = insertTermInput(terms, controlPad, idx, input => controlPad.insertBefore(input, controlEdit));
+	term.command = command;
+	term.commandReverse = commandReverse;
+	const control = document.createElement("div");
+	control.classList.add(getSel(ElementClass.CONTROL));
+	control.classList.add(getSel(ElementClass.TERM, term.selector));
+	control.appendChild(controlPad);
+	control.appendChild(createTermOptionMenu(term, terms, termInput));
+	updateTermControlMatchModeClassList(term.matchMode, control.classList);
+	(document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement).appendChild(control);
+};
 
 /**
  * Extracts assigned shortcut strings from browser commands.
@@ -937,11 +1006,11 @@ const insertControls = (() => {
 		 */
 		const insertControlWithInfo = (barControlName: ControlButtonName, info: ControlButtonInfo,
 			hideWhenInactive: boolean) => {
-			const container = document.createElement("span");
+			const container = document.createElement("div");
 			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant? can use CSS to select partial class
 			container.classList.add(getSel(ElementClass.BAR_CONTROL, barControlName));
 			container.tabIndex = -1;
-			const pad = document.createElement("span");
+			const pad = document.createElement("div");
 			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
 			pad.tabIndex = -1;
 			const button = document.createElement("button");
@@ -953,7 +1022,7 @@ const insertControls = (() => {
 				button.appendChild(image);
 			}
 			if (info.label) {
-				const text = document.createElement("span");
+				const text = document.createElement("div");
 				text.tabIndex = -1;
 				text.textContent = info.label;
 				button.appendChild(text);
@@ -970,7 +1039,8 @@ const insertControls = (() => {
 			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(container);
 		};
 
-		return (terms: MatchTerms, barControlName: ControlButtonName, hideWhenInactive: boolean) =>
+		return (terms: MatchTerms, barControlName: ControlButtonName, hideWhenInactive: boolean,
+			controlsInfo: ControlsInfo) =>
 			insertControlWithInfo(barControlName, ({
 				disableTabResearch: {
 					path: "/icons/close.svg",
@@ -991,7 +1061,23 @@ const insertControls = (() => {
 					containerId: ElementID.BAR_CONTROLS,
 					setUp: container => {
 						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;
-						insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
+						const termInput = insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
+						container.appendChild(createTermOptionMenu(
+							new MatchTerm("+", controlsInfo.matchMode),
+							terms,
+							termInput,
+							matchType => {
+								const matchMode = getTermControlMatchModeFromClassList(container.classList);
+								matchMode[matchType] = !matchMode[matchType];
+								updateTermControlMatchModeClassList(matchMode, container.classList);
+								Array.from(container.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
+									option.textContent = getTermOptionText(
+										matchMode[getTermOptionMatchType(option.textContent as string)],
+										option.textContent as string,
+									),
+								);
+							},
+						));
 					},
 				},
 			} as Record<ControlButtonName, ControlButtonInfo>)[barControlName], hideWhenInactive)
@@ -1030,7 +1116,7 @@ const insertControls = (() => {
 		bar.appendChild(barControls);
 		document.body.insertAdjacentElement("beforebegin", bar);
 		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) =>
-			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName]));
+			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo));
 		const termCommands = getTermCommands(commands);
 		terms.forEach((term, i) => insertTermControl(terms, i, termCommands.down[i], termCommands.up[i],
 			controlsInfo, highlightTags));
@@ -1631,6 +1717,12 @@ const beginHighlighting = (
 			barLook: {
 				showEditIcon: true,
 			},
+			matchMode: {
+				regex: false,
+				case: false,
+				stem: false,
+				whole: false,
+			},
 		};
 		const highlightTags: HighlightTags = {
 			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title" ]),
@@ -1657,6 +1749,9 @@ const beginHighlighting = (
 			if (message.highlightLook) {
 				hues.splice(0);
 				message.highlightLook.hues.forEach(hue => hues.push(hue));
+			}
+			if (message.matchMode) {
+				Object.assign(controlsInfo.matchMode, message.matchMode);
 			}
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
