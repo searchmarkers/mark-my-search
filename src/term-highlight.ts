@@ -144,7 +144,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 	const zIndexMax = 2**31 - 1;
 	style.textContent = `
 /* TODO reorganise and rename */
-/* TERM INPUT & BUTTONS */
+/* || Term Input and Buttons */
 #${getSel(ElementID.BAR)} ::selection
 	{ background: Highlight; color: HighlightText; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
@@ -180,7 +180,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: none; }
 /**/
 
-/* TERM MATCH MODES STYLE */
+/* || Term Matching Option Hints */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-weight: bold; }
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
@@ -205,7 +205,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ padding-inline: 2px !important; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
 /**/
 
-/* BAR */
+/* || Bar */
 #${getSel(ElementID.BAR)}
 	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; font-size: 14.6px; line-height: initial; user-select: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
@@ -223,7 +223,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: inline-block; vertical-align: top; margin-left: 0.5em; }
 /**/
 
-/* TERM PULLDOWN */
+/* || Term Pulldown */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}.${getSel(ElementClass.OVERRIDE_VISIBILITY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover) + .${getSel(ElementClass.OPTION_LIST)}
@@ -241,7 +241,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ background: hsl(0 0% 90%) !important; }
 /**/
 
-/* BAR CONTROLS */
+/* || Bar Controls */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}
 	{ white-space: pre; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
@@ -263,7 +263,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ background: hsl(0 0% 80% / 0.6) !important; }
 /**/
 
-/* TERM SCROLL MARKERS */
+/* || Term Scroll Markers */
 @keyframes ${getSel(AtRuleIdent.MARKER_ON)}
 	{ from {} to { padding-right: 16px; }; }
 @keyframes ${getSel(AtRuleIdent.MARKER_OFF)}
@@ -277,7 +277,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ padding-right: 16px; transition: unset; }
 /**/
 
-/* TERM HIGHLIGHTS */
+/* || Term Highlights */
 @keyframes ${getSel(AtRuleIdent.FLASH)}
 	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
@@ -294,7 +294,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
 				: colorA;
 		style.textContent += `
-/* TERM HIGHLIGHTS */
+/* || Term Highlights */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
@@ -303,12 +303,12 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	border-radius: 2px !important; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35) !important; }
 /**/
 
-/* TERM MARKERS */
+/* || Term Scroll Markers */
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)}
 	{ background: hsl(${hue} 100% 44%); }
 /**/
 
-/* TERM BUTTONS */
+/* || Term Control Buttons */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)} !important; }
@@ -1465,12 +1465,14 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  * sending a message to the background script containing details of terms from the current selection.
  * This flag causes a later highlighting message with possibly different terms to be received,
  * so highlighting in this run is pointless.
+ * @param pageModifyEnabled Indicates whether to modify page content.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
  * @param observer An observer which selectively performs highlighting on observing changes.
  */
 const beginHighlighting = (
-	terms: MatchTerms, termsToPurge: MatchTerms, disable: boolean, termsFromSelection: boolean,
+	terms: MatchTerms, termsToPurge: MatchTerms,
+	disable: boolean, termsFromSelection: boolean, pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
@@ -1486,7 +1488,7 @@ const beginHighlighting = (
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
 	if (disable) {
 		removeControls();
-	} else if (!termsFromSelection) {
+	} else if (!termsFromSelection && pageModifyEnabled) {
 		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
@@ -1604,13 +1606,11 @@ const getTermsFromSelection = () => {
 			if (!disable) {
 				fillStylesheetContent(terms, hues);
 			}
-			if (controlsInfo.pageModifyEnabled) {
-				beginHighlighting(
-					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-					disable, termsFromSelection,
-					highlightTags, requestRefreshIndicators, observer,
-				);
-			}
+			beginHighlighting(
+				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+				disable, termsFromSelection, controlsInfo.pageModifyEnabled,
+				highlightTags, requestRefreshIndicators, observer,
+			);
 		};
 	})();
 

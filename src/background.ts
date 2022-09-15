@@ -96,7 +96,7 @@ const isUrlFilteredIn = (() => {
 	return (url: URL, urlFilter: URLFilter): boolean =>
 		!!urlFilter.find(({ hostname, pathname }) =>
 			(new RegExp(sanitize(hostname) + "\\b")).test(url.hostname)
-			&& (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1))
+			&& (pathname === "" || pathname === "/" || (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1)))
 		)
 	;
 })();
@@ -104,6 +104,10 @@ const isUrlFilteredIn = (() => {
 // TODO document
 const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify)
+;
+
+const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
+	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
 
 /**
@@ -321,6 +325,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		const searchDetails: { isSearch: boolean, engine?: Engine } = local.enabled
 			? await isTabSearchPage(session.engines, urlString)
 			: { isSearch: false };
+		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, sync.urlFilters);
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);

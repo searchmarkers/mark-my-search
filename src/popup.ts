@@ -3,6 +3,16 @@ type PopupInteractionInfo = {
 	label?: {
 		text: string
 	}
+	textbox?: {
+		className: string
+		list?: {
+			getArray: () => Promise<Array<string>>
+			setArray: (array: Array<string>) => void
+		}
+		placeholder: string
+		onChange?: (text: string) => void
+		onSubmit?: (text: string) => void
+	}
 	anchor?: {
 		url: string
 		text: string
@@ -35,6 +45,13 @@ type PopupSectionInfo = {
 	}
 	interactions: Array<PopupInteractionInfo>
 }
+type PopupPanelInfo = {
+	className: string
+	name: {
+		text: string
+	}
+	sections: Array<PopupSectionInfo>
+}
 type PopupAlertInfo = {
 	text: string
 }
@@ -62,7 +79,8 @@ const loadPopup = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 530px; margin: 0; font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
+	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%);
+	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
 *
 	{ font-size: 16; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -76,7 +94,7 @@ body
 textarea
 	{ resize: none; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%; background: inherit; /* border-radius: 10px; */ }
+	{ display: flex; flex-direction: column; height: 100%; border-radius: 8px; background: inherit; }
 #frame > .filler
 	{ flex: 1; }
 .brand
@@ -141,15 +159,17 @@ textarea
 
 .panel .interaction
 	{ display: flex; flex-direction: column; padding-inline: 8px; padding-block: 4px; }
+.panel .list
+	{ display: flex; flex-direction: column; margin: 0; border: 0; }
 .panel .interaction.option
 	{ flex-direction: row; padding-block: 0; }
-.panel .interaction > *
+.panel .interaction *
 	{ margin-block: 2px; border-radius: 2px; padding-block: 4px; }
-.panel .interaction input[type=text],
+.panel .interaction input[type="text"],
 .panel .interaction textarea,
 .panel .interaction .submitter
 	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); font-family: inherit; }
-.panel .interaction:is(.action, .link) > *
+.panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
 	{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(300 10% 80%); }
@@ -338,6 +358,50 @@ textarea
 				}
 			})();
 		}
+		if (interactionInfo.textbox) {
+			const textboxInfo = interactionInfo.textbox;
+			const insertTextbox = (container: HTMLElement, value = ""): HTMLInputElement => {
+				const textbox = document.createElement("input");
+				textbox.type = "text";
+				textbox.classList.add(textboxInfo.className);
+				textbox.placeholder = textboxInfo.placeholder;
+				textbox.value = value;
+				const onChangeInternal = () => {
+					if (textboxInfo.list) {
+						if (textbox.value && (container.lastElementChild as HTMLInputElement).value) {
+							insertTextbox(container);
+						} else if (!textbox.value && container.lastElementChild !== textbox && document.activeElement !== textbox) {
+							textbox.remove();
+						}
+						// Parent is a list container because getArrayForList exists
+						textboxInfo.list.setArray(Array.from((textbox.parentElement as HTMLElement).children)
+							.map((textbox: HTMLInputElement) => textbox.value)
+							.filter(value => !!value)
+						);
+					}
+					if (textboxInfo.onChange) {
+						textboxInfo.onChange(textbox.value);
+					}
+				};
+				textbox.addEventListener("input", onChangeInternal);
+				textbox.addEventListener("blur", onChangeInternal);
+				container.appendChild(textbox);
+				return textbox;
+			};
+			if (textboxInfo.list) {
+				const container = document.createElement("div");
+				container.classList.add("organizer");
+				container.classList.add("list");
+				interaction.appendChild(container);
+				textboxInfo.list.getArray().then(array => {
+					array.concat("").forEach(value => {
+						insertTextbox(container, value);
+					});
+				});
+			} else {
+				insertTextbox(interaction);
+			}
+		}
 		if (interactionInfo.note) {
 			const note = document.createElement("div");
 			note.classList.add("note");
@@ -368,189 +432,293 @@ textarea
 	const temp = () => {
 		(document.querySelector(".brand .version") as HTMLElement).textContent = `v${chrome.runtime.getManifest().version}`;
 
-		const panel = document.querySelector(".panel.panel-general") as HTMLElement;
-		const sectionsInfo: Array<PopupSectionInfo> = [
+		const panelsInfo: Array<PopupPanelInfo> = [
 			{
-				title: {
-					text: "Settings",
+				className: "panel-general",
+				name: {
+					text: "Options",
 				},
-				interactions: [
+				sections: [
 					{
-						className: "option",
-						label: {
-							text: "Highlight web searches",
+						title: {
+							text: "Settings",
 						},
-						checkbox: {
-							onLoad: async setChecked => {
-								const local = await getStorageLocal([ StorageLocal.ENABLED ]);
-								setChecked(local.enabled);
-							},
-							onToggle: checked => {
-								chrome.runtime.sendMessage({
-									toggleResearchOn: checked,
-								} as BackgroundMessage);
-							},
-						},
-					},
-					{
-						className: "option",
-						label: {
-							text: "Follow links",
-						},
-						checkbox: {
-							onLoad: async setChecked => {
-								const local = await getStorageLocal([ StorageLocal.FOLLOW_LINKS ]);
-								setChecked(local.followLinks);
-							},
-							onToggle: checked => {
-								setStorageLocal({
-									followLinks: checked
-								} as StorageLocalValues);
-							},
-						},
-					},
-					{
-						className: "option",
-						label: {
-							text: "Restore keywords in tabs",
-						},
-						checkbox: {
-							onLoad: async setChecked => {
-								const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
-								setChecked(local.persistResearchInstances);
-							},
-							onToggle: checked => {
-								setStorageLocal({
-									persistResearchInstances: checked
-								} as StorageLocalValues);
-							},
-						},
-					},
-				],
-			},
-			{
-				title: {
-					text: "Current Tab Activation",
-				},
-				interactions: [
-					{
-						className: "option",
-						label: {
-							text: "Active",
-						},
-						checkbox: {
-							onLoad: async setChecked => {
-								const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-								const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-								setChecked(isTabResearchPage(session.researchInstances, tab.id as number));
-							},
-							onToggle: checked => {
-								if (checked) {
-									getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
-										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-										const researchInstance = session.researchInstances[tab.id as number];
-										if (researchInstance && researchInstance.persistent) {
-											researchInstance.enabled = true;
-										}
+						interactions: [
+							{
+								className: "option",
+								label: {
+									text: "Highlight web searches",
+								},
+								checkbox: {
+									onLoad: async setChecked => {
+										const local = await getStorageLocal([ StorageLocal.ENABLED ]);
+										setChecked(local.enabled);
+									},
+									onToggle: checked => {
 										chrome.runtime.sendMessage({
-											terms: researchInstance && researchInstance.enabled ? researchInstance.terms : [],
-											makeUnique: true,
-											toggleHighlightsOn: true,
+											toggleResearchOn: checked,
 										} as BackgroundMessage);
-									});
-								} else {
-									chrome.runtime.sendMessage({
-										disableTabResearch: true,
-									} as BackgroundMessage);
-								}
-							}
-						},
+									},
+								},
+							},
+							{
+								className: "option",
+								label: {
+									text: "Follow links",
+								},
+								checkbox: {
+									onLoad: async setChecked => {
+										const local = await getStorageLocal([ StorageLocal.FOLLOW_LINKS ]);
+										setChecked(local.followLinks);
+									},
+									onToggle: checked => {
+										setStorageLocal({
+											followLinks: checked
+										} as StorageLocalValues);
+									},
+								},
+							},
+							{
+								className: "option",
+								label: {
+									text: "Restore keywords in tabs",
+								},
+								checkbox: {
+									onLoad: async setChecked => {
+										const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
+										setChecked(local.persistResearchInstances);
+									},
+									onToggle: checked => {
+										setStorageLocal({
+											persistResearchInstances: checked
+										} as StorageLocalValues);
+									},
+								},
+							},
+						],
 					},
 					{
-						className: "option",
-						label: {
-							text: "Restores keywords",
+						title: {
+							text: "Current Tab Activation",
 						},
-						checkbox: {
-							onLoad: async setChecked => {
-								const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-								const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-								const researchInstance = session.researchInstances[tab.id as number];
-								setChecked(researchInstance
-									? researchInstance.persistent
-									: (await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ])).persistResearchInstances
-								);
-							},
-							onToggle: checked => {
-								getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
-									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-									const researchInstance = session.researchInstances[tab.id as number];
-									if (researchInstance) {
-										researchInstance.persistent = checked;
-										setStorageSession(session);
+						interactions: [
+							{
+								className: "option",
+								label: {
+									text: "Active",
+								},
+								checkbox: {
+									onLoad: async setChecked => {
+										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+										setChecked(isTabResearchPage(session.researchInstances, tab.id as number));
+									},
+									onToggle: checked => {
+										if (checked) {
+											getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
+												const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+												const researchInstance = session.researchInstances[tab.id as number];
+												if (researchInstance && researchInstance.persistent) {
+													researchInstance.enabled = true;
+												}
+												chrome.runtime.sendMessage({
+													terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
+													makeUnique: true,
+													toggleHighlightsOn: true,
+												} as BackgroundMessage);
+											});
+										} else {
+											chrome.runtime.sendMessage({
+												disableTabResearch: true,
+											} as BackgroundMessage);
+										}
 									}
-								});
+								},
 							},
+							{
+								className: "option",
+								label: {
+									text: "Restores keywords",
+								},
+								checkbox: {
+									onLoad: async setChecked => {
+										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+										const researchInstance = session.researchInstances[tab.id as number];
+										setChecked(researchInstance
+											? researchInstance.persistent
+											: (await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ])).persistResearchInstances
+										);
+									},
+									onToggle: checked => {
+										getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
+											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+											const researchInstance = session.researchInstances[tab.id as number];
+											if (researchInstance) {
+												researchInstance.persistent = checked;
+												setStorageSession(session);
+											}
+										});
+									},
+								},
+							},
+						],
+					},
+					{
+						title: {
+							text: "Contributing",
 						},
+						interactions: [
+							{
+								className: "action",
+								label: {
+									text: "Report a problem",
+								},
+								submitter: {
+									text: "Submit anonymously",
+									onClick: (messageText, onSuccess, onError) => {
+										sendProblemReport(messageText)
+											.then(onSuccess)
+											.catch(onError);
+									},
+									message: {
+										rows: 3,
+										placeholder: "Optional message",
+									},
+									alerts: {
+										[PopupAlertType.SUCCESS]: {
+											text: "Success",
+										},
+										[PopupAlertType.FAILURE]: {
+											text: "Status {status}: {text}",
+										},
+										[PopupAlertType.PENDING]: {
+											text: "Pending, do not close popup",
+										},
+									},
+								},
+								note: {
+									text: "Submits: version, url, keywords, message",
+								},
+							},
+							{
+								className: "link",
+								anchor: {
+									url: "https://github.com/ator-dev/mark-my-search/issues/new",
+									text: "File a bug report",
+								},
+							},
+							{
+								className: "link",
+								anchor: {
+									url: "https://github.com/ator-dev/mark-my-search",
+									text: "Get involved!",
+								},
+							},
+						],
 					},
 				],
 			},
 			{
-				title: {
-					text: "Contributing",
+				className: "panel-sites_research",
+				name: {
+					text: "Highlight",
 				},
-				interactions: [
+				sections: [
 					{
-						className: "action",
-						label: {
-							text: "Report a problem",
+						title: {
+							text: "Never Highlight",
 						},
-						submitter: {
-							text: "Submit anonymously",
-							onClick: (messageText, onSuccess, onError) => {
-								sendProblemReport(messageText)
-									.then(onSuccess)
-									.catch(onError);
-							},
-							message: {
-								rows: 3,
-								placeholder: "Optional message",
-							},
-							alerts: {
-								[PopupAlertType.SUCCESS]: {
-									text: "Success",
+						interactions: [
+							{
+								className: "url",
+								textbox: {
+									className: "url-input",
+									list: {
+										getArray: () =>
+											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync =>
+												sync.urlFilters.noPageModify.map(filter => filter.hostname + filter.pathname)
+											)
+										,
+										setArray: array =>
+											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
+												sync.urlFilters.noPageModify = array.map(value => {
+													const pathnameStart = value.indexOf("/");
+													const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
+													if (pathnameStart === -1) {
+														urlFilter.hostname = value;
+													} else {
+														urlFilter.hostname = value.slice(0, pathnameStart);
+														urlFilter.pathname = value.slice(pathnameStart);
+													}
+													return urlFilter;
+												});
+												setStorageSync(sync);
+											})
+										,
+									},
+									placeholder: "example.com/optional-path",
 								},
-								[PopupAlertType.FAILURE]: {
-									text: "Status {status}: {text}",
-								},
-								[PopupAlertType.PENDING]: {
-									text: "Pending, do not close popup",
-								},
 							},
-						},
-						note: {
-							text: "Submits: version, url, keywords, message",
-						},
+						],
 					},
+				],
+			},
+			{
+				className: "panel-sites_search",
+				name: {
+					text: "Search",
+				},
+				sections: [
 					{
-						className: "link",
-						anchor: {
-							url: "https://github.com/ator-dev/mark-my-search/issues/new",
-							text: "File a bug report",
+						title: {
+							text: "Do Not Auto Highlight",
 						},
-					},
-					{
-						className: "link",
-						anchor: {
-							url: "https://github.com/ator-dev/mark-my-search",
-							text: "Get involved!",
-						}
+						interactions: [
+							{
+								className: "url",
+								textbox: {
+									className: "url-input",
+									list: {
+										getArray: () =>
+											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync =>
+												sync.urlFilters.nonSearch.map(filter => filter.hostname + filter.pathname)
+											)
+										,
+										setArray: array =>
+											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
+												sync.urlFilters.nonSearch = array.map(value => {
+													const pathnameStart = value.indexOf("/");
+													const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
+													if (pathnameStart === -1) {
+														urlFilter.hostname = value;
+													} else {
+														urlFilter.hostname = value.slice(0, pathnameStart);
+														urlFilter.pathname = value.slice(pathnameStart);
+													}
+													return urlFilter;
+												});
+												setStorageSync(sync);
+											})
+										,
+									},
+									placeholder: "example.com/optional-path",
+								},
+							},
+						],
 					},
 				],
 			},
 		];
-		sectionsInfo.forEach(sectionInfo => {
-			panel.appendChild(createSection(sectionInfo));
+		panelsInfo.forEach(panelInfo => {
+			const panelContainer = document.querySelector("#frame .container-panel") as HTMLElement;
+			const panel = document.createElement("div");
+			panel.classList.add("panel");
+			panel.classList.add(panelInfo.className);
+			panelInfo.sections.forEach(sectionInfo => {
+				panel.appendChild(createSection(sectionInfo));
+			});
+			panelContainer.appendChild(panel);
 		});
 		const frame = document.querySelector("#frame") as HTMLElement;
 		const classNameIsPanel = (className: string) => className.split("-")[0] === "panel";
@@ -572,14 +740,16 @@ textarea
 			}
 		};
 		getTabs().forEach((tab: HTMLButtonElement) => {
-			tab.addEventListener("mousedown", () => {
+			const onClick = () => {
 				frame.classList.forEach(className => {
 					if (classNameIsPanel(className)) {
 						frame.classList.remove(className);
 					}
 				});
 				frame.classList.add(getPanelClassName(Array.from(tab.classList)));
-			});
+			};
+			tab.addEventListener("click", onClick);
+			tab.addEventListener("mousedown", onClick);
 			tab.addEventListener("keydown", event => {
 				if (event.key === "ArrowDown" || event.key === "ArrowRight") {
 					shiftTabFromTab(tab, true, true);
@@ -601,16 +771,18 @@ textarea
 				shiftTab(false, true);
 			}
 		});
-		(getTabs()[0] as HTMLButtonElement).dispatchEvent(new MouseEvent("mousedown"));
+		(getTabs()[0] as HTMLButtonElement).click();
 		const reload = () => {
-			sectionsInfo.forEach(sectionInfo => {
-				sectionInfo.interactions.forEach(interactionInfo => {
-					if (!interactionInfo.checkbox) {
-						return;
-					}
-					const checkbox = document.getElementById(interactionInfo.checkbox.id as string) as HTMLInputElement;
-					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-					interactionInfo.checkbox.onLoad!(checked => checkbox.checked = checked);
+			panelsInfo.forEach(panelInfo => {
+				panelInfo.sections.forEach(sectionInfo => {
+					sectionInfo.interactions.forEach(interactionInfo => {
+						if (!interactionInfo.checkbox) {
+							return;
+						}
+						const checkbox = document.getElementById(interactionInfo.checkbox.id as string) as HTMLInputElement;
+						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+						interactionInfo.checkbox.onLoad!(checked => checkbox.checked = checked);
+					});
 				});
 			});
 		};
@@ -621,10 +793,10 @@ textarea
 			const warning = document.createElement("div");
 			warning.classList.add("warning");
 			warning.textContent = text;
-			document.querySelector(`.panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
+			document.querySelector(`.container-panel .panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
 		};
-		insertWarning("sites_search", "This interface is a work in progress.");
-		insertWarning("sites_research", "This interface is a work in progress.");
+		insertWarning("sites_search", "This functionality is experimental. Please report any bugs or feedback!");
+		insertWarning("sites_research", "This functionality is experimental. Please report any bugs or feedback!");
 		insertWarning(
 			"term_lists",
 			`This interface will allow editing keyword lists
