@@ -6,8 +6,8 @@ type PopupInteractionInfo = {
 	textbox?: {
 		className: string
 		list?: {
-			getArray: () => Promise<Array<string>>
-			setArray: (array: Array<string>) => void
+			getArray: (index: number) => Promise<Array<string>>
+			setArray: (array: Array<string>, index: number) => void
 		}
 		placeholder: string
 		onChange?: (text: string) => void
@@ -42,6 +42,9 @@ type PopupInteractionInfo = {
 type PopupSectionInfo = {
 	title?: {
 		text: string
+		textbox?: {
+			placeholder: string
+		}
 	}
 	interactions: Array<PopupInteractionInfo>
 }
@@ -49,6 +52,10 @@ type PopupPanelInfo = {
 	className: string
 	name: {
 		text: string
+	}
+	list?: {
+		getArray: () => Promise<Array<string>>
+		setArray: (array: Array<string>) => void
 	}
 	sections: Array<PopupSectionInfo>
 }
@@ -210,7 +217,7 @@ textarea
 	{ background: hsl(60 50% 24%); }
 /**/
 
-.panel:not(.panel-general) .section > .title
+.panel .section > .title
 	{ margin: 4px; }
 .panel.panel-term_lists .section > .container
 	{ padding: 4px; }
@@ -284,7 +291,7 @@ textarea
 		).forEach((alert: HTMLElement) => clearAlert(alert))
 	;
 
-	const createInteraction = (interactionInfo: PopupInteractionInfo) => {
+	const createInteraction = (interactionInfo: PopupInteractionInfo, index: number) => {
 		const interaction = document.createElement("div");
 		interaction.classList.add("interaction");
 		interaction.classList.add(interactionInfo.className);
@@ -373,11 +380,15 @@ textarea
 						} else if (!textbox.value && container.lastElementChild !== textbox && document.activeElement !== textbox) {
 							textbox.remove();
 						}
-						// Parent is a list container because getArrayForList exists
-						textboxInfo.list.setArray(Array.from((textbox.parentElement as HTMLElement).children)
-							.map((textbox: HTMLInputElement) => textbox.value)
-							.filter(value => !!value)
-						);
+						if (textbox.parentElement) {
+							// Parent is a list container because getArrayForList exists
+							textboxInfo.list.setArray(
+								Array.from(textbox.parentElement.children)
+									.map((textbox: HTMLInputElement) => textbox.value)
+									.filter(value => !!value),
+								index,
+							);
+						}
 					}
 					if (textboxInfo.onChange) {
 						textboxInfo.onChange(textbox.value);
@@ -393,7 +404,7 @@ textarea
 				container.classList.add("organizer");
 				container.classList.add("list");
 				interaction.appendChild(container);
-				textboxInfo.list.getArray().then(array => {
+				textboxInfo.list.getArray(index).then(array => {
 					array.concat("").forEach(value => {
 						insertTextbox(container, value);
 					});
@@ -415,15 +426,24 @@ textarea
 		const section = document.createElement("div");
 		section.classList.add("section");
 		if (sectionInfo.title) {
-			const title = document.createElement("div");
-			title.classList.add("title");
-			title.textContent = sectionInfo.title.text;
-			section.appendChild(title);
+			if (sectionInfo.title.textbox) {
+				const title = document.createElement("input");
+				title.type = "text";
+				title.classList.add("title");
+				title.value = sectionInfo.title.text;
+				title.placeholder = sectionInfo.title.textbox.placeholder;
+				section.appendChild(title);
+			} else {
+				const title = document.createElement("div");
+				title.classList.add("title");
+				title.textContent = sectionInfo.title.text;
+				section.appendChild(title);
+			}
 		}
 		const container = document.createElement("div");
 		container.classList.add("container");
-		sectionInfo.interactions.forEach(interactionInfo => {
-			container.appendChild(createInteraction(interactionInfo));
+		sectionInfo.interactions.forEach((interactionInfo, i) => {
+			container.appendChild(createInteraction(interactionInfo, i));
 		});
 		section.appendChild(container);
 		return section;
@@ -709,6 +729,77 @@ textarea
 					},
 				],
 			},
+			{
+				className: "panel-term_lists",
+				name: {
+					text: "Keyword Lists",
+				},
+				list: {
+					getArray: () =>
+						getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
+							sync.termLists as unknown as Array<string>
+						)
+					,
+					setArray: array =>
+						getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
+							sync.urlFilters.nonSearch = array.map(value => {
+								const pathnameStart = value.indexOf("/");
+								const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
+								if (pathnameStart === -1) {
+									urlFilter.hostname = value;
+								} else {
+									urlFilter.hostname = value.slice(0, pathnameStart);
+									urlFilter.pathname = value.slice(pathnameStart);
+								}
+								return urlFilter;
+							});
+							setStorageSync(sync);
+						})
+					,
+				},
+				sections: [
+					{
+						title: {
+							text: "",
+							textbox: {
+								placeholder: "List Name",
+							},
+						},
+						interactions: [
+							{
+								className: "TODOreplace",
+								textbox: {
+									className: "TODOreplace",
+									list: {
+										getArray: index =>
+											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
+												sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname)
+											)
+										,
+										setArray: (array, index) =>
+											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+												sync.termLists[index].urlFilter = array.map(value => {
+													const pathnameStart = value.indexOf("/");
+													const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
+													if (pathnameStart === -1) {
+														urlFilter.hostname = value;
+													} else {
+														urlFilter.hostname = value.slice(0, pathnameStart);
+														urlFilter.pathname = value.slice(pathnameStart);
+													}
+													return urlFilter;
+												});
+												setStorageSync(sync);
+											})
+										,
+									},
+									placeholder: "example.com/optional-path",
+								}
+							},
+						],
+					},
+				],
+			},
 		];
 		panelsInfo.forEach(panelInfo => {
 			const panelContainer = document.querySelector("#frame .container-panel") as HTMLElement;
@@ -719,6 +810,13 @@ textarea
 				panel.appendChild(createSection(sectionInfo));
 			});
 			panelContainer.appendChild(panel);
+			const tabContainer = document.querySelector("#frame .container-tab") as HTMLElement;
+			const tab = document.createElement("button");
+			tab.type = "button";
+			tab.classList.add("tab");
+			tab.classList.add(panelInfo.className);
+			tab.textContent = panelInfo.name.text;
+			tabContainer.appendChild(tab);
 		});
 		const frame = document.querySelector("#frame") as HTMLElement;
 		const classNameIsPanel = (className: string) => className.split("-")[0] === "panel";
