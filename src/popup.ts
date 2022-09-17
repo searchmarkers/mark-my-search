@@ -1,7 +1,40 @@
 type PopupInteractionInfo = {
 	className: string
+	list?: {
+		getLength: () => Promise<number>
+		pushEmpty: () => void
+		removeAt: (index: number) => void
+	}
 	label?: {
 		text: string
+		getText?: (index: number) => Promise<string>
+		setText?: (text: string, index: number) => void
+		textbox?: {
+			placeholder: string
+		}
+	}
+	object?: {
+		className: string
+		list: {
+			getArray: (index: number) => Promise<Array<Record<string, unknown>>>
+			setArray: (array: Array<Record<string, unknown>>, index: number) => void
+		}
+		name: {
+			text: string
+			textbox?: {
+				placeholder: string
+			}
+		}
+		columns: Array<{
+			className: string
+			rows: Array<{
+				className: string
+				key: string
+				label?: PopupInteractionInfo["label"]
+				textbox?: PopupInteractionInfo["textbox"]
+				checkbox?: PopupInteractionInfo["checkbox"]
+			}>
+		}>
 	}
 	textbox?: {
 		className: string
@@ -10,6 +43,7 @@ type PopupInteractionInfo = {
 			setArray: (array: Array<string>, index: number) => void
 		}
 		placeholder: string
+		spellcheck: boolean
 		onChange?: (text: string) => void
 		onSubmit?: (text: string) => void
 	}
@@ -42,9 +76,6 @@ type PopupInteractionInfo = {
 type PopupSectionInfo = {
 	title?: {
 		text: string
-		textbox?: {
-			placeholder: string
-		}
 	}
 	interactions: Array<PopupInteractionInfo>
 }
@@ -52,10 +83,6 @@ type PopupPanelInfo = {
 	className: string
 	name: {
 		text: string
-	}
-	list?: {
-		getArray: () => Promise<Array<string>>
-		setArray: (array: Array<string>) => void
 	}
 	sections: Array<PopupSectionInfo>
 }
@@ -89,7 +116,7 @@ body
 	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%);
 	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
 *
-	{ font-size: 16; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
+	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
 	{ width: 6px; }
 ::-webkit-scrollbar-thumb
@@ -111,14 +138,14 @@ textarea
 .brand > .name
 	{ flex: 1; align-self: center; text-align: right; font-weight: bold; color: hsl(0 0% 80%); }
 .brand > .version
-	{ align-self: center; font-size: 14; color: hsl(0 0% 80% / 0.5); }
+	{ align-self: center; font-size: 14px; color: hsl(0 0% 80% / 0.5); }
 .brand > .logo
 	{ width: 32px; height: 32px; }
 .container-tab
 	{ display: flex;
 	border-top: 2px solid hsl(300 30% 36%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container-tab > .tab
-	{ flex: 1 1 auto; font-size: 14; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
+	{ flex: 1 1 auto; font-size: 14px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
 	outline: none; background: hsl(300 20% 26%); color: hsl(300 20% 80%); }
 .container-tab > .tab:focus
 	{ color: hsl(0 0% 100%); }
@@ -137,13 +164,11 @@ textarea
 	{ padding: 4px; margin: 4px; border-radius: 2px; background: hsl(60 60% 70% / 0.8); color: hsl(0 0% 8%); }
 /**/
 
-.panel-sites_search .container-tab > .tab.panel-sites_search,
-.panel-sites_research .container-tab > .tab.panel-sites_research,
+.panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
 .panel-term_lists .container-tab > .tab.panel-term_lists,
 .panel-general .container-tab > .tab.panel-general
 	{ border-bottom: 2px solid deeppink; background: hsl(300 20% 36%); }
-.panel-sites_search .container-panel > .panel.panel-sites_search,
-.panel-sites_research .container-panel > .panel.panel-sites_research,
+.panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
 .panel-term_lists .container-panel > .panel.panel-term_lists,
 .panel-general .container-panel > .panel.panel-general
 	{ display: flex; }
@@ -153,7 +178,7 @@ textarea
 	{ display: flex; flex-direction: column;
 	border-bottom: 1px solid hsl(0 0% 100% / 0.3); border-radius: inherit; background: hsl(300 100% 7%); }
 .panel .section > .title
-	{ border: none; background: none; text-align: center; font-size: 15; color: hsl(300 20% 60%); }
+	{ border: none; background: none; text-align: center; font-size: 15px; color: hsl(300 20% 60%); }
 .panel.panel .section > .container
 	{ display: flex; flex-direction: column; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
@@ -194,7 +219,7 @@ textarea
 .panel .interaction .submitter:active
 	{ background: hsl(300 60% 14%); }
 .panel .interaction .note
-	{ font-size: 14; color: hsl(300 6% 60%); }
+	{ font-size: 14px; color: hsl(300 6% 60%); }
 .panel .interaction.option .label
 	{ flex: 1; }
 .panel .interaction.link a
@@ -232,7 +257,7 @@ textarea
 .panel.panel-term_lists .container-terms .term .matching .type
 	{ display: flex; }
 .panel.panel-term_lists .container-terms .term .matching .type .label
-	{ flex: 1; align-self: center; font-size: 11; color: white; }
+	{ flex: 1; align-self: center; font-size: 11px; color: white; }
 .panel.panel-term_lists .container-urls .url-input
 	{ border: none; background: none; color: white; }
 /**/
@@ -291,19 +316,64 @@ textarea
 		).forEach((alert: HTMLElement) => clearAlert(alert))
 	;
 
+	const insertLabelAndLinkCheckbox = (container: HTMLElement,
+		labelInfo: PopupInteractionInfo["label"], checkboxInfo: PopupInteractionInfo["checkbox"]) => {
+		if (!labelInfo) {
+			return;
+		}
+		const label = (() => {
+			if (labelInfo.textbox) {
+				const label = document.createElement("input");
+				label.type = "text";
+				label.placeholder = labelInfo.textbox.placeholder;
+				label.value = labelInfo.text;
+				return label;
+			} else {
+				const label = document.createElement("label");
+				label.textContent = labelInfo.text;
+				if (checkboxInfo) {
+					checkboxInfo.id = getId.next().value;
+					label.htmlFor = checkboxInfo.id as string;
+				}
+				return label;
+			}
+		})();
+		label.classList.add("label");
+		container.appendChild(label);
+	};
+
 	const createInteraction = (interactionInfo: PopupInteractionInfo, index: number) => {
 		const interaction = document.createElement("div");
 		interaction.classList.add("interaction");
 		interaction.classList.add(interactionInfo.className);
-		if (interactionInfo.label) {
-			const label = document.createElement("label");
-			label.classList.add("label");
-			label.textContent = interactionInfo.label.text;
-			interaction.appendChild(label);
-			if (interactionInfo.checkbox) {
-				interactionInfo.checkbox.id = getId.next().value;
-				label.htmlFor = interactionInfo.checkbox.id as string;
-			}
+		insertLabelAndLinkCheckbox(interaction, interactionInfo.label, interactionInfo.checkbox);
+		if (interactionInfo.object) {
+			const objectInfo = interactionInfo.object;
+			const insertObjectElement = (container: HTMLElement, object: Record<string, unknown>) => {
+				const objectElement = document.createElement("div");
+				objectElement.classList.add("term");
+				objectInfo.columns.forEach(columnInfo => {
+					const column = document.createElement("div");
+					column.classList.add(columnInfo.className);
+					columnInfo.rows.forEach(rowInfo => {
+						const row = document.createElement("div");
+						row.classList.add(rowInfo.className);
+						insertLabelAndLinkCheckbox(row, rowInfo.label, rowInfo.checkbox);
+						column.appendChild(row);
+					});
+					objectElement.appendChild(column);
+				});
+				container.appendChild(objectElement);
+			};
+			const list = document.createElement("div");
+			list.classList.add("organizer");
+			list.classList.add("list");
+			objectInfo.list.getArray(index).then(objects => {
+				objects.forEach(object => {
+					insertObjectElement(list, object);
+				});
+			});
+			interaction.appendChild(list);
 		}
 		if (interactionInfo.anchor) {
 			const anchor = document.createElement("a");
@@ -367,16 +437,17 @@ textarea
 		}
 		if (interactionInfo.textbox) {
 			const textboxInfo = interactionInfo.textbox;
-			const insertTextbox = (container: HTMLElement, value = ""): HTMLInputElement => {
+			const insertTextboxElement = (container: HTMLElement, value = ""): HTMLInputElement => {
 				const textbox = document.createElement("input");
 				textbox.type = "text";
 				textbox.classList.add(textboxInfo.className);
 				textbox.placeholder = textboxInfo.placeholder;
+				textbox.spellcheck = textboxInfo.spellcheck;
 				textbox.value = value;
 				const onChangeInternal = () => {
 					if (textboxInfo.list) {
 						if (textbox.value && (container.lastElementChild as HTMLInputElement).value) {
-							insertTextbox(container);
+							insertTextboxElement(container);
 						} else if (!textbox.value && container.lastElementChild !== textbox && document.activeElement !== textbox) {
 							textbox.remove();
 						}
@@ -400,17 +471,17 @@ textarea
 				return textbox;
 			};
 			if (textboxInfo.list) {
-				const container = document.createElement("div");
-				container.classList.add("organizer");
-				container.classList.add("list");
-				interaction.appendChild(container);
+				const list = document.createElement("div");
+				list.classList.add("organizer");
+				list.classList.add("list");
 				textboxInfo.list.getArray(index).then(array => {
 					array.concat("").forEach(value => {
-						insertTextbox(container, value);
+						insertTextboxElement(list, value);
 					});
 				});
+				interaction.appendChild(list);
 			} else {
-				insertTextbox(interaction);
+				insertTextboxElement(interaction);
 			}
 		}
 		if (interactionInfo.note) {
@@ -426,19 +497,10 @@ textarea
 		const section = document.createElement("div");
 		section.classList.add("section");
 		if (sectionInfo.title) {
-			if (sectionInfo.title.textbox) {
-				const title = document.createElement("input");
-				title.type = "text";
-				title.classList.add("title");
-				title.value = sectionInfo.title.text;
-				title.placeholder = sectionInfo.title.textbox.placeholder;
-				section.appendChild(title);
-			} else {
-				const title = document.createElement("div");
-				title.classList.add("title");
-				title.textContent = sectionInfo.title.text;
-				section.appendChild(title);
-			}
+			const title = document.createElement("div");
+			title.classList.add("title");
+			title.textContent = sectionInfo.title.text;
+			section.appendChild(title);
 		}
 		const container = document.createElement("div");
 		container.classList.add("container");
@@ -450,8 +512,6 @@ textarea
 	};
 
 	const temp = () => {
-		(document.querySelector(".brand .version") as HTMLElement).textContent = `v${chrome.runtime.getManifest().version}`;
-
 		const panelsInfo: Array<PopupPanelInfo> = [
 			{
 				className: "panel-general",
@@ -640,7 +700,7 @@ textarea
 				],
 			},
 			{
-				className: "panel-sites_research",
+				className: "panel-sites_search_research",
 				name: {
 					text: "Highlight",
 				},
@@ -657,39 +717,28 @@ textarea
 									list: {
 										getArray: () =>
 											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync =>
-												sync.urlFilters.noPageModify.map(filter => filter.hostname + filter.pathname)
+												sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname)
 											)
 										,
 										setArray: array =>
 											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
 												sync.urlFilters.noPageModify = array.map(value => {
-													const pathnameStart = value.indexOf("/");
-													const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
-													if (pathnameStart === -1) {
-														urlFilter.hostname = value;
-													} else {
-														urlFilter.hostname = value.slice(0, pathnameStart);
-														urlFilter.pathname = value.slice(pathnameStart);
-													}
-													return urlFilter;
+													const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+													return {
+														hostname: value.slice(0, pathnameStart),
+														pathname: value.slice(pathnameStart),
+													};
 												});
 												setStorageSync(sync);
 											})
 										,
 									},
 									placeholder: "example.com/optional-path",
+									spellcheck: false,
 								},
 							},
 						],
 					},
-				],
-			},
-			{
-				className: "panel-sites_search",
-				name: {
-					text: "Search",
-				},
-				sections: [
 					{
 						title: {
 							text: "Do Not Auto Highlight",
@@ -702,27 +751,24 @@ textarea
 									list: {
 										getArray: () =>
 											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync =>
-												sync.urlFilters.nonSearch.map(filter => filter.hostname + filter.pathname)
+												sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname)
 											)
 										,
 										setArray: array =>
 											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
 												sync.urlFilters.nonSearch = array.map(value => {
-													const pathnameStart = value.indexOf("/");
-													const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
-													if (pathnameStart === -1) {
-														urlFilter.hostname = value;
-													} else {
-														urlFilter.hostname = value.slice(0, pathnameStart);
-														urlFilter.pathname = value.slice(pathnameStart);
-													}
-													return urlFilter;
+													const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+													return {
+														hostname: value.slice(0, pathnameStart),
+														pathname: value.slice(pathnameStart),
+													};
 												});
 												setStorageSync(sync);
 											})
 										,
 									},
 									placeholder: "example.com/optional-path",
+									spellcheck: false,
 								},
 							},
 						],
@@ -734,40 +780,129 @@ textarea
 				name: {
 					text: "Keyword Lists",
 				},
-				list: {
-					getArray: () =>
-						getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
-							sync.termLists as unknown as Array<string>
-						)
-					,
-					setArray: array =>
-						getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-							sync.urlFilters.nonSearch = array.map(value => {
-								const pathnameStart = value.indexOf("/");
-								const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
-								if (pathnameStart === -1) {
-									urlFilter.hostname = value;
-								} else {
-									urlFilter.hostname = value.slice(0, pathnameStart);
-									urlFilter.pathname = value.slice(pathnameStart);
-								}
-								return urlFilter;
-							});
-							setStorageSync(sync);
-						})
-					,
-				},
 				sections: [
 					{
 						title: {
 							text: "",
-							textbox: {
-								placeholder: "List Name",
-							},
 						},
 						interactions: [
 							{
 								className: "TODOreplace",
+								list: {
+									getLength: () =>
+										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
+											sync.termLists.length
+										)
+									,
+									pushEmpty: () =>
+										getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
+											sync.termLists.push({
+												name: "",
+												terms: [],
+												urlFilter: [],
+											});
+											setStorageSync(sync);
+										})
+									,
+									removeAt: index =>
+										getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
+											delete sync.termLists[index];
+											setStorageSync(sync);
+										})
+									,
+								},
+								label: {
+									text: "",
+									getText: index =>
+										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
+											sync.termLists[index].name
+										)
+									,
+									setText: (text, index) =>
+										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+											sync.termLists[index].name = text;
+											setStorageSync(sync);
+										})
+									,
+									textbox: {
+										placeholder: "List Name",
+									},
+								},
+								object: {
+									className: "term",
+									list: {
+										getArray: index =>
+											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
+												sync.termLists[index].terms as unknown as Array<Record<string, unknown>>
+											)
+										,
+										setArray: (array, index) =>
+											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+												sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
+												setStorageSync(sync);
+											})
+										,
+									},
+									name: {
+										text: "",
+										textbox: {
+											placeholder: "keyword",
+										},
+									},
+									columns: [
+										{
+											className: "TODOreplace",
+											rows: [
+												{
+													className: "TODOreplace",
+													key: "phrase",
+													textbox: {
+														className: "phrase-input",
+														placeholder: "keyword",
+														spellcheck: false,
+													},
+												},
+											],
+										},
+										{
+											className: "matching",
+											rows: [
+												{
+													className: "type",
+													key: "matchMode.whole",
+													label: {
+														text: "Match Whole Words",
+													},
+													checkbox: {},
+												},
+												{
+													className: "type",
+													key: "matchMode.stem",
+													label: {
+														text: "Match Stems",
+													},
+													checkbox: {},
+												},
+												{
+													className: "type",
+													key: "matchMode.case",
+													label: {
+														text: "Match Case",
+													},
+													checkbox: {},
+												},
+												{
+													className: "type",
+													key: "matchMode.regex",
+													label: {
+														text: "Regular Expression",
+													},
+													checkbox: {},
+												},
+											],
+										},
+									],
+								},
 								textbox: {
 									className: "TODOreplace",
 									list: {
@@ -779,30 +914,53 @@ textarea
 										setArray: (array, index) =>
 											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
 												sync.termLists[index].urlFilter = array.map(value => {
-													const pathnameStart = value.indexOf("/");
-													const urlFilter: URLFilter[keyof URLFilter] = { hostname: "", pathname: "" };
-													if (pathnameStart === -1) {
-														urlFilter.hostname = value;
-													} else {
-														urlFilter.hostname = value.slice(0, pathnameStart);
-														urlFilter.pathname = value.slice(pathnameStart);
-													}
-													return urlFilter;
+													const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+													return {
+														hostname: value.slice(0, pathnameStart),
+														pathname: value.slice(pathnameStart),
+													};
 												});
 												setStorageSync(sync);
 											})
 										,
 									},
 									placeholder: "example.com/optional-path",
-								}
+									spellcheck: false,
+								},
 							},
 						],
 					},
 				],
 			},
 		];
+		const frame = document.createElement("div");
+		frame.id = "frame";
+		document.body.appendChild(frame);
+		const brand = document.createElement("div");
+		const name = document.createElement("div");
+		const version = document.createElement("div");
+		const logo = document.createElement("img");
+		name.classList.add("name");
+		name.textContent = chrome.runtime.getManifest().name;
+		version.classList.add("version");
+		version.textContent = `v${chrome.runtime.getManifest().version}`;
+		logo.classList.add("logo");
+		logo.src = "/icons/mms.svg";
+		brand.classList.add("brand");
+		brand.appendChild(name);
+		brand.appendChild(version);
+		brand.appendChild(logo);
+		frame.insertAdjacentElement("afterbegin", brand);
+		const panelContainer = document.createElement("frame");
+		panelContainer.classList.add("container-panel");
+		frame.appendChild(panelContainer);
+		const filler = document.createElement("div");
+		filler.classList.add("filler");
+		frame.appendChild(filler);
+		const tabContainer = document.createElement("div");
+		tabContainer.classList.add("container-tab");
+		frame.appendChild(tabContainer);
 		panelsInfo.forEach(panelInfo => {
-			const panelContainer = document.querySelector("#frame .container-panel") as HTMLElement;
 			const panel = document.createElement("div");
 			panel.classList.add("panel");
 			panel.classList.add(panelInfo.className);
@@ -810,7 +968,6 @@ textarea
 				panel.appendChild(createSection(sectionInfo));
 			});
 			panelContainer.appendChild(panel);
-			const tabContainer = document.querySelector("#frame .container-tab") as HTMLElement;
 			const tab = document.createElement("button");
 			tab.type = "button";
 			tab.classList.add("tab");
@@ -818,7 +975,6 @@ textarea
 			tab.textContent = panelInfo.name.text;
 			tabContainer.appendChild(tab);
 		});
-		const frame = document.querySelector("#frame") as HTMLElement;
 		const classNameIsPanel = (className: string) => className.split("-")[0] === "panel";
 		const getPanelClassName = (classArray: Array<string>) =>
 			classArray.find(className => classNameIsPanel(className)) ?? "";
@@ -893,8 +1049,7 @@ textarea
 			warning.textContent = text;
 			document.querySelector(`.container-panel .panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
 		};
-		insertWarning("sites_search", "This functionality is experimental. Please report any bugs or feedback!");
-		insertWarning("sites_research", "This functionality is experimental. Please report any bugs or feedback!");
+		insertWarning("sites_search_research", "This functionality is experimental. Please report bugs or give feedback!");
 		insertWarning(
 			"term_lists",
 			`This interface will allow editing keyword lists
