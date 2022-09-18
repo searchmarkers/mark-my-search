@@ -87,7 +87,12 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
 	}
 };
 
-// TODO document
+/**
+ * Determines whether a URL is filtered in by a given URL filter.
+ * @param url A URL object.
+ * @param urlFilter A URL filter array, the component strings of which may contain wildcards.
+ * @returns `true` if the URL is filtered in, `false` otherwise.
+ */
 const isUrlFilteredIn = (() => {
 	const sanitize = (urlComponent: string) =>
 		sanitizeForRegex(urlComponent).replace("\\*", ".*")
@@ -101,11 +106,24 @@ const isUrlFilteredIn = (() => {
 	;
 })();
 
-// TODO document
+/**
+ * Determines whether the user has permitted pages with the given URL to be deeply modified during highlighting,
+ * which is powerful but may be destructive.
+ * @param urlString The valid URL string corresponding to a page to be potentially highlighted.
+ * @param urlFilters URL filter preferences.
+ * @returns `true` if the corresponding page may be modified, `false` otherwise.
+ */
 const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify)
 ;
 
+/**
+ * Determines whether the user has permitted pages with the given URL to treated as a search page,
+ * from which keywords may be collected.
+ * @param urlString The valid URL string corresponding to a page to be potentially auto-highlighted.
+ * @param urlFilters An object of details about URL filtering.
+ * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
+ */
 const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
@@ -119,11 +137,11 @@ const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncV
  * or the appropriate flag in the highlighting instance is `true`, __off__ otherwise. If unspecified, highlight visibility is not changed.
  * @param barControlsShown An object of flags indicating the visibility of each toolbar option module.
  * @param barLook An object of details about the style and layout of the toolbar.
- * @param highlightLook 
- * @param enablePageModify 
- * @returns A research message which, when sent to a highlighting script, will produce the desired effect within that page.
+ * @param highlightLook An object of details about the style of highlights.
+ * @param matchMode An object of term matching options, for use as defaults.
+ * @param enablePageModify Whether to enable deep page highlighting modification, or otherwise disable it.
+ * @returns A research message which, when sent to a highlighting script, will produce the requested effect within that page.
  */
-// TODO document
 const createResearchMessage = (
 	researchInstance: ResearchInstance,
 	overrideHighlightsShown: boolean | undefined,

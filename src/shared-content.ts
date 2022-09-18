@@ -198,12 +198,22 @@ interface CommandInfo {
 	reversed?: boolean
 }
 
-// TODO document
+/**
+ * Sanitizes a string for regex use by escaping all potential regex control characters.
+ * @param word A string.
+ * @param replacement The character pattern with which the sanitizer regex will replace potential control characters.
+ * Defaults to a pattern which evaluates to the backslash character plus the control character, hence escaping it.
+ * @returns The transformed string to be matched in exact form as a regex pattern.
+ */
 const sanitizeForRegex = (word: string, replacement = "\\$&") =>
 	word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement)
 ;
 
-// TODO document
+/**
+ * Gets the URL filter array corresponding to an array of valid browser URLs.
+ * @param urlStrings An array of valid URLs as strings.
+ * @returns A URL filter array containing no wildcards which would filter in each of the URLs passed.
+ */
 const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
 	urlStrings.map((urlString): URLFilter[0] => {
 		try {
