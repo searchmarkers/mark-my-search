@@ -44,8 +44,8 @@ type PopupInteractionInfo = {
 		}
 		placeholder: string
 		spellcheck: boolean
-		onChange?: (text: string) => void
-		onSubmit?: (text: string) => void
+		onLoad?: (setText: (text: string) => void, objectIndex: number, containerIndex: number) => Promise<void>
+		onChange?: (text: string, objectIndex: number, containerIndex: number) => void
 	}
 	anchor?: {
 		url: string
@@ -65,9 +65,9 @@ type PopupInteractionInfo = {
 		alerts?: Record<PopupAlertType, PopupAlertInfo>
 	}
 	checkbox?: {
-		id?: string
-		onLoad?: (setChecked: (checked: boolean) => void) => Promise<void>
-		onToggle?: (checked: boolean) => void
+		autoId?: string
+		onLoad?: (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
+		onToggle?: (checked: boolean, objectIndex: number, containerIndex: number) => void
 	}
 	note?: {
 		text: string
@@ -128,7 +128,7 @@ body
 textarea
 	{ resize: none; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%; border-radius: 8px; background: inherit; }
+	{ display: flex; flex-direction: column; height: 100%; border-radius: 6px; background: inherit; }
 #frame > .filler
 	{ flex: 1; }
 .brand
@@ -143,16 +143,12 @@ textarea
 	{ width: 32px; height: 32px; }
 .container-tab
 	{ display: flex;
-	border-top: 2px solid hsl(300 30% 36%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+	border-top: 2px solid hsl(300 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container-tab > .tab
 	{ flex: 1 1 auto; font-size: 14px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
-	outline: none; background: hsl(300 20% 26%); color: hsl(300 20% 80%); }
-.container-tab > .tab:focus
-	{ color: hsl(0 0% 100%); }
-#frame .container-tab > .tab:hover
-	{ background: hsl(300 20% 30%); }
-#frame .container-tab > .tab:active
-	{ background: hsl(300 20% 18%); }
+	background: transparent; color: hsl(300 20% 90%); }
+.container-tab > .tab:hover
+	{ background: hsl(300 30% 26%); }
 .container-panel
 	{ border-top: 1px solid deeppink; border-top-left-radius: inherit; overflow-y: auto;
 	background: hsl(300 100% 7%); }
@@ -167,7 +163,7 @@ textarea
 .panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
 .panel-term_lists .container-tab > .tab.panel-term_lists,
 .panel-general .container-tab > .tab.panel-general
-	{ border-bottom: 2px solid deeppink; background: hsl(300 20% 36%); }
+	{ border-bottom: 2px solid deeppink; background: hsl(300 30% 32%); }
 .panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
 .panel-term_lists .container-panel > .panel.panel-term_lists,
 .panel-general .container-panel > .panel.panel-general
@@ -195,7 +191,7 @@ textarea
 	{ display: flex; flex-direction: column; margin: 0; border: 0; }
 .panel .interaction.option
 	{ flex-direction: row; padding-block: 0; }
-.panel .interaction *
+.panel .interaction > *, .panel .organizer > *
 	{ margin-block: 2px; border-radius: 2px; padding-block: 4px; }
 .panel .interaction input[type="text"],
 .panel .interaction textarea,
@@ -272,6 +268,110 @@ textarea
 		}
 	})();
 
+	const objectSetValue = (object: Record<string, unknown>, key: string, value: unknown, set = true) => {
+		if (key.includes(".")) {
+			return objectSetValue(
+				object[key.slice(0, key.indexOf("."))] as Record<string, unknown>,
+				key.slice(key.indexOf(".") + 1),
+				value,
+			);
+		} else {
+			if (set) {
+				object[key] = value;
+			}
+			return object[key];
+		}
+	};
+
+	const objectGetValue = (object: Record<string, unknown>, key: string) =>
+		objectSetValue(object, key, undefined, false)
+	;
+
+	const classNameIsPanel = (className: string) =>
+		className.split("-")[0] === "panel"
+	;
+
+	const getPanelClassName = (classArray: Array<string>) =>
+		classArray.find(className => classNameIsPanel(className)) ?? ""
+	;
+
+	const focusActivePanel = () => {
+		const frame = document.querySelector("#frame") as HTMLElement;
+		const className = getPanelClassName(Array.from(frame.classList));
+		(document.querySelector(`.panel.${className} input`) as HTMLInputElement).focus();
+	};
+
+	const getTabs = () =>
+		document.querySelectorAll(".container-tab .tab")
+	;
+
+	const shiftTabFromTab = (tabCurrent: HTMLButtonElement, toRight: boolean, cycle: boolean) => {
+		const tabNext = ( //
+			tabCurrent[toRight ? "nextElementSibling" : "previousElementSibling"] //
+				?? (cycle //
+					? (tabCurrent.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"] //
+					: null //
+				)
+		) as HTMLButtonElement | null;
+		if (tabNext) {
+			tabNext.focus();
+			tabNext.dispatchEvent(new MouseEvent("mousedown"));
+		}
+	};
+
+	const handleTabs = () => {
+		const frame = document.querySelector("#frame") as HTMLElement;
+		getTabs().forEach((tab: HTMLButtonElement) => {
+			const onClick = () => {
+				frame.classList.forEach(className => {
+					if (classNameIsPanel(className)) {
+						frame.classList.remove(className);
+					}
+				});
+				frame.classList.add(getPanelClassName(Array.from(tab.classList)));
+			};
+			tab.addEventListener("click", onClick);
+			tab.addEventListener("mousedown", onClick);
+			tab.addEventListener("keydown", event => {
+				if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+					shiftTabFromTab(tab, true, true);
+				} else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+					shiftTabFromTab(tab, false, true);
+				}
+			});
+		});
+		document.addEventListener("keydown", event => {
+			const shiftTab = (toRight: boolean, cycle: boolean) => {
+				const currentTab = document
+					.querySelector(`.container-tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
+				shiftTabFromTab(currentTab, toRight, cycle);
+				focusActivePanel();
+			};
+			if (event.key === "PageDown") {
+				shiftTab(true, true);
+			} else if (event.key === "PageUp") {
+				shiftTab(false, true);
+			}
+		});
+		(getTabs()[0] as HTMLButtonElement).click();
+	};
+
+	const reload = (panelsInfo: Array<PopupPanelInfo>) => {
+		panelsInfo.forEach(panelInfo => {
+			panelInfo.sections.forEach(sectionInfo => {
+				sectionInfo.interactions.forEach(interactionInfo => {
+					if (!interactionInfo.checkbox) {
+						return;
+					}
+					const checkbox = document.getElementById(interactionInfo.checkbox.autoId as string) as HTMLInputElement;
+					if (interactionInfo.checkbox.onLoad) {
+						interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
+					}
+				});
+			});
+		});
+	};
+
 	const insertAlert = (alertType: PopupAlertType, alertsInfo: Record<PopupAlertType, PopupAlertInfo> | undefined,
 		previousSibling: HTMLElement, timeout = -1,
 		tooltip = "", formatText = (text: string) => text) => {
@@ -316,127 +416,79 @@ textarea
 		).forEach((alert: HTMLElement) => clearAlert(alert))
 	;
 
-	const insertLabelAndLinkCheckbox = (container: HTMLElement,
-		labelInfo: PopupInteractionInfo["label"], checkboxInfo: PopupInteractionInfo["checkbox"]) => {
-		if (!labelInfo) {
-			return;
-		}
-		const label = (() => {
-			if (labelInfo.textbox) {
-				const label = document.createElement("input");
-				label.type = "text";
-				label.placeholder = labelInfo.textbox.placeholder;
-				label.value = labelInfo.text;
-				return label;
-			} else {
-				const label = document.createElement("label");
-				label.textContent = labelInfo.text;
-				if (checkboxInfo) {
-					checkboxInfo.id = getId.next().value;
-					label.htmlFor = checkboxInfo.id as string;
-				}
-				return label;
-			}
-		})();
-		label.classList.add("label");
-		container.appendChild(label);
+	const insertWarning = (panelName: string, text: string) => {
+		const warning = document.createElement("div");
+		warning.classList.add("warning");
+		warning.textContent = text;
+		document.querySelector(`.container-panel .panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
 	};
 
-	const createInteraction = (interactionInfo: PopupInteractionInfo, index: number) => {
-		const interaction = document.createElement("div");
-		interaction.classList.add("interaction");
-		interaction.classList.add(interactionInfo.className);
-		insertLabelAndLinkCheckbox(interaction, interactionInfo.label, interactionInfo.checkbox);
-		if (interactionInfo.object) {
-			const objectInfo = interactionInfo.object;
-			const insertObjectElement = (container: HTMLElement, object: Record<string, unknown>) => {
-				const objectElement = document.createElement("div");
-				objectElement.classList.add("term");
-				objectInfo.columns.forEach(columnInfo => {
-					const column = document.createElement("div");
-					column.classList.add(columnInfo.className);
-					columnInfo.rows.forEach(rowInfo => {
-						const row = document.createElement("div");
-						row.classList.add(rowInfo.className);
-						insertLabelAndLinkCheckbox(row, rowInfo.label, rowInfo.checkbox);
-						column.appendChild(row);
-					});
-					objectElement.appendChild(column);
-				});
-				container.appendChild(objectElement);
-			};
-			const list = document.createElement("div");
-			list.classList.add("organizer");
-			list.classList.add("list");
-			objectInfo.list.getArray(index).then(objects => {
-				objects.forEach(object => {
-					insertObjectElement(list, object);
-				});
-			});
-			interaction.appendChild(list);
-		}
-		if (interactionInfo.anchor) {
-			const anchor = document.createElement("a");
-			anchor.href = interactionInfo.anchor.url;
-			anchor.textContent = interactionInfo.anchor.text ?? anchor.href;
-			interaction.appendChild(anchor);
-		}
-		if (interactionInfo.submitter) {
-			const submitterInfo = interactionInfo.submitter;
-			const button = document.createElement("button");
-			button.type = "button";
-			button.classList.add("submitter");
-			button.textContent = interactionInfo.submitter.text;
-			interaction.appendChild(button);
-			let getMessageText = () => "";
-			button.onclick = () => {
-				button.disabled = true;
-				clearAlerts(interaction, [ PopupAlertType.PENDING, PopupAlertType.FAILURE ]);
-				submitterInfo.onClick(
-					getMessageText(),
-					() => {
-						clearAlerts(interaction, [ PopupAlertType.PENDING ]);
-						insertAlert(PopupAlertType.SUCCESS, (submitterInfo ?? {}).alerts, button, 3000);
-						button.disabled = false;
-					},
-					error => {
-						clearAlerts(interaction, [ PopupAlertType.PENDING ]);
-						const errorText = error.text || "(no error message)";
-						insertAlert(PopupAlertType.FAILURE, (submitterInfo ?? {}).alerts, button, -1,
-							errorText, text => text.replace("{status}", error.status.toString()).replace("{text}", errorText));
-						button.disabled = false;
-					},
-				);
-				insertAlert(PopupAlertType.PENDING, submitterInfo.alerts, button);
-			};
-			if (interactionInfo.submitter.message) {
-				const messageBox = document.createElement("textarea");
-				messageBox.classList.add("message");
-				messageBox.rows = interactionInfo.submitter.message.rows;
-				messageBox.placeholder = interactionInfo.submitter.message.placeholder;
-				messageBox.spellcheck = true;
-				interaction.appendChild(messageBox);
-				getMessageText = () => messageBox.value;
+	const createSection = (() => {
+		const insertLabel = (container: HTMLElement, labelInfo: PopupInteractionInfo["label"], checkboxIsPaired: boolean,
+			containerIndex: number) => {
+			if (!labelInfo) {
+				return;
 			}
-		}
-		if (interactionInfo.checkbox) {
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.id = interactionInfo.checkbox.id ?? "";
-			checkbox.classList.add("checkbox");
-			interaction.appendChild(checkbox);
-			(async () => {
-				const checkboxInfo = interactionInfo.checkbox ?? {};
-				if (checkboxInfo.onLoad) {
-					await checkboxInfo.onLoad(checked => checkbox.checked = checked);
-				}
-				if (checkboxInfo.onToggle) {
-					checkbox.onchange = () => (checkboxInfo.onToggle ?? (() => undefined))(checkbox.checked);
+			const [ label, checkboxId ] = (() => {
+				if (labelInfo.textbox) {
+					const label = document.createElement("input");
+					label.type = "text";
+					label.placeholder = labelInfo.textbox.placeholder;
+					label.value = labelInfo.text;
+					if (labelInfo.getText) {
+						labelInfo.getText(containerIndex).then(text => label.value = text);
+					}
+					return [ label, "" ];
+				} else {
+					const label = document.createElement("label");
+					label.textContent = labelInfo.text;
+					if (labelInfo.getText) {
+						labelInfo.getText(containerIndex).then(text => label.textContent = text);
+					}
+					const checkboxId = checkboxIsPaired ? getId.next().value : "";
+					label.htmlFor = checkboxId;
+					return [ label, checkboxId ];
 				}
 			})();
-		}
-		if (interactionInfo.textbox) {
-			const textboxInfo = interactionInfo.textbox;
+			label.classList.add("label");
+			const onChangeInternal = () => {
+				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
+			};
+			if (labelInfo.setText) {
+				label.addEventListener("input", onChangeInternal);
+				label.addEventListener("blur", onChangeInternal);
+			}
+			container.appendChild(label);
+			return checkboxId;
+		};
+
+		const insertCheckbox = (container: HTMLElement, checkboxInfo: PopupInteractionInfo["checkbox"], id = "",
+			objectIndex: number, containerIndex: number) => {
+			if (!checkboxInfo) {
+				return;
+			}
+			checkboxInfo.autoId = id;
+			const checkbox = document.createElement("input");
+			checkbox.type = "checkbox";
+			checkbox.id = id;
+			checkbox.classList.add("checkbox");
+			container.appendChild(checkbox);
+			if (checkboxInfo.onLoad) {
+				checkboxInfo.onLoad(checked => checkbox.checked = checked, objectIndex, containerIndex);
+			}
+			if (checkboxInfo.onToggle) {
+				checkbox.onchange = () =>
+					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, objectIndex, containerIndex) : undefined
+				;
+			}
+			return checkbox;
+		};
+
+		const insertTextbox = (container: HTMLElement, textboxInfo: PopupInteractionInfo["textbox"],
+			objectIndex: number, containerIndex: number) => {
+			if (!textboxInfo) {
+				return;
+			}
 			const insertTextboxElement = (container: HTMLElement, value = ""): HTMLInputElement => {
 				const textbox = document.createElement("input");
 				textbox.type = "text";
@@ -444,8 +496,12 @@ textarea
 				textbox.placeholder = textboxInfo.placeholder;
 				textbox.spellcheck = textboxInfo.spellcheck;
 				textbox.value = value;
+				if (textboxInfo.onLoad) {
+					textboxInfo.onLoad(text => textbox.value = text, objectIndex, containerIndex);
+				}
 				const onChangeInternal = () => {
 					if (textboxInfo.list) {
+						// TODO make function
 						if (textbox.value && (container.lastElementChild as HTMLInputElement).value) {
 							insertTextboxElement(container);
 						} else if (!textbox.value && container.lastElementChild !== textbox && document.activeElement !== textbox) {
@@ -457,12 +513,12 @@ textarea
 								Array.from(textbox.parentElement.children)
 									.map((textbox: HTMLInputElement) => textbox.value)
 									.filter(value => !!value),
-								index,
+								objectIndex,
 							);
 						}
 					}
 					if (textboxInfo.onChange) {
-						textboxInfo.onChange(textbox.value);
+						textboxInfo.onChange(textbox.value, objectIndex, containerIndex);
 					}
 				};
 				textbox.addEventListener("input", onChangeInternal);
@@ -474,44 +530,218 @@ textarea
 				const list = document.createElement("div");
 				list.classList.add("organizer");
 				list.classList.add("list");
-				textboxInfo.list.getArray(index).then(array => {
+				textboxInfo.list.getArray(objectIndex).then(array => {
 					array.concat("").forEach(value => {
 						insertTextboxElement(list, value);
 					});
 				});
-				interaction.appendChild(list);
+				container.appendChild(list);
+				return list;
 			} else {
-				insertTextboxElement(interaction);
+				return insertTextboxElement(container);
 			}
-		}
-		if (interactionInfo.note) {
+		};
+
+		const insertObjectList = (container: HTMLElement, objectInfo: PopupInteractionInfo["object"], containerIndex: number) => {
+			if (!objectInfo) {
+				return;
+			}
+			const insertObjectElement = (container: HTMLElement, objectIndex: number) => {
+				const objectElement = document.createElement("div");
+				objectElement.classList.add("term");
+				objectInfo.columns.forEach(columnInfo => {
+					const column = document.createElement("div");
+					column.classList.add(columnInfo.className);
+					columnInfo.rows.forEach(rowInfo => {
+						const row = document.createElement("div");
+						row.classList.add(rowInfo.className);
+						const textboxOrList = insertTextbox(row, rowInfo.textbox, objectIndex, containerIndex);
+						if (textboxOrList && textboxOrList.tagName === "INPUT") {
+							//(textboxOrList as HTMLInputElement).value = objectGetValue(object, rowInfo.key);
+						}
+						const checkboxId = insertLabel(row, rowInfo.label, !!rowInfo.checkbox, containerIndex);
+						const checkbox = insertCheckbox(row, rowInfo.checkbox, checkboxId, objectIndex, containerIndex);
+						if (checkbox) {
+							//checkbox.checked = objectGetValue(object, rowInfo.key);
+						}
+						column.appendChild(row);
+					});
+					objectElement.appendChild(column);
+					const inputFirst = objectElement.querySelector("input") as HTMLInputElement;
+					inputFirst.addEventListener("input", () => {
+						if (inputFirst.value && ((container.lastElementChild as HTMLInputElement).querySelector("input") as HTMLInputElement).value) {
+							insertObjectElement(container, container.childElementCount);
+						} else if (!inputFirst.value && container.lastElementChild !== objectElement && document.activeElement !== inputFirst) {
+							objectElement.remove();
+						}
+					});
+				});
+				container.appendChild(objectElement);
+			};
+			const list = document.createElement("div");
+			list.classList.add("organizer");
+			list.classList.add("list");
+			list.classList.add("container-terms");
+			objectInfo.list.getArray(containerIndex).then(objects => {
+				objects.concat({}).forEach((object, i) => {
+					insertObjectElement(list, i);
+				});
+			});
+			container.appendChild(list);
+		};
+
+		const insertAnchor = (container: HTMLElement, anchorInfo: PopupInteractionInfo["anchor"]) => {
+			if (!anchorInfo) {
+				return;
+			}
+			const anchor = document.createElement("a");
+			anchor.href = anchorInfo.url;
+			anchor.textContent = anchorInfo.text ?? anchor.href;
+			container.appendChild(anchor);
+		};
+
+		const insertSubmitter = (container: HTMLElement, submitterInfo: PopupInteractionInfo["submitter"]) => {
+			if (!submitterInfo) {
+				return;
+			}
+			const button = document.createElement("button");
+			button.type = "button";
+			button.classList.add("submitter");
+			button.textContent = submitterInfo.text;
+			container.appendChild(button);
+			let getMessageText = () => "";
+			button.onclick = () => {
+				button.disabled = true;
+				clearAlerts(container, [ PopupAlertType.PENDING, PopupAlertType.FAILURE ]);
+				submitterInfo.onClick(
+					getMessageText(),
+					() => {
+						clearAlerts(container, [ PopupAlertType.PENDING ]);
+						insertAlert(
+							PopupAlertType.SUCCESS, //
+							(submitterInfo ?? {}).alerts, //
+							button, //
+							3000, //
+						);
+						button.disabled = false;
+					},
+					error => {
+						clearAlerts(container, [ PopupAlertType.PENDING ]);
+						const errorText = error.text || "(no error message)";
+						insertAlert(
+							PopupAlertType.FAILURE, //
+							(submitterInfo ?? {}).alerts, //
+							button, //
+							-1, //
+							errorText, //
+							text => text.replace("{status}", error.status.toString()).replace("{text}", errorText), //
+						);
+						button.disabled = false;
+					},
+				);
+				insertAlert(
+					PopupAlertType.PENDING, //
+					submitterInfo.alerts, //
+					button, //
+				);
+			};
+			if (submitterInfo.message) {
+				const messageBox = document.createElement("textarea");
+				messageBox.classList.add("message");
+				messageBox.rows = submitterInfo.message.rows;
+				messageBox.placeholder = submitterInfo.message.placeholder;
+				messageBox.spellcheck = true;
+				container.appendChild(messageBox);
+				getMessageText = () => messageBox.value;
+			}
+		};
+
+		const insertNote = (container: HTMLElement, noteInfo: PopupInteractionInfo["note"]) => {
+			if (!noteInfo) {
+				return;
+			}
 			const note = document.createElement("div");
 			note.classList.add("note");
-			note.textContent = interactionInfo.note.text;
-			interaction.appendChild(note);
-		}
-		return interaction;
+			note.textContent = noteInfo.text;
+			container.appendChild(note);
+		};
+
+		const createInteraction = (interactionInfo: PopupInteractionInfo, index: number) => {
+			const interaction = document.createElement("div");
+			interaction.classList.add("interaction");
+			interaction.classList.add(interactionInfo.className);
+			const checkboxId = insertLabel(interaction, interactionInfo.label, !!interactionInfo.checkbox, index);
+			insertObjectList(interaction, interactionInfo.object, index);
+			insertAnchor(interaction, interactionInfo.anchor);
+			insertSubmitter(interaction, interactionInfo.submitter);
+			insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, index, 0);
+			insertTextbox(interaction, interactionInfo.textbox, index, 0);
+			insertNote(interaction, interactionInfo.note);
+			return interaction;
+		};
+
+		return (sectionInfo: PopupSectionInfo) => {
+			const section = document.createElement("div");
+			section.classList.add("section");
+			if (sectionInfo.title) {
+				const title = document.createElement("div");
+				title.classList.add("title");
+				title.textContent = sectionInfo.title.text;
+				section.appendChild(title);
+			}
+			const container = document.createElement("div");
+			container.classList.add("container");
+			sectionInfo.interactions.forEach(async interactionInfo => {
+				if (interactionInfo.list) {
+					const length = await interactionInfo.list.getLength();
+					for (let i = 0; i < length; i++) {
+						container.appendChild(createInteraction(interactionInfo, i));
+					}
+				} else {
+					container.appendChild(createInteraction(interactionInfo, 0));
+				}
+			});
+			section.appendChild(container);
+			return section;
+		};
+	})();
+
+	const createBrand = () => {
+		const brand = document.createElement("div");
+		const name = document.createElement("div");
+		const version = document.createElement("div");
+		const logo = document.createElement("img");
+		name.classList.add("name");
+		name.textContent = chrome.runtime.getManifest().name;
+		version.classList.add("version");
+		version.textContent = `v${chrome.runtime.getManifest().version}`;
+		logo.classList.add("logo");
+		logo.src = "/icons/mms.svg";
+		brand.classList.add("brand");
+		brand.appendChild(name);
+		brand.appendChild(version);
+		brand.appendChild(logo);
+		return brand;
 	};
 
-	const createSection = (sectionInfo: PopupSectionInfo) => {
-		const section = document.createElement("div");
-		section.classList.add("section");
-		if (sectionInfo.title) {
-			const title = document.createElement("div");
-			title.classList.add("title");
-			title.textContent = sectionInfo.title.text;
-			section.appendChild(title);
-		}
-		const container = document.createElement("div");
-		container.classList.add("container");
-		sectionInfo.interactions.forEach((interactionInfo, i) => {
-			container.appendChild(createInteraction(interactionInfo, i));
-		});
-		section.appendChild(container);
-		return section;
+	const createFrameStructure = () => {
+		const frame = document.createElement("div");
+		frame.id = "frame";
+		document.body.appendChild(frame);
+		frame.appendChild(createBrand());
+		const panelContainer = document.createElement("div");
+		panelContainer.classList.add("container-panel");
+		frame.appendChild(panelContainer);
+		const filler = document.createElement("div");
+		filler.classList.add("filler");
+		frame.appendChild(filler);
+		const tabContainer = document.createElement("div");
+		tabContainer.classList.add("container-tab");
+		frame.appendChild(tabContainer);
+		return frame;
 	};
 
-	const temp = () => {
+	const insertAndManageContent = (() => {
 		const panelsInfo: Array<PopupPanelInfo> = [
 			{
 				className: "panel-general",
@@ -716,8 +946,8 @@ textarea
 									className: "url-input",
 									list: {
 										getArray: () =>
-											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync =>
-												sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname)
+											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => //
+												sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 											)
 										,
 										setArray: array =>
@@ -750,8 +980,8 @@ textarea
 									className: "url-input",
 									list: {
 										getArray: () =>
-											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync =>
-												sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname)
+											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => //
+												sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 											)
 										,
 										setArray: array =>
@@ -783,7 +1013,7 @@ textarea
 				sections: [
 					{
 						title: {
-							text: "",
+							text: "Keyword Lists",
 						},
 						interactions: [
 							{
@@ -860,6 +1090,16 @@ textarea
 														className: "phrase-input",
 														placeholder: "keyword",
 														spellcheck: false,
+														onLoad: async (setText, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setText(sync.termLists[containerIndex].terms[objectIndex].phrase);
+														},
+														onChange: (text, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].phrase = text;
+																setStorageSync(sync);
+															});
+														},
 													},
 												},
 											],
@@ -873,7 +1113,18 @@ textarea
 													label: {
 														text: "Match Whole Words",
 													},
-													checkbox: {},
+													checkbox: {
+														onLoad: async (setChecked, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.whole);
+														},
+														onToggle: (checked, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].matchMode.whole = checked;
+																setStorageSync(sync);
+															});
+														},
+													},
 												},
 												{
 													className: "type",
@@ -881,7 +1132,18 @@ textarea
 													label: {
 														text: "Match Stems",
 													},
-													checkbox: {},
+													checkbox: {
+														onLoad: async (setChecked, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.stem);
+														},
+														onToggle: (checked, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].matchMode.stem = checked;
+																setStorageSync(sync);
+															});
+														},
+													},
 												},
 												{
 													className: "type",
@@ -889,7 +1151,18 @@ textarea
 													label: {
 														text: "Match Case",
 													},
-													checkbox: {},
+													checkbox: {
+														onLoad: async (setChecked, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.case);
+														},
+														onToggle: (checked, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].matchMode.case = checked;
+																setStorageSync(sync);
+															});
+														},
+													},
 												},
 												{
 													className: "type",
@@ -897,7 +1170,18 @@ textarea
 													label: {
 														text: "Regular Expression",
 													},
-													checkbox: {},
+													checkbox: {
+														onLoad: async (setChecked, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.regex);
+														},
+														onToggle: (checked, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].matchMode.regex = checked;
+																setStorageSync(sync);
+															});
+														},
+													},
 												},
 											],
 										},
@@ -907,8 +1191,8 @@ textarea
 									className: "TODOreplace",
 									list: {
 										getArray: index =>
-											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
-												sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname)
+											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => //
+												sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
 											)
 										,
 										setArray: (array, index) =>
@@ -933,129 +1217,33 @@ textarea
 				],
 			},
 		];
-		const frame = document.createElement("div");
-		frame.id = "frame";
-		document.body.appendChild(frame);
-		const brand = document.createElement("div");
-		const name = document.createElement("div");
-		const version = document.createElement("div");
-		const logo = document.createElement("img");
-		name.classList.add("name");
-		name.textContent = chrome.runtime.getManifest().name;
-		version.classList.add("version");
-		version.textContent = `v${chrome.runtime.getManifest().version}`;
-		logo.classList.add("logo");
-		logo.src = "/icons/mms.svg";
-		brand.classList.add("brand");
-		brand.appendChild(name);
-		brand.appendChild(version);
-		brand.appendChild(logo);
-		frame.insertAdjacentElement("afterbegin", brand);
-		const panelContainer = document.createElement("frame");
-		panelContainer.classList.add("container-panel");
-		frame.appendChild(panelContainer);
-		const filler = document.createElement("div");
-		filler.classList.add("filler");
-		frame.appendChild(filler);
-		const tabContainer = document.createElement("div");
-		tabContainer.classList.add("container-tab");
-		frame.appendChild(tabContainer);
-		panelsInfo.forEach(panelInfo => {
-			const panel = document.createElement("div");
-			panel.classList.add("panel");
-			panel.classList.add(panelInfo.className);
-			panelInfo.sections.forEach(sectionInfo => {
-				panel.appendChild(createSection(sectionInfo));
-			});
-			panelContainer.appendChild(panel);
-			const tab = document.createElement("button");
-			tab.type = "button";
-			tab.classList.add("tab");
-			tab.classList.add(panelInfo.className);
-			tab.textContent = panelInfo.name.text;
-			tabContainer.appendChild(tab);
-		});
-		const classNameIsPanel = (className: string) => className.split("-")[0] === "panel";
-		const getPanelClassName = (classArray: Array<string>) =>
-			classArray.find(className => classNameIsPanel(className)) ?? "";
-		const focusActivePanel = () => {
-			const className = getPanelClassName(Array.from(frame.classList));
-			(document.querySelector(`.panel.${className} input`) as HTMLInputElement).focus();
-		};
-		const getTabs = () => document.querySelectorAll(".container-tab .tab");
-		const shiftTabFromTab = (tabCurrent: HTMLButtonElement, toRight: boolean, cycle: boolean) => {
-			const tabNext = (
-				tabCurrent[toRight ? "nextElementSibling" : "previousElementSibling"]
-				?? (cycle ? (tabCurrent.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"] : null)
-			) as HTMLButtonElement | null;
-			if (tabNext) {
-				tabNext.focus();
-				tabNext.dispatchEvent(new MouseEvent("mousedown"));
-			}
-		};
-		getTabs().forEach((tab: HTMLButtonElement) => {
-			const onClick = () => {
-				frame.classList.forEach(className => {
-					if (classNameIsPanel(className)) {
-						frame.classList.remove(className);
-					}
-				});
-				frame.classList.add(getPanelClassName(Array.from(tab.classList)));
-			};
-			tab.addEventListener("click", onClick);
-			tab.addEventListener("mousedown", onClick);
-			tab.addEventListener("keydown", event => {
-				if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-					shiftTabFromTab(tab, true, true);
-				} else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-					shiftTabFromTab(tab, false, true);
-				}
-			});
-		});
-		document.addEventListener("keydown", event => {
-			const shiftTab = (toRight: boolean, cycle: boolean) => {
-				const currentTab = document
-					.querySelector(`.container-tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
-				shiftTabFromTab(currentTab, toRight, cycle);
-				focusActivePanel();
-			};
-			if (event.key === "PageDown") {
-				shiftTab(true, true);
-			} else if (event.key === "PageUp") {
-				shiftTab(false, true);
-			}
-		});
-		(getTabs()[0] as HTMLButtonElement).click();
-		const reload = () => {
+
+		return () => {
+			document.body.appendChild(createFrameStructure());
+			const panelContainer = document.querySelector(".container-panel") as HTMLElement;
+			const tabContainer = document.querySelector(".container-tab") as HTMLElement;
 			panelsInfo.forEach(panelInfo => {
+				const panel = document.createElement("div");
+				panel.classList.add("panel");
+				panel.classList.add(panelInfo.className);
 				panelInfo.sections.forEach(sectionInfo => {
-					sectionInfo.interactions.forEach(interactionInfo => {
-						if (!interactionInfo.checkbox) {
-							return;
-						}
-						const checkbox = document.getElementById(interactionInfo.checkbox.id as string) as HTMLInputElement;
-						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-						interactionInfo.checkbox.onLoad!(checked => checkbox.checked = checked);
-					});
+					panel.appendChild(createSection(sectionInfo));
 				});
+				panelContainer.appendChild(panel);
+				const tab = document.createElement("button");
+				tab.type = "button";
+				tab.classList.add("tab");
+				tab.classList.add(panelInfo.className);
+				tab.textContent = panelInfo.name.text;
+				tabContainer.appendChild(tab);
 			});
+			handleTabs();
+			chrome.storage.onChanged.addListener(() => reload(panelsInfo));
+			chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
+			insertWarning("sites_search_research", "This functionality is experimental. Please report any issues!");
+			insertWarning("term_lists", "This functionality is experimental, and only activates under special conditions.");
 		};
-		chrome.storage.onChanged.addListener(reload);
-		chrome.tabs.onActivated.addListener(reload);
-		// Unrelated
-		const insertWarning = (panelName: string, text: string) => {
-			const warning = document.createElement("div");
-			warning.classList.add("warning");
-			warning.textContent = text;
-			document.querySelector(`.container-panel .panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
-		};
-		insertWarning("sites_search_research", "This functionality is experimental. Please report bugs or give feedback!");
-		insertWarning(
-			"term_lists",
-			`This interface will allow editing keyword lists
-			which can be stored, highlighted, and assigned sites for automatic highlighting.`,
-		);
-	};
+	})();
 
 	/**
 	 * An EmailJS library function which sends an email using the EmailJS service.
@@ -1091,7 +1279,7 @@ textarea
 
 	return () => {
 		fillAndInsertStylesheet();
-		temp();
+		insertAndManageContent();
 	};
 })();
 
