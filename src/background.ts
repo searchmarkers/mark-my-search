@@ -443,8 +443,10 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
+ * @param messagingRetriesRemaining The number of retries permitted in case of tab messaging errors.
+ * Retries are preceded by attempting to inject the highlighting script.
  */
-const activateResearchInTab = async (tabId: number) => {
+const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 1) => {
 	const sync = await getStorageSync([
 		StorageSync.BAR_CONTROLS_SHOWN,
 		StorageSync.BAR_LOOK,
@@ -455,18 +457,39 @@ const activateResearchInTab = async (tabId: number) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = await (async () => {
 		const researchInstance = session.researchInstances[tabId];
-		if (researchInstance
-			&& researchInstance.persistent
-			&& await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, { getDetails: { termsFromSelection: true } } as HighlightMessage)
-				.then((response: HighlightDetails) => (response.terms ?? []).length === 0)) {
-			researchInstance.enabled = true;
-			return researchInstance;
+		if (researchInstance && researchInstance.persistent) {
+			const highlightMessage = { getDetails: { termsFromSelection: true } } as HighlightMessage;
+			const termsAreSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, highlightMessage)
+				.then((response: HighlightDetails) =>
+					response.terms ? (response.terms.length > 0) : false
+				).catch(() =>
+					undefined
+				);
+			if (termsAreSelected === undefined) { // Error when sending message, likely due to lack of an injected script
+				// We cannot be sure there is no user selection, so must retry
+				if (messagingRetriesRemaining > 0) { // Give up if attempts exhausted
+					console.log(highlightMessage, "0 activating highlighting");
+					executeScriptsInTab(tabId).then(() => {
+						// Try again after attempting script injection, but give up if the same process fails and attempts are exhausted
+						console.log(highlightMessage, "1 activating research");
+						activateResearchInTab(tabId, messagingRetriesRemaining - 1);
+					});
+				}
+				return null; // Terminate since the function will be re-executed on the next try
+			}
+			if (!termsAreSelected) {
+				researchInstance.enabled = true;
+				return researchInstance;
+			}
 		}
 		return await createResearchInstance({
-			terms: [],
+			terms: [], // Indicate that the user selection should be used (in case of selected terms OR no existing research)
 			autoOverwritable: false,
 		});
 	})();
+	if (researchInstance === null) {
+		return;
+	}
 	researchInstance.highlightsShown = true;
 	if (researchInstance.terms.length) {
 		handleMessage({
