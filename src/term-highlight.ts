@@ -144,7 +144,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 	const zIndexMax = 2**31 - 1;
 	style.textContent = `
 /* TODO reorganise and rename */
-/* TERM INPUT & BUTTONS */
+/* || Term Input and Buttons */
 #${getSel(ElementID.BAR)} ::selection
 	{ background: Highlight; color: HighlightText; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
@@ -180,7 +180,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: none; }
 /**/
 
-/* TERM MATCH MODES STYLE */
+/* || Term Matching Option Hints */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-weight: bold; }
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
@@ -205,7 +205,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ padding-inline: 2px !important; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
 /**/
 
-/* BAR */
+/* || Bar */
 #${getSel(ElementID.BAR)}
 	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; font-size: 14.6px; line-height: initial; user-select: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
@@ -223,7 +223,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: inline-block; vertical-align: top; margin-left: 0.5em; }
 /**/
 
-/* TERM PULLDOWN */
+/* || Term Pulldown */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}.${getSel(ElementClass.OVERRIDE_VISIBILITY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover) + .${getSel(ElementClass.OPTION_LIST)}
@@ -241,7 +241,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ background: hsl(0 0% 90%) !important; }
 /**/
 
-/* BAR CONTROLS */
+/* || Bar Controls */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}
 	{ white-space: pre; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
@@ -263,7 +263,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ background: hsl(0 0% 80% / 0.6) !important; }
 /**/
 
-/* TERM SCROLL MARKERS */
+/* || Term Scroll Markers */
 @keyframes ${getSel(AtRuleIdent.MARKER_ON)}
 	{ from {} to { padding-right: 16px; }; }
 @keyframes ${getSel(AtRuleIdent.MARKER_OFF)}
@@ -277,7 +277,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ padding-right: 16px; transition: unset; }
 /**/
 
-/* TERM HIGHLIGHTS */
+/* || Term Highlights */
 @keyframes ${getSel(AtRuleIdent.FLASH)}
 	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
@@ -294,7 +294,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
 				: colorA;
 		style.textContent += `
-/* TERM HIGHLIGHTS */
+/* || Term Highlights */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
@@ -303,12 +303,12 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	border-radius: 2px !important; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35) !important; }
 /**/
 
-/* TERM MARKERS */
+/* || Term Scroll Markers */
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)}
 	{ background: hsl(${hue} 100% 44%); }
 /**/
 
-/* TERM BUTTONS */
+/* || Term Control Buttons */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)} !important; }
@@ -389,6 +389,10 @@ const jumpToTerm = (() => {
 		&& getComputedStyle(element).visibility !== "hidden"
 	;
 
+	/**
+	 * Focuses an element, preventing immediate scroll-into-view and forcing visible focus where supported.
+	 * @param element An element.
+	 */
 	const focusElement = (element: HTMLElement) =>
 		element.focus({
 			preventScroll: true,
@@ -478,7 +482,7 @@ const jumpToTerm = (() => {
 			const precision = 10**precisionFactor;
 			const scrollMarker = scrollMarkerGutter.querySelector(
 				`${term ? `.${getSel(ElementClass.TERM, term.selector)}` : ""}[top^="${
-					Math.trunc(getRectYRelative(container.getBoundingClientRect()) * precision) / precision
+					Math.trunc(getElementYRelative(container) * precision) / precision
 				}"]`
 			) as HTMLElement | null;
 			if (scrollMarker) {
@@ -559,7 +563,8 @@ const insertTermInput = (() => {
 	 * Shifts the control focus to another control if the caret is at the input end corresponding to the requested direction.
 	 * A control is considered focused if its input is focused.
 	 * @param term The term of the currently focused control.
-	 * @param shiftRight Whether to shift rightwards or leftwards.
+	 * @param idxTarget The index of the target term control to shift to, if no shift direction is passed.
+	 * @param shiftRight Whether to shift rightwards or leftwards, if no target index is passed.
 	 * @param onBeforeShift A function to execute once the shift is confirmed but 
 	 * @param terms Terms being controlled and highlighted.
 	 */
@@ -736,7 +741,7 @@ const getControlAppendTerm = (): Element | null =>
 
 /**
  * Selects all of the text in an input. Does not affect focus.
- * Mainly a helper for mitigating a Chromium bug which causes `select()` during the initial focus to not select all text.
+ * Mainly a helper for mitigating a Chromium bug which causes `select()` for an input's initial focus to not select all text.
  * @param input An input element to select the text of.
  */
 const selectInputTextAll = (input: HTMLInputElement) =>
@@ -806,7 +811,7 @@ const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
 ;
 
 /**
- * Updates the class list of a term control to reflect the term's matching modes.
+ * Updates the class list of a control to reflect the matching options of its term.
  * @param mode An object of term matching mode flags.
  * @param classList The control element class list for a term.
  */
@@ -817,7 +822,11 @@ const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMToke
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
 };
 
-// TODO document
+/**
+ * Gets the matching options of a term from the class list of its control.
+ * @param classList The control element class list for a term.
+ * @returns The matching options for a term.
+ */
 const getTermControlMatchModeFromClassList = (classList: DOMTokenList): MatchMode => ({
 	regex: classList.contains(getSel(ElementClass.MATCH_REGEX)),
 	case: classList.contains(getSel(ElementClass.MATCH_CASE)),
@@ -858,13 +867,13 @@ const removeTermControl = (idx: number) => {
 };
 
 /**
- * Creates an element for a term matching option.
- * @param terms Terms being controlled and highlighted.
+ * Creates an clickable element to toggle one of the matching options for a term.
  * @param term A term for which to create the option.
  * @param text Text content for the option, which is also used to determine the matching mode it controls.
+ * @param onActivated A function, taking the identifier for the match option, to execute each time the option is activated.
  * @returns The resulting option element.
  */
-const createTermOption = (term: MatchTerm, terms: MatchTerms, text: string,
+const createTermOption = (term: MatchTerm, text: string,
 	onActivated: (matchType: string) => void): HTMLButtonElement => {
 	const matchType = getTermOptionMatchType(text);
 	const option = document.createElement("button");
@@ -877,7 +886,15 @@ const createTermOption = (term: MatchTerm, terms: MatchTerms, text: string,
 	return option;
 };
 
-// TODO document
+/**
+ * Creates a menu structure containing clickable elements to individually toggle the matching options for a term.
+ * @param term A term for which to create the menu.
+ * @param terms Terms being controlled and highlighted.
+ * @param focusReturnElement An element to return focus to once an option from the menu has been activated,
+ * if the menu is currently focused. This is intended to be an element from which focus to the menu was gained.
+ * @param onActivated A function, taking the identifier for a match option, to execute each time the option is activated.
+ * @returns The resulting menu element.
+ */
 const createTermOptionMenu = (
 	term: MatchTerm,
 	terms: MatchTerms,
@@ -892,13 +909,13 @@ const createTermOptionMenu = (
 			termChangedIdx: getTermIdx(term, terms),
 		});
 	},
-) => {
+): HTMLElement => {
 	const menu = document.createElement("menu");
 	menu.classList.add(getSel(ElementClass.OPTION_LIST));
-	menu.appendChild(createTermOption(term, terms, "Case Sensitive", onActivated));
-	menu.appendChild(createTermOption(term, terms, "Stem Word", onActivated));
-	menu.appendChild(createTermOption(term, terms, "Whole Word", onActivated));
-	menu.appendChild(createTermOption(term, terms, "Regex Mode", onActivated));
+	menu.appendChild(createTermOption(term, "Case Sensitive", onActivated));
+	menu.appendChild(createTermOption(term, "Stem Word", onActivated));
+	menu.appendChild(createTermOption(term, "Whole Word", onActivated));
+	menu.appendChild(createTermOption(term, "Regex Mode", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
 		event.preventDefault();
 		if (!executeResult) {
@@ -924,12 +941,12 @@ const createTermOptionMenu = (
 
 /**
  * Inserts an interactive term control element.
- * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param terms Terms being controlled and highlighted.
  * @param idx The index in `terms` of a term to assign.
  * @param command The string of a command to display as a shortcut hint for jumping to the next term.
  * @param commandReverse The string of a command to display as a shortcut hint for jumping to the previous term.
  * @param controlsInfo Details of controls inserted.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  */
 const insertTermControl = (terms: MatchTerms, idx: number, command: string, commandReverse: string,
 	controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
@@ -1008,6 +1025,7 @@ const insertControls = (() => {
 	 * @param terms Terms to be controlled and highlighted.
 	 * @param barControlName A standard name for the control.
 	 * @param hideWhenInactive Indicates whether to hide the control while not in interaction.
+	 * @param controlsInfo Details of controls to insert.
 	 */
 	const insertControl = (() => {
 		/**
@@ -1173,12 +1191,12 @@ const resetTermControlInputsVisibility = () =>
 ;
 
 /**
- * Gets the central y-position of a DOM rect relative to the document scroll container.
- * @param rect A DOM rect.
+ * Gets the central y-position of the DOM rect of an element, relative to the document scroll container.
+ * @param element An element
  * @returns The relative y-position.
  */
-const getRectYRelative = (rect: DOMRect) =>
-	(rect.y + document.documentElement.scrollTop) / document.documentElement.scrollHeight
+const getElementYRelative = (element: HTMLElement) =>
+	(element.getBoundingClientRect().y + document.documentElement.scrollTop) / document.documentElement.scrollHeight
 ;
 
 /**
@@ -1217,7 +1235,7 @@ const insertScrollMarkers = (() => {
 			const container = getContainerBlock(highlight, highlightTags, containerBlockSelector);
 			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
 			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
-			const yRelative = getRectYRelative(container.getBoundingClientRect());
+			const yRelative = getElementYRelative(container);
 			let markerCss = `top: ${yRelative * 100}%;`;
 			if (containerIdx !== -1) {
 				if (containersInfo[containerIdx].container === container) {
@@ -1247,7 +1265,7 @@ const insertScrollMarkers = (() => {
  * @param terms Terms to find, highlight, and mark.
  * @param rootNode A node under which to find and highlight term occurrences.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
- * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
  */
 const generateTermHighlightsUnderNode = (() => {
 	/**
@@ -1329,9 +1347,11 @@ const generateTermHighlightsUnderNode = (() => {
 
 	/**
 	 * Highlights occurrences of terms in text nodes under a node in the DOM tree.
-	 * @param node A node under which to match terms and insert highlights.
-	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param terms Terms to find and highlight.
+	 * @param node A root node under which to match terms and insert highlights.
+	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
+	 * @param visitSiblings Whether to visit the siblings of the root node.
 	 */
 	const insertHighlights = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
 		nodeItems = new UnbrokenNodeList, visitSiblings = true) => {
@@ -1411,6 +1431,9 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
 
 /**
  * Gets a mutation observer which listens to document changes and performs partial highlights where necessary.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param terms Terms to be continuously found and highlighted within the DOM.
  */
 const getObserverNodeHighlighter = (() => {
 	/**
@@ -1467,12 +1490,14 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  * sending a message to the background script containing details of terms from the current selection.
  * This flag causes a later highlighting message with possibly different terms to be received,
  * so highlighting in this run is pointless.
+ * @param pageModifyEnabled Indicates whether to modify page content.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
- * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
  * @param observer An observer which selectively performs highlighting on observing changes.
  */
 const beginHighlighting = (
-	terms: MatchTerms, termsToPurge: MatchTerms, disable: boolean, termsFromSelection: boolean,
+	terms: MatchTerms, termsToPurge: MatchTerms,
+	disable: boolean, termsFromSelection: boolean, pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
@@ -1488,19 +1513,26 @@ const beginHighlighting = (
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
 	if (disable) {
 		removeControls();
-	} else if (!termsFromSelection) {
+	} else if (!termsFromSelection && pageModifyEnabled) {
 		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
 	}
 };
 
-// TODO document
+/**
+ * Extracts terms from the currently user-selected string.
+ * @returns The extracted terms, split at some separator and some punctuation characters,
+ * with some other punctuation characters removed.
+ */
 const getTermsFromSelection = () => {
 	const selection = document.getSelection();
 	const terms: MatchTerms = [];
 	if (selection && selection.anchorNode) {
-		const termsAll = selection.toString().split(" ").map(phrase => phrase.replace(/\W/g, ""))
+		const termsAll = selection.toString().split(/\r|\p{Zs}|\p{Po}|\p{Cc}/gu)
+			// (carriage return) | Space Separators | Other Punctuation | Control
+			.map(phrase => phrase.replace(/\p{Pc}|\p{Ps}|\p{Pe}|\p{Pi}|\p{Pf}/gu, ""))
+			// Connector Punctuation | Open Punctuation | Close Punctuation | Initial Punctuation | Final Punctuation
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 		const termSelectors: Set<string> = new Set;
 		termsAll.forEach(term => {
@@ -1528,7 +1560,7 @@ const getTermsFromSelection = () => {
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param hues Color hues for term styles to cycle through.
 	 * @param observer An observer which selectively performs highlighting on observing changes.
-	 * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators are regenerated.
+	 * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
 	 * @param termsUpdate An array of terms to which to update the existing terms, if change is necessary.
 	 * @param termUpdate A new term to insert, a term to be removed, or a changed version of a term, if supplied.
 	 * @param termToUpdateIdx The create term constant, the remove term constant, or the index of a term to update, if supplied.
@@ -1606,13 +1638,11 @@ const getTermsFromSelection = () => {
 			if (!disable) {
 				fillStylesheetContent(terms, hues);
 			}
-			if (controlsInfo.pageModifyEnabled) {
-				beginHighlighting(
-					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-					disable, termsFromSelection,
-					highlightTags, requestRefreshIndicators, observer,
-				);
-			}
+			beginHighlighting(
+				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+				disable, termsFromSelection, controlsInfo.pageModifyEnabled,
+				highlightTags, requestRefreshIndicators, observer,
+			);
 		};
 	})();
 

@@ -87,7 +87,12 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
 	}
 };
 
-// TODO document
+/**
+ * Determines whether a URL is filtered in by a given URL filter.
+ * @param url A URL object.
+ * @param urlFilter A URL filter array, the component strings of which may contain wildcards.
+ * @returns `true` if the URL is filtered in, `false` otherwise.
+ */
 const isUrlFilteredIn = (() => {
 	const sanitize = (urlComponent: string) =>
 		sanitizeForRegex(urlComponent).replace("\\*", ".*")
@@ -96,14 +101,31 @@ const isUrlFilteredIn = (() => {
 	return (url: URL, urlFilter: URLFilter): boolean =>
 		!!urlFilter.find(({ hostname, pathname }) =>
 			(new RegExp(sanitize(hostname) + "\\b")).test(url.hostname)
-			&& (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1))
+			&& (pathname === "" || pathname === "/" || (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1)))
 		)
 	;
 })();
 
-// TODO document
+/**
+ * Determines whether the user has permitted pages with the given URL to be deeply modified during highlighting,
+ * which is powerful but may be destructive.
+ * @param urlString The valid URL string corresponding to a page to be potentially highlighted.
+ * @param urlFilters URL filter preferences.
+ * @returns `true` if the corresponding page may be modified, `false` otherwise.
+ */
 const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify)
+;
+
+/**
+ * Determines whether the user has permitted pages with the given URL to treated as a search page,
+ * from which keywords may be collected.
+ * @param urlString The valid URL string corresponding to a page to be potentially auto-highlighted.
+ * @param urlFilters An object of details about URL filtering.
+ * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
+ */
+const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
+	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
 
 /**
@@ -115,11 +137,11 @@ const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues
  * or the appropriate flag in the highlighting instance is `true`, __off__ otherwise. If unspecified, highlight visibility is not changed.
  * @param barControlsShown An object of flags indicating the visibility of each toolbar option module.
  * @param barLook An object of details about the style and layout of the toolbar.
- * @param highlightLook 
- * @param enablePageModify 
- * @returns A research message which, when sent to a highlighting script, will produce the desired effect within that page.
+ * @param highlightLook An object of details about the style of highlights.
+ * @param matchMode An object of term matching options, for use as defaults.
+ * @param enablePageModify Whether to enable deep page highlighting modification, or otherwise disable it.
+ * @returns A research message which, when sent to a highlighting script, will produce the requested effect within that page.
  */
-// TODO document
 const createResearchMessage = (
 	researchInstance: ResearchInstance,
 	overrideHighlightsShown: boolean | undefined,
@@ -321,6 +343,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		const searchDetails: { isSearch: boolean, engine?: Engine } = local.enabled
 			? await isTabSearchPage(session.engines, urlString)
 			: { isSearch: false };
+		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, sync.urlFilters);
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
@@ -415,8 +438,10 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
+ * @param messagingRetriesRemaining The number of retries permitted in case of tab messaging errors.
+ * Retries are preceded by attempting to inject the highlighting script.
  */
-const activateResearchInTab = async (tabId: number) => {
+const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 1) => {
 	const sync = await getStorageSync([
 		StorageSync.BAR_CONTROLS_SHOWN,
 		StorageSync.BAR_LOOK,
@@ -427,18 +452,39 @@ const activateResearchInTab = async (tabId: number) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = await (async () => {
 		const researchInstance = session.researchInstances[tabId];
-		if (researchInstance
-			&& researchInstance.persistent
-			&& await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, { getDetails: { termsFromSelection: true } } as HighlightMessage)
-				.then((response: HighlightDetails) => (response.terms ?? []).length === 0)) {
-			researchInstance.enabled = true;
-			return researchInstance;
+		if (researchInstance && researchInstance.persistent) {
+			const highlightMessage = { getDetails: { termsFromSelection: true } } as HighlightMessage;
+			const termsAreSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, highlightMessage)
+				.then((response: HighlightDetails) =>
+					response.terms ? (response.terms.length > 0) : false
+				).catch(() =>
+					undefined
+				);
+			if (termsAreSelected === undefined) { // Error when sending message, likely due to lack of an injected script
+				// We cannot be sure there is no user selection, so must retry
+				if (messagingRetriesRemaining > 0) { // Give up if attempts exhausted
+					console.log(highlightMessage, "0 activating highlighting");
+					executeScriptsInTab(tabId).then(() => {
+						// Try again after attempting script injection, but give up if the same process fails and attempts are exhausted
+						console.log(highlightMessage, "1 activating research");
+						activateResearchInTab(tabId, messagingRetriesRemaining - 1);
+					});
+				}
+				return null; // Terminate since the function will be re-executed on the next try
+			}
+			if (!termsAreSelected) {
+				researchInstance.enabled = true;
+				return researchInstance;
+			}
 		}
 		return await createResearchInstance({
-			terms: [],
+			terms: [], // Indicate that the user selection should be used (in case of selected terms OR no existing research)
 			autoOverwritable: false,
 		});
 	})();
+	if (researchInstance === null) {
+		return;
+	}
 	researchInstance.highlightsShown = true;
 	if (researchInstance.terms.length) {
 		handleMessage({
