@@ -128,16 +128,23 @@ const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncV
 	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
 
-// TODO document
-const determineToggleHighlightsOn = (highlightsShown: boolean, overrideHighlightsShown: boolean) =>
+/**
+ * Determines whether the highlight-showing should be toggled on, off, or left unchanged.
+ * @param highlightsShown Whether or not highlights are shown currently.
+ * @param overrideHighlightsShown Whether or not to force highlights to be shown,
+ * or not change highlight-showing if `undefined`
+ * @returns `true` to toggle on, `false` to toggle off, `undefined` to not change.
+ */
+const determineToggleHighlightsOn = (highlightsShown: boolean, overrideHighlightsShown?: boolean) =>
 	overrideHighlightsShown === undefined
 		? undefined
 		: highlightsShown || overrideHighlightsShown
 ;
 
 /**
- * Continuously caches objects, representing search engine URLs and how to extract contained search queries, to session storage.
- * These objects are inferred from heuristics such as details of dynamic bookmarks stored by the user.
+ * Caches objects, representing search engine URLs and how to extract their search queries, to session storage.
+ * These objects are generated from information such as dynamic bookmarks stored by the user,
+ * and caching is triggered on information update.
  */
 const manageEnginesCacheOnBookmarkUpdate = (() => {
 	/**
@@ -603,7 +610,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			session.researchInstances[senderTabId] = researchInstance;
 			setStorageSession(session);
 		}
-		if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
+		if (message.makeUnique) {
 			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
 			const sync = await getStorageSync([
 				StorageSync.BAR_CONTROLS_SHOWN,

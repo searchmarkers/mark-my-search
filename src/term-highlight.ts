@@ -1255,6 +1255,7 @@ const insertScrollMarkers = (() => {
 			}
 			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
 		});
+		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
 		gutter.innerHTML = markersHtml;
 	};
 })();
@@ -1482,8 +1483,6 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  * Disables then restarts continuous highlighting.
  * @param terms Terms to be continuously found and highlighted within the DOM.
  * @param termsToPurge Terms for which to remove previous highlights.
- * @param disable Indicates whether to skip all highlighting and remove the controls,
- * thus visibly and functionally deactivating the extension within the page.
  * @param pageModifyEnabled Indicates whether to modify page content.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
@@ -1491,14 +1490,12 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  */
 const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
-	disable: boolean, pageModifyEnabled: boolean,
+	pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
-	if (disable) {
-		removeControls();
-	} else if (pageModifyEnabled) {
+	if (pageModifyEnabled) {
 		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
@@ -1535,8 +1532,6 @@ const getTermsFromSelection = () => {
 	 * Inserts the toolbar with term controls and begins continuously highlighting terms in the document.
 	 * All controls necessary are first removed. Refreshes executed may be whole or partial according to requirements.
 	 * @param terms Terms to highlight and display in the toolbar.
-	 * @param disable Indicates whether to skip control and highlight insertion stages but run removal stages,
-	 * thus visibly and functionally deactivating the extension within the page.
 	 * @param controlsInfo Details of controls to insert.
 	 * @param commands Browser commands to use in shortcut hints.
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
@@ -1568,7 +1563,7 @@ const getTermsFromSelection = () => {
 			}
 		};
 	
-		return (terms: MatchTerms, disable: boolean,
+		return (terms: MatchTerms,
 			controlsInfo: ControlsInfo, commands: BrowserCommands,
 			highlightTags: HighlightTags, hues: TermHues,
 			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
@@ -1614,15 +1609,13 @@ const getTermsFromSelection = () => {
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 					insertToolbar(terms, controlsInfo, commands, highlightTags, hues);
 				}
-			} else if (!disable) {
+			} else {
 				return;
 			}
-			if (!disable) {
-				fillStylesheetContent(terms, hues);
-			}
+			fillStylesheetContent(terms, hues);
 			beginHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				disable, controlsInfo.pageModifyEnabled,
+				controlsInfo.pageModifyEnabled,
 				highlightTags, requestRefreshIndicators, observer,
 			);
 		};
@@ -1798,23 +1791,19 @@ const getTermsFromSelection = () => {
 			}
 			if (message.deactivate) {
 				terms.splice(0);
+				removeControls();
 			}
 			if (message.enablePageModify !== undefined) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
 			}
-			if (
-				message.deactivate
-				|| message.termUpdate
-				|| (
-					message.terms !== undefined
-					&& (
-						!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
-						|| (!terms.length && !document.getElementById(ElementID.BAR))
-					)
-				)
+			if (message.termUpdate
+				|| (message.terms !== undefined && (
+					!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
+					|| (!terms.length && !document.getElementById(ElementID.BAR))
+				))
 			) {
 				refreshTermControlsAndBeginHighlighting(
-					terms, message.deactivate ?? false, //
+					terms, //
 					controlsInfo, commands, //
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //

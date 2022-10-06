@@ -64,11 +64,16 @@ class MatchTerm {
 		const addOptionalHyphens = (word: string) => word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
 		const getBoundaryTest = (charBoundary: string) => this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
 		const patternString = `${
-			getBoundaryTest(patternStringPrefix[0])}${
-			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))}${
-			sanitize(patternStringPrefix.at(-1) as string)}(?:${
-			patternStringSuffix.length ? optionalHyphen + patternStringSuffix + (this.matchMode.whole ? "\\b" : "") : ""}|${
-			getBoundaryTest(patternStringPrefix.at(-1) as string)})`;
+			getBoundaryTest(patternStringPrefix[0])
+		}${
+			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))
+		}${
+			sanitize(patternStringPrefix.at(-1) as string)
+		}(?:${
+			patternStringSuffix ? optionalHyphen + patternStringSuffix : ""
+		})?${
+			getBoundaryTest(patternStringPrefix.at(-1) as string)
+		}`;
 		this.pattern = new RegExp(patternString, flags);
 	}
 }

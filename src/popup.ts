@@ -268,25 +268,6 @@ textarea
 		}
 	})();
 
-	const objectSetValue = (object: Record<string, unknown>, key: string, value: unknown, set = true) => {
-		if (key.includes(".")) {
-			return objectSetValue(
-				object[key.slice(0, key.indexOf("."))] as Record<string, unknown>,
-				key.slice(key.indexOf(".") + 1),
-				value,
-			);
-		} else {
-			if (set) {
-				object[key] = value;
-			}
-			return object[key];
-		}
-	};
-
-	const objectGetValue = (object: Record<string, unknown>, key: string) =>
-		objectSetValue(object, key, undefined, false)
-	;
-
 	const classNameIsPanel = (className: string) =>
 		className.split("-")[0] === "panel"
 	;
@@ -298,7 +279,12 @@ textarea
 	const focusActivePanel = () => {
 		const frame = document.querySelector("#frame") as HTMLElement;
 		const className = getPanelClassName(Array.from(frame.classList));
-		(document.querySelector(`.panel.${className} input`) as HTMLInputElement).focus();
+		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
+		if (inputFirst) {
+			inputFirst.select();
+		} else if (document.activeElement) {
+			(document.activeElement as HTMLElement).blur();
+		}
 	};
 
 	const getTabs = () =>
@@ -349,8 +335,10 @@ textarea
 			};
 			if (event.key === "PageDown") {
 				shiftTab(true, true);
+				event.preventDefault();
 			} else if (event.key === "PageUp") {
 				shiftTab(false, true);
+				event.preventDefault();
 			}
 		});
 		(getTabs()[0] as HTMLButtonElement).click();
@@ -363,7 +351,10 @@ textarea
 					if (!interactionInfo.checkbox) {
 						return;
 					}
-					const checkbox = document.getElementById(interactionInfo.checkbox.autoId as string) as HTMLInputElement;
+					if (!interactionInfo.checkbox.autoId) {
+						return;
+					}
+					const checkbox = document.getElementById(interactionInfo.checkbox.autoId) as HTMLInputElement;
 					if (interactionInfo.checkbox.onLoad) {
 						interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
 					}
@@ -424,8 +415,7 @@ textarea
 	};
 
 	const createSection = (() => {
-		const insertLabel = (container: HTMLElement, labelInfo: PopupInteractionInfo["label"], checkboxIsPaired: boolean,
-			containerIndex: number) => {
+		const insertLabel = (container: HTMLElement, labelInfo: PopupInteractionInfo["label"], containerIndex: number) => {
 			if (!labelInfo) {
 				return;
 			}
@@ -445,7 +435,7 @@ textarea
 					if (labelInfo.getText) {
 						labelInfo.getText(containerIndex).then(text => label.textContent = text);
 					}
-					const checkboxId = checkboxIsPaired ? getId.next().value : "";
+					const checkboxId = getId.next().value;
 					label.htmlFor = checkboxId;
 					return [ label, checkboxId ];
 				}
@@ -559,7 +549,7 @@ textarea
 						if (textboxOrList && textboxOrList.tagName === "INPUT") {
 							//(textboxOrList as HTMLInputElement).value = objectGetValue(object, rowInfo.key);
 						}
-						const checkboxId = insertLabel(row, rowInfo.label, !!rowInfo.checkbox, containerIndex);
+						const checkboxId = insertLabel(row, rowInfo.label, containerIndex);
 						const checkbox = insertCheckbox(row, rowInfo.checkbox, checkboxId, objectIndex, containerIndex);
 						if (checkbox) {
 							//checkbox.checked = objectGetValue(object, rowInfo.key);
@@ -670,7 +660,7 @@ textarea
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction");
 			interaction.classList.add(interactionInfo.className);
-			const checkboxId = insertLabel(interaction, interactionInfo.label, !!interactionInfo.checkbox, index);
+			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
 			insertObjectList(interaction, interactionInfo.object, index);
 			insertAnchor(interaction, interactionInfo.anchor);
 			insertSubmitter(interaction, interactionInfo.submitter);
