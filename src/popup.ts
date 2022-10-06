@@ -128,7 +128,7 @@ body
 textarea
 	{ resize: none; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%; border-radius: 6px; background: inherit; }
+	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit; background: inherit; }
 #frame > .filler
 	{ flex: 1; }
 .brand
@@ -281,7 +281,11 @@ textarea
 		const className = getPanelClassName(Array.from(frame.classList));
 		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
 		if (inputFirst) {
-			inputFirst.select();
+			if (inputFirst.type === "text") {
+				inputFirst.select();
+			} else {
+				inputFirst.focus();
+			}
 		} else if (document.activeElement) {
 			(document.activeElement as HTMLElement).blur();
 		}
