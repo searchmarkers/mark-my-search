@@ -113,7 +113,7 @@ const loadPopup = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%);
+	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%); border-radius: 8px;
 	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
 *
 	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
