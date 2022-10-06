@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight search engine keywords. Jump between terms instantly.",
-	"version": "1.5.2",
+	"version": "1.6.1",
 
 	"icons": {
 		"48": "/icons/mms-48.png",

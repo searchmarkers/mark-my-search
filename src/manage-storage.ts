@@ -21,6 +21,7 @@ type StorageSyncValues = {
 		stoplist: Array<string>
 		searchParams: Array<string>
 	}
+	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
 	[StorageSync.LINK_RESEARCH_TABS]: boolean
 	[StorageSync.SHOW_HIGHLIGHTS]: {
 		default: boolean
@@ -42,14 +43,19 @@ type StorageSyncValues = {
 		noPageModify: URLFilter
 		nonSearch: URLFilter
 	}
-	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
+	[StorageSync.TERM_LISTS]: Array<TermList>
 }
 type URLFilter = Array<{
 	hostname: string,
 	pathname: string,
 }>
+type TermList = {
+	name: string
+	terms: Array<MatchTerm>
+	urlFilter: URLFilter
+}
 
-enum StorageSession { // Keys assumed to be unique across all storage areas (excluding "managed")
+enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
 	RESEARCH_INSTANCES = "researchInstances",
 	_ID_R_INSTANCES = "idResearchInstances",
     _TAB_R_INSTANCE_IDS = "tabResearchInstanceIds",
@@ -71,6 +77,7 @@ enum StorageSync {
 	BAR_LOOK = "barLook",
 	HIGHLIGHT_LOOK = "highlightLook",
 	URL_FILTERS = "urlFilters",
+	TERM_LISTS = "termLists",
 }
 
 interface ResearchInstance {
@@ -101,6 +108,12 @@ const defaultOptions: StorageSyncValues = {
 			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's",
 		],
 	},
+	matchModeDefaults: {
+		regex: false,
+		case: false,
+		stem: true,
+		whole: false,
+	},
 	linkResearchTabs: false,
 	showHighlights: {
 		default: true,
@@ -118,16 +131,11 @@ const defaultOptions: StorageSyncValues = {
 	highlightLook: {
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
-	matchModeDefaults: {
-		regex: false,
-		case: false,
-		stem: true,
-		whole: false,
-	},
 	urlFilters: {
 		noPageModify: [],
 		nonSearch: [],
 	},
+	termLists: [],
 };
 
 /**

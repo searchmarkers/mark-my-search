@@ -87,7 +87,12 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
 	}
 };
 
-// TODO document
+/**
+ * Determines whether a URL is filtered in by a given URL filter.
+ * @param url A URL object.
+ * @param urlFilter A URL filter array, the component strings of which may contain wildcards.
+ * @returns `true` if the URL is filtered in, `false` otherwise.
+ */
 const isUrlFilteredIn = (() => {
 	const sanitize = (urlComponent: string) =>
 		sanitizeForRegex(urlComponent).replace("\\*", ".*")
@@ -101,52 +106,45 @@ const isUrlFilteredIn = (() => {
 	;
 })();
 
-// TODO document
+/**
+ * Determines whether the user has permitted pages with the given URL to be deeply modified during highlighting,
+ * which is powerful but may be destructive.
+ * @param urlString The valid URL string corresponding to a page to be potentially highlighted.
+ * @param urlFilters URL filter preferences.
+ * @returns `true` if the corresponding page may be modified, `false` otherwise.
+ */
 const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify)
 ;
 
+/**
+ * Determines whether the user has permitted pages with the given URL to treated as a search page,
+ * from which keywords may be collected.
+ * @param urlString The valid URL string corresponding to a page to be potentially auto-highlighted.
+ * @param urlFilters An object of details about URL filtering.
+ * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
+ */
 const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
 
 /**
- * Creates a message for sending to an injected highlighting script in order for it to store and highlight an array of terms.
- * This is an intermediary interface which parametises common components of such a message.
- * Not all contingencies are covered, but additional arguments may be applied to the resulting message.
- * @param researchInstance An object representing an instance of highlighting.
- * @param overrideHighlightsShown A flag which, if specified, indicates the visiblity of highlights to be __on__ if `true`
- * or the appropriate flag in the highlighting instance is `true`, __off__ otherwise. If unspecified, highlight visibility is not changed.
- * @param barControlsShown An object of flags indicating the visibility of each toolbar option module.
- * @param barLook An object of details about the style and layout of the toolbar.
- * @param highlightLook 
- * @param enablePageModify 
- * @returns A research message which, when sent to a highlighting script, will produce the desired effect within that page.
+ * Determines whether the highlight-showing should be toggled on, off, or left unchanged.
+ * @param highlightsShown Whether or not highlights are shown currently.
+ * @param overrideHighlightsShown Whether or not to force highlights to be shown,
+ * or not change highlight-showing if `undefined`
+ * @returns `true` to toggle on, `false` to toggle off, `undefined` to not change.
  */
-// TODO document
-const createResearchMessage = (
-	researchInstance: ResearchInstance,
-	overrideHighlightsShown: boolean | undefined,
-	barControlsShown: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN],
-	barLook: StorageSyncValues[StorageSync.BAR_LOOK],
-	highlightLook: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK],
-	matchMode: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS],
-	enablePageModify: boolean,
-) => ({
-	terms: researchInstance.terms,
-	toggleHighlightsOn: overrideHighlightsShown === undefined
+const determineToggleHighlightsOn = (highlightsShown: boolean, overrideHighlightsShown?: boolean) =>
+	overrideHighlightsShown === undefined
 		? undefined
-		: researchInstance.highlightsShown || overrideHighlightsShown,
-	barControlsShown,
-	barLook,
-	highlightLook,
-	matchMode,
-	enablePageModify,
-} as HighlightMessage);
+		: highlightsShown || overrideHighlightsShown
+;
 
 /**
- * Continuously caches objects, representing search engine URLs and how to extract contained search queries, to session storage.
- * These objects are inferred from heuristics such as details of dynamic bookmarks stored by the user.
+ * Caches objects, representing search engine URLs and how to extract their search queries, to session storage.
+ * These objects are generated from information such as dynamic bookmarks stored by the user,
+ * and caching is triggered on information update.
  */
 const manageEnginesCacheOnBookmarkUpdate = (() => {
 	/**
@@ -341,27 +339,28 @@ const updateActionIcon = (enabled?: boolean) =>
 			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
 				session.researchInstances[tabId] = researchInstance;
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
-				activateHighlightingInTab(tabId, createResearchMessage(
-					session.researchInstances[tabId],
-					overrideHighlightsShown,
-					sync.barControlsShown,
-					sync.barLook,
-					sync.highlightLook,
-					sync.matchModeDefaults,
-					isUrlPageModifyAllowed(urlString, sync.urlFilters),
-				));
+				activateHighlightingInTab(tabId, {
+					terms: researchInstance.terms,
+					toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
+					barControlsShown: sync.barControlsShown,
+					barLook: sync.barLook,
+					highlightLook: sync.highlightLook,
+					matchMode: sync.matchModeDefaults,
+					enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
+				});
 			}
 		}
 		if (isResearchPage) {
-			activateHighlightingInTab(tabId, createResearchMessage(
-				session.researchInstances[tabId],
-				overrideHighlightsShown,
-				sync.barControlsShown,
-				sync.barLook,
-				sync.highlightLook,
-				sync.matchModeDefaults,
-				isUrlPageModifyAllowed(urlString, sync.urlFilters),
-			));
+			const researchInstance = session.researchInstances[tabId];
+			activateHighlightingInTab(tabId, {
+				terms: researchInstance.terms,
+				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
+				barControlsShown: sync.barControlsShown,
+				barLook: sync.barLook,
+				highlightLook: sync.highlightLook,
+				matchMode: sync.matchModeDefaults,
+				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
+			});
 		}
 	};
 	
@@ -425,8 +424,10 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
+ * @param messagingRetriesRemaining The number of retries permitted in case of tab messaging errors.
+ * Retries are preceded by attempting to inject the highlighting script.
  */
-const activateResearchInTab = async (tabId: number) => {
+const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 1) => {
 	const sync = await getStorageSync([
 		StorageSync.BAR_CONTROLS_SHOWN,
 		StorageSync.BAR_LOOK,
@@ -437,18 +438,39 @@ const activateResearchInTab = async (tabId: number) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = await (async () => {
 		const researchInstance = session.researchInstances[tabId];
-		if (researchInstance
-			&& researchInstance.persistent
-			&& await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, { getDetails: { termsFromSelection: true } } as HighlightMessage)
-				.then((response: HighlightDetails) => (response.terms ?? []).length === 0)) {
-			researchInstance.enabled = true;
-			return researchInstance;
+		if (researchInstance && researchInstance.persistent) {
+			const highlightMessage = { getDetails: { termsFromSelection: true } } as HighlightMessage;
+			const termsAreSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, highlightMessage)
+				.then((response: HighlightDetails) =>
+					response.terms ? (response.terms.length > 0) : false
+				).catch(() =>
+					undefined
+				);
+			if (termsAreSelected === undefined) { // Error when sending message, likely due to lack of an injected script
+				// We cannot be sure there is no user selection, so must retry
+				if (messagingRetriesRemaining > 0) { // Give up if attempts exhausted
+					console.log(highlightMessage, "0 activating highlighting");
+					executeScriptsInTab(tabId).then(() => {
+						// Try again after attempting script injection, but give up if the same process fails and attempts are exhausted
+						console.log(highlightMessage, "1 activating research");
+						activateResearchInTab(tabId, messagingRetriesRemaining - 1);
+					});
+				}
+				return null; // Terminate since the function will be re-executed on the next try
+			}
+			if (!termsAreSelected) {
+				researchInstance.enabled = true;
+				return researchInstance;
+			}
 		}
 		return await createResearchInstance({
-			terms: [],
+			terms: [], // Indicate that the user selection should be used (in case of selected terms OR no existing research)
 			autoOverwritable: false,
 		});
 	})();
+	if (researchInstance === null) {
+		return;
+	}
 	researchInstance.highlightsShown = true;
 	if (researchInstance.terms.length) {
 		handleMessage({
@@ -459,25 +481,19 @@ const activateResearchInTab = async (tabId: number) => {
 		} as BackgroundMessage, tabId);
 	} else {
 		session.researchInstances[tabId] = researchInstance;
+		researchInstance.terms = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, { getDetails: { termsFromSelection: true } } as HighlightMessage)
+			.then((response: HighlightDetails) => response.terms ?? []);
+		activateHighlightingInTab(tabId, {
+			terms: researchInstance.terms,
+			toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
+			barControlsShown: sync.barControlsShown,
+			barLook: sync.barLook,
+			highlightLook: sync.highlightLook,
+			matchMode: sync.matchModeDefaults,
+			enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
+			command: { type: CommandType.FOCUS_TERM_INPUT },
+		});
 		await setStorageSession(session);
-		activateHighlightingInTab(
-			tabId, //
-			Object.assign(
-				{
-					termsFromSelection: true,
-					command: { type: CommandType.FOCUS_TERM_INPUT },
-				} as HighlightMessage,
-				createResearchMessage(
-					researchInstance,
-					false,
-					sync.barControlsShown,
-					sync.barLook,
-					sync.highlightLook,
-					sync.matchModeDefaults,
-					isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
-				),
-			), //
-		);
 	}
 };
 
@@ -594,7 +610,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			session.researchInstances[senderTabId] = researchInstance;
 			setStorageSession(session);
 		}
-		if (message.makeUnique) { // 'message.termChangedIdx' assumed false.
+		if (message.makeUnique) {
 			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
 			const sync = await getStorageSync([
 				StorageSync.BAR_CONTROLS_SHOWN,
@@ -606,18 +622,16 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			if (message.toggleHighlightsOn !== undefined) {
 				researchInstance.highlightsShown = message.toggleHighlightsOn;
 			}
-			activateHighlightingInTab(senderTabId, Object.assign(
-				{ command: message.highlightCommand },
-				createResearchMessage(
-					researchInstance,
-					false,
-					sync.barControlsShown,
-					sync.barLook,
-					sync.highlightLook,
-					sync.matchModeDefaults,
-					isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
-				),
-			));
+			activateHighlightingInTab(senderTabId, {
+				terms: researchInstance.terms,
+				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
+				barControlsShown: sync.barControlsShown,
+				barLook: sync.barLook,
+				highlightLook: sync.highlightLook,
+				matchMode: sync.matchModeDefaults,
+				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
+				command: message.highlightCommand,
+			});
 		} else if (message.terms !== undefined) {
 			session.researchInstances[senderTabId].terms = message.terms;
 			setStorageSession(session);
