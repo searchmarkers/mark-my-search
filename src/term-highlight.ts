@@ -1484,10 +1484,6 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  * @param termsToPurge Terms for which to remove previous highlights.
  * @param disable Indicates whether to skip all highlighting and remove the controls,
  * thus visibly and functionally deactivating the extension within the page.
- * @param termsFromSelection Indicates whether to skip all highlighting,
- * sending a message to the background script containing details of terms from the current selection.
- * This flag causes a later highlighting message with possibly different terms to be received,
- * so highlighting in this run is pointless.
  * @param pageModifyEnabled Indicates whether to modify page content.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
@@ -1495,23 +1491,14 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  */
 const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
-	disable: boolean, termsFromSelection: boolean, pageModifyEnabled: boolean,
+	disable: boolean, pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
-	if (termsFromSelection) {
-		terms = [];
-		getTermsFromSelection().forEach(term => terms.push(term));
-		chrome.runtime.sendMessage({
-			terms,
-			makeUnique: true,
-			toggleHighlightsOn: true,
-		} as BackgroundMessage);
-	}
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
 	if (disable) {
 		removeControls();
-	} else if (!termsFromSelection && pageModifyEnabled) {
+	} else if (pageModifyEnabled) {
 		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
@@ -1548,9 +1535,6 @@ const getTermsFromSelection = () => {
 	 * Inserts the toolbar with term controls and begins continuously highlighting terms in the document.
 	 * All controls necessary are first removed. Refreshes executed may be whole or partial according to requirements.
 	 * @param terms Terms to highlight and display in the toolbar.
-	 * @param termsFromSelection Indicates whether to skip all highlighting.
-	 * This flag is handled externally to the effect of causing a later highlighting message with possibly different terms to be received,
-	 * so highlighting in this run is pointless.
 	 * @param disable Indicates whether to skip control and highlight insertion stages but run removal stages,
 	 * thus visibly and functionally deactivating the extension within the page.
 	 * @param controlsInfo Details of controls to insert.
@@ -1584,7 +1568,7 @@ const getTermsFromSelection = () => {
 			}
 		};
 	
-		return (terms: MatchTerms, termsFromSelection: boolean, disable: boolean,
+		return (terms: MatchTerms, disable: boolean,
 			controlsInfo: ControlsInfo, commands: BrowserCommands,
 			highlightTags: HighlightTags, hues: TermHues,
 			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
@@ -1630,7 +1614,7 @@ const getTermsFromSelection = () => {
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 					insertToolbar(terms, controlsInfo, commands, highlightTags, hues);
 				}
-			} else if (!disable && !termsFromSelection) {
+			} else if (!disable) {
 				return;
 			}
 			if (!disable) {
@@ -1638,7 +1622,7 @@ const getTermsFromSelection = () => {
 			}
 			beginHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				disable, termsFromSelection, controlsInfo.pageModifyEnabled,
+				disable, controlsInfo.pageModifyEnabled,
 				highlightTags, requestRefreshIndicators, observer,
 			);
 		};
@@ -1819,13 +1803,18 @@ const getTermsFromSelection = () => {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
 			}
 			if (
-				message.deactivate || message.termsFromSelection || message.termUpdate
-				|| (message.terms !== undefined
-					&& (!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
-						|| (!terms.length && !document.getElementById(ElementID.BAR))))
+				message.deactivate
+				|| message.termUpdate
+				|| (
+					message.terms !== undefined
+					&& (
+						!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
+						|| (!terms.length && !document.getElementById(ElementID.BAR))
+					)
+				)
 			) {
 				refreshTermControlsAndBeginHighlighting(
-					terms, message.termsFromSelection ?? false, message.deactivate ?? false, //
+					terms, message.deactivate ?? false, //
 					controlsInfo, commands, //
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //
