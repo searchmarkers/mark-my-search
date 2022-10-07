@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight search engine keywords. Jump between terms instantly.",
-	"version": "1.6.1",
+	"version": "1.7.0",
 
 	"browser_specific_settings": {
 		"gecko": {
@@ -35,6 +35,7 @@
 		"scripts": [
 			"/dist/manage-storage.js",
 			"/dist/stem-pattern-find.js",
+			"/dist/diacritic-pattern.js",
 			"/dist/shared-content.js",
 			"/dist/background.js"
 		]

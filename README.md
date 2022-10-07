@@ -16,7 +16,7 @@ The extension is instant to install and use, can be personalised to meet your pa
 * Highlight all occurrences of your words.
   * Highlight new occurrences as the page changes.
 * Provide matching options for advanced use.
-  * Allow letter case, word stems, or whole words only to be matched.
+  * Optionally match letter case, word stems, whole words only, or diacritics.
   * Allow custom regular expressions.
 * Recognise a search based on a URL, extracting search terms.
   * Allow custom 'search engines' to be registered.
@@ -27,8 +27,9 @@ The extension is instant to install and use, can be personalised to meet your pa
 * Allow occurrences to be 'jumped' (scrolled) to in either direction by clicking the term buttons.
   * Provide shortcuts for individual/global jumping, including different 'jump' modes.
   * Jump to occurrences usefully by 'focusing' whole buttons and links where possible, and otherwise focusing at a sensible point in a block where multiple terms occur.
-* Allow the user to disable auto-activation for any period of time.
-* Allow the user to disable 'research' and remove highlighting on a specific page.
+* Allow the user to disable auto-highlighting for any period of time.
+* Allow the user to deactivate highlighting on a specific page.
+* Allow websites to be excluded from auto-highlighting or modification.
 
 
 ## Advanced Use
@@ -37,7 +38,7 @@ The extension is instant to install and use, can be personalised to meet your pa
 
 * Individual term jumping: A convenient shortcut is assigned to jump (scroll) between word occurrences. In Firefox, additional similar shortcuts are provided for jumping to specific terms. In Chromium-based browsers these cannot be assigned automatically, but may be changed at <chrome://extensions/shortcuts>.
 * Individual term jumping (lazy): A shortcut can be assigned to 'toggle select modes', which makes the individual jumping shortcuts choose a term to 'select'. Selected term buttons are highlighted, and the general term jumping shortcut will instead jump to occurrences of this word.
-* Problem reports: You can report problems with the extension, including websites which misbehave when highlighted or where highlighting is incorrect, from anonymous message field in the toolbar icon's popup. Thank you for helping improve the extension!
+* Problem reports: You can report problems with the extension, including websites which misbehave when highlighted or where highlighting is incorrect, from the anonymous message field in the popup. Thank you for helping improve the extension!
 
 
 ## Compatibility

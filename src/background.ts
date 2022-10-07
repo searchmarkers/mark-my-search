@@ -3,6 +3,7 @@ if (/*isBrowserChromium()*/ !this.browser) {
 	this["importScripts"](
 		"/dist/manage-storage.js",
 		"/dist/stem-pattern-find.js",
+		"/dist/diacritic-pattern.js",
 		"/dist/shared-content.js",
 	);
 }
@@ -563,7 +564,7 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
  */
 const executeScriptsInTab = (tabId: number) =>
 	chrome.scripting.executeScript({
-		files: [ "/dist/stem-pattern-find.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
+		files: [ "/dist/stem-pattern-find.js", "/dist/diacritic-pattern.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
 		target: { tabId },
 	})
 ;

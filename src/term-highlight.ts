@@ -17,7 +17,7 @@ type ControlButtonInfo = {
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
 type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
 
-enum AtRuleIdent {
+enum AtRuleID {
 	FLASH = "flash",
 	MARKER_ON = "marker-on",
 	MARKER_OFF = "marker-off",
@@ -45,6 +45,7 @@ enum ElementClass {
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
 	MATCH_WHOLE = "match-whole",
+	MATCH_DIACRITICS = "match-diacritics",
 	PRIMARY = "primary",
 	SECONDARY = "secondary",
 	OVERRIDE_VISIBILITY = "override-visibility",
@@ -134,7 +135,7 @@ class UnbrokenNodeList {
  * @param argument An optional secondary component to the identifier.
  * @returns The selector string, being a constant selector prefix and both components joined by hyphens.
  */
-const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: string | number): string =>
+const getSel = (identifier: ElementID | ElementClass | AtRuleID, argument?: string | number): string =>
 	argument === undefined ? `markmysearch-${identifier}` : `markmysearch-${identifier}-${argument}`
 ;
 
@@ -146,7 +147,9 @@ const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: s
 const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 	const style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
 	const zIndexMax = 2**31 - 1;
-	style.textContent = `
+	const makeImportant = (styleText: string): string =>
+		styleText.replace(/;/g, " !important;"); // Prevent websites from overriding rules with !important;
+	style.textContent = makeImportant(`
 /* || Term Buttons and Input */
 #${getSel(ElementID.BAR)} ::selection
 	{ background: Highlight; color: HighlightText; }
@@ -208,6 +211,12 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+.${getSel(ElementClass.CONTROL_CONTENT)}
+	{ font-style: italic; }
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+.${getSel(ElementClass.CONTROL_CONTENT)}
+	{ border-left: 3px dashed black; }
 /**/
 
 /* || Bar */
@@ -266,10 +275,6 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* || Term Scroll Markers */
-@keyframes ${getSel(AtRuleIdent.MARKER_ON)}
-	{ from {} to { padding-right: 16px; }; }
-@keyframes ${getSel(AtRuleIdent.MARKER_OFF)}
-	{ from { padding-right: 16px; } to { padding-right: 0; }; }
 #${getSel(ElementID.MARKER_GUTTER)}
 	{ display: block; position: fixed; right: 0; top: 0; width: 0; height: 100%; z-index: ${zIndexMax}; }
 #${getSel(ElementID.MARKER_GUTTER)} *
@@ -280,11 +285,17 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* || Term Highlights */
-@keyframes ${getSel(AtRuleIdent.FLASH)}
-	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
-	{ animation: ${getSel(AtRuleIdent.FLASH)} 1s; }
+	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
 /**/
+	`) + `
+/* || Transitions */
+@keyframes ${getSel(AtRuleID.MARKER_ON)}
+	{ from {} to { padding-right: 16px; }; }
+@keyframes ${getSel(AtRuleID.MARKER_OFF)}
+	{ from { padding-right: 16px; } to { padding-right: 0; }; }
+@keyframes ${getSel(AtRuleID.FLASH)}
+	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 	`;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
@@ -295,7 +306,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 					isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
 				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
 				: colorA;
-		style.textContent += `
+		style.textContent += makeImportant(`
 /* || Term Highlights */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
@@ -327,9 +338,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 .${getSel(ElementClass.TERM, term.selector)} .${getSel(ElementClass.CONTROL_PAD)}
 	{ background: hsl(${hue} 100% 90%); }
 /**/
-		`;
+		`);
 	});
-	style.textContent = style.textContent.replace(/;/g, " !important;"); // Prevent websites from overriding rules with !important
 };
 
 /**
@@ -792,7 +802,7 @@ const updateTermTooltip = (() => {
  * @returns The corresponding match type identifier string.
  */
 const getTermOptionMatchType = (text: string): string => // TODO rework system to not rely on option text
-	text.slice(0, text.indexOf(" ")).toLowerCase()
+	text.slice(0, text.includes(" ") ? text.indexOf(" ") : undefined).toLowerCase()
 ;
 
 /**
@@ -817,6 +827,7 @@ const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMToke
 	classList[mode.case ? "add" : "remove"](getSel(ElementClass.MATCH_CASE));
 	classList[mode.stem ? "add" : "remove"](getSel(ElementClass.MATCH_STEM));
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
+	classList[mode.diacritics ? "add" : "remove"](getSel(ElementClass.MATCH_DIACRITICS));
 };
 
 /**
@@ -829,6 +840,7 @@ const getTermControlMatchModeFromClassList = (classList: DOMTokenList): MatchMod
 	case: classList.contains(getSel(ElementClass.MATCH_CASE)),
 	stem: classList.contains(getSel(ElementClass.MATCH_STEM)),
 	whole: classList.contains(getSel(ElementClass.MATCH_WHOLE)),
+	diacritics: classList.contains(getSel(ElementClass.MATCH_DIACRITICS)),
 });
 
 /**
@@ -933,6 +945,7 @@ const createTermOptionMenu = (
 	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
+	optionList.appendChild(createTermOption(term, "Diacritics", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
 		event.preventDefault();
 		if (!executeResult) {
@@ -1780,24 +1793,32 @@ const getTermsFromSelection = () => {
 				if (!control || !input) {
 					break;
 				}
+				const selection = getSelection();
 				const focusReturnElement = document.activeElement;
+				const selectionReturnRanges = selection
+					? Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i))
+					: null;
 				control.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				input.select();
 				control.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				selectInputTextAll(input);
 				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
-				const returnFocus = () => {
+				const returnSelection = () => {
 					setTimeout(() => { // Wait a few milliseconds for a possible in-toolbar focus shift to complete
 						if (document.activeElement && document.activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
 							return; // The unfocus was due to focus being shifted within the toolbar
 						}
-						bar.removeEventListener("focusout", returnFocus);
+						bar.removeEventListener("focusout", returnSelection);
 						if (focusReturnElement && focusReturnElement["focus"]) {
 							(focusReturnElement as HTMLElement).focus({ preventScroll: true });
 						}
+						if (selection && selectionReturnRanges !== null) {
+							selection.removeAllRanges();
+							selectionReturnRanges.forEach(range => selection.addRange(range));
+						}
 					});
 				};
-				bar.addEventListener("focusout", returnFocus);
+				bar.addEventListener("focusout", returnSelection);
 				break;
 			} case CommandType.SELECT_TERM: {
 				const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
@@ -1843,6 +1864,7 @@ const getTermsFromSelection = () => {
 				case: false,
 				stem: false,
 				whole: false,
+				diacritics: false,
 			},
 		};
 		const highlightTags: HighlightTags = {

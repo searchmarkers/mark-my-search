@@ -115,6 +115,7 @@ const defaultOptions: StorageSyncValues = {
 		case: false,
 		stem: true,
 		whole: false,
+		diacritics: false,
 	},
 	linkResearchTabs: false,
 	showHighlights: {
