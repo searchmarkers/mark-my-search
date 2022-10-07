@@ -261,13 +261,6 @@ textarea
 		document.head.appendChild(style);
 	};
 
-	const getId = (function* () {
-		let id = 0;
-		while (true) {
-			yield `input-${id++}`;
-		}
-	})();
-
 	const classNameIsPanel = (className: string) =>
 		className.split("-")[0] === "panel"
 	;
@@ -439,7 +432,7 @@ textarea
 					if (labelInfo.getText) {
 						labelInfo.getText(containerIndex).then(text => label.textContent = text);
 					}
-					const checkboxId = getId.next().value;
+					const checkboxId = getIdSequential.next().value;
 					label.htmlFor = checkboxId;
 					return [ label, checkboxId ];
 				}

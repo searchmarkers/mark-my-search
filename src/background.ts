@@ -377,6 +377,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				? session.researchInstances[tab.openerTabId]
 				: { ...session.researchInstances[tab.openerTabId] };
 			setStorageSession(session);
+			pageModifyRemote(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache
 		}
 	});
 
@@ -439,20 +440,19 @@ const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 
 	const researchInstance = await (async () => {
 		const researchInstance = session.researchInstances[tabId];
 		if (researchInstance && researchInstance.persistent) {
-			const highlightMessage = { getDetails: { termsFromSelection: true } } as HighlightMessage;
-			const termsAreSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, highlightMessage)
-				.then((response: HighlightDetails) =>
-					response.terms ? (response.terms.length > 0) : false
-				).catch(() =>
-					undefined
-				);
+			const termsAreSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
+				tabId,
+				{ getDetails: { termsFromSelection: true } } as HighlightMessage,
+			).then((response: HighlightDetails) =>
+				response.terms ? (response.terms.length > 0) : false
+			).catch(() =>
+				undefined
+			);
 			if (termsAreSelected === undefined) { // Error when sending message, likely due to lack of an injected script
 				// We cannot be sure there is no user selection, so must retry
 				if (messagingRetriesRemaining > 0) { // Give up if attempts exhausted
-					console.log(highlightMessage, "0 activating highlighting");
 					executeScriptsInTab(tabId).then(() => {
 						// Try again after attempting script injection, but give up if the same process fails and attempts are exhausted
-						console.log(highlightMessage, "1 activating research");
 						activateResearchInTab(tabId, messagingRetriesRemaining - 1);
 					});
 				}
@@ -481,8 +481,15 @@ const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 
 		} as BackgroundMessage, tabId);
 	} else {
 		session.researchInstances[tabId] = researchInstance;
-		researchInstance.terms = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(tabId, { getDetails: { termsFromSelection: true } } as HighlightMessage)
-			.then((response: HighlightDetails) => response.terms ?? []);
+		await executeScriptsInTab(tabId);
+		researchInstance.terms = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
+			tabId,
+			{ getDetails: { termsFromSelection: true } } as HighlightMessage,
+		).then((response: HighlightDetails) =>
+			response.terms ?? []
+		).catch(() =>
+			[]
+		);
 		activateHighlightingInTab(tabId, {
 			terms: researchInstance.terms,
 			toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
@@ -533,7 +540,15 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	if (isTabResearchPage(session.researchInstances, tabId)) {
 		const researchInstance = session.researchInstances[tabId];
-		researchInstance.highlightsShown = toggleHighlightsOn ?? !researchInstance.highlightsShown;
+		researchInstance.highlightsShown = toggleHighlightsOn
+		?? !await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
+			tabId,
+			{ getDetails: { highlightsShown: true } } as HighlightMessage,
+		).then((response: HighlightDetails) =>
+			response.highlightsShown
+		).catch(() =>
+			researchInstance.highlightsShown
+		);
 		chrome.tabs.sendMessage(tabId, {
 			toggleHighlightsOn: researchInstance.highlightsShown,
 			barControlsShown: sync.barControlsShown,
@@ -610,7 +625,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			session.researchInstances[senderTabId] = researchInstance;
 			setStorageSession(session);
 		}
-		if (message.makeUnique) {
+		if (message.makeUnique || message.toggleHighlightsOn !== undefined) {
 			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
 			const sync = await getStorageSync([
 				StorageSync.BAR_CONTROLS_SHOWN,
