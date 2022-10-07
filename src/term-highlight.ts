@@ -273,7 +273,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.MARKER_GUTTER)}
 	{ display: block; position: fixed; right: 0; top: 0; width: 0; height: 100%; z-index: ${zIndexMax}; }
 #${getSel(ElementID.MARKER_GUTTER)} *
-	{ width: 16px; top: 0; height: 1px; position: absolute; right: 0; border-left: solid hsl(0 0% 0% / 0.6) 1px; box-sizing: unset;
+	{ width: 16px; height: 1px; position: absolute; right: 0; border-left: solid hsl(0 0% 0% / 0.6) 1px; box-sizing: unset;
 	padding-right: 0; transition: padding-right 600ms; pointer-events: none; }
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.FOCUS)}
 	{ padding-right: 16px; transition: unset; }

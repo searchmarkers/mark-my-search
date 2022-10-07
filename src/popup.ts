@@ -197,6 +197,8 @@ textarea
 .panel .interaction textarea,
 .panel .interaction .submitter
 	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); font-family: inherit; }
+.panel .interaction input[type="checkbox"]
+	{ align-self: center; }
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
@@ -583,6 +585,8 @@ textarea
 			}
 			const anchor = document.createElement("a");
 			anchor.href = anchorInfo.url;
+			anchor.target = "_blank"; // New tab
+			anchor.rel = "noopener noreferrer";
 			anchor.textContent = anchorInfo.text ?? anchor.href;
 			container.appendChild(anchor);
 		};
@@ -901,14 +905,14 @@ textarea
 							{
 								className: "link",
 								anchor: {
-									url: "https://github.com/ator-dev/mark-my-search/issues/new",
+									url: "https://github.com/searchmarkers/mark-my-search/issues/new",
 									text: "File a bug report",
 								},
 							},
 							{
 								className: "link",
 								anchor: {
-									url: "https://github.com/ator-dev/mark-my-search",
+									url: "https://github.com/searchmarkers/mark-my-search",
 									text: "Get involved!",
 								},
 							},
