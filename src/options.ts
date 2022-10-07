@@ -47,18 +47,35 @@ const loadOptions = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body { padding: 6px; margin: 0; background: #bbb; }
-.${OptionClass.ERRONEOUS} { color: #e11; }
-.${OptionClass.MODIFIED} { font-weight: bold; }
-.${OptionClass.TAB_BUTTON} { border-radius: 0; display: none; }
-.${OptionClass.CONTAINER_TAB} { display: flex; flex-flow: column; }
-.${OptionClass.OPTION_SECTION} { background-color: #eee; box-shadow: 2px 2px 4px hsla(0, 0%, 0%, 0.4);
-	border-radius: 6px; padding: 6px; margin-block: 4px; }
-.${OptionClass.OPTION_LABEL} { color: #111; margin-bottom: 4px; }
-.${OptionClass.TABLE_PREFERENCES} { display: flex; flex-flow: column; width: 100%; }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} { flex: 1; display: flex; align-items: center; }
-.${OptionClass.TABLE_PREFERENCES} input[type=text] { width: 110px; }
-.${OptionClass.PREFERENCE_ROW} { display: flex; color: #353535; }
-.${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN} { background-color: #ddd; }
+.${OptionClass.ERRONEOUS}
+	{ color: #e11; }
+.${OptionClass.MODIFIED}
+	{ font-weight: bold; }
+.${OptionClass.TAB_BUTTON}
+	{ border-radius: 0; display: none; }
+.${OptionClass.CONTAINER_TAB}
+	{ display: flex; flex-flow: column; }
+.${OptionClass.OPTION_SECTION}
+	{ padding: 6px; margin-block: 4px; border-radius: 6px;
+	background-color: #eee; box-shadow: 2px 2px 4px hsla(0, 0%, 0%, 0.4); }
+.${OptionClass.OPTION_LABEL}
+	{ color: hsl(0 0% 6%); margin-bottom: 4px; }
+.${OptionClass.TABLE_PREFERENCES}
+	{ display: flex; flex-flow: column; width: 100%; }
+.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
+	{ flex: 1; display: flex; align-items: center; }
+.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
+	{ flex: 1; }
+.${OptionClass.TABLE_PREFERENCES} input[type=text]
+	{ width: 110px; }
+.${OptionClass.PREFERENCE_ROW}
+	{ display: flex; color: hsl(0 0% 21%); }
+.${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN}
+	{ background-color: hsl(0 0% 87%); }
+label
+	{ color: hsl(0 0% 22%); }
+label[for]:hover
+	{ color: hsl(0 0% 36%); }
 		`;
 		document.head.appendChild(style);
 	};
@@ -144,12 +161,15 @@ body { padding: 6px; margin: 0; background: #bbb; }
 					}
 					row.appendChild(cell);
 				};
-				const preferenceLabel = document.createElement("div");
+				const inputId = getIdSequential.next().value;
+				const preferenceLabel = document.createElement("label");
+				preferenceLabel.htmlFor = inputId;
 				preferenceLabel.textContent = `${preferenceInfo.label}:`;
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
 				inputDefault.disabled = true;
 				const input = document.createElement("input");
+				input.id = inputId;
 				input.type = inputDefault.type;
 				input.classList.add(isSinglePreference ? optionKey : `${optionKey}-${preferenceKey}`);
 				addCell(preferenceLabel, true);
@@ -203,6 +223,10 @@ body { padding: 6px; margin: 0; background: #bbb; }
 							label: "Perform a search using the current terms",
 							type: PreferenceType.BOOLEAN,
 						},
+						toggleHighlights: {
+							label: "Toggle display of highlighting",
+							type: PreferenceType.BOOLEAN,
+						},
 						appendTerm: {
 							label: "Append a new term to the toolbar",
 							type: PreferenceType.BOOLEAN,
@@ -213,7 +237,11 @@ body { padding: 6px; margin: 0; background: #bbb; }
 					label: "Toolbar style and icons",
 					preferences: {
 						showEditIcon: {
-							label: "Show a pen button in controls with editable text",
+							label: "Display an edit button in controls with editable text",
+							type: PreferenceType.BOOLEAN,
+						},
+						showRevealIcon: {
+							label: "Display a menu button in controls with match options",
 							type: PreferenceType.BOOLEAN,
 						},
 					},

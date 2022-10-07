@@ -147,7 +147,8 @@ class Engine {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightMessage {
 	getDetails?: {
-		termsFromSelection?: boolean
+		termsFromSelection?: true
+		highlightsShown?: true
 	}
 	command?: CommandInfo
 	extensionCommands?: Array<chrome.commands.Command>
@@ -166,6 +167,7 @@ interface HighlightMessage {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightDetails {
 	terms?: MatchTerms
+	highlightsShown?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -337,4 +339,12 @@ const { objectSetValue, objectGetValue } = (() => {
 			objectSetGetValue(object, key, undefined, false)
 		,
 	};
+})();
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const getIdSequential = (function* () {
+	let id = 0;
+	while (true) {
+		yield `input-${id++}`;
+	}
 })();

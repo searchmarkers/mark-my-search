@@ -56,9 +56,11 @@
 			"resources": [
 				"/icons/close.svg",
 				"/icons/search.svg",
+				"/icons/show.svg",
 				"/icons/create.svg",
 				"/icons/delete.svg",
-				"/icons/edit.svg"
+				"/icons/edit.svg",
+				"/icons/reveal.svg"
 			],
 			"matches": [ "*://*/*" ]
 		}
