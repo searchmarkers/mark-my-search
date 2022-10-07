@@ -296,6 +296,10 @@ label[for]:hover
 							label: "Default whole word matching",
 							type: PreferenceType.BOOLEAN,
 						},
+						diacritics: {
+							label: "Default diacritics matching (ignore accents)",
+							type: PreferenceType.BOOLEAN,
+						},
 						regex: {
 							label: "Use custom regular expressions by default (advanced)",
 							type: PreferenceType.BOOLEAN,

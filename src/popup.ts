@@ -1157,6 +1157,25 @@ textarea
 												},
 												{
 													className: "type",
+													key: "matchMode.diacritics",
+													label: {
+														text: "Match Diacritics",
+													},
+													checkbox: {
+														onLoad: async (setChecked, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics);
+														},
+														onToggle: (checked, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics = checked;
+																setStorageSync(sync);
+															});
+														},
+													},
+												},
+												{
+													className: "type",
 													key: "matchMode.regex",
 													label: {
 														text: "Regular Expression",

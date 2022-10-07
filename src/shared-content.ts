@@ -7,6 +7,7 @@ interface MatchMode {
 	case: boolean
 	stem: boolean
 	whole: boolean
+	diacritics: boolean
 }
 
 /**
@@ -30,6 +31,7 @@ class MatchTerm {
 			case: false,
 			stem: true,
 			whole: false,
+			diacritics: false,
 		};
 		if (matchMode) {
 			Object.assign(this.matchMode, matchMode);
@@ -44,6 +46,7 @@ class MatchTerm {
 	 * Construct a regex based on the stored search term information, assigning it to `this.pattern`.
 	 */
 	compile () {
+		console.log(this.matchMode);
 		if (/\W/g.test(this.phrase)) {
 			this.matchMode.stem = false;
 		}
@@ -58,22 +61,29 @@ class MatchTerm {
 			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
 		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex
-			? getWordPatternStrings(this.phrase) : [ this.phrase, "" ]);
+		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex)
+			? getWordPatternStrings(this.phrase)
+			: [ this.phrase, "" ];
+		const optionalHyphenStandin = "__%__"; // TODO improve
 		const optionalHyphen = this.matchMode.regex ? "" : "(\\p{Pd})?";
-		const addOptionalHyphens = (word: string) => word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
-		const getBoundaryTest = (charBoundary: string) => this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
+		const getDiacriticsMatchingPatternStringSafe = (chars: string) =>
+			this.matchMode.diacritics ? getDiacriticsMatchingPatternString(chars) : chars;
+		const getHyphenatedPatternString = (word: string) =>
+			word.replace(/(\w\?|\w)/g,`$1${optionalHyphenStandin}`);
+		const getBoundaryTest = (charBoundary: string) =>
+			this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
 		const patternString = `${
 			getBoundaryTest(patternStringPrefix[0])
 		}${
-			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))
+			getDiacriticsMatchingPatternStringSafe(getHyphenatedPatternString(sanitize(patternStringPrefix.slice(0, -1))))
 		}${
-			sanitize(patternStringPrefix.at(-1) as string)
+			getDiacriticsMatchingPatternStringSafe(sanitize(patternStringPrefix.at(-1) as string))
 		}(?:${
-			patternStringSuffix ? optionalHyphen + patternStringSuffix : ""
+			patternStringSuffix ? optionalHyphenStandin + getDiacriticsMatchingPatternStringSafe(patternStringSuffix) : ""
 		})?${
 			getBoundaryTest(patternStringPrefix.at(-1) as string)
-		}`;
+		}`.replace(new RegExp(optionalHyphenStandin, "g"), optionalHyphen);
+		console.log(patternString);
 		this.pattern = new RegExp(patternString, flags);
 	}
 }
