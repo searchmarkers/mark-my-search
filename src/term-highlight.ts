@@ -1338,7 +1338,7 @@ const insertScrollMarkers = (() => {
 			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
 		});
 		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
-		gutter.insertAdjacentHTML("afterbegin", markersHtml);
+		gutter.innerHTML = markersHtml;
 	};
 })();
 
@@ -1502,7 +1502,6 @@ const purgeClass = (className: string, root: HTMLElement = document.body, select
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
 	for (const highlight of Array.from(highlights)) {
-		// Direct assignation to `outerHTML` prevents the mutation observer from triggering excess highlighting
 		highlight.outerHTML = highlight.innerHTML;
 	}
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {

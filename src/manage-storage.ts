@@ -168,7 +168,7 @@ const setStorageSession = (items: StorageSessionValues) => {
 		items[StorageSession._ID_R_INSTANCES] = idRInstances;
 		items[StorageSession._TAB_R_INSTANCE_IDS] = tabRInstanceIds;
 	}
-	return chrome.storage["session"].set(items);
+	return chrome.storage.session.set(items);
 };
 
 /**
@@ -187,7 +187,7 @@ const getStorageSession = async (keysParam?: Array<StorageSession>): Promise<Sto
 		keys.push(StorageSession._ID_R_INSTANCES);
 		keys.push(StorageSession._TAB_R_INSTANCE_IDS);
 	}
-	const session = await chrome.storage["session"].get(keys) as StorageSessionValues;
+	const session = await chrome.storage.session.get(keys) as StorageSessionValues;
 	if (gettingRInstances) {
 		const idRInstances = session[StorageSession._ID_R_INSTANCES];
 		const tabRInstanceIds = session[StorageSession._TAB_R_INSTANCE_IDS];

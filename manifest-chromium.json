@@ -4,27 +4,18 @@
 	"description": "Highlight search engine keywords. Jump between terms instantly.",
 	"version": "1.7.0",
 
-	"browser_specific_settings": {
-		"gecko": {
-			"id": "mark-my-search@ator-dev"
-		}
-	},
-
 	"icons": {
-		"48": "/icons/mms.svg",
-		"96": "/icons/mms.svg"
+		"48": "/icons/mms-48.png",
+		"96": "/icons/mms-96.png"
 	},
 
 	"permissions": [
 		"scripting",
 		"tabs",
+		"webNavigation",
 		"storage",
 		"search",
 		"contextMenus"
-	],
-
-	"optional_permissions": [
-		"bookmarks"
 	],
 
 	"host_permissions": [
@@ -32,13 +23,7 @@
 	],
 
 	"background": {
-		"scripts": [
-			"/dist/manage-storage.js",
-			"/dist/stem-pattern-find.js",
-			"/dist/diacritic-pattern.js",
-			"/dist/shared-content.js",
-			"/dist/background.js"
-		]
+		"service_worker": "/dist/background.js"
 	},
 
 	"options_ui": {
@@ -47,7 +32,10 @@
 	},
 
 	"action": {
-		"default_icon": "/icons/mms.svg",
+		"default_icon": {
+			"16": "/icons/mms-16.png",
+			"32": "/icons/mms-32.png"
+		},
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
 	},

@@ -7,7 +7,7 @@ if (/*isBrowserChromium()*/ !this.browser) {
 		"/dist/shared-content.js",
 	);
 }
-chrome.tabs.executeScript = isBrowserChromium() ? chrome.tabs.executeScript : browser.tabs.executeScript;
+chrome.scripting = isBrowserChromium() ? chrome.scripting : browser["scripting"];
 chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
 chrome.tabs.sendMessage = isBrowserChromium()
 	? chrome.tabs.sendMessage
@@ -234,7 +234,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal([ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.browserAction.setIcon({ path: isBrowserChromium()
+		: chrome.action.setIcon({ path: isBrowserChromium()
 			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -405,19 +405,24 @@ const updateActionIcon = (enabled?: boolean) =>
  * @param highlightMessageToReceive A message to be received by the tab's highlighting script.
  * This script will first be injected if not already present.
  */
-const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) => {
-	highlightMessageToReceive = Object.assign(
-		{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
-		highlightMessageToReceive,
-	);
-	chrome.tabs.executeScript(targetTabId, { file: "/dist/stem-pattern-find.js" }).then(async () => {
-		await chrome.tabs.executeScript(targetTabId, { file: "/dist/shared-content.js" });
-		await chrome.tabs.executeScript(targetTabId, { file: "/dist/term-highlight.js" });
-		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
-	}).catch(() => {
-		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
-	});
-};
+const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) =>
+	chrome.scripting.executeScript({
+		func: (tabId, highlightMessage) => {
+			const executionDeniedIdentifier = "executionUnnecessary";
+			chrome.runtime.sendMessage({
+				executeInTab: !window[executionDeniedIdentifier],
+				tabId,
+				highlightMessage,
+			} as BackgroundMessage);
+			window[executionDeniedIdentifier] = true;
+		},
+		args: [ targetTabId, Object.assign(
+			{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
+			highlightMessageToReceive,
+		) ],
+		target: { tabId: targetTabId },
+	})
+;
 
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
@@ -558,12 +563,12 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
  * Injects a highlighting script, composed of the highlighting code preceded by its dependencies, into a tab.
  * @param tabId The ID of a tab to execute the script in.
  */
-const executeScriptsInTab = async (tabId: number) => {
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/stem-pattern-find.js" });
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/diacritic-pattern.js" });
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/shared-content.js" });
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/term-highlight.js" });
-};
+const executeScriptsInTab = (tabId: number) =>
+	chrome.scripting.executeScript({
+		files: [ "/dist/stem-pattern-find.js", "/dist/diacritic-pattern.js", "/dist/shared-content.js", "/dist/term-highlight.js" ],
+		target: { tabId },
+	})
+;
 
 chrome.commands.onCommand.addListener(async commandString => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); // `tab.id` always defined for this case
@@ -670,7 +675,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 	sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
 });
 
-chrome.browserAction.onClicked.addListener(() =>
+chrome.action.onClicked.addListener(() =>
 	chrome.permissions.request({ permissions: [ "bookmarks" ] })
 );
 
