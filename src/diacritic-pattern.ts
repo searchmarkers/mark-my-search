@@ -42,7 +42,6 @@ const getDiacriticsMatchingPatternString: (chars: string) => string = (() => {
 	;
 
 	return (chars: string) => {
-		console.log("HERE");
 		let patternString = "";
 		const characterGroups = getCharacterGroups();
 		Array.from(chars.matchAll(getCharacterGroupsPattern(characterGroups))).slice(0, -1).forEach((matchArray, i) => {

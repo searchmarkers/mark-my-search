@@ -46,7 +46,6 @@ class MatchTerm {
 	 * Construct a regex based on the stored search term information, assigning it to `this.pattern`.
 	 */
 	compile () {
-		console.log(this.matchMode);
 		if (/\W/g.test(this.phrase)) {
 			this.matchMode.stem = false;
 		}
@@ -83,7 +82,6 @@ class MatchTerm {
 		})?${
 			getBoundaryTest(patternStringPrefix.at(-1) as string)
 		}`.replace(new RegExp(optionalHyphenStandin, "g"), optionalHyphen);
-		console.log(patternString);
 		this.pattern = new RegExp(patternString, flags);
 	}
 }
