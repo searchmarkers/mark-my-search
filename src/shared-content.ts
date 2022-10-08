@@ -7,6 +7,7 @@ interface MatchMode {
 	case: boolean
 	stem: boolean
 	whole: boolean
+	diacritics: boolean
 }
 
 /**
@@ -30,6 +31,7 @@ class MatchTerm {
 			case: false,
 			stem: true,
 			whole: false,
+			diacritics: false,
 		};
 		if (matchMode) {
 			Object.assign(this.matchMode, matchMode);
@@ -58,17 +60,28 @@ class MatchTerm {
 			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
 		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour
 		const flags = this.matchMode.case ? "gu" : "giu";
-		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex
-			? getWordPatternStrings(this.phrase) : [ this.phrase, "" ]);
+		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex)
+			? getWordPatternStrings(this.phrase)
+			: [ this.phrase, "" ];
+		const optionalHyphenStandin = "__%__"; // TODO improve
 		const optionalHyphen = this.matchMode.regex ? "" : "(\\p{Pd})?";
-		const addOptionalHyphens = (word: string) => word.replace(/(\w\?|\w)/g,`$1${optionalHyphen}`);
-		const getBoundaryTest = (charBoundary: string) => this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
+		const getDiacriticsMatchingPatternStringSafe = (chars: string) =>
+			this.matchMode.diacritics ? getDiacriticsMatchingPatternString(chars) : chars;
+		const getHyphenatedPatternString = (word: string) =>
+			word.replace(/(\w\?|\w)/g,`$1${optionalHyphenStandin}`);
+		const getBoundaryTest = (charBoundary: string) =>
+			this.matchMode.whole && /\w/g.test(charBoundary) ? "\\b" : "";
 		const patternString = `${
-			getBoundaryTest(patternStringPrefix[0])}${
-			addOptionalHyphens(sanitize(patternStringPrefix.slice(0, -1)))}${
-			sanitize(patternStringPrefix.at(-1) as string)}(?:${
-			patternStringSuffix.length ? optionalHyphen + patternStringSuffix + (this.matchMode.whole ? "\\b" : "") : ""}|${
-			getBoundaryTest(patternStringPrefix.at(-1) as string)})`;
+			getBoundaryTest(patternStringPrefix[0])
+		}${
+			getDiacriticsMatchingPatternStringSafe(getHyphenatedPatternString(sanitize(patternStringPrefix.slice(0, -1))))
+		}${
+			getDiacriticsMatchingPatternStringSafe(sanitize(patternStringPrefix.at(-1) as string))
+		}(?:${
+			patternStringSuffix ? optionalHyphenStandin + getDiacriticsMatchingPatternStringSafe(patternStringSuffix) : ""
+		})?${
+			getBoundaryTest(patternStringPrefix.at(-1) as string)
+		}`.replace(new RegExp(optionalHyphenStandin, "g"), optionalHyphen);
 		this.pattern = new RegExp(patternString, flags);
 	}
 }
@@ -142,7 +155,8 @@ class Engine {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightMessage {
 	getDetails?: {
-		termsFromSelection?: boolean
+		termsFromSelection?: true
+		highlightsShown?: true
 	}
 	command?: CommandInfo
 	extensionCommands?: Array<chrome.commands.Command>
@@ -151,7 +165,6 @@ interface HighlightMessage {
 	termToUpdateIdx?: number
 	deactivate?: boolean
 	enablePageModify?: boolean
-	termsFromSelection?: boolean
 	toggleHighlightsOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
@@ -162,6 +175,7 @@ interface HighlightMessage {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface HighlightDetails {
 	terms?: MatchTerms
+	highlightsShown?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -214,6 +228,7 @@ const sanitizeForRegex = (word: string, replacement = "\\$&") =>
  * @param urlStrings An array of valid URLs as strings.
  * @returns A URL filter array containing no wildcards which would filter in each of the URLs passed.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
 	urlStrings.map((urlString): URLFilter[0] => {
 		try {
@@ -305,3 +320,39 @@ const itemsMatch = <T> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a
 const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number): boolean =>
 	(tabId in researchInstances) && researchInstances[tabId].enabled
 ;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { objectSetValue, objectGetValue } = (() => {
+	const objectSetGetValue = (object: Record<string, unknown>, key: string, value: unknown, set = true) => {
+		if (key.includes(".")) {
+			return objectSetValue(
+				object[key.slice(0, key.indexOf("."))] as Record<string, unknown>,
+				key.slice(key.indexOf(".") + 1),
+				value,
+			);
+		} else {
+			if (set) {
+				object[key] = value;
+			}
+			return object[key];
+		}
+	};
+
+	return {
+		objectSetValue: (object: Record<string, unknown>, key: string, value: unknown) => {
+			objectSetGetValue(object, key, value);
+		},
+
+		objectGetValue: (object: Record<string, unknown>, key: string) =>
+			objectSetGetValue(object, key, undefined, false)
+		,
+	};
+})();
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const getIdSequential = (function* () {
+	let id = 0;
+	while (true) {
+		yield `input-${id++}`;
+	}
+})();

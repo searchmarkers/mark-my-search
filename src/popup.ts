@@ -113,7 +113,7 @@ const loadPopup = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%);
+	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%); border-radius: 8px;
 	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
 *
 	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
@@ -128,7 +128,7 @@ body
 textarea
 	{ resize: none; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%; border-radius: 6px; background: inherit; }
+	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit; background: inherit; }
 #frame > .filler
 	{ flex: 1; }
 .brand
@@ -197,6 +197,8 @@ textarea
 .panel .interaction textarea,
 .panel .interaction .submitter
 	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); font-family: inherit; }
+.panel .interaction input[type="checkbox"]
+	{ align-self: center; }
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
@@ -261,32 +263,6 @@ textarea
 		document.head.appendChild(style);
 	};
 
-	const getId = (function* () {
-		let id = 0;
-		while (true) {
-			yield `input-${id++}`;
-		}
-	})();
-
-	const objectSetValue = (object: Record<string, unknown>, key: string, value: unknown, set = true) => {
-		if (key.includes(".")) {
-			return objectSetValue(
-				object[key.slice(0, key.indexOf("."))] as Record<string, unknown>,
-				key.slice(key.indexOf(".") + 1),
-				value,
-			);
-		} else {
-			if (set) {
-				object[key] = value;
-			}
-			return object[key];
-		}
-	};
-
-	const objectGetValue = (object: Record<string, unknown>, key: string) =>
-		objectSetValue(object, key, undefined, false)
-	;
-
 	const classNameIsPanel = (className: string) =>
 		className.split("-")[0] === "panel"
 	;
@@ -298,7 +274,16 @@ textarea
 	const focusActivePanel = () => {
 		const frame = document.querySelector("#frame") as HTMLElement;
 		const className = getPanelClassName(Array.from(frame.classList));
-		(document.querySelector(`.panel.${className} input`) as HTMLInputElement).focus();
+		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
+		if (inputFirst) {
+			if (inputFirst.type === "text") {
+				inputFirst.select();
+			} else {
+				inputFirst.focus();
+			}
+		} else if (document.activeElement) {
+			(document.activeElement as HTMLElement).blur();
+		}
 	};
 
 	const getTabs = () =>
@@ -349,8 +334,10 @@ textarea
 			};
 			if (event.key === "PageDown") {
 				shiftTab(true, true);
+				event.preventDefault();
 			} else if (event.key === "PageUp") {
 				shiftTab(false, true);
+				event.preventDefault();
 			}
 		});
 		(getTabs()[0] as HTMLButtonElement).click();
@@ -363,7 +350,10 @@ textarea
 					if (!interactionInfo.checkbox) {
 						return;
 					}
-					const checkbox = document.getElementById(interactionInfo.checkbox.autoId as string) as HTMLInputElement;
+					if (!interactionInfo.checkbox.autoId) {
+						return;
+					}
+					const checkbox = document.getElementById(interactionInfo.checkbox.autoId) as HTMLInputElement;
 					if (interactionInfo.checkbox.onLoad) {
 						interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
 					}
@@ -424,8 +414,7 @@ textarea
 	};
 
 	const createSection = (() => {
-		const insertLabel = (container: HTMLElement, labelInfo: PopupInteractionInfo["label"], checkboxIsPaired: boolean,
-			containerIndex: number) => {
+		const insertLabel = (container: HTMLElement, labelInfo: PopupInteractionInfo["label"], containerIndex: number) => {
 			if (!labelInfo) {
 				return;
 			}
@@ -445,7 +434,7 @@ textarea
 					if (labelInfo.getText) {
 						labelInfo.getText(containerIndex).then(text => label.textContent = text);
 					}
-					const checkboxId = checkboxIsPaired ? getId.next().value : "";
+					const checkboxId = getIdSequential.next().value;
 					label.htmlFor = checkboxId;
 					return [ label, checkboxId ];
 				}
@@ -559,7 +548,7 @@ textarea
 						if (textboxOrList && textboxOrList.tagName === "INPUT") {
 							//(textboxOrList as HTMLInputElement).value = objectGetValue(object, rowInfo.key);
 						}
-						const checkboxId = insertLabel(row, rowInfo.label, !!rowInfo.checkbox, containerIndex);
+						const checkboxId = insertLabel(row, rowInfo.label, containerIndex);
 						const checkbox = insertCheckbox(row, rowInfo.checkbox, checkboxId, objectIndex, containerIndex);
 						if (checkbox) {
 							//checkbox.checked = objectGetValue(object, rowInfo.key);
@@ -596,6 +585,8 @@ textarea
 			}
 			const anchor = document.createElement("a");
 			anchor.href = anchorInfo.url;
+			anchor.target = "_blank"; // New tab
+			anchor.rel = "noopener noreferrer";
 			anchor.textContent = anchorInfo.text ?? anchor.href;
 			container.appendChild(anchor);
 		};
@@ -670,7 +661,7 @@ textarea
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction");
 			interaction.classList.add(interactionInfo.className);
-			const checkboxId = insertLabel(interaction, interactionInfo.label, !!interactionInfo.checkbox, index);
+			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
 			insertObjectList(interaction, interactionInfo.object, index);
 			insertAnchor(interaction, interactionInfo.anchor);
 			insertSubmitter(interaction, interactionInfo.submitter);
@@ -914,14 +905,14 @@ textarea
 							{
 								className: "link",
 								anchor: {
-									url: "https://github.com/ator-dev/mark-my-search/issues/new",
+									url: "https://github.com/searchmarkers/mark-my-search/issues/new",
 									text: "File a bug report",
 								},
 							},
 							{
 								className: "link",
 								anchor: {
-									url: "https://github.com/ator-dev/mark-my-search",
+									url: "https://github.com/searchmarkers/mark-my-search",
 									text: "Get involved!",
 								},
 							},
@@ -1159,6 +1150,25 @@ textarea
 														onToggle: (checked, objectIndex, containerIndex) => {
 															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
 																sync.termLists[containerIndex].terms[objectIndex].matchMode.case = checked;
+																setStorageSync(sync);
+															});
+														},
+													},
+												},
+												{
+													className: "type",
+													key: "matchMode.diacritics",
+													label: {
+														text: "Match Diacritics",
+													},
+													checkbox: {
+														onLoad: async (setChecked, objectIndex, containerIndex) => {
+															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics);
+														},
+														onToggle: (checked, objectIndex, containerIndex) => {
+															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+																sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics = checked;
 																setStorageSync(sync);
 															});
 														},

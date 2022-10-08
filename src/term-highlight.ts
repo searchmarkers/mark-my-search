@@ -7,6 +7,7 @@ type HighlightTags = {
 type TermHues = Array<number>
 type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 type ControlButtonInfo = {
+	buttonClass?: ElementClass
 	path?: string
 	label?: string
 	containerId: ElementID
@@ -16,7 +17,7 @@ type ControlButtonInfo = {
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
 type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
 
-enum AtRuleIdent {
+enum AtRuleID {
 	FLASH = "flash",
 	MARKER_ON = "marker-on",
 	MARKER_OFF = "marker-off",
@@ -28,6 +29,8 @@ enum ElementClass {
 	CONTROL = "control",
 	CONTROL_PAD = "control-pad",
 	CONTROL_CONTENT = "control-content",
+	CONTROL_BUTTON = "control-button",
+	CONTROL_REVEAL = "control-reveal",
 	CONTROL_EDIT = "control-edit",
 	BAR_CONTROL = "bar-control",
 	OPTION_LIST = "options",
@@ -42,9 +45,11 @@ enum ElementClass {
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
 	MATCH_WHOLE = "match-whole",
+	MATCH_DIACRITICS = "match-diacritics",
 	PRIMARY = "primary",
 	SECONDARY = "secondary",
 	OVERRIDE_VISIBILITY = "override-visibility",
+	OVERRIDE_FOCUS = "override-focus",
 }
 
 enum ElementID {
@@ -130,7 +135,7 @@ class UnbrokenNodeList {
  * @param argument An optional secondary component to the identifier.
  * @returns The selector string, being a constant selector prefix and both components joined by hyphens.
  */
-const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: string | number): string =>
+const getSel = (identifier: ElementID | ElementClass | AtRuleID, argument?: string | number): string =>
 	argument === undefined ? `markmysearch-${identifier}` : `markmysearch-${identifier}-${argument}`
 ;
 
@@ -142,37 +147,39 @@ const getSel = (identifier: ElementID | ElementClass | AtRuleIdent, argument?: s
 const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 	const style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
 	const zIndexMax = 2**31 - 1;
-	style.textContent = `
-/* TODO reorganise and rename */
-/* || Term Input and Buttons */
+	const makeImportant = (styleText: string): string =>
+		styleText.replace(/;/g, " !important;"); // Prevent websites from overriding rules with !important;
+	style.textContent = makeImportant(`
+/* || Term Buttons and Input */
 #${getSel(ElementID.BAR)} ::selection
 	{ background: Highlight; color: HighlightText; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
-	{ width: 5em; padding: 0 2px 0 2px !important; margin-left: 4px; border: none !important; outline: revert;
-	box-sizing: unset !important; font-family: revert !important; white-space: pre; color: #000 !important; }
+	{ width: 5em; padding: 0 2px 0 2px; margin-left: 4px; border: none; outline: revert;
+	box-sizing: unset; font-family: revert; white-space: pre; color: #000; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled *,
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)}),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)} input:not(:focus),
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)}),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
-	{ width: 0; padding: 0 !important; margin: 0; }
+	{ width: 0; padding: 0; margin: 0; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_REVEAL)} img
+	{ width: 0.5em; }
 #${getSel(ElementID.BAR)}
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: none; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled
-+ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus)
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: block; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled
-+ .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus)
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
@@ -184,25 +191,32 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-weight: bold; }
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
-.${getSel(ElementClass.CONTROL_PAD)} button::before
+.${getSel(ElementClass.CONTROL_CONTENT)}::before
 	{ content: "(.*)"; margin-right: 2px; font-weight: bold; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
-.${getSel(ElementClass.CONTROL_PAD)} button
-	{ padding-top: 0 !important; border-top: 1px dashed black; }
+.${getSel(ElementClass.CONTROL_CONTENT)}
+	{ padding-top: 0; border-top: 1px dashed black; }
 #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)}, .${getSel(ElementClass.MATCH_REGEX)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ text-decoration: underline; }
-#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
-.${getSel(ElementClass.CONTROL_PAD)} button
+#${getSel(ElementID.BAR_CONTROLS)}
+.${getSel(ElementClass.BAR_CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
+.${getSel(ElementClass.CONTROL_CONTENT)}
 	{ border-bottom: 3px solid #666; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
 #${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
-.${getSel(ElementClass.CONTROL_PAD)} button
-	{ padding-inline: 2px !important; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
+.${getSel(ElementClass.CONTROL_CONTENT)}
+	{ padding-inline: 2px; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+.${getSel(ElementClass.CONTROL_CONTENT)}
+	{ font-style: italic; }
+#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+.${getSel(ElementClass.CONTROL_CONTENT)}
+	{ border-left: 3px dashed black; }
 /**/
 
 /* || Bar */
@@ -213,10 +227,10 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} *
 	{ all: revert; font: revert; font-size: inherit; line-height: 120%; padding: 0; outline: none; }
 #${getSel(ElementID.BAR)} img
-	{ height: 1.1em; width: 1.1em; }
+	{ height: 1.1em; width: 1.1em; object-fit: cover; }
 #${getSel(ElementID.BAR)} button
 	{ display: flex; align-items: center; padding-inline: 4px; margin-block: 0; border: none; border-radius: inherit;
-	background: none; color: #000 !important; cursor: pointer; letter-spacing: normal; transition: unset; }
+	background: none; color: hsl(0 0% 0%); cursor: pointer; letter-spacing: normal; transition: unset; }
 #${getSel(ElementID.BAR)} > *
 	{ display: inline; }
 #${getSel(ElementID.BAR)} > * > *
@@ -224,7 +238,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* || Term Pulldown */
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus,
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:is(:focus, :active),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}.${getSel(ElementClass.OVERRIDE_VISIBILITY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover) + .${getSel(ElementClass.OPTION_LIST)}
 	{ display: flex; }
@@ -233,12 +247,11 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
 	{ display: none; position: absolute; flex-direction: column; width: max-content; padding: 0; margin: 0; z-index: 1; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ display: block; padding-block: 2px; margin-left: 3px; font-size: small; background: hsl(0 0% 75%) !important; filter: grayscale(100%);
-	width: 100%; text-align: left; color: #111 !important;
-	border-color: hsl(0 0% 50%) !important; border-bottom-width: 1px !important;
-	border-style: none none solid solid !important; }
+	{ display: block; padding-block: 2px; margin-left: 3px; font-size: small; background: hsl(0 0% 94% / 0.76);
+	color: hsl(0 0% 6%); filter: grayscale(100%); width: 100%; text-align: left;
+	border-width: 2px; border-color: hsl(0 0% 40% / 0.7); border-left-style: solid; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
-	{ background: hsl(0 0% 90%) !important; }
+	{ background: hsl(0 0% 100%); }
 /**/
 
 /* || Bar Controls */
@@ -246,43 +259,43 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ white-space: pre; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 	{ display: flex; height: 1.3em; border-style: none; border-radius: 4px; box-shadow: 1px 1px 5px;
-	background: hsl(0 0% 90% / 0.8) !important; color: #000 !important; }
+	background: hsl(0 0% 90% / 0.8); color: #000; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: hsl(0 0% 90% / 0.4) !important; }
+	{ background: hsl(0 0% 90% / 0.4); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:hover
-	{ background: hsl(0 0% 65%) !important; }
+	{ background: hsl(0 0% 65%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:active
-	{ background: hsl(0 0% 50%) !important; }
-#${getSel(ElementID.BAR)} > :not(#${getSel(ElementID.BAR_TERMS)}) > .${getSel(ElementClass.DISABLED)}
+	{ background: hsl(0 0% 50%); }
+#${getSel(ElementID.BAR)} > :not(#${getSel(ElementID.BAR_TERMS)})
+> .${getSel(ElementClass.DISABLED)}:not(:focus-within, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: none; }
 #${getSel(ElementID.BAR)} #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ display: flex; }
-#${getSel(ElementID.BAR)} #${getSel(ElementID.BAR_TERMS)}
-.${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ background: hsl(0 0% 80% / 0.6) !important; }
+	{ display: flex; background: hsl(0 0% 80% / 0.6); }
 /**/
 
 /* || Term Scroll Markers */
-@keyframes ${getSel(AtRuleIdent.MARKER_ON)}
-	{ from {} to { padding-right: 16px; }; }
-@keyframes ${getSel(AtRuleIdent.MARKER_OFF)}
-	{ from { padding-right: 16px; } to { padding-right: 0; }; }
 #${getSel(ElementID.MARKER_GUTTER)}
 	{ display: block; position: fixed; right: 0; top: 0; width: 0; height: 100%; z-index: ${zIndexMax}; }
 #${getSel(ElementID.MARKER_GUTTER)} *
-	{ width: 16px; top: 0; height: 1px; position: absolute; right: 0; border-left: solid hsl(0 0% 0% / 0.6) 1px; box-sizing: unset;
+	{ width: 16px; height: 1px; position: absolute; right: 0; border-left: solid hsl(0 0% 0% / 0.6) 1px; box-sizing: unset;
 	padding-right: 0; transition: padding-right 600ms; pointer-events: none; }
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.FOCUS)}
 	{ padding-right: 16px; transition: unset; }
 /**/
 
 /* || Term Highlights */
-@keyframes ${getSel(AtRuleIdent.FLASH)}
-	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
-	{ animation: ${getSel(AtRuleIdent.FLASH)} 1s; }
+	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
 /**/
+	`) + `
+/* || Transitions */
+@keyframes ${getSel(AtRuleID.MARKER_ON)}
+	{ from {} to { padding-right: 16px; }; }
+@keyframes ${getSel(AtRuleID.MARKER_OFF)}
+	{ from { padding-right: 16px; } to { padding-right: 0; }; }
+@keyframes ${getSel(AtRuleID.FLASH)}
+	{ from { background-color: hsl(0 0% 65% / 0.8); } to {}; }
 	`;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
@@ -293,14 +306,14 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 					isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
 				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
 				: colorA;
-		style.textContent += `
+		style.textContent += makeImportant(`
 /* || Term Highlights */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)} !important;
-	border-radius: 2px !important; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35) !important; }
+	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
+	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }
 /**/
 
 /* || Term Scroll Markers */
@@ -311,25 +324,21 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Term Control Buttons */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)} !important; }
+	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)}; }
 #${getSel(ElementID.BAR_TERMS)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.4)`, `hsl(${hue} 70% 88% / 0.4)`)} !important; }
+	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.4)`, `hsl(${hue} 70% 88% / 0.4)`)}; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
-.${getSel(ElementClass.CONTROL_CONTENT)}:hover,
+.${getSel(ElementClass.CONTROL_BUTTON)}:hover:not(:disabled)
+	{ background: hsl(${hue} 70% 80%); }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
-.${getSel(ElementClass.CONTROL_EDIT)}:hover:not(:disabled)
-	{ background: hsl(${hue} 70% 80%) !important; }
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
-.${getSel(ElementClass.CONTROL_CONTENT)}:active,
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
-.${getSel(ElementClass.CONTROL_EDIT)}:active:not(:disabled)
-	{ background: hsl(${hue} 70% 70%) !important; }
+.${getSel(ElementClass.CONTROL_BUTTON)}:active:not(:disabled)
+	{ background: hsl(${hue} 70% 70%); }
 #${getSel(ElementID.BAR_TERMS)}.${getSel(ElementClass.CONTROL_PAD, i)}
 .${getSel(ElementClass.TERM, term.selector)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: hsl(${hue} 100% 90%) !important; }
+	{ background: hsl(${hue} 100% 90%); }
 /**/
-		`;
+		`);
 	});
 };
 
@@ -603,24 +612,27 @@ const insertTermInput = (() => {
 		const replaces = idxCode !== TermChange.CREATE;
 		const input = document.createElement("input");
 		input.type = "text";
-		input.classList.add(getSel(ElementClass.DISABLED));
 		const resetInput = (termText = controlContent.textContent as string) => {
 			input.value = replaces ? termText : "";
 		};
 		input.onfocus = () => {
+			if (input.classList.contains(getSel(ElementClass.OVERRIDE_FOCUS))) {
+				return; // Focus has been delegated to another element and will be on the input when this class is removed
+			}
 			input.addEventListener("keyup", (event) => {
 				if (event.key === "Tab") {
 					selectInputTextAll(input);
 				}
 			});
-			input.classList.remove(getSel(ElementClass.DISABLED));
 			resetInput();
 			resetTermControlInputsVisibility();
 			input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 		};
 		input.onblur = () => {
-			commit(term, terms);
-			input.classList.add(getSel(ElementClass.DISABLED));
+			if (!input.classList.contains(getSel(ElementClass.OVERRIDE_FOCUS))) {
+				// Focus has been lost, not delegated to another element
+				commit(term, terms);
+			}
 		};
 		const show = (event: MouseEvent) => {
 			event.preventDefault();
@@ -688,12 +700,7 @@ const insertTermInput = (() => {
 					return;
 				}
 				event.preventDefault();
-				const control = controlPad.parentElement as HTMLElement;
-				const optionList = control.querySelector(`.${getSel(ElementClass.OPTION_LIST)}`) as HTMLElement;
-				optionList.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
-				optionList.tabIndex = 0;
-				optionList.focus();
-				optionList.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				openTermOptionMenu(term);
 				return;
 			}
 			}
@@ -795,7 +802,7 @@ const updateTermTooltip = (() => {
  * @returns The corresponding match type identifier string.
  */
 const getTermOptionMatchType = (text: string): string => // TODO rework system to not rely on option text
-	text.slice(0, text.indexOf(" ")).toLowerCase()
+	text.slice(0, text.includes(" ") ? text.indexOf(" ") : undefined).toLowerCase()
 ;
 
 /**
@@ -820,6 +827,7 @@ const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMToke
 	classList[mode.case ? "add" : "remove"](getSel(ElementClass.MATCH_CASE));
 	classList[mode.stem ? "add" : "remove"](getSel(ElementClass.MATCH_STEM));
 	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
+	classList[mode.diacritics ? "add" : "remove"](getSel(ElementClass.MATCH_DIACRITICS));
 };
 
 /**
@@ -832,6 +840,7 @@ const getTermControlMatchModeFromClassList = (classList: DOMTokenList): MatchMod
 	case: classList.contains(getSel(ElementClass.MATCH_CASE)),
 	stem: classList.contains(getSel(ElementClass.MATCH_STEM)),
 	whole: classList.contains(getSel(ElementClass.MATCH_WHOLE)),
+	diacritics: classList.contains(getSel(ElementClass.MATCH_DIACRITICS)),
 });
 
 /**
@@ -868,7 +877,7 @@ const removeTermControl = (idx: number) => {
 
 /**
  * Creates an clickable element to toggle one of the matching options for a term.
- * @param term A term for which to create the option.
+ * @param term The term for which to create a matching option.
  * @param text Text content for the option, which is also used to determine the matching mode it controls.
  * @param onActivated A function, taking the identifier for the match option, to execute each time the option is activated.
  * @returns The resulting option element.
@@ -881,24 +890,43 @@ const createTermOption = (term: MatchTerm, text: string,
 	option.classList.add(getSel(ElementClass.OPTION));
 	option.tabIndex = -1;
 	option.textContent = getTermOptionText(term.matchMode[matchType], text);
-	option.onmouseup = () => onActivated(matchType);
+	option.onmouseup = () => {
+		if (!option.matches(":active")) {
+			onActivated(matchType);
+		}
+	};
 	option.onclick = () => onActivated(matchType);
 	return option;
 };
 
+// TODO document
+const delegateFocusFromTermInput = (input: HTMLInputElement, target: HTMLElement) => {
+	if (document.activeElement === input) {
+		input.classList.add(getSel(ElementClass.OVERRIDE_FOCUS));
+	}
+	target.focus();
+	if (input.classList.contains(getSel(ElementClass.OVERRIDE_FOCUS))) {
+		const returnFocus = () => {
+			target.removeEventListener("blur", returnFocus);
+			input.focus();
+			input.classList.remove(getSel(ElementClass.OVERRIDE_FOCUS));
+		};
+		target.addEventListener("blur", returnFocus);
+	}
+};
+
 /**
  * Creates a menu structure containing clickable elements to individually toggle the matching options for a term.
- * @param term A term for which to create the menu.
+ * @param term The term for which to create a menu.
  * @param terms Terms being controlled and highlighted.
- * @param focusReturnElement An element to return focus to once an option from the menu has been activated,
- * if the menu is currently focused. This is intended to be an element from which focus to the menu was gained.
  * @param onActivated A function, taking the identifier for a match option, to execute each time the option is activated.
+ * @param controlsInfo Details of controls being inserted.
  * @returns The resulting menu element.
  */
 const createTermOptionMenu = (
 	term: MatchTerm,
 	terms: MatchTerms,
-	focusReturnElement: HTMLElement,
+	controlsInfo: ControlsInfo,
 	onActivated = (matchType: string) => {
 		const termUpdate = Object.assign({}, term);
 		termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
@@ -909,34 +937,72 @@ const createTermOptionMenu = (
 			termChangedIdx: getTermIdx(term, terms),
 		});
 	},
-): HTMLElement => {
-	const menu = document.createElement("menu");
-	menu.classList.add(getSel(ElementClass.OPTION_LIST));
-	menu.appendChild(createTermOption(term, "Case Sensitive", onActivated));
-	menu.appendChild(createTermOption(term, "Stem Word", onActivated));
-	menu.appendChild(createTermOption(term, "Whole Word", onActivated));
-	menu.appendChild(createTermOption(term, "Regex Mode", onActivated));
+): { optionList: HTMLElement, controlReveal: HTMLButtonElement } => {
+	const termIsValid = terms.includes(term); // If virtual and used for appending terms, this will be `false`.
+	const optionList = document.createElement("menu");
+	optionList.classList.add(getSel(ElementClass.OPTION_LIST));
+	optionList.appendChild(createTermOption(term, "Case Sensitive", onActivated));
+	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
+	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
+	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
+	optionList.appendChild(createTermOption(term, "Diacritics", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
 		event.preventDefault();
 		if (!executeResult) {
 			return;
 		}
 		if (event.key === "Escape") {
-			focusReturnElement.focus();
+			optionList.blur();
+			return;
 		}
 		if (event.key === " " || event.key.length !== 1) {
 			return;
 		}
-		menu.querySelectorAll(`.${getSel(ElementClass.OPTION)}`).forEach((option: HTMLButtonElement) => {
+		Array.from(optionList.querySelectorAll(`.${getSel(ElementClass.OPTION)}`)).some((option: HTMLButtonElement) => {
 			if ((option.textContent ?? "").toLowerCase().startsWith(event.key)) {
 				option.click();
+				return true;
 			}
+			return false;
 		});
-		focusReturnElement.focus();
+		optionList.blur();
 	};
-	menu.onkeydown = event => handleKeyEvent(event, false);
-	menu.onkeyup = event => handleKeyEvent(event);
-	return menu;
+	optionList.onkeydown = event => handleKeyEvent(event, false);
+	optionList.onkeyup = event => handleKeyEvent(event);
+	const controlReveal = document.createElement("button");
+	controlReveal.type = "button";
+	controlReveal.classList.add(getSel(ElementClass.CONTROL_BUTTON));
+	controlReveal.classList.add(getSel(ElementClass.CONTROL_REVEAL));
+	controlReveal.tabIndex = -1;
+	controlReveal.disabled = !controlsInfo.barLook.showRevealIcon;
+	controlReveal.addEventListener("click", () => {
+		const input = controlReveal.parentElement ? controlReveal.parentElement.querySelector("input") : null;
+		const willFocusInput = input ? input.getBoundingClientRect().width > 0 : false;
+		resetTermControlInputsVisibility();
+		if (input && willFocusInput) {
+			input.focus();
+		}
+		openTermOptionMenu(termIsValid ? term : undefined);
+	});
+	const controlRevealToggle = document.createElement("img");
+	controlRevealToggle.src = chrome.runtime.getURL("/icons/reveal.svg");
+	controlReveal.appendChild(controlRevealToggle);
+	return { optionList, controlReveal };
+};
+
+// TODO document
+const openTermOptionMenu = (term: MatchTerm | undefined) => {
+	const control = getControl(term);
+	const input = control ? control.querySelector("input") : null;
+	const optionList = control ? control.querySelector(`.${getSel(ElementClass.OPTION_LIST)}`) as HTMLElement | null : null;
+	if (!input || !optionList) {
+		return;
+	}
+	delegateFocusFromTermInput(input, optionList);
+	optionList.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
+	optionList.tabIndex = 0;
+	optionList.focus();
+	optionList.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 };
 
 /**
@@ -951,11 +1017,14 @@ const createTermOptionMenu = (
 const insertTermControl = (terms: MatchTerms, idx: number, command: string, commandReverse: string,
 	controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
 	const term = terms.at(idx) as MatchTerm;
+	const { optionList, controlReveal } = createTermOptionMenu(term, terms, controlsInfo);
 	const controlPad = document.createElement("div");
 	controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
 	controlPad.classList.add(getSel(ElementClass.DISABLED));
+	controlPad.appendChild(controlReveal);
 	const controlContent = document.createElement("button");
 	controlContent.type = "button";
+	controlContent.classList.add(getSel(ElementClass.CONTROL_BUTTON));
 	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
@@ -963,11 +1032,10 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlPad.appendChild(controlContent);
 	const controlEdit = document.createElement("button");
 	controlEdit.type = "button";
+	controlEdit.classList.add(getSel(ElementClass.CONTROL_BUTTON));
 	controlEdit.classList.add(getSel(ElementClass.CONTROL_EDIT));
-	if (!controlsInfo.barLook.showEditIcon) {
-		controlEdit.disabled = true;
-	}
 	controlEdit.tabIndex = -1;
+	controlEdit.disabled = !controlsInfo.barLook.showEditIcon;
 	const controlEditChange = document.createElement("img");
 	const controlEditRemove = document.createElement("img");
 	controlEditChange.src = chrome.runtime.getURL("/icons/edit.svg");
@@ -977,14 +1045,14 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlEdit.appendChild(controlEditChange);
 	controlEdit.appendChild(controlEditRemove);
 	controlPad.appendChild(controlEdit);
-	const termInput = insertTermInput(terms, controlPad, idx, input => controlPad.insertBefore(input, controlEdit));
+	insertTermInput(terms, controlPad, idx, input => controlPad.insertBefore(input, controlEdit));
 	term.command = command;
 	term.commandReverse = commandReverse;
 	const control = document.createElement("div");
 	control.classList.add(getSel(ElementClass.CONTROL));
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	control.appendChild(controlPad);
-	control.appendChild(createTermOptionMenu(term, terms, termInput));
+	control.appendChild(optionList);
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	(document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement).appendChild(control);
 };
@@ -1046,6 +1114,9 @@ const insertControls = (() => {
 			const button = document.createElement("button");
 			button.type = "button";
 			button.tabIndex = -1;
+			if (info.buttonClass) {
+				button.classList.add(getSel(info.buttonClass));
+			}
 			if (info.path) {
 				const image = document.createElement("img");
 				image.src = chrome.runtime.getURL(info.path);
@@ -1086,17 +1157,25 @@ const insertControls = (() => {
 						performSearch: true,
 					} as BackgroundMessage),
 				},
+				toggleHighlights: {
+					path: "/icons/show.svg",
+					containerId: ElementID.BAR_OPTIONS,
+					onclick: () => chrome.runtime.sendMessage({
+						toggleHighlightsOn: !controlsInfo.highlightsShown,
+					} as BackgroundMessage),
+				},
 				appendTerm: {
+					buttonClass: ElementClass.CONTROL_CONTENT,
 					path: "/icons/create.svg",
 					containerId: ElementID.BAR_CONTROLS,
 					setUp: container => {
 						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;
-						const termInput = insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
+						insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
 						updateTermControlMatchModeClassList(controlsInfo.matchMode, container.classList);
-						container.appendChild(createTermOptionMenu(
+						const { optionList, controlReveal } = createTermOptionMenu(
 							new MatchTerm("_", controlsInfo.matchMode),
 							terms,
-							termInput,
+							controlsInfo,
 							matchType => {
 								const matchMode = getTermControlMatchModeFromClassList(container.classList);
 								matchMode[matchType] = !matchMode[matchType];
@@ -1108,7 +1187,9 @@ const insertControls = (() => {
 									),
 								);
 							},
-						));
+						);
+						pad.appendChild(controlReveal);
+						container.appendChild(optionList);
 					},
 				},
 			} as Record<ControlButtonName, ControlButtonInfo>)[barControlName], hideWhenInactive)
@@ -1180,13 +1261,14 @@ const removeControls = () => {
 };
 
 /**
- * Removes the visibility classes of all term control inputs, reseting their visibility.
+ * Removes the visibility classes of all term control inputs, resetting their visibility.
  */
 const resetTermControlInputsVisibility = () =>
 	purgeClass(
 		getSel(ElementClass.OVERRIDE_VISIBILITY),
 		document.getElementById(getSel(ElementID.BAR)) as HTMLElement,
 		"input",
+		classList => !classList.contains(getSel(ElementClass.OVERRIDE_FOCUS)),
 	)
 ;
 
@@ -1255,7 +1337,7 @@ const insertScrollMarkers = (() => {
 			}
 			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
 		});
-		// Generates and inserts HTML directly in order to increase performance, rather than appending individual elements.
+		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
 		gutter.insertAdjacentHTML("afterbegin", markersHtml);
 	};
 })();
@@ -1401,9 +1483,14 @@ const generateTermHighlightsUnderNode = (() => {
  * @param className A class name to purge.
  * @param root A root node under which to purge the class (non-inclusive).
  * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
+ * @param predicate A function called for each element, the condition of which must be met in order to purge from that element.
  */
-const purgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "") =>
-	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(element => element.classList.remove(className))
+const purgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "",
+	predicate?: (classList: DOMTokenList) => boolean) =>
+	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(predicate
+		? element => predicate(element.classList) ? element.classList.remove(className) : undefined
+		: element => element.classList.remove(className) // Predicate not called when not supplied, for efficiency (bulk purges)
+	)
 ;
 
 /**
@@ -1484,12 +1571,6 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  * Disables then restarts continuous highlighting.
  * @param terms Terms to be continuously found and highlighted within the DOM.
  * @param termsToPurge Terms for which to remove previous highlights.
- * @param disable Indicates whether to skip all highlighting and remove the controls,
- * thus visibly and functionally deactivating the extension within the page.
- * @param termsFromSelection Indicates whether to skip all highlighting,
- * sending a message to the background script containing details of terms from the current selection.
- * This flag causes a later highlighting message with possibly different terms to be received,
- * so highlighting in this run is pointless.
  * @param pageModifyEnabled Indicates whether to modify page content.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
@@ -1497,23 +1578,12 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  */
 const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
-	disable: boolean, termsFromSelection: boolean, pageModifyEnabled: boolean,
+	pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
-	if (termsFromSelection) {
-		terms = [];
-		getTermsFromSelection().forEach(term => terms.push(term));
-		chrome.runtime.sendMessage({
-			terms,
-			makeUnique: true,
-			toggleHighlightsOn: true,
-		} as BackgroundMessage);
-	}
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
-	if (disable) {
-		removeControls();
-	} else if (!termsFromSelection && pageModifyEnabled) {
+	if (pageModifyEnabled) {
 		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
@@ -1550,11 +1620,6 @@ const getTermsFromSelection = () => {
 	 * Inserts the toolbar with term controls and begins continuously highlighting terms in the document.
 	 * All controls necessary are first removed. Refreshes executed may be whole or partial according to requirements.
 	 * @param terms Terms to highlight and display in the toolbar.
-	 * @param termsFromSelection Indicates whether to skip all highlighting.
-	 * This flag is handled externally to the effect of causing a later highlighting message with possibly different terms to be received,
-	 * so highlighting in this run is pointless.
-	 * @param disable Indicates whether to skip control and highlight insertion stages but run removal stages,
-	 * thus visibly and functionally deactivating the extension within the page.
 	 * @param controlsInfo Details of controls to insert.
 	 * @param commands Browser commands to use in shortcut hints.
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
@@ -1586,7 +1651,7 @@ const getTermsFromSelection = () => {
 			}
 		};
 	
-		return (terms: MatchTerms, termsFromSelection: boolean, disable: boolean,
+		return (terms: MatchTerms,
 			controlsInfo: ControlsInfo, commands: BrowserCommands,
 			highlightTags: HighlightTags, hues: TermHues,
 			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
@@ -1632,15 +1697,13 @@ const getTermsFromSelection = () => {
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
 					insertToolbar(terms, controlsInfo, commands, highlightTags, hues);
 				}
-			} else if (!disable && !termsFromSelection) {
+			} else {
 				return;
 			}
-			if (!disable) {
-				fillStylesheetContent(terms, hues);
-			}
+			fillStylesheetContent(terms, hues);
 			beginHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				disable, termsFromSelection, controlsInfo.pageModifyEnabled,
+				controlsInfo.pageModifyEnabled,
 				highlightTags, requestRefreshIndicators, observer,
 			);
 		};
@@ -1726,10 +1789,37 @@ const getTermsFromSelection = () => {
 				}
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
-				const control = getControl(undefined, commandInfo.termIdx) as HTMLElement;
-				const input = control.querySelector("input") as HTMLInputElement;
+				const control = getControl(undefined, commandInfo.termIdx);
+				const input = control ? control.querySelector("input") : null;
+				if (!control || !input) {
+					break;
+				}
+				const selection = getSelection();
+				const focusReturnElement = document.activeElement;
+				const selectionReturnRanges = selection
+					? Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i))
+					: null;
+				control.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				input.select();
+				control.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				selectInputTextAll(input);
+				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
+				const returnSelection = () => {
+					setTimeout(() => { // Wait a few milliseconds for a possible in-toolbar focus shift to complete
+						if (document.activeElement && document.activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
+							return; // The unfocus was due to focus being shifted within the toolbar
+						}
+						bar.removeEventListener("focusout", returnSelection);
+						if (focusReturnElement && focusReturnElement["focus"]) {
+							(focusReturnElement as HTMLElement).focus({ preventScroll: true });
+						}
+						if (selection && selectionReturnRanges !== null) {
+							selection.removeAllRanges();
+							selectionReturnRanges.forEach(range => selection.addRange(range));
+						}
+					});
+				};
+				bar.addEventListener("focusout", returnSelection);
 				break;
 			} case CommandType.SELECT_TERM: {
 				const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
@@ -1763,16 +1853,19 @@ const getTermsFromSelection = () => {
 			barControlsShown: {
 				disableTabResearch: true,
 				performSearch: true,
+				toggleHighlights: true,
 				appendTerm: true,
 			},
 			barLook: {
 				showEditIcon: true,
+				showRevealIcon: true,
 			},
 			matchMode: {
 				regex: false,
 				case: false,
 				stem: false,
 				whole: false,
+				diacritics: false,
 			},
 		};
 		const highlightTags: HighlightTags = {
@@ -1789,21 +1882,25 @@ const getTermsFromSelection = () => {
 		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
 			sendResponse: (response: HighlightDetails) => void) => {
 			if (message.getDetails) {
-				// This is a much more maintainable pattern. Maybe convert more extension logic to this getter/setter message design?
+				const details: HighlightDetails = {};
 				if (message.getDetails.termsFromSelection) {
-					sendResponse({ terms: getTermsFromSelection() });
+					details.terms = getTermsFromSelection();
 				}
+				if (message.getDetails.highlightsShown) {
+					details.highlightsShown = controlsInfo.highlightsShown;
+				}
+				sendResponse(details);
 			}
 			if (message.extensionCommands) {
 				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
-			if (message.barControlsShown) {
-				controlsInfo.barControlsShown = message.barControlsShown;
-			}
-			if (message.barLook) {
-				controlsInfo.barLook = message.barLook;
-			}
+			Object.entries(message.barControlsShown ?? {}).forEach(([ key, value ]) => {
+				controlsInfo.barControlsShown[key] = value;
+			});
+			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
+				controlsInfo.barLook[key] = value;
+			});
 			if (message.highlightLook) {
 				hues.splice(0);
 				message.highlightLook.hues.forEach(hue => hues.push(hue));
@@ -1816,18 +1913,19 @@ const getTermsFromSelection = () => {
 			}
 			if (message.deactivate) {
 				terms.splice(0);
+				removeControls();
 			}
 			if (message.enablePageModify !== undefined) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
 			}
-			if (
-				message.deactivate || message.termsFromSelection || message.termUpdate
-				|| (message.terms !== undefined
-					&& (!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
-						|| (!terms.length && !document.getElementById(ElementID.BAR))))
+			if (message.termUpdate
+				|| (message.terms !== undefined && (
+					!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
+					|| (!terms.length && !document.getElementById(ElementID.BAR))
+				))
 			) {
 				refreshTermControlsAndBeginHighlighting(
-					terms, message.termsFromSelection ?? false, message.deactivate ?? false, //
+					terms, //
 					controlsInfo, commands, //
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //
