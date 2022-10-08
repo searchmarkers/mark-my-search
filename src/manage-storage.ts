@@ -31,10 +31,12 @@ type StorageSyncValues = {
 	[StorageSync.BAR_CONTROLS_SHOWN]: {
 		disableTabResearch: boolean
 		performSearch: boolean
+		toggleHighlights: boolean
 		appendTerm: boolean
 	}
 	[StorageSync.BAR_LOOK]: {
 		showEditIcon: boolean
+		showRevealIcon: boolean
 	}
 	[StorageSync.HIGHLIGHT_LOOK]: {
 		hues: Array<number>
@@ -113,6 +115,7 @@ const defaultOptions: StorageSyncValues = {
 		case: false,
 		stem: true,
 		whole: false,
+		diacritics: false,
 	},
 	linkResearchTabs: false,
 	showHighlights: {
@@ -123,10 +126,12 @@ const defaultOptions: StorageSyncValues = {
 	barControlsShown: {
 		disableTabResearch: true,
 		performSearch: true,
+		toggleHighlights: true,
 		appendTerm: true,
 	},
 	barLook: {
 		showEditIcon: true,
+		showRevealIcon: true,
 	},
 	highlightLook: {
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
