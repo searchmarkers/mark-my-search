@@ -77,11 +77,11 @@
 			"description": "Focus the toolbar input for adding a new term"
 		},
 		"advance-global": {
-			"suggested_key": { "default": "Alt+Space" },
+			"suggested_key": { "default": "Alt+S" },
 			"description": "Jump to next mark in page"
 		},
 		"advance-global-reverse": {
-			"suggested_key": { "default": "Alt+Shift+Space" },
+			"suggested_key": { "default": "Alt+Shift+S" },
 			"description": "Jump to previous mark in page"
 		},
 		"select-term-0": { "description": "Jump to next mark for 1st term" },

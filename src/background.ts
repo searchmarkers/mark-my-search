@@ -427,83 +427,44 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
- * @param messagingRetriesRemaining The number of retries permitted in case of tab messaging errors.
+ * @param retriesRemaining The number of retries permitted in case of tab messaging errors.
  * Retries are preceded by attempting to inject the highlighting script.
  */
-const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 1) => {
-	const sync = await getStorageSync([
-		StorageSync.BAR_CONTROLS_SHOWN,
-		StorageSync.BAR_LOOK,
-		StorageSync.HIGHLIGHT_LOOK,
-		StorageSync.MATCH_MODE_DEFAULTS,
-		StorageSync.URL_FILTERS,
-	]);
+const activateResearchInTab = async (tabId: number, retriesRemaining = 1) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-	const researchInstance = await (async () => {
-		const researchInstance = session.researchInstances[tabId];
-		if (researchInstance && researchInstance.persistent) {
-			const termsAreSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
-				tabId,
-				{ getDetails: { termsFromSelection: true } } as HighlightMessage,
-			).then((response: HighlightDetails) =>
-				response.terms ? (response.terms.length > 0) : false
-			).catch(() =>
-				undefined
-			);
-			if (termsAreSelected === undefined) { // Error when sending message, likely due to lack of an injected script
-				// We cannot be sure there is no user selection, so must retry
-				if (messagingRetriesRemaining > 0) { // Give up if attempts exhausted
-					executeScriptsInTab(tabId).then(() => {
-						// Try again after attempting script injection, but give up if the same process fails and attempts are exhausted
-						activateResearchInTab(tabId, messagingRetriesRemaining - 1);
-					});
-				}
-				return null; // Terminate since the function will be re-executed on the next try
-			}
-			if (!termsAreSelected) {
-				researchInstance.enabled = true;
-				return researchInstance;
-			}
+	// TODO make function (getting selected terms with retries)
+	const termsSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
+		tabId,
+		{ getDetails: { termsFromSelection: true } } as HighlightMessage,
+	).then((response: HighlightDetails) =>
+		response.terms ?? []
+	).catch(() => undefined);
+	if (termsSelected === undefined) { // Error when sending message, likely due to lack of an injected script
+		// We cannot be sure there is no user selection, so must retry
+		if (retriesRemaining > 0) { // Try executing+messaging again if attempts not exhausted
+			await executeScriptsInTab(tabId);
+			activateResearchInTab(tabId, retriesRemaining - 1);
 		}
-		return await createResearchInstance({
-			terms: [], // Indicate that the user selection should be used (in case of selected terms OR no existing research)
+		return; // Gives up at this point if no retries remain, as it is assumed that scripts cannot be injected into this tab
+	}
+	const researchInstance = session.researchInstances[tabId]
+		? session.researchInstances[tabId]
+		: await createResearchInstance({
+			terms: [],
 			autoOverwritable: false,
 		});
-	})();
-	if (researchInstance === null) {
-		return;
-	}
+	researchInstance.terms = termsSelected.length ? termsSelected : researchInstance.terms;
+	researchInstance.enabled = true;
 	researchInstance.highlightsShown = true;
-	if (researchInstance.terms.length) {
-		handleMessage({
-			terms: researchInstance.terms,
-			makeUnique: true,
-			toggleHighlightsOn: true,
-			highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
-		} as BackgroundMessage, tabId);
-	} else {
-		session.researchInstances[tabId] = researchInstance;
-		await executeScriptsInTab(tabId);
-		researchInstance.terms = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
-			tabId,
-			{ getDetails: { termsFromSelection: true } } as HighlightMessage,
-		).then((response: HighlightDetails) =>
-			response.terms ?? []
-		).catch(() =>
-			[]
-		);
-		activateHighlightingInTab(tabId, {
-			terms: researchInstance.terms,
-			toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
-			barControlsShown: sync.barControlsShown,
-			barLook: sync.barLook,
-			highlightLook: sync.highlightLook,
-			matchMode: sync.matchModeDefaults,
-			enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
-			command: { type: CommandType.FOCUS_TERM_INPUT },
-		});
-		await setStorageSession(session);
-	}
+	researchInstance.autoOverwritable = false;
+	handleMessage({
+		terms: researchInstance.terms,
+		makeUnique: true,
+		toggleHighlightsOn: true,
+		highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
+	} as BackgroundMessage, tabId);
+	session.researchInstances[tabId] = researchInstance;
+	await setStorageSession(session);
 };
 
 /**
