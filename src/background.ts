@@ -427,43 +427,36 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
- * @param messagingRetriesRemaining The number of retries permitted in case of tab messaging errors.
+ * @param retriesRemaining The number of retries permitted in case of tab messaging errors.
  * Retries are preceded by attempting to inject the highlighting script.
  */
-const activateResearchInTab = async (tabId: number, messagingRetriesRemaining = 1) => {
+const activateResearchInTab = async (tabId: number, retriesRemaining = 1) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-	const researchInstance = await (async () => {
-		const termsSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
-			tabId,
-			{ getDetails: { termsFromSelection: true } } as HighlightMessage,
-		).then((response: HighlightDetails) =>
-			response.terms ?? []
-		).catch(() => undefined);
-		if (termsSelected === undefined) { // Error when sending message, likely due to lack of an injected script
-			// We cannot be sure there is no user selection, so must retry
-			if (messagingRetriesRemaining > 0) { // Give up if attempts exhausted
-				executeScriptsInTab(tabId).then(() => {
-					// Try again after attempting script injection, but give up if the same process fails and attempts are exhausted
-					activateResearchInTab(tabId, messagingRetriesRemaining - 1);
-				});
-			}
-			return null; // Terminate since the function will be re-executed on the next try
+	// TODO make function (getting selected terms with retries)
+	const termsSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
+		tabId,
+		{ getDetails: { termsFromSelection: true } } as HighlightMessage,
+	).then((response: HighlightDetails) =>
+		response.terms ?? []
+	).catch(() => undefined);
+	if (termsSelected === undefined) { // Error when sending message, likely due to lack of an injected script
+		// We cannot be sure there is no user selection, so must retry
+		if (retriesRemaining > 0) { // Try executing+messaging again if attempts not exhausted
+			await executeScriptsInTab(tabId);
+			activateResearchInTab(tabId, retriesRemaining - 1);
 		}
-		const researchInstance = session.researchInstances[tabId]
-			? session.researchInstances[tabId]
-			: await createResearchInstance({
-				terms: [],
-				autoOverwritable: false,
-			});
-		researchInstance.terms = termsSelected.length ? termsSelected : researchInstance.terms;
-		researchInstance.enabled = true;
-		researchInstance.highlightsShown = true;
-		researchInstance.autoOverwritable = false;
-		return researchInstance;
-	})();
-	if (researchInstance === null) {
-		return;
+		return; // Gives up at this point if no retries remain, as it is assumed that scripts cannot be injected into this tab
 	}
+	const researchInstance = session.researchInstances[tabId]
+		? session.researchInstances[tabId]
+		: await createResearchInstance({
+			terms: [],
+			autoOverwritable: false,
+		});
+	researchInstance.terms = termsSelected.length ? termsSelected : researchInstance.terms;
+	researchInstance.enabled = true;
+	researchInstance.highlightsShown = true;
+	researchInstance.autoOverwritable = false;
 	handleMessage({
 		terms: researchInstance.terms,
 		makeUnique: true,
