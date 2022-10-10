@@ -423,7 +423,7 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
- * @param messagingRetriesRemaining The number of retries permitted in case of tab messaging errors.
+ * @param retriesRemaining The number of retries permitted in case of tab messaging errors.
  * Retries are preceded by attempting to inject the highlighting script.
  */
 const activateResearchInTab = async (tabId: number, retriesRemaining = 1) => {
