@@ -942,10 +942,10 @@ const createTermOptionMenu = (
 	const optionList = document.createElement("menu");
 	optionList.classList.add(getSel(ElementClass.OPTION_LIST));
 	optionList.appendChild(createTermOption(term, "Case Sensitive", onActivated));
-	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
-	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
+	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Diacritics", onActivated));
+	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
 		event.preventDefault();
 		if (!executeResult) {
