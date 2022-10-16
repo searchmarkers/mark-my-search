@@ -2,7 +2,11 @@
 type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>
 
-// TODO document
+/**
+ * Gets a JSON-stringified form of the given object for use in logging.
+ * @param object An object.
+ * @returns A stringified form of the object. The JSON may be collapsed or expanded depending on size.
+ */
 const getObjectStringLog = (object: Record<string, unknown>): string =>
 	JSON.stringify(
 		object,

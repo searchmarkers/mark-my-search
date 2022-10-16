@@ -471,7 +471,7 @@ const jumpToTerm = (() => {
 			elementToSelect.tabIndex = 0;
 		}
 		focusElement(elementToSelect);
-		if (activeElement !== elementToSelect) {
+		if (document.activeElement !== elementToSelect) {
 			const element = document.createElement("div");
 			element.tabIndex = 0;
 			element.classList.add(getSel(ElementClass.REMOVE));
