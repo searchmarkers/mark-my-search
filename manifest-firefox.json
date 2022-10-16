@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight search engine keywords. Jump between terms instantly.",
-	"version": "1.7.1",
+	"version": "1.7.2",
 
 	"browser_specific_settings": {
 		"gecko": {
@@ -86,7 +86,7 @@
 			"description": "Enable/disable sticky term jumping mode"
 		},
 		"focus-term-append": {
-			"description": "Focus the toolbar input for adding a new term"
+			"description": "Focus input for appending a term"
 		},
 		"advance-global": {
 			"suggested_key": { "default": "Alt+Space" },
@@ -96,25 +96,25 @@
 			"suggested_key": { "default": "Alt+Shift+Space" },
 			"description": "Jump to previous mark in page"
 		},
-		"select-term-0": { "description": "Jump to next mark for 1st term" },
-		"select-term-1": { "description": "Jump to next mark for 2nd term" },
-		"select-term-2": { "description": "Jump to next mark for 3rd term" },
-		"select-term-3": { "description": "Jump to next mark for 4th term" },
-		"select-term-4": { "description": "Jump to next mark for 5th term" },
-		"select-term-5": { "description": "Jump to next mark for 6th term" },
-		"select-term-6": { "description": "Jump to next mark for 7th term" },
-		"select-term-7": { "description": "Jump to next mark for 8th term" },
-		"select-term-8": { "description": "Jump to next mark for 9th term" },
-		"select-term-9": { "description": "Jump to next mark for 10th term" },
-		"select-term-0-reverse": { "description": "Jump to previous mark for 1st term" },
-		"select-term-1-reverse": { "description": "Jump to previous mark for 2nd term" },
-		"select-term-2-reverse": { "description": "Jump to previous mark for 3rd term" },
-		"select-term-3-reverse": { "description": "Jump to previous mark for 4th term" },
-		"select-term-4-reverse": { "description": "Jump to previous mark for 5th term" },
-		"select-term-5-reverse": { "description": "Jump to previous mark for 6th term" },
-		"select-term-6-reverse": { "description": "Jump to previous mark for 7th term" },
-		"select-term-7-reverse": { "description": "Jump to previous mark for 8th term" },
-		"select-term-8-reverse": { "description": "Jump to previous mark for 9th term" },
-		"select-term-9-reverse": { "description": "Jump to previous mark for 10th term" }
+		"select-term-0": { "description": "Jump to next for 1st term" },
+		"select-term-1": { "description": "Jump to next for 2nd term" },
+		"select-term-2": { "description": "Jump to next for 3rd term" },
+		"select-term-3": { "description": "Jump to next for 4th term" },
+		"select-term-4": { "description": "Jump to next for 5th term" },
+		"select-term-5": { "description": "Jump to next for 6th term" },
+		"select-term-6": { "description": "Jump to next for 7th term" },
+		"select-term-7": { "description": "Jump to next for 8th term" },
+		"select-term-8": { "description": "Jump to next for 9th term" },
+		"select-term-9": { "description": "Jump to next for 10th term" },
+		"select-term-0-reverse": { "description": "Jump to previous for 1st term" },
+		"select-term-1-reverse": { "description": "Jump to previous for 2nd term" },
+		"select-term-2-reverse": { "description": "Jump to previous for 3rd term" },
+		"select-term-3-reverse": { "description": "Jump to previous for 4th term" },
+		"select-term-4-reverse": { "description": "Jump to previous for 5th term" },
+		"select-term-5-reverse": { "description": "Jump to previous for 6th term" },
+		"select-term-6-reverse": { "description": "Jump to previous for 7th term" },
+		"select-term-7-reverse": { "description": "Jump to previous for 8th term" },
+		"select-term-8-reverse": { "description": "Jump to previous for 9th term" },
+		"select-term-9-reverse": { "description": "Jump to previous for 10th term" }
 	}
 }

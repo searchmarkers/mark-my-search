@@ -46,7 +46,8 @@ const loadOptions = (() => {
 	const fillAndInsertStylesheet = () => {
 		const style = document.createElement("style");
 		style.textContent = `
-body { padding: 6px; margin: 0; background: #bbb; }
+body
+	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; }
 .${OptionClass.ERRONEOUS}
 	{ color: #e11; }
 .${OptionClass.MODIFIED}
@@ -250,7 +251,7 @@ label[for]:hover
 					label: "Keyword highlighting style",
 					preferences: {
 						hues: {
-							label: "Keyword color hues to cycle through",
+							label: "Keyword colors hue cycle",
 							type: PreferenceType.ARRAY,
 						},
 					},

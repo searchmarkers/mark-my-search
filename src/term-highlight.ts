@@ -234,7 +234,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} > *
 	{ display: inline; }
 #${getSel(ElementID.BAR)} > * > *
-	{ display: inline-block; vertical-align: top; margin-left: 0.5em; }
+	{ display: inline-block; margin-left: 0.5em; }
 /**/
 
 /* || Term Pulldown */
@@ -416,11 +416,15 @@ const jumpToTerm = (() => {
 		const focusContainer = document.body
 			.getElementsByClassName(getSel(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
 		const selection = document.getSelection();
-		const selectionFocus = selection && (!document.activeElement
-			|| document.activeElement === document.body || !document.body.contains(document.activeElement)
-			|| document.activeElement === focusBase || document.activeElement.contains(focusContainer))
+		const activeElement = document.activeElement;
+		if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
+			(activeElement as HTMLInputElement).blur();
+		}
+		const selectionFocus = selection && (!activeElement
+			|| activeElement === document.body || !document.body.contains(activeElement)
+			|| activeElement === focusBase || activeElement.contains(focusContainer))
 			? selection.focusNode
-			: document.activeElement ?? document.body;
+			: activeElement ?? document.body;
 		if (focusBase) {
 			focusBase.classList.remove(getSel(ElementClass.FOCUS));
 			purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
@@ -467,7 +471,7 @@ const jumpToTerm = (() => {
 			elementToSelect.tabIndex = 0;
 		}
 		focusElement(elementToSelect);
-		if (document.activeElement !== elementToSelect) {
+		if (activeElement !== elementToSelect) {
 			const element = document.createElement("div");
 			element.tabIndex = 0;
 			element.classList.add(getSel(ElementClass.REMOVE));
@@ -519,7 +523,11 @@ const insertTermInput = (() => {
 	 * @param shiftCaretRight If supplied, whether to shift the caret to the right or the left. If unsupplied, all text is selected.
 	 */
 	const selectInput = (control: HTMLElement, shiftCaretRight?: boolean) => {
-		const input = control.querySelector("input") as HTMLInputElement;
+		const input = control.querySelector("input");
+		if (!input) {
+			assert(false, "term input no select", "required element(s) not found", { control });
+			return;
+		}
 		input.select();
 		if (shiftCaretRight !== undefined) {
 			const caretPosition = shiftCaretRight ? 0 : -1;
@@ -574,7 +582,7 @@ const insertTermInput = (() => {
 	 * @param term The term of the currently focused control.
 	 * @param idxTarget The index of the target term control to shift to, if no shift direction is passed.
 	 * @param shiftRight Whether to shift rightwards or leftwards, if no target index is passed.
-	 * @param onBeforeShift A function to execute once the shift is confirmed but 
+	 * @param onBeforeShift A function to execute once the shift is confirmed but has not yet taken place.
 	 * @param terms Terms being controlled and highlighted.
 	 */
 	const tryShiftTermFocus = (term: MatchTerm | undefined, idxTarget: number | undefined, shiftRight: boolean | undefined,
@@ -615,25 +623,25 @@ const insertTermInput = (() => {
 		const resetInput = (termText = controlContent.textContent as string) => {
 			input.value = replaces ? termText : "";
 		};
-		input.onfocus = () => {
+		input.addEventListener("focusin", () => {
 			if (input.classList.contains(getSel(ElementClass.OVERRIDE_FOCUS))) {
 				return; // Focus has been delegated to another element and will be on the input when this class is removed
 			}
-			input.addEventListener("keyup", (event) => {
-				if (event.key === "Tab") {
-					selectInputTextAll(input);
-				}
-			});
 			resetInput();
 			resetTermControlInputsVisibility();
 			input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
-		};
-		input.onblur = () => {
+		});
+		input.addEventListener("focusout", () => {
 			if (!input.classList.contains(getSel(ElementClass.OVERRIDE_FOCUS))) {
 				// Focus has been lost, not delegated to another element
 				commit(term, terms);
 			}
-		};
+		});
+		input.addEventListener("keyup", event => {
+			if (event.key === "Tab") {
+				selectInputTextAll(input);
+			}
+		});
 		const show = (event: MouseEvent) => {
 			event.preventDefault();
 			input.select();
@@ -899,7 +907,13 @@ const createTermOption = (term: MatchTerm, text: string,
 	return option;
 };
 
-// TODO document
+/**
+ * Moves focus temporarily from a term input to a target element. Term inputs normally commit when unfocused,
+ * but this method ensures it is considered a delegation of focus so will not cause changes to be committed.
+ * Accordingly, focus is returned to the input once lost from the target.
+ * @param input The term input from which to delegate focus.
+ * @param target The element which will hold focus until returned to the input.
+ */
 const delegateFocusFromTermInput = (input: HTMLInputElement, target: HTMLElement) => {
 	if (document.activeElement === input) {
 		input.classList.add(getSel(ElementClass.OVERRIDE_FOCUS));
@@ -942,10 +956,10 @@ const createTermOptionMenu = (
 	const optionList = document.createElement("menu");
 	optionList.classList.add(getSel(ElementClass.OPTION_LIST));
 	optionList.appendChild(createTermOption(term, "Case Sensitive", onActivated));
-	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
-	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
+	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Diacritics", onActivated));
+	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
 		event.preventDefault();
 		if (!executeResult) {
@@ -954,8 +968,7 @@ const createTermOptionMenu = (
 		if (event.key === "Escape") {
 			optionList.blur();
 			return;
-		}
-		if (event.key === " " || event.key.length !== 1) {
+		} else if (event.key === " " || event.key.length !== 1) {
 			return;
 		}
 		Array.from(optionList.querySelectorAll(`.${getSel(ElementClass.OPTION)}`)).some((option: HTMLButtonElement) => {
@@ -990,12 +1003,17 @@ const createTermOptionMenu = (
 	return { optionList, controlReveal };
 };
 
-// TODO document
+/**
+ * Opens and focuses the menu of matching options for a term, allowing the user to toggle matching modes.
+ * @param term The term for which to open a matching options menu.
+ */
 const openTermOptionMenu = (term: MatchTerm | undefined) => {
 	const control = getControl(term);
 	const input = control ? control.querySelector("input") : null;
 	const optionList = control ? control.querySelector(`.${getSel(ElementClass.OPTION_LIST)}`) as HTMLElement | null : null;
 	if (!input || !optionList) {
+		assert(false, "term option menu no open", "required element(s) not found",
+			{ term: (term ? term : "term appender") });
 		return;
 	}
 	delegateFocusFromTermInput(input, optionList);
@@ -1299,7 +1317,7 @@ const insertScrollMarkers = (() => {
 
 	return (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
 		if (terms.length === 0) {
-			return; // No terms results in an empty selector, which is not allowed
+			return; // No terms results in an empty selector, which is not allowed.
 		}
 		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
 		const containerBlockSelector = getContainerBlockSelector(highlightTags);
@@ -1661,7 +1679,6 @@ const getTermsFromSelection = () => {
 			const termsToPurge: MatchTerms = [];
 			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
 				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
-				// 'message.disable' assumed false.
 				if (termToUpdateIdx === TermChange.CREATE) {
 					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
 					const termCommands = getTermCommands(commands);
@@ -1681,9 +1698,9 @@ const getTermsFromSelection = () => {
 			} else if (termsUpdate !== undefined) {
 				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
 					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
-					if (termRemovedPreviousIdx === -1) {
-						console.warn(`Request received to delete term ${JSON.stringify(termUpdate)} which is not stored in this page.`);
-					} else {
+					if (assert(
+						termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
+					)) {
 						removeTermControl(termRemovedPreviousIdx);
 						terms.splice(termRemovedPreviousIdx, 1);
 						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
@@ -1745,7 +1762,7 @@ const getTermsFromSelection = () => {
 				requestCount = 0;
 				insertScrollMarkers(terms, highlightTags, hues);
 				terms.forEach(term => updateTermTooltip(term));
-			}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates)
+			}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates).
 		while (true) {
 			requestCount++;
 			const dateMs = Date.now();
@@ -1768,7 +1785,7 @@ const getTermsFromSelection = () => {
 		while (true) {
 			const commandInfo: CommandInfo = yield;
 			if (!commandInfo) {
-				continue; // Requires an initial empty call before working (TODO otherwise mitigate)
+				continue; // Requires an initial empty call before working (TODO solve this issue).
 			}
 			const getFocusedIdx = (idx: number) => Math.min(terms.length - 1, idx);
 			focusedIdx = getFocusedIdx(focusedIdx);
@@ -1803,20 +1820,23 @@ const getTermsFromSelection = () => {
 				control.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				selectInputTextAll(input);
 				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
-				const returnSelection = () => {
-					setTimeout(() => { // Wait a few milliseconds for a possible in-toolbar focus shift to complete
-						if (document.activeElement && document.activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
-							return; // The unfocus was due to focus being shifted within the toolbar
-						}
-						bar.removeEventListener("focusout", returnSelection);
-						if (focusReturnElement && focusReturnElement["focus"]) {
-							(focusReturnElement as HTMLElement).focus({ preventScroll: true });
-						}
-						if (selection && selectionReturnRanges !== null) {
-							selection.removeAllRanges();
-							selectionReturnRanges.forEach(range => selection.addRange(range));
-						}
-					});
+				const returnSelection = (event: FocusEvent) => {
+					if (event.relatedTarget) {
+						setTimeout(() => {
+							if (!document.activeElement || !document.activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
+								bar.removeEventListener("focusout", returnSelection);
+							}
+						});
+						return; // Focus is being moved, not lost.
+					}
+					bar.removeEventListener("focusout", returnSelection);
+					if (focusReturnElement && focusReturnElement["focus"]) {
+						(focusReturnElement as HTMLElement).focus({ preventScroll: true });
+					}
+					if (selection && selectionReturnRanges !== null) {
+						selection.removeAllRanges();
+						selectionReturnRanges.forEach(range => selection.addRange(range));
+					}
 				};
 				bar.addEventListener("focusout", returnSelection);
 				break;
@@ -1843,6 +1863,7 @@ const getTermsFromSelection = () => {
 	;
 
 	return () => {
+		window[WindowFlag.EXECUTION_UNNECESSARY] = true;
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
@@ -1876,7 +1897,7 @@ const getTermsFromSelection = () => {
 		const requestRefreshIndicators: RequestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
 		const produceEffectOnCommand: ProduceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, highlightTags, terms);
-		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate)
+		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 		insertStyleElement();
 		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
 			sendResponse: (response: HighlightDetails) => void) => {
@@ -1938,7 +1959,7 @@ const getTermsFromSelection = () => {
 			if (bar) {
 				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
 			}
-			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message
+			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
 		});
 	};
 })()();
