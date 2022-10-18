@@ -251,7 +251,7 @@ label[for]:hover
 					label: "Keyword highlighting style",
 					preferences: {
 						hues: {
-							label: "Keyword colors hue cycle",
+							label: "Highlight color hue cycle",
 							type: PreferenceType.ARRAY,
 						},
 					},
@@ -283,7 +283,7 @@ label[for]:hover
 					},
 				},
 				matchModeDefaults: {
-					label: "Matching options for new manually-added terms",
+					label: "Matching options for new terms",
 					preferences: {
 						case: {
 							label: "Default case sensitivity",
