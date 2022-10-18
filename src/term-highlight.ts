@@ -409,6 +409,69 @@ const jumpToTerm = (() => {
 		} as FocusOptions)
 	;
 
+	// TODO document
+	const jumpToScrollMarker = (term: MatchTerm | undefined, container: HTMLElement) => {
+		const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
+		purgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
+		// eslint-disable-next-line no-constant-condition
+		[6, 5, 4, 3, 2].some(precisionFactor => {
+			const precision = 10**precisionFactor;
+			const scrollMarker = scrollMarkerGutter.querySelector(
+				`${term ? `.${getSel(ElementClass.TERM, term.selector)}` : ""}[top^="${
+					Math.trunc(getElementYRelative(container) * precision) / precision
+				}"]`
+			) as HTMLElement | null;
+			if (scrollMarker) {
+				scrollMarker.classList.add(getSel(ElementClass.FOCUS));
+				return true;
+			}
+			return false;
+		});
+	};
+
+	// TODO document
+	const selectNextElement = (reverse: boolean, walker: TreeWalker, walkSelectionFocusContainer: { accept: boolean },
+		highlightTags: HighlightTags, elementToSelect?: HTMLElement,
+	): { elementSelected: HTMLElement | null, container: HTMLElement | null } => {
+		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
+		let elementTerm = walker[nextNodeMethod]() as HTMLElement;
+		if (!elementTerm) {
+			walker.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
+			elementTerm = walker[nextNodeMethod]() as HTMLElement;
+			if (!elementTerm) {
+				walkSelectionFocusContainer.accept = true;
+				elementTerm = walker[nextNodeMethod]() as HTMLElement;
+				if (!elementTerm) {
+					return { elementSelected: null, container: null };
+				}
+			}
+		}
+		const container = getContainerBlock(elementTerm.parentElement as HTMLElement, highlightTags);
+		container.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
+		elementTerm.classList.add(getSel(ElementClass.FOCUS));
+		elementToSelect = Array.from(container.getElementsByTagName("mms-h"))
+			.every(thisElement => getContainerBlock(thisElement.parentElement as HTMLElement, highlightTags) === container)
+			? container
+			: elementTerm;
+		if (elementToSelect.tabIndex === -1) {
+			elementToSelect.classList.add(getSel(ElementClass.FOCUS_REVERT));
+			elementToSelect.tabIndex = 0;
+		}
+		focusElement(elementToSelect);
+		if (document.activeElement !== elementToSelect) {
+			const element = document.createElement("div");
+			element.tabIndex = 0;
+			element.classList.add(getSel(ElementClass.REMOVE));
+			elementToSelect.insertAdjacentElement(reverse ? "afterbegin" : "beforeend", element);
+			elementToSelect = element;
+			focusElement(elementToSelect);
+		}
+		if (document.activeElement === elementToSelect) {
+			return { elementSelected: elementToSelect, container };
+		}
+		return selectNextElement(reverse, walker, walkSelectionFocusContainer, highlightTags, elementToSelect);
+	};
+
 	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
 		const termSelector = term ? getSel(ElementClass.TERM, term.selector) : "";
 		const focusBase = document.body
@@ -437,73 +500,27 @@ const jumpToTerm = (() => {
 					: selectionFocus.parentElement,
 				highlightTags)
 			: undefined;
-		const acceptInSelectionFocusContainer = { value: false };
+		const walkSelectionFocusContainer = { accept: false };
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			element.tagName === "MMS-H"
 			&& (termSelector ? element.classList.contains(termSelector) : true)
 			&& isVisible(element)
-			&& (getContainerBlock(element, highlightTags) !== selectionFocusContainer || acceptInSelectionFocusContainer.value)
+			&& (getContainerBlock(element, highlightTags) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP);
 		walker.currentNode = selectionFocus ? selectionFocus : document.body;
-		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		let elementTerm = walker[nextNodeMethod]() as HTMLElement;
-		if (!elementTerm) {
-			walker.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
-			elementTerm = walker[nextNodeMethod]() as HTMLElement;
-			if (!elementTerm) {
-				acceptInSelectionFocusContainer.value = true;
-				elementTerm = walker[nextNodeMethod]() as HTMLElement;
-				if (!elementTerm) {
-					return;
-				}
-			}
+		const { elementSelected, container } = selectNextElement(reverse, walker, walkSelectionFocusContainer, highlightTags);
+		if (!elementSelected || !container) {
+			return;
 		}
-		const container = getContainerBlock(elementTerm.parentElement as HTMLElement, highlightTags);
-		container.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
-		elementTerm.classList.add(getSel(ElementClass.FOCUS));
-		let elementToSelect = Array.from(container.getElementsByTagName("mms-h"))
-			.every(thisElement => getContainerBlock(thisElement.parentElement as HTMLElement, highlightTags) === container)
-			? container
-			: elementTerm;
-		if (elementToSelect.tabIndex === -1) {
-			elementToSelect.classList.add(getSel(ElementClass.FOCUS_REVERT));
-			elementToSelect.tabIndex = 0;
-		}
-		focusElement(elementToSelect);
-		if (document.activeElement !== elementToSelect) {
-			const element = document.createElement("div");
-			element.tabIndex = 0;
-			element.classList.add(getSel(ElementClass.REMOVE));
-			elementToSelect.insertAdjacentElement(reverse ? "afterbegin" : "beforeend", element);
-			elementToSelect = element;
-			focusElement(elementToSelect);
-		}
-		elementToSelect.scrollIntoView({ behavior: "smooth", block: "center" });
+		elementSelected.scrollIntoView({ behavior: "smooth", block: "center" });
 		if (selection) {
-			selection.setBaseAndExtent(elementToSelect, 0, elementToSelect, 0);
+			selection.setBaseAndExtent(elementSelected, 0, elementSelected, 0);
 		}
-		Array.from(document.body.getElementsByClassName(getSel(ElementClass.REMOVE)))
-			.forEach((element: HTMLElement) => {
-				element.remove();
-			})
-		;
-		const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
-		purgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
-		// eslint-disable-next-line no-constant-condition
-		[6, 5, 4, 3, 2].some(precisionFactor => {
-			const precision = 10**precisionFactor;
-			const scrollMarker = scrollMarkerGutter.querySelector(
-				`${term ? `.${getSel(ElementClass.TERM, term.selector)}` : ""}[top^="${
-					Math.trunc(getElementYRelative(container) * precision) / precision
-				}"]`
-			) as HTMLElement | null;
-			if (scrollMarker) {
-				scrollMarker.classList.add(getSel(ElementClass.FOCUS));
-				return true;
-			}
-			return false;
+		document.body.querySelectorAll(`.${getSel(ElementClass.REMOVE)}`).forEach((element: HTMLElement) => {
+			element.remove();
 		});
+		jumpToScrollMarker(term, container);
 	};
 })();
 
