@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Mark My Search",
-	"description": "Highlight search engine keywords. Jump between terms instantly.",
+	"description": "Highlight searched keywords. Find matches instantly.",
 	"version": "1.7.2",
 
 	"icons": {

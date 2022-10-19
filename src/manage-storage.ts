@@ -144,6 +144,20 @@ const defaultOptions: StorageSyncValues = {
 };
 
 /**
+ * Calls a function which gets a particular area of storage, initializing storage and retrying **once** if an error is encountered.
+ * @param callGetStorage Function to get any storage items from "session", "local", or "sync" storage.
+ * @returns The storage returned by the storage getter.
+ */
+const getStorageSafely = (callGetStorage: typeof getStorageSession | typeof getStorageLocal | typeof getStorageSync) =>
+	callGetStorage().catch(async () => {
+		// TODO use custom logging function
+		console.warn("Reinitialized storage due to error when getting storage items. Retrying.");
+		await initializeStorage();
+		return callGetStorage();
+	})
+;
+
+/**
  * Stores items to browser session storage.
  * @param items An object of items to create or update.
  */
@@ -177,7 +191,9 @@ const setStorageSession = (items: StorageSessionValues) => {
  * @returns A promise that resolves with an object containing the requested items.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageSession = async (keysParam?: Array<StorageSession>): Promise<StorageSessionValues> => {
+const getStorageSession = (
+	keysParam?: Array<StorageSession>
+): Promise<StorageSessionValues> => getStorageSafely(async () => {
 	const keys = keysParam === undefined
 		? undefined
 		: typeof(keysParam) === "string" ? [ keysParam ] : Array.from(new Set(keysParam));
@@ -204,7 +220,7 @@ const getStorageSession = async (keysParam?: Array<StorageSession>): Promise<Sto
 		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
 	}
 	return session;
-};
+}) as Promise<StorageSessionValues>;
 
 /**
  * Stores items to browser local storage.
@@ -219,9 +235,11 @@ const setStorageLocal = (items: StorageLocalValues) => {
  * @param keysParam An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
-const getStorageLocal = (keysParam?: Array<StorageLocal>): Promise<StorageLocalValues> => {
+const getStorageLocal = async (
+	keysParam?: Array<StorageLocal>
+): Promise<StorageLocalValues> => getStorageSafely(async () => {
 	return chrome.storage.local.get(keysParam) as Promise<StorageLocalValues>;
-};
+}) as Promise<StorageLocalValues>;
 
 /**
  * Stores items to browser sync storage.
@@ -236,12 +254,14 @@ const setStorageSync = (items: StorageSyncValues) => {
  * @param keysParam An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
-const getStorageSync = (keysParam?: Array<StorageSync>): Promise<StorageSyncValues> => {
+const getStorageSync = (
+	keysParam?: Array<StorageSync>
+): Promise<StorageSyncValues> => getStorageSafely(async () => {
 	return chrome.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
-};
+}) as Promise<StorageSyncValues>;
 
 /**
- * Set internal storage to its default working values.
+ * Sets internal storage to its default working values.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const initializeStorage = async () => {
