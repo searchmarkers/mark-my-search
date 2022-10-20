@@ -1846,6 +1846,9 @@ const getTermsFromSelection = () => {
 						});
 						return; // Focus is being moved, not lost.
 					}
+					if (document.activeElement && document.activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
+						return;
+					}
 					bar.removeEventListener("focusout", returnSelection);
 					if (focusReturnElement && focusReturnElement["focus"]) {
 						(focusReturnElement as HTMLElement).focus({ preventScroll: true });
