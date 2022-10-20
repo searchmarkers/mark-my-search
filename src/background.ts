@@ -268,7 +268,6 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Registers items to selectively appear in context menus. These items serve as shortcuts for managing the extension.
 	 */
 	const createContextMenuItems = () => {
-		// FIXME this will not be called if the extension was disabled then enabled without restarting the session
 		chrome.contextMenus.onClicked.addListener((info, tab) => {
 			if (tab && tab.id !== undefined) {
 				log("research activation request", "context menu item activated", { tabId: tab.id });
@@ -325,6 +324,8 @@ const updateActionIcon = (enabled?: boolean) =>
 	});
 
 	chrome.runtime.onStartup.addListener(initialize);
+
+	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
 })();
 
 (() => {
@@ -484,7 +485,6 @@ const getTermsSelectedInTab = async (tabId: number, retriesRemaining = 0): Promi
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
- * Retries are preceded by attempting to inject the highlighting script.
  */
 const activateResearchInTab = async (tabId: number) => {
 	log("research activation start", "", { tabId });
