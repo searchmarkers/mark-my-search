@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.7.3",
+	"version": "1.7.4",
 
 	"icons": {
 		"48": "/icons/mms-48.png",
