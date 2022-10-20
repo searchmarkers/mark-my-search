@@ -1,10 +1,24 @@
+enum ScriptLib { // Library scripts, which perform no action but provide utilities including types, enums, and functions.
+	STORAGE = "/dist/manage-storage.js",
+	STEMMING = "/dist/stem-pattern-find.js",
+	DIACRITICS = "/dist/diacritic-pattern.js",
+	COMMON = "/dist/shared-content.js",
+}
+
+enum Script { // Handler scripts.
+	BACKGROUND = "/dist/background.js",
+	OPTIONS = "/dist/options.js",
+	POPUP = "/dist/popup.js",
+	CONTENT_MARKER = "/dist/term-highlight.js",
+}
+
 if (/*isBrowserChromium()*/ !this.browser) {
-	// Firefox accepts a list of event page scripts, whereas Chromium only accepts service workers
+	// Firefox accepts a list of event page scripts, whereas Chromium only accepts service workers.
 	this["importScripts"](
-		"/dist/manage-storage.js",
-		"/dist/stem-pattern-find.js",
-		"/dist/diacritic-pattern.js",
-		"/dist/shared-content.js",
+		ScriptLib.STORAGE,
+		ScriptLib.STEMMING,
+		ScriptLib.DIACRITICS,
+		ScriptLib.COMMON,
 	);
 }
 chrome.tabs.executeScript = isBrowserChromium() ? chrome.tabs.executeScript : browser.tabs.executeScript;
@@ -66,12 +80,16 @@ const createResearchInstance = async (args: {
  * @param url A URL to be tested.
  * @returns The URL segment determined to be the search query, or the empty string if none is found.
  */
-const getSearchQuery = async (url: string): Promise<string> => {
-	const sync = await getStorageSync([ StorageSync.AUTO_FIND_OPTIONS ]);
-	return new URL(url).searchParams.get(
-		sync.autoFindOptions.searchParams.find(param => new URL(url).searchParams.has(param)) ?? ""
-	) ?? "";
-};
+const getSearchQuery = async (url: string): Promise<string> =>
+	getStorageSync([ StorageSync.AUTO_FIND_OPTIONS ]).then(sync =>
+		new URL(url).searchParams.get(
+			sync.autoFindOptions.searchParams.find(param => new URL(url).searchParams.has(param)) ?? ""
+		) ?? ""
+	).catch(() => {
+		log("search query extraction fail", "", { url });
+		return "";
+	})
+;
 
 /**
  * Gets heuristically whether or not a URL specifies a search on an arbitrary search engine.
@@ -115,9 +133,13 @@ const isUrlFilteredIn = (() => {
  * @param urlFilters URL filter preferences.
  * @returns `true` if the corresponding page may be modified, `false` otherwise.
  */
-const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) =>
-	!isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify)
-;
+const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) => {
+	try {
+		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
+	} catch {
+		return true;
+	}
+};
 
 /**
  * Determines whether the user has permitted pages with the given URL to treated as a search page,
@@ -245,9 +267,13 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Registers items to selectively appear in context menus. These items serve as shortcuts for managing the extension.
 	 */
 	const createContextMenuItems = () => {
+		// FIXME this will not be called if the extension was disabled then enabled without restarting the session
 		chrome.contextMenus.onClicked.addListener((info, tab) => {
 			if (tab && tab.id !== undefined) {
+				log("research activation request", "context menu item activated", { tabId: tab.id });
 				activateResearchInTab(tab.id);
+			} else {
+				assert(false, "research activation [from context menu] no request", "", { tab });
 			}
 		});
 	
@@ -308,6 +334,8 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * @param tabId The ID of a tab to check and interact with.
 	 */
 	const pageModifyRemote = async (urlString: string, tabId: number) => {
+		const logMetadata = { timeStart: Date.now(), tabId, url: urlString };
+		log("tab-communicate fulfillment start", "", logMetadata);
 		const sync = await getStorageSync([
 			StorageSync.AUTO_FIND_OPTIONS,
 			StorageSync.SHOW_HIGHLIGHTS,
@@ -339,22 +367,18 @@ const updateActionIcon = (enabled?: boolean) =>
 				autoOverwritable: true,
 			});
 			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
+				const researchEnablementReason = isResearchPage
+					? "search detected in tab containing overwritable non-matching research"
+					: "search detected in tab";
+				log("tab-communicate research enable", researchEnablementReason, logMetadata);
 				session.researchInstances[tabId] = researchInstance;
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
-				activateHighlightingInTab(tabId, {
-					terms: researchInstance.terms,
-					toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
-					barControlsShown: sync.barControlsShown,
-					barLook: sync.barLook,
-					highlightLook: sync.highlightLook,
-					matchMode: sync.matchModeDefaults,
-					enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
-				});
 			}
 		}
-		if (isResearchPage) {
+		if (isTabResearchPage(session.researchInstances, tabId)) {
+			log("tab-communicate highlight activation request", "tab is currently a research page", logMetadata);
 			const researchInstance = session.researchInstances[tabId];
-			activateHighlightingInTab(tabId, {
+			await activateHighlightingInTab(tabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
 				barControlsShown: sync.barControlsShown,
@@ -364,6 +388,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
 		}
+		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
 	
 	chrome.tabs.onCreated.addListener(async tab => {
@@ -372,6 +397,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			|| tab.id === undefined || tab.openerTabId === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
 			return;
 		}
+		log("tab-communicate obligation check", "tab created", { tabId: tab.id });
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (isTabResearchPage(session.researchInstances, tab.openerTabId)) {
 			const sync = await getStorageSync([ StorageSync.LINK_RESEARCH_TABS ]);
@@ -379,7 +405,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				? session.researchInstances[tab.openerTabId]
 				: { ...session.researchInstances[tab.openerTabId] };
 			setStorageSession(session);
-			pageModifyRemote(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache
+			pageModifyRemote(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache.
 		}
 	});
 
@@ -410,38 +436,57 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 		{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
 		highlightMessageToReceive,
 	);
-	chrome.tabs.executeScript(targetTabId, { file: "/dist/stem-pattern-find.js" }).then(async () => {
-		await chrome.tabs.executeScript(targetTabId, { file: "/dist/diacritic-pattern.js" });
-		await chrome.tabs.executeScript(targetTabId, { file: "/dist/shared-content.js" });
-		await chrome.tabs.executeScript(targetTabId, { file: "/dist/term-highlight.js" });
+	const logMetadata = { tabId: targetTabId };
+	log("script injection [highlighting activation] start", "", logMetadata);
+	await executeScriptsInTab(targetTabId).then(value => {
+		log("script injection [highlighting activation] finish", "", logMetadata);
 		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
+		return value;
 	}).catch(() => {
+		log(
+			"script injection [highlighting activation] fail",
+			"injection not permitted in this tab (perhaps scripts were already injected), sending message regardless",
+			logMetadata,
+		);
 		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
+	});
+};
+
+/**
+ * Attempts to retrieve terms extracted from the current user selection, in a given tab.
+ * @param tabId The ID of a tab from which to take selected terms.
+ * @param retriesRemaining The number of retries (after attempting to inject scripts) permitted, if any.
+ * @returns The terms extracted if successful, `undefined` otherwise.
+ */
+const getTermsSelectedInTab = async (tabId: number, retriesRemaining = 0): Promise<MatchTerms | undefined> => {
+	log("selection terms retrieval start", "");
+	return (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
+		tabId,
+		{ getDetails: { termsFromSelection: true } } as HighlightMessage,
+	).then((response: HighlightDetails) => {
+		log("selection terms retrieval finish", "", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
+		return response.terms ?? [];
+	}).catch(async () => {
+		log("selection terms retrieval fail", "selection terms not received in response, perhaps no script is injected", { tabId });
+		if (!assert(retriesRemaining !== 0, "selection terms retrieval cancel", "no retries remain")) {
+			return undefined;
+		}
+		await executeScriptsInTab(tabId);
+		return getTermsSelectedInTab(tabId, retriesRemaining - 1);
 	});
 };
 
 /**
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
- * @param retriesRemaining The number of retries permitted in case of tab messaging errors.
- * Retries are preceded by attempting to inject the highlighting script.
  */
-const activateResearchInTab = async (tabId: number, retriesRemaining = 1) => {
+const activateResearchInTab = async (tabId: number) => {
+	log("research activation start", "", { tabId });
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-	// TODO make function (getting selected terms with retries)
-	const termsSelected = await (chrome.tabs.sendMessage as typeof browser.tabs.sendMessage)(
-		tabId,
-		{ getDetails: { termsFromSelection: true } } as HighlightMessage,
-	).then((response: HighlightDetails) =>
-		response.terms ?? []
-	).catch(() => undefined);
-	if (termsSelected === undefined) { // Error when sending message, likely due to lack of an injected script
-		// We cannot be sure there is no user selection, so must retry
-		if (retriesRemaining > 0) { // Try executing+messaging again if attempts not exhausted
-			await executeScriptsInTab(tabId);
-			activateResearchInTab(tabId, retriesRemaining - 1);
-		}
-		return; // Gives up at this point if no retries remain, as it is assumed that scripts cannot be injected into this tab
+	const termsSelected = await getTermsSelectedInTab(tabId, 1);
+	if (termsSelected === undefined) {
+		log("research activation fail", "terms were not received in response, perhaps there is no script injected");
+		return;
 	}
 	const researchInstance = session.researchInstances[tabId]
 		? session.researchInstances[tabId]
@@ -449,18 +494,17 @@ const activateResearchInTab = async (tabId: number, retriesRemaining = 1) => {
 			terms: [],
 			autoOverwritable: false,
 		});
-	researchInstance.terms = termsSelected.length ? termsSelected : researchInstance.terms;
 	researchInstance.enabled = true;
-	researchInstance.highlightsShown = true;
 	researchInstance.autoOverwritable = false;
-	handleMessage({
-		terms: researchInstance.terms,
+	session.researchInstances[tabId] = researchInstance;
+	await setStorageSession(session);
+	await handleMessage({
+		terms: termsSelected.length ? termsSelected : researchInstance.terms,
 		makeUnique: true,
 		toggleHighlightsOn: true,
 		highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
 	} as BackgroundMessage, tabId);
-	session.researchInstances[tabId] = researchInstance;
-	await setStorageSession(session);
+	log("research activation finish", "", { tabId });
 };
 
 /**
@@ -521,14 +565,21 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
  * @param tabId The ID of a tab to execute the script in.
  */
 const executeScriptsInTab = async (tabId: number) => {
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/stem-pattern-find.js" });
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/diacritic-pattern.js" });
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/shared-content.js" });
-	await chrome.tabs.executeScript(tabId as number, { file: "/dist/term-highlight.js" });
+	const logMetadata = { tabId };
+	log("script injection start", "", logMetadata);
+	await chrome.tabs.executeScript(tabId as number, { file: ScriptLib.STEMMING }).then(async () => {
+		await chrome.tabs.executeScript(tabId as number, { file: ScriptLib.DIACRITICS });
+		await chrome.tabs.executeScript(tabId as number, { file: ScriptLib.COMMON });
+		await chrome.tabs.executeScript(tabId as number, { file: Script.CONTENT_MARKER });
+		log("script injection finish", "", logMetadata);
+	}).catch(() => {
+		log("script injection fail", "injection not permitted in this tab", logMetadata);
+	});
 };
 
 chrome.commands.onCommand.addListener(async commandString => {
-	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); // `tab.id` always defined for this case
+	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+	const tabId = tab.id as number; // `tab.id` always defined for this case.
 	const commandInfo = parseCommand(commandString);
 	switch (commandInfo.type) {
 	case CommandType.TOGGLE_ENABLED: {
@@ -539,17 +590,17 @@ chrome.commands.onCommand.addListener(async commandString => {
 		return;
 	} case CommandType.TOGGLE_IN_TAB: {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		if (isTabResearchPage(session.researchInstances, tab.id as number)) {
-			deactivateResearchInTab(tab.id as number);
+		if (isTabResearchPage(session.researchInstances, tabId)) {
+			deactivateResearchInTab(tabId);
 		} else {
-			activateResearchInTab(tab.id as number);
+			activateResearchInTab(tabId);
 		}
 		return;
 	} case CommandType.TOGGLE_HIGHLIGHTS: {
-		toggleHighlightsInTab(tab.id as number);
+		toggleHighlightsInTab(tabId);
 		return;
 	}}
-	chrome.tabs.sendMessage(tab.id as number, { command: commandInfo } as HighlightMessage);
+	chrome.tabs.sendMessage(tabId, { command: commandInfo } as HighlightMessage);
 });
 
 /**
@@ -562,6 +613,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 		if (message.executeInTab) {
 			await executeScriptsInTab(message.tabId as number);
 		}
+		// FIXME generates errors even when wrapped in try...catch
 		chrome.tabs.sendMessage(message.tabId as number, message.highlightMessage);
 	} else if (message.toggleResearchOn !== undefined) {
 		setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
@@ -582,10 +634,9 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				autoOverwritable: false,
 			});
 			session.researchInstances[senderTabId] = researchInstance;
-			setStorageSession(session);
 		}
 		if (message.makeUnique || message.toggleHighlightsOn !== undefined) {
-			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement
+			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement.
 			const sync = await getStorageSync([
 				StorageSync.BAR_CONTROLS_SHOWN,
 				StorageSync.BAR_LOOK,
@@ -596,7 +647,8 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			if (message.toggleHighlightsOn !== undefined) {
 				researchInstance.highlightsShown = message.toggleHighlightsOn;
 			}
-			activateHighlightingInTab(senderTabId, {
+			setStorageSession(session);
+			await activateHighlightingInTab(senderTabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
 				barControlsShown: sync.barControlsShown,
@@ -617,6 +669,8 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 					chrome.tabs.sendMessage(Number(tabId), highlightMessage);
 				}
 			});
+		} else {
+			setStorageSession(session);
 		}
 	}
 };
@@ -629,7 +683,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 			handleMessage(message, tab.id as number)
 		);
 	}
-	sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message
+	sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message.
 });
 
 chrome.browserAction.onClicked.addListener(() =>
