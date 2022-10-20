@@ -234,7 +234,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} > *
 	{ display: inline; }
 #${getSel(ElementID.BAR)} > * > *
-	{ display: inline-block; margin-left: 0.5em; }
+	{ display: inline-block; vertical-align: top; margin-left: 0.5em; }
 /**/
 
 /* || Term Pulldown */
