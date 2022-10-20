@@ -928,7 +928,7 @@ textarea
 				sections: [
 					{
 						title: {
-							text: "Never Highlight",
+							text: "Sites to Never Highlight",
 						},
 						interactions: [
 							{
@@ -962,7 +962,7 @@ textarea
 					},
 					{
 						title: {
-							text: "Do Not Auto Highlight",
+							text: "Sites to Not Detect As Search Engines",
 						},
 						interactions: [
 							{
@@ -1250,8 +1250,8 @@ textarea
 			handleTabs();
 			chrome.storage.onChanged.addListener(() => reload(panelsInfo));
 			chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
-			insertWarning("sites_search_research", "This functionality is experimental. Please report any issues!");
-			insertWarning("term_lists", "This functionality is experimental, and only activates under special conditions.");
+			insertWarning("sites_search_research", "Experimental, please report any issues!");
+			insertWarning("term_lists", "This is a work in progress.");
 		};
 	})();
 

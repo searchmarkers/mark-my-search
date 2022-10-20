@@ -2,6 +2,63 @@
 type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>
 
+/**
+ * Gets a JSON-stringified form of the given object for use in logging.
+ * @param object An object.
+ * @returns A stringified form of the object. The JSON may be collapsed or expanded depending on size.
+ */
+const getObjectStringLog = (object: Record<string, unknown>): string =>
+	JSON.stringify(
+		object,
+		undefined,
+		(Object.keys(object).length > 1
+		|| (typeof(Object.values(object)[0]) === "object"
+			&& Object.keys(Object.values(object)[0] as Record<string, unknown>).length))
+			? 2 : undefined,
+	)
+;
+
+/**
+ * Logs a debug message as part of normal operation.
+ * @param operation Description of the process started or completed, or the event encountered.
+ * Single lowercase command with capitalisation where appropriate and no fullstop, subject before verb.
+ * @param reason Description of the reason for the process or situation.
+ * Single lowercase statement with capitalisation where appropriate and no fullstop.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const log = (operation: string, reason: string, metadata: Record<string, unknown> = {}) => {
+	const operationStatement = `DEBUG: ${operation[0].toUpperCase() + operation.slice(1)}`;
+	const reasonStatement = reason.length ? reason[0].toUpperCase() + reason.slice(1) : "";
+	console.log(operationStatement
+		+ (reasonStatement.length ? `: ${reasonStatement}.` : ".")
+		+ (Object.keys(metadata).length ? (" " + getObjectStringLog(metadata)) : "")
+	);
+};
+
+/**
+ * Logs a graceful failure message.
+ * @param condition A value which will be evaluated to `true` or `false`. If falsy, there has been a problem which will be logged.
+ * @param problem Description of the operation failure.
+ * Single lowercase command with capitalisation where appropriate and no fullstop, subject before verb.
+ * @param reason Description of the low-level reason for the failure.
+ * Single lowercase statement with capitalisation where appropriate and no fullstop.
+ * @param metadata Objects which may help with debugging the problem.
+ * @returns `true` if the condition is truthy, `false` otherwise.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const assert = (condition: unknown, problem: string, reason: string, metadata: Record<string, unknown> = {}): boolean => {
+	if (!condition) {
+		console.warn(`DEBUG: ${problem[0].toUpperCase() + problem.slice(1)}: ${reason[0].toUpperCase() + reason.slice(1)}.`
+		+ (Object.keys(metadata).length ? (" " + getObjectStringLog(metadata)) : ""));
+	}
+	return !!condition;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+enum WindowFlag {
+	EXECUTION_UNNECESSARY = "executionUnnecessary",
+}
+
 interface MatchMode {
 	regex: boolean
 	case: boolean
@@ -63,7 +120,7 @@ class MatchTerm {
 		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex)
 			? getWordPatternStrings(this.phrase)
 			: [ this.phrase, "" ];
-		const optionalHyphenStandin = "__%__"; // TODO improve
+		const optionalHyphenStandin = "_ _ _"; // TODO improve method of inserting optional hyphens
 		const optionalHyphen = this.matchMode.regex ? "" : "(\\p{Pd})?";
 		const getDiacriticsMatchingPatternStringSafe = (chars: string) =>
 			this.matchMode.diacritics ? getDiacriticsMatchingPatternString(chars) : chars;
