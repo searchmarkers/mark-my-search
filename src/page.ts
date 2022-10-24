@@ -1,4 +1,18 @@
-type PopupInteractionInfo = {
+
+type PageInteractionSubmitterInfo = {
+	text: string
+	onClick: (
+		messageText: string,
+		onSuccess: () => void,
+		onError: (error: { status: number, text: string }) => void,
+	) => void
+	message?: {
+		rows: number
+		placeholder: string
+	}
+	alerts?: Record<PageAlertType, PageAlertInfo>
+}
+type PageInteractionInfo = {
 	className: string
 	list?: {
 		getLength: () => Promise<number>
@@ -30,9 +44,9 @@ type PopupInteractionInfo = {
 			rows: Array<{
 				className: string
 				key: string
-				label?: PopupInteractionInfo["label"]
-				textbox?: PopupInteractionInfo["textbox"]
-				checkbox?: PopupInteractionInfo["checkbox"]
+				label?: PageInteractionInfo["label"]
+				textbox?: PageInteractionInfo["textbox"]
+				checkbox?: PageInteractionInfo["checkbox"]
 			}>
 		}>
 	}
@@ -51,19 +65,7 @@ type PopupInteractionInfo = {
 		url: string
 		text: string
 	}
-	submitter?: {
-		text: string
-		onClick: (
-			messageText: string,
-			onSuccess: () => void,
-			onError: (error: { status: number, text: string }) => void,
-		) => void
-		message?: {
-			rows: number
-			placeholder: string
-		}
-		alerts?: Record<PopupAlertType, PopupAlertInfo>
-	}
+	submitters?: Array<PageInteractionSubmitterInfo>
 	checkbox?: {
 		autoId?: string
 		onLoad?: (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
@@ -73,52 +75,96 @@ type PopupInteractionInfo = {
 		text: string
 	}
 }
-type PopupSectionInfo = {
+type PageSectionInfo = {
 	title?: {
 		text: string
 	}
-	interactions: Array<PopupInteractionInfo>
+	interactions: Array<PageInteractionInfo>
 }
-type PopupPanelInfo = {
+type PagePanelInfo = {
 	className: string
 	name: {
 		text: string
 	}
-	sections: Array<PopupSectionInfo>
+	sections: Array<PageSectionInfo>
 }
-type PopupAlertInfo = {
+type PageAlertInfo = {
 	text: string
 }
 
-enum PopupAlertType {
+enum PageAlertType {
 	SUCCESS = "success",
 	FAILURE = "failure",
 	PENDING = "pending",
 }
 
-//enum PopupButtonClass {
+//enum PageButtonClass {
 //	TOGGLE = "toggle",
 //	ENABLED = "enabled",
 //}
 
 /**
- * Loads the popup into the page.
- * @param buttonsInfo Details of the buttons to present.
+ * An EmailJS library function which sends an email using the EmailJS service.
+ * @param service The name of a service category for the email.
+ * @param template The name of a template under the service for the email.
+ * @param details Custom template field entries.
+ * @param key The API key to use.
  */
-const loadPopup = (() => {
+const sendEmail: (
+	service: string,
+	template: string,
+	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
+	key: string,
+) => Promise<void> = window["libSendEmail"];
+
+/**
+ * Sends a problem report message to a dedicated inbox.
+ * @param userMessage An optional message string to send as a comment.
+	*/
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const sendProblemReport = async (userMessage = "") => {
+	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+	const phrases = session.researchInstances[tab.id as number]
+		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+		: "";
+	return sendEmail("service_mms_report", "template_mms_report", {
+		mmsVersion: chrome.runtime.getManifest().version,
+		url: tab.url,
+		phrases,
+		userMessage,
+	}, "NNElRuGiCXYr1E43j");
+};
+
+// TODO document functions
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const pageInsertWarning = (container: HTMLElement, text: string) => {
+	const warning = document.createElement("div");
+	warning.classList.add("warning");
+	warning.textContent = text;
+	container.insertAdjacentElement("afterbegin", warning);
+};
+
+const pageFocusScrollContainer = () =>
+	(document.querySelector(".container-panel") as HTMLElement).focus()
+;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const loadPage = (() => {
 	/**
-	 * Fills and inserts a CSS stylesheet element to style the popup.
+	 * Fills and inserts a CSS stylesheet element to style the page.
 	 */
-	const fillAndInsertStylesheet = () => {
+	const fillAndInsertStylesheet = (additionalStyleText = "") => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ width: 300px; height: 530px; margin: 0; border: 2px solid hsl(300 100% 16%); border-radius: 8px;
-	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); user-select: none; }
+	{ height: 100vh; margin: 0; border: 2px solid hsl(300 100% 16%); border-radius: 8px;
+	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); }
 *
 	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
-	{ width: 6px; }
+	{ width: 5px; }
 ::-webkit-scrollbar-thumb
 	{ background: hsl(300 50% 40% / 0.5); }
 ::-webkit-scrollbar-thumb:hover
@@ -129,8 +175,6 @@ textarea
 	{ resize: none; }
 #frame
 	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit; background: inherit; }
-#frame > .filler
-	{ flex: 1; }
 .brand
 	{ display: flex; }
 .brand > *
@@ -142,7 +186,7 @@ textarea
 .brand > .logo
 	{ width: 32px; height: 32px; }
 .container-tab
-	{ display: flex;
+	{ display: flex; justify-content: center;
 	border-top: 2px solid hsl(300 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container-tab > .tab
 	{ flex: 1 1 auto; font-size: 14px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
@@ -150,29 +194,32 @@ textarea
 .container-tab > .tab:hover
 	{ background: hsl(300 30% 26%); }
 .container-panel
-	{ border-top: 1px solid deeppink; border-top-left-radius: inherit; overflow-y: auto;
-	background: hsl(300 100% 7%); }
+	{ flex: 1 1 auto; border-top: 1px solid deeppink; border-top-left-radius: inherit; overflow-y: auto;
+	outline: none; background: hsl(300 100% 10%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
 .container-panel > .panel
-	{ display: none; flex-direction: column; border-radius: inherit; }
+	{ display: none; flex-direction: column; margin-inline: max(0px, calc((100vw - 600px)/2));
+	border-radius: inherit; box-shadow: 0 0 10px; }
 .warning
 	{ padding: 4px; margin: 4px; border-radius: 2px; background: hsl(60 60% 70% / 0.8); color: hsl(0 0% 8%); }
 /**/
 
 .panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
 .panel-term_lists .container-tab > .tab.panel-term_lists,
+.panel-features .container-tab > .tab.panel-features,
 .panel-general .container-tab > .tab.panel-general
 	{ border-bottom: 2px solid deeppink; background: hsl(300 30% 32%); }
 .panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
 .panel-term_lists .container-panel > .panel.panel-term_lists,
+.panel-features .container-panel > .panel.panel-features,
 .panel-general .container-panel > .panel.panel-general
 	{ display: flex; }
 /**/
 
 .panel .section
-	{ display: flex; flex-direction: column;
-	border-bottom: 1px solid hsl(0 0% 100% / 0.3); border-radius: inherit; background: hsl(300 100% 7%); }
+	{ display: flex; flex-direction: column; width: 100%;
+	border-bottom: 1px solid hsl(0 0% 100% / 0.3); background: hsl(300 100% 7%); }
 .panel .section > .title
 	{ border: none; background: none; text-align: center; font-size: 15px; color: hsl(300 20% 60%); }
 .panel.panel .section > .container
@@ -181,14 +228,16 @@ textarea
 	{ .panel.panel .section > .container { overflow-y: overlay; }; }
 /**/
 
-.panel.panel-general .section > .title
-	{ padding-inline: 8px; padding-block: 4px; }
-/**/
-
 .panel .interaction
 	{ display: flex; flex-direction: column; padding-inline: 8px; padding-block: 4px; }
 .panel .list
-	{ display: flex; flex-direction: column; margin: 0; border: 0; }
+	{ display: flex; margin: 0; border: 0; }
+.panel .list.column
+	{ flex-direction: column; }
+.panel .list.row
+	{ flex-direction: row; gap: 8px; }
+.panel .list.row > *
+	{ flex: 1 1 auto; }
 .panel .interaction.option
 	{ flex-direction: row; padding-block: 0; }
 .panel .interaction > *, .panel .organizer > *
@@ -202,7 +251,7 @@ textarea
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
-	{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(300 10% 80%); }
+	{ color: hsl(300 10% 80%); }
 .panel .interaction.option label.label[for]:hover
 	{ color: hsl(300 10% 66%); }
 .panel .interaction .submitter
@@ -259,7 +308,7 @@ textarea
 .panel.panel-term_lists .container-urls .url-input
 	{ border: none; background: none; color: white; }
 /**/
-		`;
+		` + additionalStyleText;
 		document.head.appendChild(style);
 	};
 
@@ -281,8 +330,8 @@ textarea
 			} else {
 				inputFirst.focus();
 			}
-		} else if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
+		} else {
+			pageFocusScrollContainer();
 		}
 	};
 
@@ -304,7 +353,7 @@ textarea
 		}
 	};
 
-	const handleTabs = () => {
+	const handleTabs = (shiftModifierIsRequired = true) => {
 		const frame = document.querySelector("#frame") as HTMLElement;
 		getTabs().forEach((tab: HTMLButtonElement) => {
 			const onClick = () => {
@@ -326,6 +375,9 @@ textarea
 			});
 		});
 		document.addEventListener("keydown", event => {
+			if (shiftModifierIsRequired && !event.shiftKey) {
+				return;
+			}
 			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
 					.querySelector(`.container-tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
@@ -343,7 +395,7 @@ textarea
 		(getTabs()[0] as HTMLButtonElement).click();
 	};
 
-	const reload = (panelsInfo: Array<PopupPanelInfo>) => {
+	const reload = (panelsInfo: Array<PagePanelInfo>) => {
 		panelsInfo.forEach(panelInfo => {
 			panelInfo.sections.forEach(sectionInfo => {
 				sectionInfo.interactions.forEach(interactionInfo => {
@@ -362,7 +414,7 @@ textarea
 		});
 	};
 
-	const insertAlert = (alertType: PopupAlertType, alertsInfo: Record<PopupAlertType, PopupAlertInfo> | undefined,
+	const insertAlert = (alertType: PageAlertType, alertsInfo: Record<PageAlertType, PageAlertInfo> | undefined,
 		previousSibling: HTMLElement, timeout = -1,
 		tooltip = "", formatText = (text: string) => text) => {
 		if (!alertsInfo) {
@@ -406,15 +458,8 @@ textarea
 		).forEach((alert: HTMLElement) => clearAlert(alert))
 	;
 
-	const insertWarning = (panelName: string, text: string) => {
-		const warning = document.createElement("div");
-		warning.classList.add("warning");
-		warning.textContent = text;
-		document.querySelector(`.container-panel .panel-${panelName}`)?.insertAdjacentElement("afterbegin", warning);
-	};
-
 	const createSection = (() => {
-		const insertLabel = (container: HTMLElement, labelInfo: PopupInteractionInfo["label"], containerIndex: number) => {
+		const insertLabel = (container: HTMLElement, labelInfo: PageInteractionInfo["label"], containerIndex: number) => {
 			if (!labelInfo) {
 				return;
 			}
@@ -451,7 +496,7 @@ textarea
 			return checkboxId;
 		};
 
-		const insertCheckbox = (container: HTMLElement, checkboxInfo: PopupInteractionInfo["checkbox"], id = "",
+		const insertCheckbox = (container: HTMLElement, checkboxInfo: PageInteractionInfo["checkbox"], id = "",
 			objectIndex: number, containerIndex: number) => {
 			if (!checkboxInfo) {
 				return;
@@ -473,7 +518,7 @@ textarea
 			return checkbox;
 		};
 
-		const insertTextbox = (container: HTMLElement, textboxInfo: PopupInteractionInfo["textbox"],
+		const insertTextbox = (container: HTMLElement, textboxInfo: PageInteractionInfo["textbox"],
 			objectIndex: number, containerIndex: number) => {
 			if (!textboxInfo) {
 				return;
@@ -519,6 +564,7 @@ textarea
 				const list = document.createElement("div");
 				list.classList.add("organizer");
 				list.classList.add("list");
+				list.classList.add("column");
 				textboxInfo.list.getArray(objectIndex).then(array => {
 					array.concat("").forEach(value => {
 						insertTextboxElement(list, value);
@@ -531,7 +577,7 @@ textarea
 			}
 		};
 
-		const insertObjectList = (container: HTMLElement, objectInfo: PopupInteractionInfo["object"], containerIndex: number) => {
+		const insertObjectList = (container: HTMLElement, objectInfo: PageInteractionInfo["object"], containerIndex: number) => {
 			if (!objectInfo) {
 				return;
 			}
@@ -570,6 +616,7 @@ textarea
 			const list = document.createElement("div");
 			list.classList.add("organizer");
 			list.classList.add("list");
+			list.classList.add("column");
 			list.classList.add("container-terms");
 			objectInfo.list.getArray(containerIndex).then(objects => {
 				objects.concat({}).forEach((object, i) => {
@@ -579,7 +626,7 @@ textarea
 			container.appendChild(list);
 		};
 
-		const insertAnchor = (container: HTMLElement, anchorInfo: PopupInteractionInfo["anchor"]) => {
+		const insertAnchor = (container: HTMLElement, anchorInfo: PageInteractionInfo["anchor"]) => {
 			if (!anchorInfo) {
 				return;
 			}
@@ -591,7 +638,7 @@ textarea
 			container.appendChild(anchor);
 		};
 
-		const insertSubmitter = (container: HTMLElement, submitterInfo: PopupInteractionInfo["submitter"]) => {
+		const insertSubmitter = (container: HTMLElement, submitterInfo: PageInteractionSubmitterInfo | undefined) => {
 			if (!submitterInfo) {
 				return;
 			}
@@ -603,35 +650,39 @@ textarea
 			let getMessageText = () => "";
 			button.onclick = () => {
 				button.disabled = true;
-				clearAlerts(container, [ PopupAlertType.PENDING, PopupAlertType.FAILURE ]);
+				clearAlerts(container, [ PageAlertType.PENDING, PageAlertType.FAILURE ]);
 				submitterInfo.onClick(
 					getMessageText(),
 					() => {
-						clearAlerts(container, [ PopupAlertType.PENDING ]);
-						insertAlert(
-							PopupAlertType.SUCCESS, //
-							(submitterInfo ?? {}).alerts, //
-							button, //
-							3000, //
-						);
+						if (submitterInfo.alerts) {
+							clearAlerts(container, [ PageAlertType.PENDING ]);
+							insertAlert(
+								PageAlertType.SUCCESS, //
+								submitterInfo.alerts, //
+								button, //
+								3000, //
+							);
+						}
 						button.disabled = false;
 					},
 					error => {
-						clearAlerts(container, [ PopupAlertType.PENDING ]);
-						const errorText = error.text || "(no error message)";
-						insertAlert(
-							PopupAlertType.FAILURE, //
-							(submitterInfo ?? {}).alerts, //
-							button, //
-							-1, //
-							errorText, //
-							text => text.replace("{status}", error.status.toString()).replace("{text}", errorText), //
-						);
+						if (submitterInfo.alerts) {
+							clearAlerts(container, [ PageAlertType.PENDING ]);
+							const errorText = error.text || "(no error message)";
+							insertAlert(
+								PageAlertType.FAILURE, //
+								submitterInfo.alerts, //
+								button, //
+								-1, //
+								errorText, //
+								text => text.replace("{status}", error.status.toString()).replace("{text}", errorText), //
+							);
+						}
 						button.disabled = false;
 					},
 				);
 				insertAlert(
-					PopupAlertType.PENDING, //
+					PageAlertType.PENDING, //
 					submitterInfo.alerts, //
 					button, //
 				);
@@ -647,7 +698,19 @@ textarea
 			}
 		};
 
-		const insertNote = (container: HTMLElement, noteInfo: PopupInteractionInfo["note"]) => {
+		const insertSubmitters = (container: HTMLElement, submittersInfo: PageInteractionInfo["submitters"]) => {
+			if (!submittersInfo) {
+				return;
+			}
+			const list = document.createElement("div");
+			list.classList.add("organizer");
+			list.classList.add("list");
+			list.classList.add(submittersInfo.length > 1 ? "row" : "column");
+			submittersInfo.forEach(submitterInfo => insertSubmitter(list, submitterInfo));
+			container.appendChild(list);
+		};
+
+		const insertNote = (container: HTMLElement, noteInfo: PageInteractionInfo["note"]) => {
 			if (!noteInfo) {
 				return;
 			}
@@ -657,21 +720,21 @@ textarea
 			container.appendChild(note);
 		};
 
-		const createInteraction = (interactionInfo: PopupInteractionInfo, index: number) => {
+		const createInteraction = (interactionInfo: PageInteractionInfo, index: number) => {
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction");
 			interaction.classList.add(interactionInfo.className);
 			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
 			insertObjectList(interaction, interactionInfo.object, index);
 			insertAnchor(interaction, interactionInfo.anchor);
-			insertSubmitter(interaction, interactionInfo.submitter);
+			insertSubmitters(interaction, interactionInfo.submitters);
 			insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, index, 0);
 			insertTextbox(interaction, interactionInfo.textbox, index, 0);
 			insertNote(interaction, interactionInfo.note);
 			return interaction;
 		};
 
-		return (sectionInfo: PopupSectionInfo) => {
+		return (sectionInfo: PageSectionInfo) => {
 			const section = document.createElement("div");
 			section.classList.add("section");
 			if (sectionInfo.title) {
@@ -702,8 +765,10 @@ textarea
 		const name = document.createElement("div");
 		const version = document.createElement("div");
 		const logo = document.createElement("img");
+		const fullname = chrome.runtime.getManifest().name; // The complete name may include e.g. " … | Search Highlighter"
+		const fullnameInfoStart = fullname.search(/\W\W\W/g);
 		name.classList.add("name");
-		name.textContent = chrome.runtime.getManifest().name;
+		name.textContent = fullnameInfoStart === -1 ? fullname : fullname.slice(0, fullnameInfoStart);
 		version.classList.add("version");
 		version.textContent = `v${chrome.runtime.getManifest().version}`;
 		logo.classList.add("logo");
@@ -722,582 +787,44 @@ textarea
 		frame.appendChild(createBrand());
 		const panelContainer = document.createElement("div");
 		panelContainer.classList.add("container-panel");
+		panelContainer.tabIndex = -1;
 		frame.appendChild(panelContainer);
-		const filler = document.createElement("div");
-		filler.classList.add("filler");
-		frame.appendChild(filler);
 		const tabContainer = document.createElement("div");
 		tabContainer.classList.add("container-tab");
 		frame.appendChild(tabContainer);
 		return frame;
 	};
 
-	const insertAndManageContent = (() => {
-		const panelsInfo: Array<PopupPanelInfo> = [
-			{
-				className: "panel-general",
-				name: {
-					text: "Options",
-				},
-				sections: [
-					{
-						title: {
-							text: "Settings",
-						},
-						interactions: [
-							{
-								className: "option",
-								label: {
-									text: "Highlight web searches",
-								},
-								checkbox: {
-									onLoad: async setChecked => {
-										const local = await getStorageLocal([ StorageLocal.ENABLED ]);
-										setChecked(local.enabled);
-									},
-									onToggle: checked => {
-										chrome.runtime.sendMessage({
-											toggleResearchOn: checked,
-										} as BackgroundMessage);
-									},
-								},
-							},
-							{
-								className: "option",
-								label: {
-									text: "Follow links",
-								},
-								checkbox: {
-									onLoad: async setChecked => {
-										const local = await getStorageLocal([ StorageLocal.FOLLOW_LINKS ]);
-										setChecked(local.followLinks);
-									},
-									onToggle: checked => {
-										setStorageLocal({
-											followLinks: checked
-										} as StorageLocalValues);
-									},
-								},
-							},
-							{
-								className: "option",
-								label: {
-									text: "Restore keywords in tabs",
-								},
-								checkbox: {
-									onLoad: async setChecked => {
-										const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
-										setChecked(local.persistResearchInstances);
-									},
-									onToggle: checked => {
-										setStorageLocal({
-											persistResearchInstances: checked
-										} as StorageLocalValues);
-									},
-								},
-							},
-						],
-					},
-					{
-						title: {
-							text: "Current Tab Activation",
-						},
-						interactions: [
-							{
-								className: "option",
-								label: {
-									text: "Active",
-								},
-								checkbox: {
-									onLoad: async setChecked => {
-										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-										setChecked(isTabResearchPage(session.researchInstances, tab.id as number));
-									},
-									onToggle: checked => {
-										if (checked) {
-											getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
-												const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-												const researchInstance = session.researchInstances[tab.id as number];
-												if (researchInstance && researchInstance.persistent) {
-													researchInstance.enabled = true;
-												}
-												chrome.runtime.sendMessage({
-													terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
-													makeUnique: true,
-													toggleHighlightsOn: true,
-												} as BackgroundMessage);
-											});
-										} else {
-											chrome.runtime.sendMessage({
-												disableTabResearch: true,
-											} as BackgroundMessage);
-										}
-									}
-								},
-							},
-							{
-								className: "option",
-								label: {
-									text: "Restores keywords",
-								},
-								checkbox: {
-									onLoad: async setChecked => {
-										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-										const researchInstance = session.researchInstances[tab.id as number];
-										setChecked(researchInstance
-											? researchInstance.persistent
-											: (await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ])).persistResearchInstances
-										);
-									},
-									onToggle: checked => {
-										getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
-											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-											const researchInstance = session.researchInstances[tab.id as number];
-											if (researchInstance) {
-												researchInstance.persistent = checked;
-												setStorageSession(session);
-											}
-										});
-									},
-								},
-							},
-						],
-					},
-					{
-						title: {
-							text: "Contributing",
-						},
-						interactions: [
-							{
-								className: "action",
-								label: {
-									text: "Report a problem",
-								},
-								submitter: {
-									text: "Submit anonymously",
-									onClick: (messageText, onSuccess, onError) => {
-										sendProblemReport(messageText)
-											.then(onSuccess)
-											.catch(onError);
-									},
-									message: {
-										rows: 3,
-										placeholder: "Optional message",
-									},
-									alerts: {
-										[PopupAlertType.SUCCESS]: {
-											text: "Success",
-										},
-										[PopupAlertType.FAILURE]: {
-											text: "Status {status}: {text}",
-										},
-										[PopupAlertType.PENDING]: {
-											text: "Pending, do not close popup",
-										},
-									},
-								},
-								note: {
-									text: "Submits: version, url, keywords, message",
-								},
-							},
-							{
-								className: "link",
-								anchor: {
-									url: "https://github.com/searchmarkers/mark-my-search/issues/new",
-									text: "File a bug report",
-								},
-							},
-							{
-								className: "link",
-								anchor: {
-									url: "https://github.com/searchmarkers/mark-my-search",
-									text: "Get involved!",
-								},
-							},
-						],
-					},
-				],
-			},
-			{
-				className: "panel-sites_search_research",
-				name: {
-					text: "Highlight",
-				},
-				sections: [
-					{
-						title: {
-							text: "Sites to Never Highlight",
-						},
-						interactions: [
-							{
-								className: "url",
-								textbox: {
-									className: "url-input",
-									list: {
-										getArray: () =>
-											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => //
-												sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
-											)
-										,
-										setArray: array =>
-											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-												sync.urlFilters.noPageModify = array.map(value => {
-													const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
-													return {
-														hostname: value.slice(0, pathnameStart),
-														pathname: value.slice(pathnameStart),
-													};
-												});
-												setStorageSync(sync);
-											})
-										,
-									},
-									placeholder: "example.com/optional-path",
-									spellcheck: false,
-								},
-							},
-						],
-					},
-					{
-						title: {
-							text: "Sites to Not Detect As Search Engines",
-						},
-						interactions: [
-							{
-								className: "url",
-								textbox: {
-									className: "url-input",
-									list: {
-										getArray: () =>
-											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => //
-												sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
-											)
-										,
-										setArray: array =>
-											getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-												sync.urlFilters.nonSearch = array.map(value => {
-													const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
-													return {
-														hostname: value.slice(0, pathnameStart),
-														pathname: value.slice(pathnameStart),
-													};
-												});
-												setStorageSync(sync);
-											})
-										,
-									},
-									placeholder: "example.com/optional-path",
-									spellcheck: false,
-								},
-							},
-						],
-					},
-				],
-			},
-			{
-				className: "panel-term_lists",
-				name: {
-					text: "Keyword Lists",
-				},
-				sections: [
-					{
-						title: {
-							text: "Keyword Lists",
-						},
-						interactions: [
-							{
-								className: "TODOreplace",
-								list: {
-									getLength: () =>
-										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
-											sync.termLists.length
-										)
-									,
-									pushEmpty: () =>
-										getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-											sync.termLists.push({
-												name: "",
-												terms: [],
-												urlFilter: [],
-											});
-											setStorageSync(sync);
-										})
-									,
-									removeAt: index =>
-										getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-											delete sync.termLists[index];
-											setStorageSync(sync);
-										})
-									,
-								},
-								label: {
-									text: "",
-									getText: index =>
-										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
-											sync.termLists[index].name
-										)
-									,
-									setText: (text, index) =>
-										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-											sync.termLists[index].name = text;
-											setStorageSync(sync);
-										})
-									,
-									textbox: {
-										placeholder: "List Name",
-									},
-								},
-								object: {
-									className: "term",
-									list: {
-										getArray: index =>
-											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
-												sync.termLists[index].terms as unknown as Array<Record<string, unknown>>
-											)
-										,
-										setArray: (array, index) =>
-											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-												sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
-												setStorageSync(sync);
-											})
-										,
-									},
-									name: {
-										text: "",
-										textbox: {
-											placeholder: "keyword",
-										},
-									},
-									columns: [
-										{
-											className: "TODOreplace",
-											rows: [
-												{
-													className: "TODOreplace",
-													key: "phrase",
-													textbox: {
-														className: "phrase-input",
-														placeholder: "keyword",
-														spellcheck: false,
-														onLoad: async (setText, objectIndex, containerIndex) => {
-															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-															setText(sync.termLists[containerIndex].terms[objectIndex].phrase);
-														},
-														onChange: (text, objectIndex, containerIndex) => {
-															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-																sync.termLists[containerIndex].terms[objectIndex].phrase = text;
-																setStorageSync(sync);
-															});
-														},
-													},
-												},
-											],
-										},
-										{
-											className: "matching",
-											rows: [
-												{
-													className: "type",
-													key: "matchMode.whole",
-													label: {
-														text: "Match Whole Words",
-													},
-													checkbox: {
-														onLoad: async (setChecked, objectIndex, containerIndex) => {
-															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.whole);
-														},
-														onToggle: (checked, objectIndex, containerIndex) => {
-															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-																sync.termLists[containerIndex].terms[objectIndex].matchMode.whole = checked;
-																setStorageSync(sync);
-															});
-														},
-													},
-												},
-												{
-													className: "type",
-													key: "matchMode.stem",
-													label: {
-														text: "Match Stems",
-													},
-													checkbox: {
-														onLoad: async (setChecked, objectIndex, containerIndex) => {
-															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.stem);
-														},
-														onToggle: (checked, objectIndex, containerIndex) => {
-															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-																sync.termLists[containerIndex].terms[objectIndex].matchMode.stem = checked;
-																setStorageSync(sync);
-															});
-														},
-													},
-												},
-												{
-													className: "type",
-													key: "matchMode.case",
-													label: {
-														text: "Match Case",
-													},
-													checkbox: {
-														onLoad: async (setChecked, objectIndex, containerIndex) => {
-															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.case);
-														},
-														onToggle: (checked, objectIndex, containerIndex) => {
-															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-																sync.termLists[containerIndex].terms[objectIndex].matchMode.case = checked;
-																setStorageSync(sync);
-															});
-														},
-													},
-												},
-												{
-													className: "type",
-													key: "matchMode.diacritics",
-													label: {
-														text: "Match Diacritics",
-													},
-													checkbox: {
-														onLoad: async (setChecked, objectIndex, containerIndex) => {
-															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics);
-														},
-														onToggle: (checked, objectIndex, containerIndex) => {
-															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-																sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics = checked;
-																setStorageSync(sync);
-															});
-														},
-													},
-												},
-												{
-													className: "type",
-													key: "matchMode.regex",
-													label: {
-														text: "Regular Expression",
-													},
-													checkbox: {
-														onLoad: async (setChecked, objectIndex, containerIndex) => {
-															const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-															setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.regex);
-														},
-														onToggle: (checked, objectIndex, containerIndex) => {
-															getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-																sync.termLists[containerIndex].terms[objectIndex].matchMode.regex = checked;
-																setStorageSync(sync);
-															});
-														},
-													},
-												},
-											],
-										},
-									],
-								},
-								textbox: {
-									className: "TODOreplace",
-									list: {
-										getArray: index =>
-											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => //
-												sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
-											)
-										,
-										setArray: (array, index) =>
-											getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-												sync.termLists[index].urlFilter = array.map(value => {
-													const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
-													return {
-														hostname: value.slice(0, pathnameStart),
-														pathname: value.slice(pathnameStart),
-													};
-												});
-												setStorageSync(sync);
-											})
-										,
-									},
-									placeholder: "example.com/optional-path",
-									spellcheck: false,
-								},
-							},
-						],
-					},
-				],
-			},
-		];
-
-		return () => {
-			document.body.appendChild(createFrameStructure());
-			const panelContainer = document.querySelector(".container-panel") as HTMLElement;
-			const tabContainer = document.querySelector(".container-tab") as HTMLElement;
-			panelsInfo.forEach(panelInfo => {
-				const panel = document.createElement("div");
-				panel.classList.add("panel");
-				panel.classList.add(panelInfo.className);
-				panelInfo.sections.forEach(sectionInfo => {
-					panel.appendChild(createSection(sectionInfo));
-				});
-				panelContainer.appendChild(panel);
-				const tab = document.createElement("button");
-				tab.type = "button";
-				tab.classList.add("tab");
-				tab.classList.add(panelInfo.className);
-				tab.textContent = panelInfo.name.text;
-				tabContainer.appendChild(tab);
+	const insertAndManageContent = (panelsInfo: Array<PagePanelInfo>, shiftModifierIsRequired = true) => {
+		document.body.appendChild(createFrameStructure());
+		const panelContainer = document.querySelector(".container-panel") as HTMLElement;
+		const tabContainer = document.querySelector(".container-tab") as HTMLElement;
+		panelsInfo.forEach(panelInfo => {
+			const panel = document.createElement("div");
+			panel.classList.add("panel");
+			panel.classList.add(panelInfo.className);
+			panelInfo.sections.forEach(sectionInfo => {
+				panel.appendChild(createSection(sectionInfo));
 			});
-			handleTabs();
-			chrome.storage.onChanged.addListener(() => reload(panelsInfo));
-			chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
-			insertWarning("sites_search_research", "Experimental, please report any issues!");
-			insertWarning("term_lists", "This is a work in progress.");
-		};
-	})();
-
-	/**
-	 * An EmailJS library function which sends an email using the EmailJS service.
-	 * @param service The name of a service category for the email.
-	 * @param template The name of a template under the service for the email.
-	 * @param details Custom template field entries.
-	 * @param key The API key to use.
-	 */
-	const sendEmail: (
-		service: string,
-		template: string,
-		details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
-		key: string,
-	) => Promise<void> = window["libSendEmail"];
-
-	/**
-	 * Sends a problem report message to a dedicated inbox.
-	 * @param userMessage An optional message string to send as a comment.
-	 */
-	const sendProblemReport = async (userMessage = "") => {
-		const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		const phrases = session.researchInstances[tab.id as number]
-			? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
-			: "";
-		return sendEmail("service_mms_report", "template_mms_report", {
-			mmsVersion: chrome.runtime.getManifest().version,
-			url: tab.url,
-			phrases,
-			userMessage,
-		}, "NNElRuGiCXYr1E43j");
+			panelContainer.appendChild(panel);
+			const tab = document.createElement("button");
+			tab.type = "button";
+			tab.classList.add("tab");
+			tab.classList.add(panelInfo.className);
+			tab.textContent = panelInfo.name.text;
+			tabContainer.appendChild(tab);
+		});
+		handleTabs(shiftModifierIsRequired);
+		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
+		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
-	return () => {
-		fillAndInsertStylesheet();
-		insertAndManageContent();
-	};
-})();
-
-(() => {
-	return () => {
+	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
 		chrome.tabs.query = isBrowserChromium() // Running in Chromium
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
-		loadPopup();
+		fillAndInsertStylesheet(additionalStyleText);
+		insertAndManageContent(panelsInfo, shiftModifierIsRequired);
+		pageFocusScrollContainer();
 	};
-})()();
+})();
