@@ -3,6 +3,6 @@
 /node_modules
 /web-ext-artifacts
 /.web-extension-id
-/mark-my-search.zip
+/mark_my_search-*.zip
 /.pnpm-debug.log
 /manifest.json
