@@ -68,6 +68,12 @@
 	],
 
 	"commands": {
+		"open-popup": {
+			"description": "Open the popup"
+		},
+		"open-options": {
+			"description": "Open the options page"
+		},
 		"toggle-research-tab": {
 			"suggested_key": { "default": "Alt+Shift+M" },
 			"description": "Find in current tab"

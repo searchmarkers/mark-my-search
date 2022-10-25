@@ -65,6 +65,8 @@ body
 	{ display: flex; flex-flow: column; width: 100%; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
 	{ flex: 1; display: flex; align-items: center; }
+.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > ::after
+	{ content: ":" }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
 	{ flex: 1; }
 .${OptionClass.TABLE_PREFERENCES} input[type=text]
@@ -165,7 +167,7 @@ label[for]:hover
 				const inputId = getIdSequential.next().value;
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
-				preferenceLabel.textContent = `${preferenceInfo.label}:`;
+				preferenceLabel.textContent = preferenceInfo.label;
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
 				inputDefault.disabled = true;
