@@ -66,16 +66,16 @@ const loadPopup = (() => {
 							className: "action",
 							submitters: [
 								{
-									text: "More options",
-									onClick: (messageText, onSuccess) => {
-										chrome.runtime.openOptionsPage();
+									text: "Startpage",
+									onClick: (messageText, formFields, onSuccess) => {
+										chrome.tabs.create({ url: chrome.runtime.getURL("/pages/startpage.html") });
 										onSuccess();
 									},
 								},
 								{
-									text: "Startpage",
-									onClick: (messageText, onSuccess) => {
-										chrome.tabs.create({ url: chrome.runtime.getURL("pages/startpage.html") });
+									text: "More options",
+									onClick: (messageText, formFields, onSuccess) => {
+										chrome.runtime.openOptionsPage();
 										onSuccess();
 									},
 								},
@@ -162,8 +162,8 @@ const loadPopup = (() => {
 							},
 							submitters: [ {
 								text: "Submit anonymously",
-								onClick: (messageText, onSuccess, onError) => {
-									sendProblemReport(messageText)
+								onClick: (messageText, formFields, onSuccess, onError) => {
+									sendProblemReport(messageText, formFields)
 										.then(onSuccess)
 										.catch(onError);
 								},
@@ -516,7 +516,7 @@ const loadPopup = (() => {
 	return () => {
 		loadPage(panelsInfo, `
 body
-	{ width: 300px; height: 564px; user-select: none; }
+	{ width: 300px; height: 540px; user-select: none; }
 		`, false);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
@@ -526,6 +526,8 @@ body
 			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
 			"This is a work in progress.",
 		);
+		console.log(document.head.outerHTML);
+		console.log(document.body.outerHTML);
 	};
 })();
 

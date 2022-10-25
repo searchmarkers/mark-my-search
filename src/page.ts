@@ -1,12 +1,14 @@
-
 type PageInteractionSubmitterInfo = {
 	text: string
 	onClick: (
 		messageText: string,
+		formFields: Array<FormField>,
 		onSuccess: () => void,
 		onError: (error: { status: number, text: string }) => void,
 	) => void
+	formFields?: Array<PageInteractionInfo>
 	message?: {
+		singleline?: boolean
 		rows: number
 		placeholder: string
 	}
@@ -91,6 +93,10 @@ type PagePanelInfo = {
 type PageAlertInfo = {
 	text: string
 }
+type FormField = {
+	question: string
+	response: string
+}
 
 enum PageAlertType {
 	SUCCESS = "success",
@@ -113,7 +119,33 @@ enum PageAlertType {
 const sendEmail: (
 	service: string,
 	template: string,
-	details: { mmsVersion?: string, url?: string, phrases?: string, userMessage?: string, userEmail?: string },
+	details: {
+		addon_version?: string
+		url?: string
+		phrases?: string
+		user_message?: string
+		user_email?: string
+		item_0_question?: string
+		item_1_question?: string
+		item_2_question?: string
+		item_3_question?: string
+		item_4_question?: string
+		item_5_question?: string
+		item_6_question?: string
+		item_7_question?: string
+		item_8_question?: string
+		item_9_question?: string
+		item_0_response?: string
+		item_1_response?: string
+		item_2_response?: string
+		item_3_response?: string
+		item_4_response?: string
+		item_5_response?: string
+		item_6_response?: string
+		item_7_response?: string
+		item_8_response?: string
+		item_9_response?: string
+	},
 	key: string,
 ) => Promise<void> = window["libSendEmail"];
 
@@ -122,18 +154,28 @@ const sendEmail: (
  * @param userMessage An optional message string to send as a comment.
 	*/
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const sendProblemReport = async (userMessage = "") => {
+const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const phrases = session.researchInstances[tab.id as number]
 		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
-	return sendEmail("service_mms_report", "template_mms_report", {
-		mmsVersion: chrome.runtime.getManifest().version,
+	const message = {
+		addon_version: chrome.runtime.getManifest().version,
 		url: tab.url,
 		phrases,
-		userMessage,
-	}, "NNElRuGiCXYr1E43j");
+		user_message: userMessage,
+	};
+	(formFields ?? []).forEach((formField, i) => {
+		message[`item_${i}_question`] = formField.question;
+		message[`item_${i}_response`] = formField.response;
+	});
+	return sendEmail(
+		"service_mms_ux",
+		formFields.length ? "template_mms_ux_form" : "template_mms_ux_report",
+		message,
+		"NNElRuGiCXYr1E43j",
+	);
 };
 
 // TODO document functions
@@ -143,7 +185,7 @@ const pageInsertWarning = (container: HTMLElement, text: string) => {
 	const warning = document.createElement("div");
 	warning.classList.add("warning");
 	warning.textContent = text;
-	container.insertAdjacentElement("afterbegin", warning);
+	container.appendChild(warning);
 };
 
 const pageFocusScrollContainer = () =>
@@ -159,8 +201,8 @@ const loadPage = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ height: 100vh; margin: 0; border: 2px solid hsl(300 100% 16%); border-radius: 8px;
-	font-family: ubuntu, sans-serif; background: hsl(300 100% 11%); }
+	{ height: 100vh; margin: 0; border: 2px solid hsl(300 100% 14%); border-radius: 8px; overflow: hidden;
+	font-family: ubuntu, sans-serif; background: hsl(300 100% 6%); }
 *
 	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -179,11 +221,11 @@ textarea
 	{ display: flex; }
 .brand > *
 	{ margin: 6px; }
-.brand > .name
-	{ flex: 1; align-self: center; text-align: right; font-weight: bold; color: hsl(0 0% 80%); }
-.brand > .version
+.brand .name
+	{ flex: 1; align-self: center; text-align: right; font-weight: bold; color: hsl(0 0% 74%); }
+.brand .version
 	{ align-self: center; font-size: 14px; color: hsl(0 0% 80% / 0.5); }
-.brand > .logo
+.brand .logo
 	{ width: 32px; height: 32px; }
 .container-tab
 	{ display: flex; justify-content: center;
@@ -192,17 +234,19 @@ textarea
 	{ flex: 1 1 auto; font-size: 14px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
 	background: transparent; color: hsl(300 20% 90%); }
 .container-tab > .tab:hover
-	{ background: hsl(300 30% 26%); }
+	{ background: hsl(300 30% 22%); }
 .container-panel
 	{ flex: 1 1 auto; border-top: 1px solid deeppink; border-top-left-radius: inherit; overflow-y: auto;
 	outline: none; background: hsl(300 100% 10%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
 .container-panel > .panel
-	{ display: none; flex-direction: column; margin-inline: max(0px, calc((100vw - 600px)/2));
-	border-radius: inherit; box-shadow: 0 0 10px; }
+	{ display: none; flex-direction: column; gap: 1px;
+	border-radius: inherit; background: hsl(0 0% 100% / 0.26); box-shadow: 0 0 10px; }
+.container-panel > .panel, .brand
+	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
-	{ padding: 4px; margin: 4px; border-radius: 2px; background: hsl(60 60% 70% / 0.8); color: hsl(0 0% 8%); }
+	{ padding: 4px; border-radius: 2px; background: hsl(60 36% 50% / 0.8); color: hsl(0 0% 8%); }
 /**/
 
 .panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
@@ -218,8 +262,7 @@ textarea
 /**/
 
 .panel .section
-	{ display: flex; flex-direction: column; width: 100%;
-	border-bottom: 1px solid hsl(0 0% 100% / 0.3); background: hsl(300 100% 7%); }
+	{ display: flex; flex-direction: column; width: 100%; background: hsl(300 100% 7%); }
 .panel .section > .title
 	{ border: none; background: none; text-align: center; font-size: 15px; color: hsl(300 20% 60%); }
 .panel.panel .section > .container
@@ -239,7 +282,7 @@ textarea
 .panel .list.row > *
 	{ flex: 1 1 auto; }
 .panel .interaction.option
-	{ flex-direction: row; padding-block: 0; }
+	{ flex-direction: row; padding-block: 0; user-select: none; }
 .panel .interaction > *, .panel .organizer > *
 	{ margin-block: 2px; border-radius: 2px; padding-block: 4px; }
 .panel .interaction input[type="text"],
@@ -251,9 +294,9 @@ textarea
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
-	{ color: hsl(300 10% 80%); }
+	{ color: hsl(300 0% 72%); }
 .panel .interaction.option label.label[for]:hover
-	{ color: hsl(300 10% 66%); }
+	{ color: hsl(300 0% 66%); }
 .panel .interaction .submitter
 	{ padding-block: 3px; }
 .panel .interaction .submitter:disabled
@@ -266,7 +309,7 @@ textarea
 .panel .interaction .submitter:active
 	{ background: hsl(300 60% 14%); }
 .panel .interaction .note
-	{ font-size: 14px; color: hsl(300 6% 60%); }
+	{ font-size: 14px; color: hsl(300 6% 54%); white-space: break-spaces; }
 .panel .interaction.option .label
 	{ flex: 1; }
 .panel .interaction.link a
@@ -277,8 +320,9 @@ textarea
 	{ color: hsl(0 100% 60%); }
 /**/
 
-.alert
-	{ display: flex; align-items: center; height: 20px; transition-property: height, margin; transition-duration: 0.2s; }
+#frame .alert
+	{ display: flex; align-items: center; height: 20px; padding-block: 0;
+	transition-property: height, margin; transition-duration: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #frame .alert:not(.shown)
 	{ height: 0; margin-block: 0; }
 .alert.success
@@ -642,6 +686,29 @@ textarea
 			if (!submitterInfo) {
 				return;
 			}
+			let getFormFields = (): Array<FormField> => [];
+			if (submitterInfo.formFields) {
+				const list = document.createElement("div");
+				list.classList.add("organizer");
+				list.classList.add("list");
+				list.classList.add("column");
+				submitterInfo.formFields.forEach(interactionInfo => {
+					const interaction = createInteraction(interactionInfo, -1);
+					list.appendChild(interaction);
+				});
+				container.appendChild(list);
+				getFormFields = () =>
+					Array.from(list.querySelectorAll("label")).map((label): FormField => {
+						const input = list.querySelector(`input#${label.htmlFor}`) as HTMLInputElement | null;
+						return {
+							question: label.textContent ?? "",
+							response: input
+								? input.checked === undefined ? input.value ?? "" : input.checked.toString()
+								: "",
+						};
+					})
+				;
+			}
 			const button = document.createElement("button");
 			button.type = "button";
 			button.classList.add("submitter");
@@ -653,6 +720,7 @@ textarea
 				clearAlerts(container, [ PageAlertType.PENDING, PageAlertType.FAILURE ]);
 				submitterInfo.onClick(
 					getMessageText(),
+					getFormFields(),
 					() => {
 						if (submitterInfo.alerts) {
 							clearAlerts(container, [ PageAlertType.PENDING ]);
@@ -688,11 +756,27 @@ textarea
 				);
 			};
 			if (submitterInfo.message) {
-				const messageBox = document.createElement("textarea");
+				const messageInfo = submitterInfo.message;
+				const messageBox = (messageInfo.singleline
+					? () => {
+						const box = document.createElement("input");
+						box.type = "text";
+						return box;
+					}
+					: () => {
+						const box = document.createElement("textarea");
+						box.rows = messageInfo.rows;
+						return box;
+					}
+				)();
 				messageBox.classList.add("message");
-				messageBox.rows = submitterInfo.message.rows;
 				messageBox.placeholder = submitterInfo.message.placeholder;
 				messageBox.spellcheck = true;
+				messageBox.addEventListener("keypress", (event: KeyboardEvent) => {
+					if (event.key === "Enter" && (messageInfo.singleline || event.ctrlKey)) {
+						button.click();
+					}
+				});
 				container.appendChild(messageBox);
 				getMessageText = () => messageBox.value;
 			}
@@ -728,9 +812,9 @@ textarea
 			insertObjectList(interaction, interactionInfo.object, index);
 			insertAnchor(interaction, interactionInfo.anchor);
 			insertSubmitters(interaction, interactionInfo.submitters);
-			insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, index, 0);
 			insertTextbox(interaction, interactionInfo.textbox, index, 0);
 			insertNote(interaction, interactionInfo.note);
+			insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, index, 0);
 			return interaction;
 		};
 
@@ -765,10 +849,8 @@ textarea
 		const name = document.createElement("div");
 		const version = document.createElement("div");
 		const logo = document.createElement("img");
-		const fullname = chrome.runtime.getManifest().name; // The complete name may include e.g. " … | Search Highlighter"
-		const fullnameInfoStart = fullname.search(/\W\W\W/g);
 		name.classList.add("name");
-		name.textContent = fullnameInfoStart === -1 ? fullname : fullname.slice(0, fullnameInfoStart);
+		name.textContent = getName();
 		version.classList.add("version");
 		version.textContent = `v${chrome.runtime.getManifest().version}`;
 		logo.classList.add("logo");
@@ -820,7 +902,7 @@ textarea
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
-		chrome.tabs.query = isBrowserChromium() // Running in Chromium
+		chrome.tabs.query = useChromeAPI()
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
 		fillAndInsertStylesheet(additionalStyleText);

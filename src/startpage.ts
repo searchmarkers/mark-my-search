@@ -26,9 +26,7 @@ const loadStartpage = (() => {
 								text: "2. Wait for results to load to see your keywords highlighted.",
 							},
 							note: {
-								text:
-`Generic keywords such as "my" and "the" are excluded.
-If highlighting has not worked, try Troubleshooting.`,
+								text: "Generic keywords such as \"my\" and \"the\" are excluded. If highlighting fails, try Troubleshooting.",
 							},
 						},
 						{
@@ -36,6 +34,27 @@ If highlighting has not worked, try Troubleshooting.`,
 							label: {
 								text: "3. You're done! The same keywords will be highlighted on any page you visit from the results.",
 							},
+						},
+						{
+							className: "action",
+							label: {
+								text: "Try it out",
+							},
+							submitters: [ {
+								text: "Find matches",
+								onClick: (messageText, formFields, onSuccess) => {
+									chrome.runtime.sendMessage({
+										makeUnique: true,
+										terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
+									} as BackgroundMessage)
+										.then(() => onSuccess());
+								},
+								message: {
+									singleline: true,
+									rows: 1,
+									placeholder: "Keywords",
+								},
+							} ],
 						},
 					],
 				},
@@ -108,8 +127,8 @@ See Features > Keyword Matching for details of these options.`,
 							},
 							submitters: [ {
 								text: "Submit anonymously",
-								onClick: (messageText, onSuccess, onError) => {
-									sendProblemReport(messageText)
+								onClick: (messageText, formFields, onSuccess, onError) => {
+									sendProblemReport(messageText, formFields)
 										.then(onSuccess)
 										.catch(onError);
 								},
@@ -125,7 +144,7 @@ See Features > Keyword Matching for details of these options.`,
 										text: "Status {status}: {text}",
 									},
 									[PageAlertType.PENDING]: {
-										text: "Pending, do not close popup",
+										text: "Pending, do not exit page",
 									},
 								},
 							} ],
@@ -137,7 +156,7 @@ See Features > Keyword Matching for details of these options.`,
 							className: "link",
 							anchor: {
 								url: "https://github.com/searchmarkers/mark-my-search/issues/new",
-								text: "Found a problem? File a bug report",
+								text: "Have a problem or idea? Open an issue",
 							},
 						},
 						{
@@ -299,6 +318,9 @@ See Features > Keyword Matching for details of these options.`,
 	];
 
 	return () => {
+		const title = document.createElement("title");
+		title.text = `${getName()} - Start`;
+		document.head.appendChild(title);
 		loadPage(panelsInfo, `
 body
 	{ border: unset; }

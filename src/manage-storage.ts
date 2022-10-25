@@ -1,8 +1,8 @@
-const isBrowserChromium = () =>
+const useChromeAPI = () =>
 	!this.browser
 ;
 
-chrome.storage = isBrowserChromium() /* Running in Chromium */  ? chrome.storage : browser.storage as typeof chrome.storage;
+chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chrome.storage;
 chrome.storage.session ??= chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
