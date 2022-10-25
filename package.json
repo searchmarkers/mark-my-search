@@ -1,4 +1,23 @@
 {
+	"name": "mark-my-search",
+	"displayName": "Mark My Search",
+	"scripts": {
+		"build": "tsc -p ./tsconfig.json"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/searchmarkers/mark-my-search.git"
+	},
+	"author": {
+		"name": "ator-dev",
+		"email": "ator-dev@protonmail.com",
+		"url": "https://github.com/ator-dev"
+	},
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/searchmarkers/mark-my-search/issues"
+	},
+	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
 	"dependencies": {
 		"@types/chrome": "^0.0.193",
 		"@types/download": "^8.0.1",

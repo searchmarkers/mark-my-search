@@ -246,7 +246,7 @@ textarea
 .container-panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
-	{ padding: 4px; border-radius: 2px; background: hsl(60 36% 50% / 0.8); color: hsl(0 0% 8%); }
+	{ padding: 4px; border-radius: 2px; background: hsl(60 36% 50% / 0.8); color: hsl(0 0% 8%); white-space: break-spaces; }
 /**/
 
 .panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
@@ -321,7 +321,7 @@ textarea
 /**/
 
 #frame .alert
-	{ display: flex; align-items: center; height: 20px; padding-block: 0;
+	{ height: 20px; padding-block: 0;
 	transition-property: height, margin; transition-duration: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #frame .alert:not(.shown)
 	{ height: 0; margin-block: 0; }

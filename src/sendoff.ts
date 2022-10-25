@@ -25,7 +25,7 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 						{
 							className: "action",
 							label: {
-								text: "Information is sent privately with no personal details, and will be viewed only by the developer of Mark My Search.",
+								text: "Information is sent privately with no personal details, and is viewable only by the developer of Mark My Search.",
 							},
 							submitters: [ {
 								text: "Submit",
@@ -45,7 +45,7 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 									{
 										className: "option",
 										label: {
-											text: "Doesn't show up",
+											text: "Highlighting doesn't show up",
 										},
 										checkbox: {},
 									},
@@ -73,14 +73,14 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 									{
 										className: "option",
 										label: {
-											text: "Highlighting is sometimes incomplete",
+											text: "Highlighting breaks pages",
 										},
 										checkbox: {},
 									},
 									{
 										className: "option",
 										label: {
-											text: "Highlighting messes up pages",
+											text: "Highlighting is sometimes incomplete",
 										},
 										checkbox: {},
 									},
@@ -94,20 +94,20 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 									{
 										className: "option",
 										label: {
-											text: "I don't want all my searches highlighted",
+											text: "Highlighting is overwhelming",
 										},
 										note: {
-											text: "Turn off 'Highlight web searches' in the popup",
+											text: "Turn off 'Highlights begin visible' in the options",
 										},
 										checkbox: {},
 									},
 									{
 										className: "option",
 										label: {
-											text: "Highlighting is overwhelming",
+											text: "I don't want all my searches highlighted",
 										},
 										note: {
-											text: "Turn off 'Highlights begin visible' in the options",
+											text: "Turn off 'Highlight web searches' in the popup",
 										},
 										checkbox: {},
 									},

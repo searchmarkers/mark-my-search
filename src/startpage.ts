@@ -39,15 +39,27 @@ const loadStartpage = (() => {
 							className: "action",
 							label: {
 								text: "Try it out",
+								getText: async () =>
+									chrome.runtime.getURL("/").startsWith("chrome-extension://")
+										? "Try it in your default search engine"
+										: "Try it in this page"
+								,
 							},
 							submitters: [ {
 								text: "Find matches",
 								onClick: (messageText, formFields, onSuccess) => {
-									chrome.runtime.sendMessage({
-										makeUnique: true,
-										terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
-									} as BackgroundMessage)
-										.then(() => onSuccess());
+									if (chrome.runtime.getURL("/").startsWith("chrome-extension://")) {
+										chrome.search.query({
+											disposition: "NEW_TAB",
+											text: messageText,
+										}, onSuccess);
+									} else {
+										chrome.runtime.sendMessage({
+											makeUnique: true,
+											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
+										} as BackgroundMessage)
+											.then(() => onSuccess());
+									}
 								},
 								message: {
 									singleline: true,
