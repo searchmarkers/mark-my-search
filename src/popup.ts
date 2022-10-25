@@ -526,8 +526,6 @@ body
 			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
 			"This is a work in progress.",
 		);
-		console.log(document.head.outerHTML);
-		console.log(document.body.outerHTML);
 	};
 })();
 
