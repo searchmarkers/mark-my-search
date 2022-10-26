@@ -28,8 +28,8 @@ jobs:
         with:
           files: mark_my_search-*.zip
       - name: Repository Pages dispatch
-        uses: myrotvorets/trigger-repository-dispatch-action@1.0.0
+        uses: peter-evans/repository-dispatch@v2
         with:
-          token: ${{ secrets.REPOSITORY_ACCESS_TOKEN }}
-          repo: searchmarkers/searchmarkers.github.io
-          type: update
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          repository: searchmarkers/searchmarkers.github.io
+          event-type: update
