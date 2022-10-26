@@ -31,8 +31,8 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 								text: "Submit",
 								onClick: (messageText, formFields, onSuccess, onError) => {
 									sendProblemReport(messageText, formFields)
-										.then(onSuccess)
-										.catch(onError);
+										.then(() => onSuccess())
+										.catch(() => onError());
 								},
 								formFields: [
 									{
