@@ -3,9 +3,9 @@
 	"displayName": "Mark My Search",
 	"scripts": {
 		"compile": "tsc -p ./tsconfig.json",
-		"build-firefox": "ln -s manifest-firefox.json manifest.json && zip mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
-		"build-chromium": "ln -s manifest-chromium.json manifest.json && zip mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
-		"build-opera": "ln -s manifest-opera.json manifest.json && zip mark_my_search-opera.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id"
+		"build-firefox": "rm manifest.json && ln -s manifest-firefox.json manifest.json && zip mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
+		"build-chromium": "rm manifest.json && ln -s manifest-chromium.json manifest.json && zip mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
+		"build-opera": "rm manifest.json && ln -s manifest-opera.json manifest.json && zip mark_my_search-opera.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id"
 	},
 	"repository": {
 		"type": "git",
