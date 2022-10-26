@@ -22,7 +22,7 @@ jobs:
 #       with:
 #         name: dist
 #         path: dist
-      - name: Build release
+      - name: Builds release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
