@@ -1,5 +1,5 @@
-name: compile-source
-run-name: compiling source files
+name: source-compile
+run-name: source files compile
 
 on: [push]
 
