@@ -47,7 +47,7 @@ const loadOptions = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; }
+	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; user-select: none; }
 .${OptionClass.ERRONEOUS}
 	{ color: #e11; }
 .${OptionClass.MODIFIED}
@@ -76,9 +76,9 @@ body
 .${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN}
 	{ background-color: hsl(0 0% 87%); }
 label
-	{ color: hsl(0 0% 22%); }
+	{ color: hsl(0 0% 28%); }
 label[for]:hover
-	{ color: hsl(0 0% 36%); }
+	{ color: hsl(0 0% 18%); }
 		`;
 		document.head.appendChild(style);
 	};
