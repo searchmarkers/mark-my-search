@@ -17,7 +17,7 @@ jobs:
           npm run build-firefox
           npm run build-chromium
           npm run build-opera
-#     - name: Archive production artifact
+#     - name: Artifact archive
 #       uses: actions/upload-artifact@v3
 #       with:
 #         name: dist
