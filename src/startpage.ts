@@ -141,8 +141,8 @@ See Features > Keyword Matching for details of these options.`,
 								text: "Submit anonymously",
 								onClick: (messageText, formFields, onSuccess, onError) => {
 									sendProblemReport(messageText, formFields)
-										.then(onSuccess)
-										.catch(onError);
+										.then(() => onSuccess())
+										.catch(() => onError());
 								},
 								message: {
 									rows: 3,
