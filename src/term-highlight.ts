@@ -285,6 +285,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* || Term Highlights */
+mms-h
+	{ font: inherit; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
 /**/
@@ -436,8 +438,18 @@ const jumpToTerm = (() => {
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 		let elementTerm = walker[nextNodeMethod]() as HTMLElement;
 		if (!elementTerm) {
-			walker.currentNode = reverse && document.body.lastElementChild ? document.body.lastElementChild : document.body;
+			let nodeToRemove: Node | null = null;
+			if (!document.body.lastChild || document.body.lastChild.nodeType !== Node.TEXT_NODE) {
+				nodeToRemove = document.createTextNode("");
+				document.body.appendChild(nodeToRemove);
+			}
+			walker.currentNode = (reverse && document.body.lastChild)
+				? document.body.lastChild
+				: document.body;
 			elementTerm = walker[nextNodeMethod]() as HTMLElement;
+			if (nodeToRemove) {
+				nodeToRemove.parentElement?.removeChild(nodeToRemove);
+			}
 			if (!elementTerm) {
 				walkSelectionFocusContainer.accept = true;
 				elementTerm = walker[nextNodeMethod]() as HTMLElement;
@@ -485,7 +497,8 @@ const jumpToTerm = (() => {
 		}
 		const selectionFocus = selection && (!activeElement
 			|| activeElement === document.body || !document.body.contains(activeElement)
-			|| activeElement === focusBase || activeElement.contains(focusContainer))
+			|| activeElement === focusBase || activeElement.contains(focusContainer)
+		)
 			? selection.focusNode
 			: activeElement ?? document.body;
 		if (focusBase) {

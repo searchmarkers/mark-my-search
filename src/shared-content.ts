@@ -253,6 +253,8 @@ interface BackgroundMessage {
 
 enum CommandType {
 	NONE,
+	OPEN_POPUP,
+	OPEN_OPTIONS,
 	TOGGLE_IN_TAB,
 	TOGGLE_ENABLED,
 	TOGGLE_BAR,
@@ -312,7 +314,15 @@ const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
 const parseCommand = (commandString: string): CommandInfo => {
 	const parts = commandString.split("-");
 	switch (parts[0]) {
-	case "toggle": {
+	case "open": {
+		switch (parts[1]) {
+		case "popup": {
+			return { type: CommandType.OPEN_POPUP };
+		} case "options": {
+			return { type: CommandType.OPEN_OPTIONS };
+		}}
+		break;
+	} case "toggle": {
 		switch (parts[1]) {
 		case "research": {
 			switch (parts[2]) {
@@ -413,3 +423,18 @@ const getIdSequential = (function* () {
 		yield `input-${id++}`;
 	}
 })();
+
+const getNameFull = (): string =>
+	chrome.runtime.getManifest().name
+;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const getName = (): string => {
+	const manifest = chrome.runtime.getManifest();
+	if (manifest.short_name) {
+		return manifest.short_name;
+	}
+	const nameFull = getNameFull(); // The complete name may take the form e.g. " Name | Classification".
+	const nameEndPosition = nameFull.search(/\W\W\W/g);
+	return nameEndPosition === -1 ? nameFull : nameFull.slice(0, nameEndPosition);
+};

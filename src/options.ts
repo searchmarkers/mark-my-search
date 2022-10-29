@@ -47,7 +47,7 @@ const loadOptions = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; }
+	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; user-select: none; }
 .${OptionClass.ERRONEOUS}
 	{ color: #e11; }
 .${OptionClass.MODIFIED}
@@ -65,6 +65,8 @@ body
 	{ display: flex; flex-flow: column; width: 100%; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
 	{ flex: 1; display: flex; align-items: center; }
+.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > ::after
+	{ content: ":" }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
 	{ flex: 1; }
 .${OptionClass.TABLE_PREFERENCES} input[type=text]
@@ -74,9 +76,9 @@ body
 .${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN}
 	{ background-color: hsl(0 0% 87%); }
 label
-	{ color: hsl(0 0% 22%); }
+	{ color: hsl(0 0% 28%); }
 label[for]:hover
-	{ color: hsl(0 0% 36%); }
+	{ color: hsl(0 0% 18%); }
 		`;
 		document.head.appendChild(style);
 	};
@@ -165,7 +167,7 @@ label[for]:hover
 				const inputId = getIdSequential.next().value;
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
-				preferenceLabel.textContent = `${preferenceInfo.label}:`;
+				preferenceLabel.textContent = preferenceInfo.label;
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
 				inputDefault.disabled = true;

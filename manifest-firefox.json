@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.7.4",
+	"version": "1.8.0",
 
 	"browser_specific_settings": {
 		"gecko": {
@@ -60,6 +60,12 @@
 	],
 
 	"commands": {
+		"open-popup": {
+			"description": "Open the popup"
+		},
+		"open-options": {
+			"description": "Open the options page"
+		},
 		"toggle-research-tab": {
 			"suggested_key": { "default": "Alt+Shift+M" },
 			"description": "Find in current tab"
