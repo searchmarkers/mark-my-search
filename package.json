@@ -1,4 +1,26 @@
 {
+	"name": "mark-my-search",
+	"displayName": "Mark My Search",
+	"scripts": {
+		"compile": "tsc -p ./tsconfig.json",
+		"build-firefox": "ln -fs manifest-firefox.json manifest.json && zip mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
+		"build-chromium": "ln -fs manifest-chromium.json manifest.json && zip mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
+		"build-opera": "ln -fs manifest-opera.json manifest.json && zip mark_my_search-opera.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/searchmarkers/mark-my-search.git"
+	},
+	"author": {
+		"name": "ator-dev",
+		"email": "ator-dev@protonmail.com",
+		"url": "https://github.com/ator-dev"
+	},
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/searchmarkers/mark-my-search/issues"
+	},
+	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
 	"dependencies": {
 		"@types/chrome": "^0.0.193",
 		"@types/download": "^8.0.1",

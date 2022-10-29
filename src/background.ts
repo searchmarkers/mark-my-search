@@ -21,17 +21,17 @@ if (/*isBrowserChromium()*/ !this.browser) {
 		ScriptLib.COMMON,
 	);
 }
-chrome.tabs.executeScript = isBrowserChromium() ? chrome.tabs.executeScript : browser.tabs.executeScript;
-chrome.tabs.query = isBrowserChromium() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
-chrome.tabs.sendMessage = isBrowserChromium()
+chrome.tabs.executeScript = useChromeAPI() ? chrome.tabs.executeScript : browser.tabs.executeScript;
+chrome.tabs.query = useChromeAPI() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.tabs.sendMessage = useChromeAPI()
 	? chrome.tabs.sendMessage
 	: browser.tabs.sendMessage as typeof chrome.tabs.sendMessage;
-chrome.tabs.get = isBrowserChromium() ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
-chrome.search["search"] = isBrowserChromium()
+chrome.tabs.get = useChromeAPI() ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
+chrome.search["search"] = useChromeAPI()
 	? (options: { query: string, tabId: number }) =>
 		chrome.search["query"]({ text: options.query, tabId: options.tabId }, () => undefined)
 	: browser.search.search;
-chrome.commands.getAll = isBrowserChromium() ? chrome.commands.getAll : browser.commands.getAll;
+chrome.commands.getAll = useChromeAPI() ? chrome.commands.getAll : browser.commands.getAll;
 
 /**
  * Creates an object storing highlighting information about a tab, for application to pages within that tab.
@@ -208,7 +208,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	};
 
 	return () => {
-		if (isBrowserChromium() || !chrome.bookmarks) {
+		if (useChromeAPI() || !chrome.bookmarks) {
 			return;
 		}
 		browser.bookmarks.getTree().then(async nodes => {
@@ -256,7 +256,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal([ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.browserAction.setIcon({ path: isBrowserChromium()
+		: chrome.browserAction.setIcon({ path: useChromeAPI()
 			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -290,11 +290,11 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Prepares non-volatile extension components on install.
 	 */
 	const setUp = () => {
-		if (isBrowserChromium()) {
+		if (useChromeAPI()) {
 			// TODO instruct user how to assign the appropriate shortcuts
 		} else {
-			browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
-			browser.commands.update({ name: "toggle-bar", shortcut: "Ctrl+Shift+F" });
+			//browser.commands.update({ name: "toggle-select", shortcut: "Ctrl+Shift+U" });
+			//browser.commands.update({ name: "toggle-bar", shortcut: "Ctrl+Shift+F" });
 			browser.commands.update({ name: "toggle-research-global", shortcut: "Alt+Shift+J" });
 			browser.commands.update({ name: "focus-term-append", shortcut: "Alt+Period" });
 			for (let i = 0; i < 10; i++) {
@@ -308,19 +308,27 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Prepares volatile extension components in a new browser session.
 	 */
 	const initialize = () => {
+		chrome.runtime.setUninstallURL("https://searchmarkers.github.io/pages/sendoff/");
 		manageEnginesCacheOnBookmarkUpdate();
 		createContextMenuItems();
 		initializeStorage();
 		updateActionIcon();
 	};
 
-	chrome.runtime.onInstalled.addListener(details => {
-		if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+	const startOnInstall = (isExtensionInstall: boolean, allowOnboarding = true) => {
+		if (isExtensionInstall) {
 			setUp();
+			if (allowOnboarding) {
+				chrome.tabs.create({ url: chrome.runtime.getURL("/pages/startpage.html") });
+			}
 		}
 		repairOptions();
 		initialize();
-	});
+	};
+
+	chrome.runtime.onInstalled.addListener(details =>
+		startOnInstall(details.reason === chrome.runtime.OnInstalledReason.INSTALL)
+	);
 
 	chrome.runtime.onStartup.addListener(initialize);
 
@@ -416,7 +424,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	});
 
-	if (isBrowserChromium()) {
+	if (useChromeAPI()) {
 		// Chromium emits no `tabs` event for tab reload
 		chrome.webNavigation.onCommitted.addListener(details => {
 			if (details.url !== "" && details.transitionType === "reload") {
@@ -579,11 +587,19 @@ const executeScriptsInTab = async (tabId: number) => {
 };
 
 chrome.commands.onCommand.addListener(async commandString => {
+	if (commandString === "open-popup") {
+		(chrome.action["openPopup"] ?? (() => undefined))();
+	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id as number; // `tab.id` always defined for this case.
 	const commandInfo = parseCommand(commandString);
 	switch (commandInfo.type) {
-	case CommandType.TOGGLE_ENABLED: {
+	case CommandType.OPEN_POPUP: {
+		return;
+	} case CommandType.OPEN_OPTIONS: {
+		chrome.runtime.openOptionsPage();
+		return;
+	} case CommandType.TOGGLE_ENABLED: {
 		getStorageLocal([ StorageLocal.ENABLED ]).then(local => {
 			setStorageLocal({ enabled: !local.enabled } as StorageLocalValues);
 			updateActionIcon(!local.enabled);
