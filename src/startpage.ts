@@ -57,8 +57,7 @@ const loadStartpage = (() => {
 										chrome.runtime.sendMessage({
 											makeUnique: true,
 											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
-										} as BackgroundMessage)
-											.then(() => onSuccess());
+										} as BackgroundMessage, onSuccess);
 									}
 								},
 								message: {
