@@ -92,6 +92,7 @@ type PagePanelInfo = {
 }
 type PageAlertInfo = {
 	text: string
+	timeout?: number
 }
 type FormField = {
 	question: string
@@ -459,11 +460,11 @@ textarea
 	};
 
 	const insertAlert = (alertType: PageAlertType, alertsInfo: Record<PageAlertType, PageAlertInfo> | undefined,
-		previousSibling: HTMLElement, timeout = -1,
-		tooltip = "", formatText = (text: string) => text) => {
+		previousSibling: HTMLElement, timeoutDefault = -1, tooltip = "", formatText = (text: string) => text) => {
 		if (!alertsInfo) {
 			return;
 		}
+		const timeout = alertsInfo[alertType].timeout ?? timeoutDefault;
 		const alert = document.createElement("label");
 		alert.classList.add("alert");
 		alert.classList.add(alertType);

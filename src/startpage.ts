@@ -49,7 +49,7 @@ const loadStartpage = (() => {
 								text: "Find matches",
 								onClick: (messageText, formFields, onSuccess) => {
 									if (chrome.runtime.getURL("/").startsWith("chrome-extension://")) {
-										chrome.search.query({
+										chrome.search["query"]({
 											disposition: "NEW_TAB",
 											text: messageText,
 										}, onSuccess);
@@ -269,7 +269,9 @@ See Features > Keyword Matching for details of these options.`,
 								text: "Toolbar - click keyword buttons to scroll to the next match.",
 							},
 							note: {
-								text: "Press [Shift+Space] to jump to the next generic match, or assign a shortcut like [Alt+Shift+1] for each term.",
+								text:
+`Press [Alt+Space] to jump to the next generic match, and [Alt+Shift+Space] for the previous,
+or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 							},
 						},
 						{

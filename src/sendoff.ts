@@ -118,7 +118,8 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 								},
 								alerts: {
 									[PageAlertType.SUCCESS]: {
-										text: "Success",
+										text: "Thank you, your feedback will be carefully considered!",
+										timeout: -1,
 									},
 									[PageAlertType.FAILURE]: {
 										text: "Status {status}: {text}",
