@@ -16,6 +16,10 @@ type ControlButtonInfo = {
 }
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
 type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
+type GetNextHighlightClassName = Generator<string, never, unknown>
+
+// TODO remove global variable, use alternative method
+const termSelectorIds: Record<string, number> = {};
 
 enum AtRuleID {
 	FLASH = "flash",
@@ -54,6 +58,7 @@ enum ElementClass {
 
 enum ElementID {
 	STYLE = "style",
+	STYLE_PAINT = "style-paint",
 	BAR = "bar",
 	BAR_OPTIONS = "bar-options",
 	BAR_TERMS = "bar-terms",
@@ -72,60 +77,6 @@ interface ControlsInfo {
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
 	matchMode: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
-}
-
-interface UnbrokenNodeListItem {
-	value: Text
-	next: UnbrokenNodeListItem | null
-}
-
-// Singly linked list implementation for efficient highlight matching of node DOM 'flow' groups
-class UnbrokenNodeList {
-	first: UnbrokenNodeListItem | null;
-	last: UnbrokenNodeListItem | null;
-
-	push (value: Text) {
-		if (this.last) {
-			this.last.next = { value, next: null };
-			this.last = this.last.next;
-		} else {
-			this.first = { value, next: null };
-			this.last = this.first;
-		}
-	}
-
-	insertAfter (itemBefore: UnbrokenNodeListItem | null, value: Text | null) {
-		if (value) {
-			if (itemBefore) {
-				itemBefore.next = { next: itemBefore.next, value };
-			} else {
-				this.first = { next: this.first, value };
-			}
-		}
-	}
-
-	getText () {
-		let text = "";
-		let current = this.first;
-		do {
-			text += (current as UnbrokenNodeListItem).value.textContent;
-		// eslint-disable-next-line no-cond-assign
-		} while (current = (current as UnbrokenNodeListItem).next);
-		return text;
-	}
-
-	clear () {
-		this.first = null;
-		this.last = null;
-	}
-
-	*[Symbol.iterator] () {
-		let current = this.first;
-		do {
-			yield current as UnbrokenNodeListItem;
-		// eslint-disable-next-line no-cond-assign
-		} while (current = (current as UnbrokenNodeListItem).next);
-	}
 }
 
 /**
@@ -301,22 +252,19 @@ mms-h
 	`;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
-		const isAboveStyleLevel = (level: number) => i >= hues.length * level;
-		const getBackgroundStyle = (colorA: string, colorB: string) =>
-			isAboveStyleLevel(1)
-				?  `repeating-linear-gradient(${
-					isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
-				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
-				: colorA;
+		term.hue = hue;
+		style.textContent += `
+*
+	{ --boxes${termSelectorIds[term.phrase]}: []; }
+		`;
 		style.textContent += makeImportant(`
-/* || Term Highlights */
+/* || Term Highlights *//*
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
-~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
+~ body .${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
-~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
-	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }
-/**/
+~ body .${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
+	{ --boxColor: ${getHighlightBackgroundStyle(i, hue, hues.length)}; }
+*//**/
 
 /* || Term Scroll Markers */
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)}
@@ -326,10 +274,10 @@ mms-h
 /* || Term Control Buttons */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)}; }
+	{ background: ${getBackgroundStyle(i, hues.length, `hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)}; }
 #${getSel(ElementID.BAR_TERMS)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 70% 70% / 0.4)`, `hsl(${hue} 70% 88% / 0.4)`)}; }
+	{ background: ${getBackgroundStyle(i, hues.length, `hsl(${hue} 70% 70% / 0.4)`, `hsl(${hue} 70% 88% / 0.4)`)}; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_BUTTON)}:hover:not(:disabled)
 	{ background: hsl(${hue} 70% 80%); }
@@ -343,6 +291,27 @@ mms-h
 		`);
 	});
 };
+
+// TODO document, reorganise
+const isIdxAboveStyleLevel = (idx: number, level: number, levelCount: number) =>
+	idx >= levelCount * level
+;
+
+// TODO document, reorganise
+const getBackgroundStyle = (idx: number, hueCount: number, colorA: string, colorB: string) =>
+	isIdxAboveStyleLevel(idx, 1, hueCount)
+		?  `repeating-linear-gradient(${
+			isIdxAboveStyleLevel(idx, 3, hueCount)
+				? isIdxAboveStyleLevel(idx, 4, hueCount) ? 0 : 90
+				: isIdxAboveStyleLevel(idx, 2, hueCount) ? 45 : -45
+		}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
+		: colorA
+;
+
+// TODO document, reorganise
+const getHighlightBackgroundStyle = (idx: number, hue: number, hueCount: number) =>
+	getBackgroundStyle(idx, hueCount, `hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)
+;
 
 /**
  * Gets a selector string for the container block of an element.
@@ -1295,6 +1264,11 @@ const removeControls = () => {
 		return;
 	}
 	style.textContent = "";
+	const stylePaint = document.getElementById(getSel(ElementID.STYLE_PAINT));
+	if (!stylePaint) {
+		return;
+	}
+	//stylePaint.textContent = "";
 	const bar = document.getElementById(getSel(ElementID.BAR));
 	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER));
 	if (bar) {
@@ -1401,78 +1375,83 @@ const generateTermHighlightsUnderNode = (() => {
 	/**
 	 * Highlights a term matched in a text node.
 	 * @param term The term matched.
-	 * @param textEndNode The text node to highlight inside.
+	 * @param node The text node to highlight inside.
 	 * @param start The first character index of the match within the text node.
 	 * @param end The last character index of the match within the text node.
-	 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
-	 * @param nodeItemPrevious The previous item in the text node list.
-	 * @returns The new previous item (the item just highlighted).
 	 */
-	const highlightInsideNode = (term: MatchTerm, textEndNode: Node, start: number, end: number,
-		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null): UnbrokenNodeListItem => {
-		// TODO add strategy for mitigating damage (caused by programmatic changes by the website)
-		const text = textEndNode.textContent as string;
-		const textStart = text.substring(0, start);
-		const highlight = document.createElement("mms-h");
-		highlight.classList.add(getSel(ElementClass.TERM, term.selector));
-		highlight.textContent = text.substring(start, end);
-		textEndNode.textContent = text.substring(end);
-		(textEndNode.parentNode as Node).insertBefore(highlight, textEndNode);
-		nodeItems.insertAfter(nodeItemPrevious, highlight.firstChild as Text);
-		if (textStart !== "") {
-			const textStartNode = document.createTextNode(textStart);
-			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
-			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
-			return ((nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem)
-				.next as UnbrokenNodeListItem;
-		}
-		return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem;
+	const highlightInsideNode = (term: MatchTerm, node: Text, nodeAncestor: HTMLElement, nodeAncestorRect: DOMRect,
+		start: number, end: number,
+		range: Range, getNextHighlightClassName: GetNextHighlightClassName) => {
+		range.setStart(node, start);
+		range.setEnd(node, end);
+		const textRect = range.getBoundingClientRect();
+		const highlightId = getNextHighlightClassName.next().value;
+		nodeAncestor.setAttribute("highlight", (nodeAncestor.getAttribute("highlight") ?? "") + highlightId);
+		nodeAncestor.classList.add(getSel(ElementClass.TERM, term.selector));
+		return `
+body [highlight*=${highlightId}]
+	{ --boxes${termSelectorIds[term.phrase]}: [{"color":"${getHighlightBackgroundStyle(termSelectorIds[term.selector], term.hue, 7)}","x":${textRect.x - nodeAncestorRect.x},"y":${textRect.y - nodeAncestorRect.y},"w":${textRect.width},"h":${textRect.height}}]; background-image: paint(highlights) !important; }
+		`;
 	};
 
 	/**
 	 * Highlights terms in a block of consecutive text nodes.
 	 * @param terms Terms to find and highlight.
-	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
+	 * @param nodes Consecutive text nodes to highlight inside.
 	 */
-	const highlightInBlock = (terms: MatchTerms, nodeItems: UnbrokenNodeList) => {
-		const textFlow = nodeItems.getText();
+	const highlightInBlock = (terms: MatchTerms, nodes: Array<Text>,
+		range: Range, getNextHighlightClassName: GetNextHighlightClassName) => {
+		const textFlow = nodes.map(node => node.textContent).join("");
+		let styleText = "";
 		for (const term of terms) {
-			let nodeItemPrevious: UnbrokenNodeListItem | null = null;
-			let nodeItem: UnbrokenNodeListItem | null = nodeItems.first as UnbrokenNodeListItem;
+			let i = 0;
+			let node = nodes[0];
 			let textStart = 0;
-			let textEnd = nodeItem.value.length;
+			let textEnd = node.length;
 			const matches = textFlow.matchAll(term.pattern);
 			for (const match of matches) {
-				let highlightStart = match.index as number;
+				const highlightStart = match.index as number;
 				const highlightEnd = highlightStart + match[0].length;
 				while (textEnd <= highlightStart) {
-					nodeItemPrevious = nodeItem;
-					nodeItem = nodeItem.next as UnbrokenNodeListItem;
+					i++;
+					node = nodes[i];
 					textStart = textEnd;
-					textEnd += nodeItem.value.length;
+					textEnd += node.length;
 				}
 				// eslint-disable-next-line no-constant-condition
 				while (true) {
-					nodeItemPrevious = highlightInsideNode(
-						term,
-						nodeItem.value,
-						highlightStart - textStart,
-						Math.min(highlightEnd - textStart, textEnd),
-						nodeItems,
-						nodeItemPrevious,
+					let nodeAncestor = node.parentElement as HTMLElement;
+					// eslint-disable-next-line no-constant-condition
+					while (true) {
+						const ancestorAboveAnchor = (nodeAncestor as HTMLElement).closest("a")?.parentElement as HTMLElement;
+						if (ancestorAboveAnchor) {
+							nodeAncestor = ancestorAboveAnchor;
+						} else {
+							break;
+						}
+					}
+					console.log(node, nodeAncestor, highlightStart - textStart, Math.min(highlightEnd - textStart, node.length));
+					styleText += highlightInsideNode(
+						term, //
+						node, //
+						nodeAncestor as HTMLElement, //
+						(nodeAncestor as HTMLElement).getBoundingClientRect(), //
+						highlightStart - textStart, //
+						Math.min(highlightEnd - textStart, node.length), //
+						range, //
+						getNextHighlightClassName, //
 					);
-					highlightStart = textEnd;
-					textStart = highlightEnd;
 					if (highlightEnd <= textEnd) {
 						break;
 					}
-					nodeItemPrevious = nodeItem;
-					nodeItem = nodeItem.next as UnbrokenNodeListItem;
+					i++;
+					node = nodes[i];
 					textStart = textEnd;
-					textEnd += nodeItem.value.length;
+					textEnd += node.length;
 				}
 			}
 		}
+		return styleText;
 	};
 
 	/**
@@ -1480,47 +1459,57 @@ const generateTermHighlightsUnderNode = (() => {
 	 * @param terms Terms to find and highlight.
 	 * @param node A root node under which to match terms and insert highlights.
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
-	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
+	 * @param nodes Consecutive text nodes to highlight inside.
 	 * @param visitSiblings Whether to visit the siblings of the root node.
 	 */
 	const insertHighlights = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
-		nodeItems = new UnbrokenNodeList, visitSiblings = true) => {
+		nodes: Array<Text>, visitSiblings = true,
+		range: Range, getNextHighlightClassName: GetNextHighlightClassName) => {
 		// TODO support for <iframe>?
+		let styleText = "";
 		do {
 			switch (node.nodeType) {
 			case (1): // Node.ELEMENT_NODE
 			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
 				if (!highlightTags.reject.has((node as Element).tagName as TagName)) {
 					const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
-					if (breaksFlow && nodeItems.first) {
-						highlightInBlock(terms, nodeItems);
-						nodeItems.clear();
+					if (breaksFlow && nodes.length) {
+						styleText += highlightInBlock(terms, nodes, range, getNextHighlightClassName);
+						nodes.splice(0, nodes.length);
 					}
 					if (node.firstChild) {
-						insertHighlights(terms, node.firstChild, highlightTags, nodeItems);
-						if (breaksFlow && nodeItems.first) {
-							highlightInBlock(terms, nodeItems);
-							nodeItems.clear();
+						styleText += insertHighlights(terms, node.firstChild, highlightTags, nodes, undefined, range, getNextHighlightClassName);
+						if (breaksFlow && nodes.length) {
+							styleText += highlightInBlock(terms, nodes, range, getNextHighlightClassName);
+							nodes.splice(0, nodes.length);
 						}
 					}
 				}
 				break;
 			} case (3): { // Node.TEXT_NODE
-				nodeItems.push(node as Text);
+				nodes.push(node as Text);
 				break;
 			}}
 			node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
 		} while (node && visitSiblings);
+		return styleText;
 	};
 
 	return (terms: MatchTerms, rootNode: Node,
-		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators) => {
+		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
+		getNextHighlightClassName: GetNextHighlightClassName) => {
+		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+		const range = document.createRange();
 		if (rootNode.nodeType === Node.TEXT_NODE) {
-			const nodeItems = new UnbrokenNodeList;
-			nodeItems.push(rootNode as Text);
-			highlightInBlock(terms, nodeItems);
+			const text = highlightInBlock(terms, [ rootNode as Text ], range, getNextHighlightClassName);
+			style.textContent += text;
 		} else {
-			insertHighlights(terms, rootNode, highlightTags, new UnbrokenNodeList, false);
+			const text = insertHighlights(terms, rootNode, highlightTags, [], false, range, getNextHighlightClassName);
+			style.textContent += text;
+			//document.querySelectorAll(terms.map(term => `.${getSel(ElementClass.TERM, term.selector)}`).join(", "))
+			//	.forEach((termContainer: HTMLElement) => {
+			//		console.log(termContainer.offsetHeight);
+			//	});
 		}
 		requestRefreshIndicators.next();
 	};
@@ -1580,7 +1569,8 @@ const getObserverNodeHighlighter = (() => {
 		!element.closest(rejectSelector) && element.tagName !== "MMS-H"
 	;
 
-	return (requestRefreshIndicators: RequestRefreshIndicators, highlightTags: HighlightTags, terms: MatchTerms) => {
+	return (requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName,
+		highlightTags: HighlightTags, terms: MatchTerms) => {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
@@ -1588,7 +1578,8 @@ const getObserverNodeHighlighter = (() => {
 					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
 					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
 						restoreNodes([], node as HTMLElement | DocumentFragment);
-						generateTermHighlightsUnderNode(terms, node, highlightTags, requestRefreshIndicators);
+						generateTermHighlightsUnderNode(terms, node, highlightTags, requestRefreshIndicators,
+							getNextHighlightClassName);
 					}
 				}
 			}
@@ -1627,11 +1618,13 @@ const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
 	pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
+	getNextHighlightClassName: GetNextHighlightClassName,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
 	if (pageModifyEnabled) {
-		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
+		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators,
+			getNextHighlightClassName);
 		terms.forEach(term => updateTermOccurringStatus(term));
 		highlightInNodesOnMutation(observer);
 	}
@@ -1702,6 +1695,7 @@ const getTermsFromSelection = () => {
 			controlsInfo: ControlsInfo, commands: BrowserCommands,
 			highlightTags: HighlightTags, hues: TermHues,
 			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
+			getNextHighlightClassName: GetNextHighlightClassName,
 			termsUpdate?: MatchTerms, termUpdate?: MatchTerm,
 			termToUpdateIdx?: TermChange.CREATE | TermChange.REMOVE | number,
 		) => {
@@ -1751,6 +1745,7 @@ const getTermsFromSelection = () => {
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
 				controlsInfo.pageModifyEnabled,
 				highlightTags, requestRefreshIndicators, observer,
+				getNextHighlightClassName,
 			);
 		};
 	})();
@@ -1758,11 +1753,15 @@ const getTermsFromSelection = () => {
 	/**
 	 * Inserts a uniquely identified CSS stylesheet to perform all extension styling.
 	 */
-	const insertStyleElement = () => {
-		let style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
-		if (!style) {
-			style = document.createElement("style");
+	const insertStyleElements = () => {
+		if (!document.getElementById(getSel(ElementID.STYLE))) {
+			const style = document.createElement("style");
 			style.id = getSel(ElementID.STYLE);
+			document.head.appendChild(style);
+		}
+		if (!document.getElementById(getSel(ElementID.STYLE_PAINT))) {
+			const style = document.createElement("style");
+			style.id = getSel(ElementID.STYLE_PAINT);
 			document.head.appendChild(style);
 		}
 	};
@@ -1774,7 +1773,8 @@ const getTermsFromSelection = () => {
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param hues Color hues for term styles to cycle through.
 	 */
-	const requestRefreshIndicatorsFn = function* (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
+	const requestRefreshIndicatorsFn = function* (terms: MatchTerms,
+		highlightTags: HighlightTags, hues: TermHues): RequestRefreshIndicators {
 		const requestWaitDuration = 1000;
 		const reschedulingDelayMax = 5000;
 		const reschedulingRequestCountMargin = 1;
@@ -1809,7 +1809,8 @@ const getTermsFromSelection = () => {
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param terms Terms being controlled, highlighted, and jumped to.
 	 */
-	const produceEffectOnCommandFn = function* (terms: MatchTerms, highlightTags: HighlightTags) {
+	const produceEffectOnCommandFn = function* (terms: MatchTerms,
+		highlightTags: HighlightTags): ProduceEffectOnCommand {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
 		while (true) {
@@ -1886,6 +1887,14 @@ const getTermsFromSelection = () => {
 		}
 	};
 
+	const getNextHighlightClassNameFn = function* (): GetNextHighlightClassName {
+		let i = 0;
+		while (true) {
+			//yield getSel(ElementClass.TERM, i.toString());
+			yield "b" + (i++).toString().padStart(8, "0");
+		}
+	};
+
 	/**
 	 * Gets a set of highlight tags in all forms reasonably required.
 	 * @param tagsLower An array of tag names in their lowercase form.
@@ -1897,6 +1906,7 @@ const getTermsFromSelection = () => {
 
 	return () => {
 		window[WindowFlag.EXECUTION_UNNECESSARY] = true;
+		CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/draw-highlights.js") + "?q=hello");
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
@@ -1927,11 +1937,13 @@ const getTermsFromSelection = () => {
 				"mms-h" as HTMLElementTagName ]),
 			// break: any other class of element
 		};
-		const requestRefreshIndicators: RequestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
-		const produceEffectOnCommand: ProduceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
-		const observer = getObserverNodeHighlighter(requestRefreshIndicators, highlightTags, terms);
+		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
+		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
+		const getNextHighlightClassName = getNextHighlightClassNameFn();
+		const observer = getObserverNodeHighlighter(requestRefreshIndicators, getNextHighlightClassName,
+			highlightTags, terms);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-		insertStyleElement();
+		insertStyleElements();
 		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
 			sendResponse: (response: HighlightDetails) => void) => {
 			if (message.getDetails) {
@@ -1972,6 +1984,10 @@ const getTermsFromSelection = () => {
 			if (message.enablePageModify !== undefined) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
 			}
+			(message.terms ?? []).forEach((term, i) => {
+				// TODO fix
+				termSelectorIds[term.phrase] = i;
+			});
 			if (message.termUpdate
 				|| (message.terms !== undefined && (
 					!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
@@ -1983,6 +1999,7 @@ const getTermsFromSelection = () => {
 					controlsInfo, commands, //
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //
+					getNextHighlightClassName, //
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
 			}

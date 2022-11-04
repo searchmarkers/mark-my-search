@@ -2,6 +2,7 @@ enum ScriptLib { // Library scripts, which perform no action but provide utiliti
 	STORAGE = "/dist/manage-storage.js",
 	STEMMING = "/dist/stem-pattern-find.js",
 	DIACRITICS = "/dist/diacritic-pattern.js",
+	//DRAW_HIGHLIGHTS = "/dist/draw-highlights.js",
 	COMMON = "/dist/shared-content.js",
 }
 
