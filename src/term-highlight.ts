@@ -70,7 +70,6 @@ enum TermChange {
 }
 
 interface ControlsInfo {
-	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
@@ -350,7 +349,7 @@ const getContainerBlock = (element: HTMLElement, highlightTags: HighlightTags, s
  * Sets their `tabIndex` to -1.
  * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
  */
-const revertElementsUnfocusable = (root = document.body) => {
+const elementsRemakeUnfocusable = (root = document.body) => {
 	if (!root.parentNode) {
 		return;
 	}
@@ -392,7 +391,7 @@ const jumpToTerm = (() => {
 	// TODO document
 	const jumpToScrollMarker = (term: MatchTerm | undefined, container: HTMLElement) => {
 		const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
-		purgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
+		elementsPurgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
 		// eslint-disable-next-line no-constant-condition
 		[6, 5, 4, 3, 2].some(precisionFactor => {
 			const precision = 10**precisionFactor;
@@ -481,8 +480,8 @@ const jumpToTerm = (() => {
 			: activeElement ?? document.body;
 		if (focusBase) {
 			focusBase.classList.remove(getSel(ElementClass.FOCUS));
-			purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
-			revertElementsUnfocusable();
+			elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER));
+			elementsRemakeUnfocusable();
 		}
 		const selectionFocusContainer = selectionFocus
 			? getContainerBlock(
@@ -734,20 +733,6 @@ const insertTermInput = (() => {
  */
 const getTermIdxFromArray = (term: MatchTerm | undefined, terms: MatchTerms): TermChange.CREATE | number =>
 	term ? terms.indexOf(term) : TermChange.CREATE
-;
-
-// TODO document
-const getTermIdx = (termSelector?: string): TermChange.CREATE | number => {
-	const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement;
-	const control = barTerms.querySelector(`.${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.TERM, termSelector)}`);
-	return termSelector === undefined
-		? TermChange.CREATE
-		: control ? Array.from(barTerms.children).indexOf(control) : -1;
-};
-
-// TODO document
-const getTermCount = (): number =>
-	(document.getElementById(getSel(ElementID.BAR_TERMS)) as HTMLElement).childElementCount
 ;
 
 /**
@@ -1254,9 +1239,6 @@ const insertControls = (() => {
 		if (controlsInfo.highlightsShown) {
 			bar.classList.add(getSel(ElementClass.HIGHLIGHTS_SHOWN));
 		}
-		if (!controlsInfo.pageModifyEnabled) {
-			bar.classList.add(getSel(ElementClass.DISABLED));
-		}
 		const barOptions = document.createElement("span");
 		barOptions.id = getSel(ElementID.BAR_OPTIONS);
 		const barTerms = document.createElement("span");
@@ -1300,16 +1282,16 @@ const removeControls = () => {
 	if (gutter) {
 		gutter.remove();
 	}
-	purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
-	purgeClass(getSel(ElementClass.FOCUS));
-	revertElementsUnfocusable();
+	elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER));
+	elementsPurgeClass(getSel(ElementClass.FOCUS));
+	elementsRemakeUnfocusable();
 };
 
 /**
  * Removes the visibility classes of all term control inputs, resetting their visibility.
  */
 const resetTermControlInputsVisibility = () =>
-	purgeClass(
+	elementsPurgeClass(
 		getSel(ElementClass.OVERRIDE_VISIBILITY),
 		document.getElementById(getSel(ElementID.BAR)) as HTMLElement,
 		"input",
@@ -1390,11 +1372,11 @@ const insertScrollMarkers = (() => {
 /**
  * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
  * @param terms Terms to find, highlight, and mark.
- * @param rootNode A node under which to find and highlight term occurrences.
+ * @param root A node under which to find and highlight term occurrences.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
  */
-const generateTermHighlightsUnderNode = (() => {
+const highlightsGenerateForBranch = (() => {
 	/**
 	 * Highlights terms in a block of consecutive text nodes.
 	 * @param terms Terms to find and highlight.
@@ -1490,16 +1472,16 @@ const generateTermHighlightsUnderNode = (() => {
 		} while (node && visitSiblings);
 	};
 
-	return (terms: MatchTerms, rootNode: Node,
+	return (terms: MatchTerms, root: Node,
 		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
 		getNextHighlightClassName: GetNextHighlightClassName) => {
 		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
 		const range = document.createRange();
 		const elementHighlightsInfo: ElementsHighlightBoxesInfo = new Map;
-		if (rootNode.nodeType === Node.TEXT_NODE) {
-			highlightInBlock(terms, [ rootNode as Text ], elementHighlightsInfo);
+		if (root.nodeType === Node.TEXT_NODE) {
+			highlightInBlock(terms, [ root as Text ], elementHighlightsInfo);
 		} else {
-			insertHighlights(terms, rootNode, highlightTags, [], elementHighlightsInfo, false);
+			insertHighlights(terms, root, highlightTags, [], elementHighlightsInfo, false);
 		}
 		const styleText = Array.from(elementHighlightsInfo).map(([ element, boxesInfo ]) => {
 			const highlightId = getNextHighlightClassName.next().value;
@@ -1507,9 +1489,15 @@ const generateTermHighlightsUnderNode = (() => {
 			if (!elementRects.length) {
 				elementRects = [ element.getBoundingClientRect() ];
 			}
+			const boxes = JSON.parse(
+				getComputedStyle(element).getPropertyValue("--boxes").toString() || "[]",
+			) as Array<HighlightBox>;
 			element.setAttribute("highlight", highlightId);
-			return `body [highlight*=${highlightId}] { background-image: paint(highlights) !important; --boxes: ${
-				JSON.stringify(boxesInfo.map((boxInfo): HighlightBox => {
+			return constructHighlightStyleRule(
+				highlightId,
+				boxes.filter(box => terms.every((term, i) =>
+					box.color !== getHighlightBackgroundStyle(i, term.hue, terms.length)
+				)).concat(boxesInfo.map((boxInfo): HighlightBox => {
 					range.setStart(boxInfo.node, boxInfo.start);
 					range.setEnd(boxInfo.node, boxInfo.end);
 					const textRects = Array.from(range.getClientRects());
@@ -1534,18 +1522,64 @@ const generateTermHighlightsUnderNode = (() => {
 						}
 					}
 					return {
-						color: getHighlightBackgroundStyle(getTermIdx(boxInfo.term.selector), boxInfo.term.hue, getTermCount()),
+						color: getHighlightBackgroundStyle( // TODO cache
+							getTermIdxFromArray(boxInfo.term, terms),
+							boxInfo.term.hue,
+							terms.length,
+						),
 						x,
 						y,
 						width: width || textRectBounding.width,
 						height: textRectBounding.height,
 					};
-				}))}; }`;
+				})),
+			);
 		}).join("");
+		console.log(styleText);
 		setTimeout(() => style.textContent += styleText);
 		requestRefreshIndicators.next();
 	};
 })();
+
+/**
+ * Remove highlights for matches of terms.
+ * @param terms Terms for which to remove highlights. If left empty, all highlights are removed.
+ * @param root A root node under which to remove highlights.
+ */
+const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | DocumentFragment = document.body) => {
+	const style = document.getElementById(getSel(ElementID.STYLE_PAINT));
+	if (style) {
+		const rules = (style.textContent as string).trimEnd().split("\n");
+		for (const element of Array.from(root.querySelectorAll("[highlight]"))) {
+			const highlightId = element.getAttribute("highlight") as string;
+			const highlightIdSelector = `[highlight*=${highlightId}]`;
+			const boxes = JSON.parse(
+				getComputedStyle(element).getPropertyValue("--boxes").toString() || "[]",
+			) as Array<HighlightBox>;
+			rules[rules.findIndex(rule => rule.includes(highlightIdSelector))] = terms.length ? constructHighlightStyleRule(
+				highlightId,
+				boxes.filter(box =>
+					terms.every((term, i) => box.color !== getHighlightBackgroundStyle(i, term.hue, terms.length)) // TODO cache
+				),
+			) : "";
+		}
+		style.textContent = rules.join("");
+	}
+	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+		root = (root as DocumentFragment).getRootNode() as HTMLElement;
+		if (root.nodeType === Node.TEXT_NODE) {
+			return;
+		}
+	}
+	elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
+	elementsPurgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
+	elementsRemakeUnfocusable(root as HTMLElement);
+};
+
+// TODO document
+const constructHighlightStyleRule = (highlightId: string, boxes: Array<HighlightBox>): string =>
+	`body [highlight*=${highlightId}] { background-image: paint(highlights) !important; --boxes: ${JSON.stringify(boxes)}; }\n`
+;
 
 /**
  * Remove all uses of a class name in elements under a root node in the DOM tree.
@@ -1554,37 +1588,13 @@ const generateTermHighlightsUnderNode = (() => {
  * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
  * @param predicate A function called for each element, the condition of which must be met in order to purge from that element.
  */
-const purgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "",
+const elementsPurgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "",
 	predicate?: (classList: DOMTokenList) => boolean) =>
 	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(predicate
 		? element => predicate(element.classList) ? element.classList.remove(className) : undefined
 		: element => element.classList.remove(className) // Predicate not called when not supplied, for efficiency (bulk purges)
 	)
 ;
-
-/**
- * Revert all direct DOM tree changes under a root node introduced by the extension.
- * Circumstantial and non-direct alterations may remain.
- * @param classNames Class names of the highlights to remove. If left empty, all highlights are removed.
- * @param root A root node under which to remove highlights.
- */
-const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	const highlights = root.querySelectorAll(classNames.length ? `.${classNames.join(", mms-h.")}[highlight]` : "[highlight]");
-	// TODO replace
-	//for (const highlight of Array.from(highlights)) {
-	//	highlight.className = highlight.className.replace(new RegExp(`${}`, "g"), "");
-	//}
-	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-		root = (root as DocumentFragment).getRootNode() as HTMLElement;
-		if (root.nodeType === Node.TEXT_NODE) {
-			return;
-		}
-	}
-	purgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
-	purgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
-	revertElementsUnfocusable(root as HTMLElement);
-};
 
 /**
  * Gets a mutation observer which listens to document changes and performs partial highlights where necessary.
@@ -1611,8 +1621,8 @@ const getObserverNodeHighlighter = (() => {
 				for (const node of Array.from(mutation.addedNodes)) {
 					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
 					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
-						restoreNodes([], node as HTMLElement | DocumentFragment);
-						generateTermHighlightsUnderNode(terms, node, highlightTags, requestRefreshIndicators,
+						highlightsRemoveForBranch([], node as HTMLElement | DocumentFragment);
+						highlightsGenerateForBranch(terms, node, highlightTags, requestRefreshIndicators,
 							getNextHighlightClassName);
 					}
 				}
@@ -1643,25 +1653,19 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
  * Disables then restarts continuous highlighting.
  * @param terms Terms to be continuously found and highlighted within the DOM.
  * @param termsToPurge Terms for which to remove previous highlights.
- * @param pageModifyEnabled Indicates whether to modify page content.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
  * @param observer An observer which selectively performs highlighting on observing changes.
  */
 const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
-	pageModifyEnabled: boolean,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 	getNextHighlightClassName: GetNextHighlightClassName,
 ) => {
-	highlightInNodesOnMutationDisconnect(observer);
-	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
-	if (pageModifyEnabled) {
-		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators,
-			getNextHighlightClassName);
-		terms.forEach(term => updateTermOccurringStatus(term));
-		highlightInNodesOnMutation(observer);
-	}
+	highlightsGenerateForBranch(terms, document.body, highlightTags, requestRefreshIndicators,
+		getNextHighlightClassName);
+	terms.forEach(term => updateTermOccurringStatus(term));
+	highlightInNodesOnMutation(observer);
 };
 
 /**
@@ -1761,7 +1765,7 @@ const getTermsFromSelection = () => {
 					)) {
 						removeTermControl(termRemovedPreviousIdx);
 						terms.splice(termRemovedPreviousIdx, 1);
-						restoreNodes([ getSel(ElementClass.TERM, termUpdate.selector) ]);
+						highlightsRemoveForBranch([ termUpdate ]);
 						fillStylesheetContent(terms, hues);
 						requestRefreshIndicators.next();
 						return;
@@ -1777,7 +1781,6 @@ const getTermsFromSelection = () => {
 			fillStylesheetContent(terms, hues);
 			beginHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				controlsInfo.pageModifyEnabled,
 				highlightTags, requestRefreshIndicators, observer,
 				getNextHighlightClassName,
 			);
@@ -1945,7 +1948,6 @@ const getTermsFromSelection = () => {
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = {
-			pageModifyEnabled: false,
 			highlightsShown: false,
 			barControlsShown: {
 				disableTabResearch: true,
@@ -2011,12 +2013,10 @@ const getTermsFromSelection = () => {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
 			if (message.deactivate) {
+				highlightInNodesOnMutationDisconnect(observer);
 				terms.splice(0);
 				removeControls();
-				restoreNodes();
-			}
-			if (message.enablePageModify !== undefined) {
-				controlsInfo.pageModifyEnabled = message.enablePageModify;
+				highlightsRemoveForBranch();
 			}
 			if (message.termUpdate
 				|| (message.terms !== undefined && (

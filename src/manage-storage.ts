@@ -42,7 +42,6 @@ type StorageSyncValues = {
 		hues: Array<number>
 	}
 	[StorageSync.URL_FILTERS]: {
-		noPageModify: URLFilter
 		nonSearch: URLFilter
 	}
 	[StorageSync.TERM_LISTS]: Array<TermList>
@@ -137,7 +136,6 @@ const defaultOptions: StorageSyncValues = {
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 	urlFilters: {
-		noPageModify: [],
 		nonSearch: [],
 	},
 	termLists: [],

@@ -213,40 +213,6 @@ const loadPopup = (() => {
 			sections: [
 				{
 					title: {
-						text: "Sites to Never Highlight",
-					},
-					interactions: [
-						{
-							className: "url",
-							textbox: {
-								className: "url-input",
-								list: {
-									getArray: () =>
-										getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
-										)
-									,
-									setArray: array =>
-										getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.noPageModify = array.map(value => {
-												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
-												return {
-													hostname: value.slice(0, pathnameStart),
-													pathname: value.slice(pathnameStart),
-												};
-											});
-											setStorageSync(sync);
-										})
-									,
-								},
-								placeholder: "example.com/optional-path",
-								spellcheck: false,
-							},
-						},
-					],
-				},
-				{
-					title: {
 						text: "Sites to Not Detect As Search Engines",
 					},
 					interactions: [

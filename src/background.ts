@@ -129,21 +129,6 @@ const isUrlFilteredIn = (() => {
 })();
 
 /**
- * Determines whether the user has permitted pages with the given URL to be deeply modified during highlighting,
- * which is powerful but may be destructive.
- * @param urlString The valid URL string corresponding to a page to be potentially highlighted.
- * @param urlFilters URL filter preferences.
- * @returns `true` if the corresponding page may be modified, `false` otherwise.
- */
-const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) => {
-	try {
-		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
-	} catch {
-		return true;
-	}
-};
-
-/**
  * Determines whether the user has permitted pages with the given URL to treated as a search page,
  * from which keywords may be collected.
  * @param urlString The valid URL string corresponding to a page to be potentially auto-highlighted.
@@ -396,7 +381,6 @@ const updateActionIcon = (enabled?: boolean) =>
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
 				matchMode: sync.matchModeDefaults,
-				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
 		}
 		log("tab-communicate fulfillment finish", "", logMetadata);
@@ -684,7 +668,6 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
 				matchMode: sync.matchModeDefaults,
-				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
 				command: message.highlightCommand,
 			});
 		} else if (message.terms !== undefined) {
