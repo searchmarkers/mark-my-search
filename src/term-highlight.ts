@@ -14,10 +14,11 @@ type ControlButtonInfo = {
 	onclick?: () => void
 	setUp?: (container: HTMLElement) => void
 }
+type ElementsHighlightBoxesInfo = Map<HTMLElement, Array<HighlightBoxInfo>>
+type TermSelectorStyles = Record<string, TermStyle>
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
 type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
 type GetNextHighlightClassName = Generator<string, never, unknown>
-type ElementsHighlightBoxesInfo = Map<HTMLElement, Array<HighlightBoxInfo>>
 
 enum AtRuleID {
 	FLASH = "flash",
@@ -84,11 +85,15 @@ interface HighlightBoxInfo {
 }
 
 interface HighlightBox {
-	color: string
+	selector: string
 	x: number
 	y: number
 	width: number
 	height: number
+}
+
+interface TermStyle {
+	hue: number
 }
 
 /**
@@ -248,12 +253,21 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* || Term Highlights */
-mms-h
-	{ font: inherit; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
 /**/
 	`) + `
+/* || Term Highlight */
+body [highlight]
+	{ --mms-styles: ${JSON.stringify((() => {
+		const styles: TermSelectorStyles = {};
+		terms.forEach((term, i) => {
+			styles[term.selector] = { hue: hues[i % hues.length] };
+		});
+		return styles;
+	})())}; }
+/**/
+
 /* || Transitions */
 @keyframes ${getSel(AtRuleID.MARKER_ON)}
 	{ from {} to { padding-right: 16px; }; }
@@ -266,14 +280,6 @@ mms-h
 		const hue = hues[i % hues.length];
 		term.hue = hue;
 		style.textContent += makeImportant(`
-/* || Term Highlights *//*
-#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
-~ body .${getSel(ElementClass.TERM, term.selector)},
-#${getSel(ElementID.BAR)}
-~ body .${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
-	{ --boxColor: ${getHighlightBackgroundStyle(i, hue, hues.length)}; }
-*//**/
-
 /* || Term Scroll Markers */
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)}
 	{ background: hsl(${hue} 100% 44%); }
@@ -1490,13 +1496,13 @@ const highlightsGenerateForBranch = (() => {
 				elementRects = [ element.getBoundingClientRect() ];
 			}
 			const boxes = JSON.parse(
-				getComputedStyle(element).getPropertyValue("--boxes").toString() || "[]",
+				getComputedStyle(element).getPropertyValue("--mms-boxes").toString() || "[]",
 			) as Array<HighlightBox>;
 			element.setAttribute("highlight", highlightId);
 			return constructHighlightStyleRule(
 				highlightId,
 				boxes.filter(box => terms.every((term, i) =>
-					box.color !== getHighlightBackgroundStyle(i, term.hue, terms.length)
+					box.selector !== getHighlightBackgroundStyle(i, term.hue, terms.length)
 				)).concat(boxesInfo.map((boxInfo): HighlightBox => {
 					range.setStart(boxInfo.node, boxInfo.start);
 					range.setEnd(boxInfo.node, boxInfo.end);
@@ -1522,11 +1528,7 @@ const highlightsGenerateForBranch = (() => {
 						}
 					}
 					return {
-						color: getHighlightBackgroundStyle( // TODO cache
-							getTermIdxFromArray(boxInfo.term, terms),
-							boxInfo.term.hue,
-							terms.length,
-						),
+						selector: boxInfo.term.selector,
 						x,
 						y,
 						width: width || textRectBounding.width,
@@ -1535,7 +1537,6 @@ const highlightsGenerateForBranch = (() => {
 				})),
 			);
 		}).join("");
-		console.log(styleText);
 		setTimeout(() => style.textContent += styleText);
 		requestRefreshIndicators.next();
 	};
@@ -1554,13 +1555,11 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 			const highlightId = element.getAttribute("highlight") as string;
 			const highlightIdSelector = `[highlight*=${highlightId}]`;
 			const boxes = JSON.parse(
-				getComputedStyle(element).getPropertyValue("--boxes").toString() || "[]",
+				getComputedStyle(element).getPropertyValue("--mms-boxes").toString() || "[]",
 			) as Array<HighlightBox>;
 			rules[rules.findIndex(rule => rule.includes(highlightIdSelector))] = terms.length ? constructHighlightStyleRule(
 				highlightId,
-				boxes.filter(box =>
-					terms.every((term, i) => box.color !== getHighlightBackgroundStyle(i, term.hue, terms.length)) // TODO cache
-				),
+				boxes.filter(box => terms.every(term => box.selector !== term.selector)),
 			) : "";
 		}
 		style.textContent = rules.join("");
@@ -1578,7 +1577,7 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 
 // TODO document
 const constructHighlightStyleRule = (highlightId: string, boxes: Array<HighlightBox>): string =>
-	`body [highlight*=${highlightId}] { background-image: paint(highlights) !important; --boxes: ${JSON.stringify(boxes)}; }\n`
+	`body [highlight*=${highlightId}] { background-image: paint(highlights) !important; --mms-boxes: ${JSON.stringify(boxes)}; }\n`
 ;
 
 /**
