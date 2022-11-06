@@ -258,8 +258,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 	`) + `
 /* || Term Highlight */
-body [highlight]
-	{ --mms-styles: ${JSON.stringify((() => {
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [highlight]
+	{ background-image: paint(highlights) !important; --mms-styles: ${JSON.stringify((() => {
 		const styles: TermSelectorStyles = {};
 		terms.forEach((term, i) => {
 			styles[term.selector] = { hue: hues[i % hues.length] };
@@ -1320,60 +1320,51 @@ const getElementYRelative = (element: HTMLElement) =>
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param hues Color hues for term styles to cycle through.
  */
-const insertScrollMarkers = (() => {
-	/**
-	 * Extracts the selector of a term from its prefixed class name form.
-	 * @param highlightClassName The single class name of a term highlight.
-	 * @returns The corresponding term selector.
-	 */
-	const getTermSelector = (highlightClassName: string) =>
-		highlightClassName.slice(getSel(ElementClass.TERM).length + 1)
-	;
-
-	return (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
-		if (terms.length === 0) {
-			return; // No terms results in an empty selector, which is not allowed.
-		}
-		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
-		const containerBlockSelector = getContainerBlockSelector(highlightTags);
-		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
-		const containersInfo: Array<{
-			container: HTMLElement
-			termsAdded: Set<string>
-		}> = [];
-		let markersHtml = "";
-		document.body.querySelectorAll(terms
-			.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
-			.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`)
-			.join(", ")
-		).forEach((highlight: HTMLElement) => {
-			const container = getContainerBlock(highlight, highlightTags, containerBlockSelector);
-			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
-			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
-			const yRelative = getElementYRelative(container);
-			let markerCss = `top: ${yRelative * 100}%;`;
-			if (containerIdx !== -1) {
-				if (containersInfo[containerIdx].container === container) {
-					if (containersInfo[containerIdx].termsAdded.has(getTermSelector(className))) {
-						return;
+const insertScrollMarkers = (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
+	if (terms.length === 0) {
+		return; // No terms results in an empty selector, which is not allowed.
+	}
+	terms = terms.slice(0, hues.length); // Markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms.
+	const containerBlockSelector = getContainerBlockSelector(highlightTags);
+	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
+	const containersInfo: Array<{
+		container: HTMLElement
+		termsAdded: Set<string>
+	}> = [];
+	let markersHtml = "";
+	document.body.querySelectorAll("[highlight]").forEach((element: HTMLElement) => {
+		const container = getContainerBlock(element, highlightTags, containerBlockSelector);
+		const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
+		const yRelative = getElementYRelative(container);
+		(JSON.parse(getComputedStyle(element).getPropertyValue("--mms-boxes").toString() || "[]") as Array<HighlightBox>)
+			.map(box => box.selector)
+			.filter(termSelector => terms.find(term => term.selector === termSelector))
+			.forEach(termSelector => {
+				let markerCss = `top: ${yRelative * 100}%;`;
+				if (containerIdx !== -1) {
+					if (containersInfo[containerIdx].container === container) {
+						if (containersInfo[containerIdx].termsAdded.has(termSelector)) {
+							return;
+						} else {
+							const termsAddedCount = Array.from(containersInfo[containerIdx].termsAdded).length;
+							markerCss += `padding-left: ${termsAddedCount * 5}px; z-index: ${termsAddedCount * -1}`;
+							containersInfo[containerIdx].termsAdded.add(termSelector);
+						}
 					} else {
-						const termsAddedCount = Array.from(containersInfo[containerIdx].termsAdded).length;
-						markerCss += `padding-left: ${termsAddedCount * 5}px; z-index: ${termsAddedCount * -1}`;
-						containersInfo[containerIdx].termsAdded.add(getTermSelector(className));
+						containersInfo.splice(containerIdx);
+						containersInfo.push({ container, termsAdded: new Set([ termSelector ]) });
 					}
 				} else {
-					containersInfo.splice(containerIdx);
-					containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
+					containersInfo.push({ container, termsAdded: new Set([ termSelector ]) });
 				}
-			} else {
-				containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
-			}
-			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
-		});
-		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
-		gutter.innerHTML = markersHtml;
-	};
-})();
+				markersHtml += `<div class="${
+					getSel(ElementClass.TERM, termSelector)
+				}" top="${yRelative}" style="${markerCss}"></div>`;
+			});
+	});
+	gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
+	gutter.innerHTML = markersHtml;
+};
 
 /**
  * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
@@ -1577,7 +1568,7 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 
 // TODO document
 const constructHighlightStyleRule = (highlightId: string, boxes: Array<HighlightBox>): string =>
-	`body [highlight*=${highlightId}] { background-image: paint(highlights) !important; --mms-boxes: ${JSON.stringify(boxes)}; }\n`
+	`body [highlight*=${highlightId}] { --mms-boxes: ${JSON.stringify(boxes)}; }\n`
 ;
 
 /**
@@ -1661,6 +1652,7 @@ const beginHighlighting = (
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 	getNextHighlightClassName: GetNextHighlightClassName,
 ) => {
+	highlightsRemoveForBranch(termsToPurge);
 	highlightsGenerateForBranch(terms, document.body, highlightTags, requestRefreshIndicators,
 		getNextHighlightClassName);
 	terms.forEach(term => updateTermOccurringStatus(term));

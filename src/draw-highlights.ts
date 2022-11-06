@@ -11,9 +11,8 @@ class PainterHighlights {
 		size: { width: number, height: number },
 		properties: { get: (property: string) => { toString: () => string } },
 	) {
-		const selectorStyles = JSON.parse(properties.get("--mms-styles").toString()) as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--mms-boxes").toString()) as Array<HighlightBox>;
-		//console.log(boxes);
+		const selectorStyles = JSON.parse(properties.get("--mms-styles").toString() || "{}") as TermSelectorStyles;
+		const boxes = JSON.parse(properties.get("--mms-boxes").toString() || "[]") as Array<HighlightBox>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.selector];
 			ctx.strokeStyle = `hsl(${style.hue} 100% 10% / 0.4)`;
