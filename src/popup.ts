@@ -102,9 +102,10 @@ const loadPopup = (() => {
 								onToggle: checked => {
 									if (checked) {
 										getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
+											const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 											const researchInstance = session.researchInstances[tab.id as number];
-											if (researchInstance && researchInstance.persistent) {
+											if (researchInstance && local.persistResearchInstances) {
 												researchInstance.enabled = true;
 											}
 											chrome.runtime.sendMessage({
@@ -124,26 +125,32 @@ const loadPopup = (() => {
 						{
 							className: "option",
 							label: {
-								text: "Restores keywords",
+								text: "Keywords stored",
 							},
 							checkbox: {
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-									const researchInstance = session.researchInstances[tab.id as number];
-									setChecked(researchInstance
-										? researchInstance.persistent
-										: (await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ])).persistResearchInstances
-									);
+									setChecked(!!session.researchInstances[tab.id as number]);
 								},
 								onToggle: checked => {
 									getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
 										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-										const researchInstance = session.researchInstances[tab.id as number];
-										if (researchInstance) {
-											researchInstance.persistent = checked;
-											setStorageSession(session);
+										if (checked) {
+											session.researchInstances[tab.id as number] = {
+												enabled: false,
+												autoOverwritable: false,
+												highlightsShown: true,
+												phrases: [],
+												terms: [],
+											};
+										} else {
+											delete session.researchInstances[tab.id as number];
+											chrome.runtime.sendMessage({
+												disableTabResearch: true,
+											} as BackgroundMessage);
 										}
+										setStorageSession(session);
 									});
 								},
 							},
@@ -301,7 +308,7 @@ const loadPopup = (() => {
 									)
 								,
 								pushEmpty: () =>
-									getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
+									getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
 										sync.termLists.push({
 											name: "",
 											terms: [],
@@ -311,8 +318,8 @@ const loadPopup = (() => {
 									})
 								,
 								removeAt: index =>
-									getStorageSync([ StorageSync.URL_FILTERS ]).then(sync => {
-										delete sync.termLists[index];
+									getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+										sync.termLists.splice(index, 1);
 										setStorageSync(sync);
 									})
 								,
@@ -321,7 +328,7 @@ const loadPopup = (() => {
 								text: "",
 								getText: index =>
 									getStorageSync([ StorageSync.TERM_LISTS ]).then(sync =>
-										sync.termLists[index].name
+										sync.termLists[index] ? sync.termLists[index].name : ""
 									)
 								,
 								setText: (text, index) =>
@@ -344,9 +351,14 @@ const loadPopup = (() => {
 									,
 									setArray: (array, index) =>
 										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
+											console.log(sync.termLists[index].terms);
 											sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
+											console.log(array);
 											setStorageSync(sync);
 										})
+									,
+									getNew: text =>
+										new MatchTerm(text) as unknown as Record<string, unknown>
 									,
 								},
 								name: {
@@ -368,7 +380,7 @@ const loadPopup = (() => {
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
 														const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
-														setText(sync.termLists[containerIndex].terms[objectIndex].phrase);
+														setText(sync.termLists[containerIndex].terms[objectIndex] ? sync.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
 														getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
@@ -506,6 +518,27 @@ const loadPopup = (() => {
 								placeholder: "example.com/optional-path",
 								spellcheck: false,
 							},
+							submitters: [
+								{
+									text: "Add in current tab",
+									onClick: async (messageText, formFields, onSuccess, onError, index) => {
+										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+										const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
+										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+										const researchInstance = session.researchInstances[tab.id as number];
+										if (researchInstance && !researchInstance.enabled) {
+											researchInstance.enabled = true;
+											await setStorageSession(session);
+										}
+										chrome.runtime.sendMessage({
+											terms: sync.termLists[index].terms,
+											makeUnique: true,
+											toggleHighlightsOn: true,
+										} as BackgroundMessage);
+										onSuccess();
+									},
+								},
+							],
 						},
 					],
 				},
