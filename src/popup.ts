@@ -553,11 +553,15 @@ body
 		`, false);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
-			"Experimental, please report any issues!",
+			"Please report any problems!",
+		);
+		pageInsertWarning(
+			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
+			"May be unclear on first use, but will be made more obvious in future.",
 		);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
-			"This is a work in progress.",
+			"This is highly experimental - please report issues with the experience.",
 		);
 	};
 })();

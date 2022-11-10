@@ -345,7 +345,7 @@ textarea
 .panel.panel-term_lists .container-terms .term
 	{ display: flex; padding: 4px; margin-block: 2px; border-radius: 10px; background: hsl(300 30% 15%); }
 .panel.panel-term_lists .container-terms .term .phrase-input
-	{ width: 80px; border: none; background: none; color: white; }
+	{ width: 120px; border: none; background: none; color: white; }
 .panel.panel-term_lists .container-terms .term .matching
 	{ flex: 1; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
@@ -356,6 +356,25 @@ textarea
 	{ flex: 1; align-self: center; font-size: 11px; color: white; }
 .panel.panel-term_lists .container-urls .url-input
 	{ border: none; background: none; color: white; }
+/**/
+
+#frame .panel .collapsible::before
+	{ content: ' ';
+	display: inline-block;
+  
+	border-top: 5px solid transparent;
+	border-bottom: 5px solid transparent;
+	border-left: 5px solid currentColor;
+  
+	vertical-align: middle;
+	margin-right: .7rem;
+	transform: translateY(-2px);
+  
+	transition: transform .2s ease-out; }
+#frame .panel .collapsible
+	{ align-self: start; background: white; }
+#frame .panel .collapsible:not(:checked) + *
+	{ display: none; }
 /**/
 		` + additionalStyleText;
 		document.head.appendChild(style);
@@ -641,6 +660,14 @@ textarea
 				container.appendChild(objectElement);
 				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
 				const insertColumn = (columnInfo: PageInteractionObjectColumnInfo) => {
+					if (columnInfo.rows.length > 1) {
+						const toggleButton = document.createElement("input");
+						toggleButton.type = "checkbox";
+						toggleButton.classList.add("collapsible");
+						//const label = document.createElement("label");
+						//label.htmlFor = 
+						objectElement.appendChild(toggleButton);
+					}
 					const column = document.createElement("div");
 					column.classList.add(columnInfo.className);
 					const insertRow = (rowInfo: PageInteractionObjectRowInfo) => {
