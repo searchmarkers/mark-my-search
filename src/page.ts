@@ -241,7 +241,7 @@ textarea
 .container-tab > .tab:hover
 	{ background: hsl(300 30% 22%); }
 .container-panel
-	{ flex: 1 1 auto; border-top: 1px solid deeppink; border-top-left-radius: inherit; overflow-y: auto;
+	{ flex: 1 1 auto; border-top: 2px solid hsl(300 100% 50%); border-top-left-radius: inherit; overflow-y: auto;
 	outline: none; background: hsl(300 100% 10%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
@@ -251,14 +251,14 @@ textarea
 .container-panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
-	{ padding: 4px; border-radius: 2px; background: hsl(60 36% 50% / 0.8); color: hsl(0 0% 8%); white-space: break-spaces; }
+	{ padding: 4px; border-radius: 2px; background: hsl(60 39% 71%); color: hsl(0 0% 8%); white-space: break-spaces; }
 /**/
 
 .panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
 .panel-term_lists .container-tab > .tab.panel-term_lists,
 .panel-features .container-tab > .tab.panel-features,
 .panel-general .container-tab > .tab.panel-general
-	{ border-bottom: 2px solid deeppink; background: hsl(300 30% 32%); }
+	{ border-bottom: 2px solid hsl(300 100% 50%); background: hsl(300 30% 32%); }
 .panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
 .panel-term_lists .container-panel > .panel.panel-term_lists,
 .panel-features .container-panel > .panel.panel-features,
@@ -288,7 +288,7 @@ textarea
 	{ flex: 1 1 auto; }
 .panel .interaction.option
 	{ flex-direction: row; padding-block: 0; user-select: none; }
-.panel .interaction > *, .panel .organizer > *
+.panel .interaction > *, .panel .organizer > *, .panel .term
 	{ margin-block: 2px; border-radius: 2px; padding-block: 4px; }
 .panel .interaction input[type="text"],
 .panel .interaction textarea,
@@ -343,9 +343,12 @@ textarea
 .panel.panel-term_lists .section > .container
 	{ padding: 4px; }
 .panel.panel-term_lists .container-terms .term
-	{ display: flex; padding: 4px; margin-block: 2px; border-radius: 10px; background: hsl(300 30% 15%); }
+	{ display: flex; background: hsl(300 30% 15%); }
 .panel.panel-term_lists .container-terms .term .phrase-input
-	{ width: 120px; border: none; background: none; color: white; }
+	{ width: 120px; background: none; }
+.panel.panel-term_lists .container-terms .term .phrase-input:not(:focus, :hover, :placeholder-shown)
+	{ background-image: linear-gradient(90deg, hsl(0 0% 90%) 85%, transparent);
+	-webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .panel.panel-term_lists .container-terms .term .matching
 	{ flex: 1; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
@@ -353,27 +356,22 @@ textarea
 .panel.panel-term_lists .container-terms .term .matching .type
 	{ display: flex; }
 .panel.panel-term_lists .container-terms .term .matching .type .label
-	{ flex: 1; align-self: center; font-size: 11px; color: white; }
+	{ flex: 1; align-self: center; font-size: 12px; }
 .panel.panel-term_lists .container-urls .url-input
-	{ border: none; background: none; color: white; }
+	{ border: none; background: none; color: hsl(0 0% 90%); }
 /**/
 
-#frame .panel .collapsible::before
-	{ content: ' ';
-	display: inline-block;
-  
-	border-top: 5px solid transparent;
-	border-bottom: 5px solid transparent;
-	border-left: 5px solid currentColor;
-  
-	vertical-align: middle;
-	margin-right: .7rem;
-	transform: translateY(-2px);
-  
-	transition: transform .2s ease-out; }
-#frame .panel .collapsible
-	{ align-self: start; background: white; }
-#frame .panel .collapsible:not(:checked) + *
+#frame .panel .collapse-toggle
+	{ display: none; }
+#frame .panel .collapse-toggle + label::before
+	{ display: inline-block; vertical-align: middle; translate: 0.3em; content: " ";
+	border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 5px solid currentColor;
+	rotate: 90deg; transition: rotate .2s ease-out; }
+#frame .panel .collapse-toggle:not(:checked) + label::before
+	{ rotate: 0deg; }
+#frame .panel .collapse-toggle + label
+	{ display: block; align-self: start; background: transparent; color: white; cursor: pointer; width: 1.2em; height: 1.2em; }
+#frame .panel .collapse-toggle:not(:checked) + label + *
 	{ display: none; }
 /**/
 		` + additionalStyleText;
@@ -661,11 +659,20 @@ textarea
 				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
 				const insertColumn = (columnInfo: PageInteractionObjectColumnInfo) => {
 					if (columnInfo.rows.length > 1) {
-						const toggleButton = document.createElement("input");
-						toggleButton.type = "checkbox";
-						toggleButton.classList.add("collapsible");
-						//const label = document.createElement("label");
-						//label.htmlFor = 
+						const checkboxId = getIdSequential.next().value;
+						const toggleCheckbox = document.createElement("input");
+						toggleCheckbox.type = "checkbox";
+						toggleCheckbox.id = checkboxId;
+						toggleCheckbox.classList.add("collapse-toggle");
+						const toggleButton = document.createElement("label");
+						toggleButton.htmlFor = checkboxId;
+						toggleButton.tabIndex = 0;
+						toggleButton.addEventListener("keydown", event => {
+							if (event.key === "Enter") {
+								toggleCheckbox.checked = !toggleCheckbox.checked;
+							}
+						});
+						objectElement.appendChild(toggleCheckbox);
 						objectElement.appendChild(toggleButton);
 					}
 					const column = document.createElement("div");

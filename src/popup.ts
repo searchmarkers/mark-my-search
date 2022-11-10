@@ -520,7 +520,7 @@ const loadPopup = (() => {
 							},
 							submitters: [
 								{
-									text: "Add in current tab",
+									text: "Highlight in current tab",
 									onClick: async (messageText, formFields, onSuccess, onError, index) => {
 										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 										const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
@@ -553,15 +553,15 @@ body
 		`, false);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
-			"Please report any problems!",
+			"Experimental, look out for bugs!",
 		);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
-			"May be unclear on first use, but will be made more obvious in future.",
+			"List entries are saved as you type them. This will be more clear in future.",
 		);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
-			"This is highly experimental - please report issues with the experience.",
+			"Keyword lists are highly experimental. Please report any issues.",
 		);
 	};
 })();
