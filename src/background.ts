@@ -45,7 +45,6 @@ const createResearchInstance = async (args: {
 	autoOverwritable: boolean
 }): Promise<ResearchInstance> => {
 	const sync = await getStorageSync([ StorageSync.SHOW_HIGHLIGHTS ]);
-	const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
@@ -61,7 +60,6 @@ const createResearchInstance = async (args: {
 			terms,
 			highlightsShown: sync.showHighlights.default,
 			autoOverwritable: args.autoOverwritable,
-			persistent: local.persistResearchInstances,
 			enabled: true,
 		};
 	}
@@ -71,7 +69,6 @@ const createResearchInstance = async (args: {
 		terms: args.terms,
 		highlightsShown: sync.showHighlights.default,
 		autoOverwritable: args.autoOverwritable,
-		persistent: local.persistResearchInstances,
 		enabled: true,
 	};
 };
@@ -354,6 +351,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			StorageSync.HIGHLIGHT_LOOK,
 			StorageSync.MATCH_MODE_DEFAULTS,
 			StorageSync.URL_FILTERS,
+			StorageSync.TERM_LISTS,
 		]);
 		const local = await getStorageLocal([ StorageLocal.ENABLED ]);
 		const session = await getStorageSession([
@@ -364,6 +362,10 @@ const updateActionIcon = (enabled?: boolean) =>
 			? await isTabSearchPage(session.engines, urlString)
 			: { isSearch: false };
 		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, sync.urlFilters);
+		const termsFromLists = sync.termLists.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
+			.flatMap(termList => termList.terms);
+		const getTermsAdditionalDistinct = (terms: MatchTerms, termsExtra: MatchTerms) =>
+			termsExtra.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
@@ -374,20 +376,23 @@ const updateActionIcon = (enabled?: boolean) =>
 					url: urlString,
 					engine: searchDetails.engine,
 				},
-				autoOverwritable: true,
+				autoOverwritable: !termsFromLists.length,
 			});
+			session.researchInstances[tabId] = researchInstance;
 			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
 				const researchEnablementReason = isResearchPage
 					? "search detected in tab containing overwritable non-matching research"
 					: "search detected in tab";
 				log("tab-communicate research enable", researchEnablementReason, logMetadata);
-				session.researchInstances[tabId] = researchInstance;
+				researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
 				setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
 			}
 		}
-		if (isTabResearchPage(session.researchInstances, tabId)) {
+		if (isTabResearchPage(session.researchInstances, tabId) || termsFromLists.length) {
 			log("tab-communicate highlight activation request", "tab is currently a research page", logMetadata);
-			const researchInstance = session.researchInstances[tabId];
+			const researchInstance = session.researchInstances[tabId] ?? await createResearchInstance({ autoOverwritable: false });
+			const termsDistinctFromLists = getTermsAdditionalDistinct(researchInstance.terms, termsFromLists);
+			researchInstance.terms = researchInstance.terms.concat(termsDistinctFromLists);
 			await activateHighlightingInTab(tabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
@@ -397,6 +402,9 @@ const updateActionIcon = (enabled?: boolean) =>
 				matchMode: sync.matchModeDefaults,
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
+			if (termsDistinctFromLists.length) {
+				setStorageSession(session);
+			}
 		}
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
@@ -422,6 +430,14 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 		if (changeInfo.url) {
 			pageModifyRemote(changeInfo.url, tabId);
+		}
+	});
+
+	chrome.tabs.onRemoved.addListener(async tabId => {
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+		if (session.researchInstances[tabId]) {
+			delete session.researchInstances[tabId];
+			setStorageSession(session);
 		}
 	});
 
@@ -496,13 +512,14 @@ const getTermsSelectedInTab = async (tabId: number, retriesRemaining = 0): Promi
  */
 const activateResearchInTab = async (tabId: number) => {
 	log("research activation start", "", { tabId });
+	const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const termsSelected = await getTermsSelectedInTab(tabId, 1);
 	if (termsSelected === undefined) {
 		log("research activation fail", "terms were not received in response, perhaps there is no script injected");
 		return;
 	}
-	const researchInstance = session.researchInstances[tabId]
+	const researchInstance = session.researchInstances[tabId] && local.persistResearchInstances
 		? session.researchInstances[tabId]
 		: await createResearchInstance({
 			terms: [],
@@ -523,17 +540,13 @@ const activateResearchInTab = async (tabId: number) => {
 
 /**
  * Disables the highlighting information about a tab.
- * @param tabId The ID of a tab to be forgotten.
+ * @param tabId The ID of a tab to be disconnected.
  */
 const disableResearchInstanceInTab = async (tabId: number) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = session.researchInstances[tabId];
 	if (researchInstance) {
-		if (researchInstance.persistent) {
-			researchInstance.enabled = false;
-		} else {
-			delete session.researchInstances[tabId];
-		}
+		researchInstance.enabled = false;
 		setStorageSession(session);
 	}
 };
