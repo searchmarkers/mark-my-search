@@ -1,0 +1,64 @@
+name: source-compile
+run-name: source files compile
+
+on: [push]
+
+env:
+  REPO_OWNER: ""
+  REPO_NAME: ""
+  VERSION: '0.0.0'
+  TAG_NAME: 'v0.0.0'
+
+jobs:
+  build:
+    name: compile-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: env setup
+        run: |
+          echo "REPO_OWNER=${GITHUB_REPOSITORY%/*}" >> $GITHUB_ENV
+          echo "REPO_NAME=${GITHUB_REPOSITORY#*/}" >> $GITHUB_ENV
+      - name: Repository checkout
+        uses: actions/checkout@v3
+      - name: npm install, compile, build
+        run: |
+          npm install
+          npm run compile
+          npm run build-firefox
+          npm run build-chromium
+          npm run build-opera
+      - name: Tag overwrite
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone https://user:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY
+          cd ${{ env.REPO_NAME }}
+          version=$( cat manifest-firefox.json | jq --raw-output '.version' )
+          tag_name=v$version
+          git config user.name "searchmarkers"
+          git config user.email "dev@example.com"
+          if [ $( git tag -l $tag_name ) ]; then
+            git tag -d $tag_name
+          fi
+          git tag -fa $tag_name -m "Version $version"
+          git push origin ":refs/tags/$tag_name"
+          git push origin main --tags
+          echo "VERSION=$version" >> $GITHUB_ENV
+          echo "TAG_NAME=$tag_name" >> $GITHUB_ENV
+      - name: Release create from tag
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.TAG_NAME }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "mark_my_search-*.zip"
+          replacesArtifacts: true
+          name: "Auto-Release Version ${{ env.VERSION }}"
+          generateReleaseNotes: true
+          allowUpdates: true
+      - name: Repository Pages dispatch
+        uses: peter-evans/repository-dispatch@v2
+        if: github.repository_owner == 'searchmarkers'
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          repository: "${{ env.REPO_OWNER }}/searchmarkers.github.io"
+          event-type: update

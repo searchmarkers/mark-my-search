@@ -1,3 +1,14 @@
+type PageInteractionObjectRowInfo = {
+	className: string
+	key: string
+	label?: PageInteractionInfo["label"]
+	textbox?: PageInteractionInfo["textbox"]
+	checkbox?: PageInteractionInfo["checkbox"]
+}
+type PageInteractionObjectColumnInfo = {
+	className: string
+	rows: Array<PageInteractionObjectRowInfo>
+}
 type PageInteractionSubmitterInfo = {
 	text: string
 	onClick: (
@@ -5,6 +16,7 @@ type PageInteractionSubmitterInfo = {
 		formFields: Array<FormField>,
 		onSuccess: () => void,
 		onError: (error?: { status: number, text: string }) => void,
+		index: number,
 	) => void
 	formFields?: Array<PageInteractionInfo>
 	message?: {
@@ -18,7 +30,7 @@ type PageInteractionInfo = {
 	className: string
 	list?: {
 		getLength: () => Promise<number>
-		pushEmpty: () => void
+		pushEmpty: () => Promise<void>
 		removeAt: (index: number) => void
 	}
 	label?: {
@@ -33,7 +45,8 @@ type PageInteractionInfo = {
 		className: string
 		list: {
 			getArray: (index: number) => Promise<Array<Record<string, unknown>>>
-			setArray: (array: Array<Record<string, unknown>>, index: number) => void
+			setArray: (array: Array<Record<string, unknown>>, index: number) => Promise<void>
+			getNew: (text: string) => Record<string, unknown>
 		}
 		name: {
 			text: string
@@ -41,16 +54,7 @@ type PageInteractionInfo = {
 				placeholder: string
 			}
 		}
-		columns: Array<{
-			className: string
-			rows: Array<{
-				className: string
-				key: string
-				label?: PageInteractionInfo["label"]
-				textbox?: PageInteractionInfo["textbox"]
-				checkbox?: PageInteractionInfo["checkbox"]
-			}>
-		}>
+		columns: Array<PageInteractionObjectColumnInfo>
 	}
 	textbox?: {
 		className: string
@@ -92,6 +96,7 @@ type PagePanelInfo = {
 }
 type PageAlertInfo = {
 	text: string
+	timeout?: number
 }
 type FormField = {
 	question: string
@@ -236,7 +241,7 @@ textarea
 .container-tab > .tab:hover
 	{ background: hsl(300 30% 22%); }
 .container-panel
-	{ flex: 1 1 auto; border-top: 1px solid deeppink; border-top-left-radius: inherit; overflow-y: auto;
+	{ flex: 1 1 auto; border-top: 2px solid hsl(300 100% 50%); border-top-left-radius: inherit; overflow-y: auto;
 	outline: none; background: hsl(300 100% 10%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
@@ -246,14 +251,14 @@ textarea
 .container-panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
-	{ padding: 4px; border-radius: 2px; background: hsl(60 36% 50% / 0.8); color: hsl(0 0% 8%); white-space: break-spaces; }
+	{ padding: 4px; border-radius: 2px; background: hsl(60 39% 71%); color: hsl(0 0% 8%); white-space: break-spaces; }
 /**/
 
 .panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
 .panel-term_lists .container-tab > .tab.panel-term_lists,
 .panel-features .container-tab > .tab.panel-features,
 .panel-general .container-tab > .tab.panel-general
-	{ border-bottom: 2px solid deeppink; background: hsl(300 30% 32%); }
+	{ border-bottom: 2px solid hsl(300 100% 50%); background: hsl(300 30% 32%); }
 .panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
 .panel-term_lists .container-panel > .panel.panel-term_lists,
 .panel-features .container-panel > .panel.panel-features,
@@ -283,7 +288,7 @@ textarea
 	{ flex: 1 1 auto; }
 .panel .interaction.option
 	{ flex-direction: row; padding-block: 0; user-select: none; }
-.panel .interaction > *, .panel .organizer > *
+.panel .interaction > *, .panel .organizer > *, .panel .term
 	{ margin-block: 2px; border-radius: 2px; padding-block: 4px; }
 .panel .interaction input[type="text"],
 .panel .interaction textarea,
@@ -338,9 +343,12 @@ textarea
 .panel.panel-term_lists .section > .container
 	{ padding: 4px; }
 .panel.panel-term_lists .container-terms .term
-	{ display: flex; padding: 4px; margin-block: 2px; border-radius: 10px; background: hsl(300 30% 15%); }
+	{ display: flex; background: hsl(300 30% 15%); }
 .panel.panel-term_lists .container-terms .term .phrase-input
-	{ width: 80px; border: none; background: none; color: white; }
+	{ width: 120px; background: none; }
+.panel.panel-term_lists .container-terms .term .phrase-input:not(:focus, :hover, :placeholder-shown)
+	{ background-image: linear-gradient(90deg, hsl(0 0% 90%) 85%, transparent);
+	-webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .panel.panel-term_lists .container-terms .term .matching
 	{ flex: 1; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
@@ -348,9 +356,23 @@ textarea
 .panel.panel-term_lists .container-terms .term .matching .type
 	{ display: flex; }
 .panel.panel-term_lists .container-terms .term .matching .type .label
-	{ flex: 1; align-self: center; font-size: 11px; color: white; }
+	{ flex: 1; align-self: center; font-size: 12px; }
 .panel.panel-term_lists .container-urls .url-input
-	{ border: none; background: none; color: white; }
+	{ border: none; background: none; color: hsl(0 0% 90%); }
+/**/
+
+#frame .panel .collapse-toggle
+	{ display: none; }
+#frame .panel .collapse-toggle + label::before
+	{ display: inline-block; vertical-align: middle; translate: 0.3em; content: " ";
+	border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 5px solid currentColor;
+	rotate: 90deg; transition: rotate .2s ease-out; }
+#frame .panel .collapse-toggle:not(:checked) + label::before
+	{ rotate: 0deg; }
+#frame .panel .collapse-toggle + label
+	{ display: block; align-self: start; background: transparent; color: white; cursor: pointer; width: 1.2em; height: 1.2em; }
+#frame .panel .collapse-toggle:not(:checked) + label + *
+	{ display: none; }
 /**/
 		` + additionalStyleText;
 		document.head.appendChild(style);
@@ -459,11 +481,11 @@ textarea
 	};
 
 	const insertAlert = (alertType: PageAlertType, alertsInfo: Record<PageAlertType, PageAlertInfo> | undefined,
-		previousSibling: HTMLElement, timeout = -1,
-		tooltip = "", formatText = (text: string) => text) => {
+		previousSibling: HTMLElement, timeoutDefault = -1, tooltip = "", formatText = (text: string) => text) => {
 		if (!alertsInfo) {
 			return;
 		}
+		const timeout = alertsInfo[alertType].timeout ?? timeoutDefault;
 		const alert = document.createElement("label");
 		alert.classList.add("alert");
 		alert.classList.add(alertType);
@@ -504,6 +526,7 @@ textarea
 
 	const createSection = (() => {
 		const insertLabel = (container: HTMLElement, labelInfo: PageInteractionInfo["label"], containerIndex: number) => {
+			console.log(containerIndex);
 			if (!labelInfo) {
 				return;
 			}
@@ -530,6 +553,7 @@ textarea
 			})();
 			label.classList.add("label");
 			const onChangeInternal = () => {
+				console.log(containerIndex);
 				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
 			};
 			if (labelInfo.setText) {
@@ -541,7 +565,7 @@ textarea
 		};
 
 		const insertCheckbox = (container: HTMLElement, checkboxInfo: PageInteractionInfo["checkbox"], id = "",
-			objectIndex: number, containerIndex: number) => {
+			getObjectIndex: () => number, containerIndex: number) => {
 			if (!checkboxInfo) {
 				return;
 			}
@@ -552,18 +576,18 @@ textarea
 			checkbox.classList.add("checkbox");
 			container.appendChild(checkbox);
 			if (checkboxInfo.onLoad) {
-				checkboxInfo.onLoad(checked => checkbox.checked = checked, objectIndex, containerIndex);
+				checkboxInfo.onLoad(checked => checkbox.checked = checked, getObjectIndex(), containerIndex);
 			}
 			if (checkboxInfo.onToggle) {
 				checkbox.onchange = () =>
-					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, objectIndex, containerIndex) : undefined
+					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, getObjectIndex(), containerIndex) : undefined
 				;
 			}
 			return checkbox;
 		};
 
 		const insertTextbox = (container: HTMLElement, textboxInfo: PageInteractionInfo["textbox"],
-			objectIndex: number, containerIndex: number) => {
+			getObjectIndex: () => number, containerIndex: number): HTMLInputElement | HTMLDivElement | undefined => {
 			if (!textboxInfo) {
 				return;
 			}
@@ -575,7 +599,7 @@ textarea
 				textbox.spellcheck = textboxInfo.spellcheck;
 				textbox.value = value;
 				if (textboxInfo.onLoad) {
-					textboxInfo.onLoad(text => textbox.value = text, objectIndex, containerIndex);
+					textboxInfo.onLoad(text => textbox.value = text, getObjectIndex(), containerIndex);
 				}
 				const onChangeInternal = () => {
 					if (textboxInfo.list) {
@@ -591,12 +615,12 @@ textarea
 								Array.from(textbox.parentElement.children)
 									.map((textbox: HTMLInputElement) => textbox.value)
 									.filter(value => !!value),
-								objectIndex,
+								getObjectIndex(),
 							);
 						}
 					}
 					if (textboxInfo.onChange) {
-						textboxInfo.onChange(textbox.value, objectIndex, containerIndex);
+						textboxInfo.onChange(textbox.value, getObjectIndex(), containerIndex);
 					}
 				};
 				textbox.addEventListener("input", onChangeInternal);
@@ -609,7 +633,7 @@ textarea
 				list.classList.add("organizer");
 				list.classList.add("list");
 				list.classList.add("column");
-				textboxInfo.list.getArray(objectIndex).then(array => {
+				textboxInfo.list.getArray(getObjectIndex()).then(array => {
 					array.concat("").forEach(value => {
 						insertTextboxElement(list, value);
 					});
@@ -625,47 +649,92 @@ textarea
 			if (!objectInfo) {
 				return;
 			}
-			const insertObjectElement = (container: HTMLElement, objectIndex: number) => {
+			const getArray = (): Promise<Array<Record<string, unknown>>> =>
+				objectInfo.list.getArray(containerIndex)
+			;
+			const insertObjectElement = (container: HTMLElement, deferContent = false) => {
 				const objectElement = document.createElement("div");
 				objectElement.classList.add("term");
-				objectInfo.columns.forEach(columnInfo => {
+				container.appendChild(objectElement);
+				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
+				const insertColumn = (columnInfo: PageInteractionObjectColumnInfo) => {
+					if (columnInfo.rows.length > 1) {
+						const checkboxId = getIdSequential.next().value;
+						const toggleCheckbox = document.createElement("input");
+						toggleCheckbox.type = "checkbox";
+						toggleCheckbox.id = checkboxId;
+						toggleCheckbox.classList.add("collapse-toggle");
+						const toggleButton = document.createElement("label");
+						toggleButton.htmlFor = checkboxId;
+						toggleButton.tabIndex = 0;
+						toggleButton.addEventListener("keydown", event => {
+							if (event.key === "Enter") {
+								toggleCheckbox.checked = !toggleCheckbox.checked;
+							}
+						});
+						objectElement.appendChild(toggleCheckbox);
+						objectElement.appendChild(toggleButton);
+					}
 					const column = document.createElement("div");
 					column.classList.add(columnInfo.className);
-					columnInfo.rows.forEach(rowInfo => {
+					const insertRow = (rowInfo: PageInteractionObjectRowInfo) => {
 						const row = document.createElement("div");
 						row.classList.add(rowInfo.className);
-						const textboxOrList = insertTextbox(row, rowInfo.textbox, objectIndex, containerIndex);
-						if (textboxOrList && textboxOrList.tagName === "INPUT") {
-							//(textboxOrList as HTMLInputElement).value = objectGetValue(object, rowInfo.key);
-						}
+						insertTextbox(row, rowInfo.textbox, getObjectIndex, containerIndex);
 						const checkboxId = insertLabel(row, rowInfo.label, containerIndex);
-						const checkbox = insertCheckbox(row, rowInfo.checkbox, checkboxId, objectIndex, containerIndex);
-						if (checkbox) {
-							//checkbox.checked = objectGetValue(object, rowInfo.key);
-						}
+						insertCheckbox(row, rowInfo.checkbox, checkboxId, getObjectIndex, containerIndex);
 						column.appendChild(row);
-					});
+					};
+					columnInfo.rows.forEach(rowInfo => insertRow(rowInfo));
 					objectElement.appendChild(column);
-					const inputFirst = objectElement.querySelector("input") as HTMLInputElement;
-					inputFirst.addEventListener("input", () => {
-						if (inputFirst.value && ((container.lastElementChild as HTMLInputElement).querySelector("input") as HTMLInputElement).value) {
-							insertObjectElement(container, container.childElementCount);
-						} else if (!inputFirst.value && container.lastElementChild !== objectElement && document.activeElement !== inputFirst) {
+				};
+				if (deferContent) {
+					insertColumn(objectInfo.columns[0]);
+				} else {
+					objectInfo.columns.forEach(columnInfo => insertColumn(columnInfo));
+				}
+				const inputMain = objectElement.querySelector("input") as HTMLInputElement;
+				let newElementQueued = false;
+				inputMain.oninput = () => {
+					if (inputMain.value && ((container.lastElementChild as HTMLInputElement).querySelector("input") as HTMLInputElement).value && !newElementQueued) {
+						newElementQueued = true;
+						getArray().then(async array => {
+							array.push(objectInfo.list.getNew(inputMain.value));
+							await objectInfo.list.setArray(array, containerIndex);
+							inputMain.dispatchEvent(new Event("input"));
+							if (deferContent) {
+								deferContent = false;
+								objectInfo.columns.slice(1).forEach(columnInfo => insertColumn(columnInfo));
+							}
+							insertObjectElement(container, true);
+							newElementQueued = false;
+						});
+					}
+				};
+				inputMain.onblur = () => {
+					if (!inputMain.value && container.lastElementChild !== objectElement) {
+						getArray().then(array => {
+							const index = getObjectIndex();
+							array.splice(index, 1);
+							objectInfo.list.setArray(array, containerIndex);
+							if (index + 1 < container.childElementCount) {
+								(container.children[index + 1].querySelector("input") as HTMLInputElement).select();
+							}
 							objectElement.remove();
-						}
-					});
-				});
-				container.appendChild(objectElement);
+						});
+					}
+				};
 			};
 			const list = document.createElement("div");
 			list.classList.add("organizer");
 			list.classList.add("list");
 			list.classList.add("column");
 			list.classList.add("container-terms");
-			objectInfo.list.getArray(containerIndex).then(objects => {
-				objects.concat({}).forEach((object, i) => {
-					insertObjectElement(list, i);
+			getArray().then(array => {
+				array.forEach(() => {
+					insertObjectElement(list);
 				});
+				insertObjectElement(list, true);
 			});
 			container.appendChild(list);
 		};
@@ -682,7 +751,8 @@ textarea
 			container.appendChild(anchor);
 		};
 
-		const insertSubmitter = (container: HTMLElement, submitterInfo: PageInteractionSubmitterInfo | undefined) => {
+		const insertSubmitter = (container: HTMLElement, submitterInfo: PageInteractionSubmitterInfo | undefined,
+			getObjectIndex: () => number) => {
 			if (!submitterInfo) {
 				return;
 			}
@@ -693,8 +763,7 @@ textarea
 				list.classList.add("list");
 				list.classList.add("column");
 				submitterInfo.formFields.forEach(interactionInfo => {
-					const interaction = createInteraction(interactionInfo, -1);
-					list.appendChild(interaction);
+					insertInteraction(list, interactionInfo);
 				});
 				container.appendChild(list);
 				getFormFields = () =>
@@ -748,6 +817,7 @@ textarea
 						}
 						button.disabled = false;
 					},
+					getObjectIndex(),
 				);
 				insertAlert(
 					PageAlertType.PENDING, //
@@ -782,7 +852,8 @@ textarea
 			}
 		};
 
-		const insertSubmitters = (container: HTMLElement, submittersInfo: PageInteractionInfo["submitters"]) => {
+		const insertSubmitters = (container: HTMLElement, submittersInfo: PageInteractionInfo["submitters"],
+			getObjectIndex: () => number) => {
 			if (!submittersInfo) {
 				return;
 			}
@@ -790,7 +861,7 @@ textarea
 			list.classList.add("organizer");
 			list.classList.add("list");
 			list.classList.add(submittersInfo.length > 1 ? "row" : "column");
-			submittersInfo.forEach(submitterInfo => insertSubmitter(list, submitterInfo));
+			submittersInfo.forEach(submitterInfo => insertSubmitter(list, submitterInfo, getObjectIndex));
 			container.appendChild(list);
 		};
 
@@ -804,17 +875,53 @@ textarea
 			container.appendChild(note);
 		};
 
-		const createInteraction = (interactionInfo: PageInteractionInfo, index: number) => {
+		const insertInteraction = (container: HTMLElement, interactionInfo: PageInteractionInfo) => {
+			let index = container.childElementCount;
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction");
 			interaction.classList.add(interactionInfo.className);
 			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
-			insertObjectList(interaction, interactionInfo.object, index);
-			insertAnchor(interaction, interactionInfo.anchor);
-			insertSubmitters(interaction, interactionInfo.submitters);
-			insertTextbox(interaction, interactionInfo.textbox, index, 0);
-			insertNote(interaction, interactionInfo.note);
-			insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, index, 0);
+			const tempInsertOthers = () => {
+				insertObjectList(interaction, interactionInfo.object, index);
+				insertAnchor(interaction, interactionInfo.anchor);
+				insertSubmitters(interaction, interactionInfo.submitters, () => index);
+				insertTextbox(interaction, interactionInfo.textbox, () => index, 0);
+				insertNote(interaction, interactionInfo.note);
+				insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, () => index, 0);
+			};
+			const labelTextbox = interaction.querySelector("input") as HTMLInputElement;
+			if (interactionInfo.list) {
+				const listInfo = interactionInfo.list;
+				const onChangeInternal = () => {
+					index = Array.from(container.children).indexOf(interaction);
+					if (labelTextbox.value && ((container.lastElementChild as HTMLElement).querySelector("input") as HTMLInputElement).value) {
+						listInfo.pushEmpty().then(() => {
+							tempInsertOthers();
+							insertInteraction(container, interactionInfo);
+						});
+					} else if (!labelTextbox.value && container.lastElementChild !== interaction && document.activeElement !== labelTextbox) {
+						if (index + 1 < container.childElementCount) {
+							(container.children[index + 1].querySelector("input") as HTMLInputElement).select();
+						}
+						interaction.remove();
+						listInfo.removeAt(index);
+					}
+				};
+				labelTextbox.addEventListener("input", onChangeInternal);
+				labelTextbox.addEventListener("blur", onChangeInternal);
+				if (interactionInfo.label && interactionInfo.label.getText) {
+					interactionInfo.label.getText(index).then(text => {
+						if (text) {
+							tempInsertOthers();
+						}
+					});
+				} else {
+					tempInsertOthers();
+				}
+			} else {
+				tempInsertOthers();
+			}
+			container.appendChild(interaction);
 			return interaction;
 		};
 
@@ -833,10 +940,11 @@ textarea
 				if (interactionInfo.list) {
 					const length = await interactionInfo.list.getLength();
 					for (let i = 0; i < length; i++) {
-						container.appendChild(createInteraction(interactionInfo, i));
+						insertInteraction(container, interactionInfo);
 					}
+					insertInteraction(container, interactionInfo);
 				} else {
-					container.appendChild(createInteraction(interactionInfo, 0));
+					insertInteraction(container, interactionInfo);
 				}
 			});
 			section.appendChild(container);

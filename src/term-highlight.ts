@@ -1968,6 +1968,7 @@ const getTermsFromSelection = () => {
 			if (message.deactivate) {
 				terms.splice(0);
 				removeControls();
+				restoreNodes();
 			}
 			if (message.enablePageModify !== undefined) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
