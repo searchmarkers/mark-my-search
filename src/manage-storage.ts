@@ -87,7 +87,6 @@ interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
 	autoOverwritable: boolean
-	persistent: boolean
 	enabled: boolean
 }
 
