@@ -1366,6 +1366,21 @@ const insertScrollMarkers = (terms: MatchTerms, highlightTags: HighlightTags, hu
 	gutter.innerHTML = markersHtml;
 };
 
+// TODO document
+const getAncestorHighlightable = (node: Node) => {
+	let ancestor = node.parentElement as HTMLElement;
+	// eslint-disable-next-line no-constant-condition
+	while (true) {
+		const ancestorAboveAnchor = (ancestor as HTMLElement).closest("a")?.parentElement as HTMLElement;
+		if (ancestorAboveAnchor) {
+			ancestor = ancestorAboveAnchor;
+		} else {
+			break;
+		}
+	}
+	return ancestor;
+};
+
 /**
  * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
  * @param terms Terms to find, highlight, and mark.
@@ -1398,20 +1413,11 @@ const highlightsGenerateForBranch = (() => {
 				}
 				// eslint-disable-next-line no-constant-condition
 				while (true) {
-					let nodeAncestor = node.parentElement as HTMLElement;
-					// eslint-disable-next-line no-constant-condition
-					while (true) {
-						const ancestorAboveAnchor = (nodeAncestor as HTMLElement).closest("a")?.parentElement as HTMLElement;
-						if (ancestorAboveAnchor) {
-							nodeAncestor = ancestorAboveAnchor;
-						} else {
-							break;
-						}
-					}
-					let boxesInfo = elementsBoxesInfo.get(nodeAncestor);
+					const ancestor = getAncestorHighlightable(node);
+					let boxesInfo = elementsBoxesInfo.get(ancestor);
 					if (!boxesInfo) {
 						boxesInfo = [];
-						elementsBoxesInfo.set(nodeAncestor, boxesInfo);
+						elementsBoxesInfo.set(ancestor, boxesInfo);
 					}
 					boxesInfo.push({
 						term,
@@ -1527,7 +1533,7 @@ const highlightsGenerateForBranch = (() => {
 					};
 				})),
 			);
-		}).join("");
+		}).join("\n") + "\n";
 		setTimeout(() => style.textContent += styleText);
 		requestRefreshIndicators.next();
 	};
@@ -1553,7 +1559,7 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 				boxes.filter(box => terms.every(term => box.selector !== term.selector)),
 			) : "";
 		}
-		style.textContent = rules.join("");
+		style.textContent = rules.join("\n") + "\n";
 	}
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 		root = (root as DocumentFragment).getRootNode() as HTMLElement;
@@ -1568,7 +1574,7 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 
 // TODO document
 const constructHighlightStyleRule = (highlightId: string, boxes: Array<HighlightBox>): string =>
-	`body [highlight*=${highlightId}] { --mms-boxes: ${JSON.stringify(boxes)}; }\n`
+	`body [highlight*=${highlightId}] { --mms-boxes: ${JSON.stringify(boxes)}; }`
 ;
 
 /**
@@ -1608,6 +1614,11 @@ const getObserverNodeHighlighter = (() => {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
+				if ( mutation.target.parentElement && mutation.type === "characterData") {
+					highlightsRemoveForBranch([], getAncestorHighlightable(mutation.target).parentElement as HTMLElement);
+					highlightsGenerateForBranch(terms, mutation.target, highlightTags, requestRefreshIndicators,
+						getNextHighlightClassName);
+				}
 				for (const node of Array.from(mutation.addedNodes)) {
 					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
 					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
@@ -1627,7 +1638,11 @@ const getObserverNodeHighlighter = (() => {
  * @param observer An observer which selectively performs highlighting on observing changes.
  */
 const highlightInNodesOnMutation = (observer: MutationObserver) =>
-	observer.observe(document.body, { childList: true, subtree: true })
+	observer.observe(document.body, {
+		subtree: true,
+		childList: true,
+		characterData: true,
+	})
 ;
 
 /**
