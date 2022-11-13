@@ -595,6 +595,7 @@ const insertTermInput = (() => {
 				terms: terms.map((term, i) => i === idx ? termChanged : term),
 				termChanged,
 				termChangedIdx: idx,
+				toggleAutoOverwritable: false,
 			} as BackgroundMessage);
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {

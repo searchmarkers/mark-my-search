@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.10.0",
+	"version": "1.10.1",
 
 	"browser_specific_settings": {
 		"gecko": {
