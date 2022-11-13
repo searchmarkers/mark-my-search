@@ -378,8 +378,8 @@ const updateActionIcon = (enabled?: boolean) =>
 				},
 				autoOverwritable: !termsFromLists.length,
 			});
-			session.researchInstances[tabId] = researchInstance;
 			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
+				session.researchInstances[tabId] = researchInstance;
 				const researchEnablementReason = isResearchPage
 					? "search detected in tab containing overwritable non-matching research"
 					: "search detected in tab";
