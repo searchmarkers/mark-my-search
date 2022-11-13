@@ -254,7 +254,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal([ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: useChromeAPI()
+		: chrome.browserAction.setIcon({ path: useChromeAPI()
 			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
