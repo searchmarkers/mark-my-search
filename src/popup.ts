@@ -141,7 +141,6 @@ const loadPopup = (() => {
 												enabled: false,
 												autoOverwritable: false,
 												highlightsShown: true,
-												phrases: [],
 												terms: [],
 											};
 										} else {
@@ -531,7 +530,13 @@ const loadPopup = (() => {
 											await setStorageSession(session);
 										}
 										chrome.runtime.sendMessage({
-											terms: researchInstance ? researchInstance.terms.concat(sync.termLists[index].terms.filter(termFromList => !researchInstance.terms.find(term => term.phrase === termFromList.phrase))) : sync.termLists[index].terms,
+											terms: researchInstance
+												? researchInstance.terms.concat(
+													sync.termLists[index].terms.filter(termFromList =>
+														!researchInstance.terms.find(term => term.phrase === termFromList.phrase)
+													)
+												)
+												: sync.termLists[index].terms,
 											makeUnique: true,
 											toggleHighlightsOn: true,
 										} as BackgroundMessage);
