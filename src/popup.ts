@@ -141,7 +141,6 @@ const loadPopup = (() => {
 												enabled: false,
 												autoOverwritable: false,
 												highlightsShown: true,
-												phrases: [],
 												terms: [],
 											};
 										} else {
@@ -531,7 +530,13 @@ const loadPopup = (() => {
 											await setStorageSession(session);
 										}
 										chrome.runtime.sendMessage({
-											terms: researchInstance ? researchInstance.terms.concat(sync.termLists[index].terms.filter(termFromList => !researchInstance.terms.find(term => term.phrase === termFromList.phrase))) : sync.termLists[index].terms,
+											terms: researchInstance
+												? researchInstance.terms.concat(
+													sync.termLists[index].terms.filter(termFromList =>
+														!researchInstance.terms.find(term => term.phrase === termFromList.phrase)
+													)
+												)
+												: sync.termLists[index].terms,
 											makeUnique: true,
 											toggleHighlightsOn: true,
 										} as BackgroundMessage);
@@ -551,10 +556,6 @@ const loadPopup = (() => {
 body
 	{ width: 300px; height: 540px; user-select: none; }
 		`, false);
-		pageInsertWarning(
-			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
-			"Experimental, look out for bugs!",
-		);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
 			"List entries are saved as you type them. This will be more clear in future.",

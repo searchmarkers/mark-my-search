@@ -223,6 +223,7 @@ interface HighlightMessage {
 	deactivate?: boolean
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
+	autoOverwritable?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
@@ -248,6 +249,7 @@ interface BackgroundMessage {
 	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean
+	toggleAutoOverwritable?: boolean
 	performSearch?: boolean
 }
 
