@@ -52,12 +52,10 @@ const createResearchInstance = async (args: {
 			: phraseGroups.flatMap(phraseGroups.length % 2
 				? ((phraseGroup, i) => i % 2 ? phraseGroup : phraseGroup.split(" ").filter(phrase => !!phrase))
 				: phraseGroup => phraseGroup.split(" "));
-		const terms = Array.from(new Set(termsRaw))
-			.filter(phrase => args.url ? !args.url.stoplist.includes(phrase) : false)
-			.map(phrase => new MatchTerm(phrase));
 		return {
-			phrases: terms.map(term => term.phrase),
-			terms,
+			terms: Array.from(new Set(termsRaw))
+				.filter(phrase => args.url ? !args.url.stoplist.includes(phrase) : false)
+				.map(phrase => new MatchTerm(phrase)),
 			highlightsShown: sync.showHighlights.default,
 			autoOverwritable: args.autoOverwritable,
 			enabled: true,
@@ -65,7 +63,6 @@ const createResearchInstance = async (args: {
 	}
 	args.terms ??= [];
 	return {
-		phrases: args.terms.map(term => term.phrase),
 		terms: args.terms,
 		highlightsShown: sync.showHighlights.default,
 		autoOverwritable: args.autoOverwritable,
@@ -378,8 +375,9 @@ const updateActionIcon = (enabled?: boolean) =>
 				},
 				autoOverwritable: !termsFromLists.length,
 			});
-			session.researchInstances[tabId] = researchInstance;
-			if (!isResearchPage || !itemsMatch(session.researchInstances[tabId].phrases, researchInstance.phrases)) {
+			const getPhrases = (researchInstance: ResearchInstance) => researchInstance.terms.map(term => term.phrase);
+			if (!isResearchPage || !itemsMatch(getPhrases(session.researchInstances[tabId]), getPhrases(researchInstance))) {
+				session.researchInstances[tabId] = researchInstance;
 				const researchEnablementReason = isResearchPage
 					? "search detected in tab containing overwritable non-matching research"
 					: "search detected in tab";
@@ -397,6 +395,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			await activateHighlightingInTab(tabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
+				autoOverwritable: researchInstance.autoOverwritable,
 				barControlsShown: sync.barControlsShown,
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
@@ -527,8 +526,6 @@ const activateResearchInTab = async (tabId: number) => {
 	session.researchInstances[tabId] = researchInstance;
 	await setStorageSession(session);
 	await handleMessage({
-		terms: termsSelected.length ? termsSelected : researchInstance.terms,
-		makeUnique: true,
 		toggleHighlightsOn: true,
 		highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
 	} as BackgroundMessage, tabId);
@@ -578,6 +575,7 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 		);
 		chrome.tabs.sendMessage(tabId, {
 			toggleHighlightsOn: researchInstance.highlightsShown,
+			autoOverwritable: researchInstance.autoOverwritable,
 			barControlsShown: sync.barControlsShown,
 		} as HighlightMessage);
 		setStorageSession({ researchInstances: session.researchInstances } as StorageSessionValues);
@@ -645,8 +643,8 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 		// FIXME generates errors even when wrapped in try...catch
 		chrome.tabs.sendMessage(message.tabId as number, message.highlightMessage);
 	} else if (message.toggleResearchOn !== undefined) {
-		setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues)
-			.then(() => updateActionIcon(message.toggleResearchOn));
+		await setStorageLocal({ enabled: message.toggleResearchOn } as StorageLocalValues);
+		updateActionIcon(message.toggleResearchOn);
 	} else if (message.disableTabResearch) {
 		deactivateResearchInTab(senderTabId);
 	} else if (message.performSearch) {
@@ -655,12 +653,12 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
 			tabId: senderTabId,
 		});
-	} else {
+	} else if (message.toggleAutoOverwritable === undefined || Object.keys(message).length > 1) {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (message.makeUnique || !isTabResearchPage(session.researchInstances, senderTabId)) {
 			const researchInstance = await createResearchInstance({
 				terms: message.terms,
-				autoOverwritable: false,
+				autoOverwritable: message.toggleAutoOverwritable ?? true,
 			});
 			session.researchInstances[senderTabId] = researchInstance;
 		}
@@ -673,13 +671,13 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				StorageSync.MATCH_MODE_DEFAULTS,
 				StorageSync.URL_FILTERS,
 			]);
-			if (message.toggleHighlightsOn !== undefined) {
-				researchInstance.highlightsShown = message.toggleHighlightsOn;
-			}
+			researchInstance.highlightsShown = message.toggleHighlightsOn ?? researchInstance.highlightsShown;
+			researchInstance.autoOverwritable = message.toggleAutoOverwritable ?? researchInstance.autoOverwritable;
 			setStorageSession(session);
 			await activateHighlightingInTab(senderTabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
+				autoOverwritable: researchInstance.autoOverwritable,
 				barControlsShown: sync.barControlsShown,
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
@@ -688,19 +686,25 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				command: message.highlightCommand,
 			});
 		} else if (message.terms !== undefined) {
-			session.researchInstances[senderTabId].terms = message.terms;
+			const researchInstance = session.researchInstances[senderTabId];
+			researchInstance.terms = message.terms;
+			researchInstance.highlightsShown = message.toggleHighlightsOn ?? researchInstance.highlightsShown;
+			researchInstance.autoOverwritable = message.toggleAutoOverwritable ?? researchInstance.autoOverwritable;
 			setStorageSession(session);
 			const highlightMessage: HighlightMessage = { terms: message.terms };
 			highlightMessage.termUpdate = message.termChanged;
 			highlightMessage.termToUpdateIdx = message.termChangedIdx;
-			Object.keys(session.researchInstances).forEach(tabId => {
-				if (session.researchInstances[tabId] === session.researchInstances[senderTabId]) {
-					chrome.tabs.sendMessage(Number(tabId), highlightMessage);
-				}
-			});
+			highlightMessage.autoOverwritable = researchInstance.autoOverwritable;
+			chrome.tabs.sendMessage(senderTabId, highlightMessage);
 		} else {
 			setStorageSession(session);
 		}
+		return;
+	}
+	if (message.toggleAutoOverwritable !== undefined) {
+		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+		session.researchInstances[senderTabId].autoOverwritable = message.toggleAutoOverwritable;
+		setStorageSession(session);
 	}
 };
 
