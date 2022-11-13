@@ -391,6 +391,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		if (isTabResearchPage(session.researchInstances, tabId) || termsFromLists.length) {
 			log("tab-communicate highlight activation request", "tab is currently a research page", logMetadata);
 			const researchInstance = session.researchInstances[tabId] ?? await createResearchInstance({ autoOverwritable: false });
+			session.researchInstances[tabId] = researchInstance;
 			const termsDistinctFromLists = getTermsAdditionalDistinct(researchInstance.terms, termsFromLists);
 			researchInstance.terms = researchInstance.terms.concat(termsDistinctFromLists);
 			await activateHighlightingInTab(tabId, {

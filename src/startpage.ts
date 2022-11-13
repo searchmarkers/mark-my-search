@@ -14,39 +14,25 @@ const loadStartpage = (() => {
 						{
 							className: "action",
 							label: {
-								text: "1. Search for anything on your preferred search engine.",
-							},
-							note: {
-								text: "Try \"mark my search\" on DuckDuckGo or Google to find our pages!",
+								text: "Search on DuckDuckGo, Google, or anywhere else",
 							},
 						},
 						{
 							className: "action",
 							label: {
-								text: "2. Wait for results to load to see your keywords highlighted.",
-							},
-							note: {
-								text: "Generic keywords such as \"my\" and \"the\" are excluded. If highlighting fails, try Troubleshooting.",
+								text: "See your keywords highlighted in the search results",
 							},
 						},
 						{
 							className: "action",
 							label: {
-								text: "3. You're done! The same keywords will be highlighted on any page you visit from the results.",
+								text: "You're done! See highlights on any site you visit",
 							},
 						},
 						{
 							className: "action",
-							label: {
-								text: "Try it out",
-								getText: async () =>
-									chrome.runtime.getURL("/").startsWith("chrome-extension://")
-										? "Try it in your default search engine"
-										: "Try it in this page"
-								,
-							},
 							submitters: [ {
-								text: "Find matches",
+								text: "Try it out",
 								onClick: (messageText, formFields, onSuccess) => {
 									if (chrome.runtime.getURL("/").startsWith("chrome-extension://")) {
 										chrome.search["query"]({
@@ -64,7 +50,7 @@ const loadStartpage = (() => {
 								message: {
 									singleline: true,
 									rows: 1,
-									placeholder: "Keywords",
+									placeholder: "Search words",
 								},
 							} ],
 						},
@@ -78,19 +64,13 @@ const loadStartpage = (() => {
 						{
 							className: "action",
 							label: {
-								text: "Highlighting - activate or deactivate",
-							},
-							note: {
-								text: "Alt+Shift+M",
+								text: "Activate or deactivate with Alt+Shift+M",
 							},
 						},
 						{
 							className: "action",
 							label: {
-								text: "Highlighting - activation by search",
-							},
-							note: {
-								text: "Search on any search engine.",
+								text: "Activate automatically by searching online",
 							},
 						},
 						{
@@ -99,9 +79,7 @@ const loadStartpage = (() => {
 								text: "Keywords - create or edit",
 							},
 							note: {
-								text:
-`Click the pen button next to a keyword, or the + button, to open a text input.
-Type your new keyword into the input and press [Enter] or click off when you're done.`,
+								text: "Click (+) or the pen button, type your new keyword, then press [Enter] or click out.",
 							},
 						},
 						{
@@ -110,7 +88,7 @@ Type your new keyword into the input and press [Enter] or click off when you're 
 								text: "Keywords - remove",
 							},
 							note: {
-								text: "Edit a keyword then delete the text or click the bin button, or right-click a keyword's pen button.",
+								text: "While editing a keyword, delete the text or click the bin button.",
 							},
 						},
 						{
@@ -119,63 +97,7 @@ Type your new keyword into the input and press [Enter] or click off when you're 
 								text: "Keywords - change matching",
 							},
 							note: {
-								text:
-`Click the 3-dots button next to a keyword (or press [Shift+Space] while editing) \
-and click an option (or press the key underlined), or pull down from a keyword and release over an option.
-See Features > Keyword Matching for details of these options.`,
-							},
-						},
-					],
-				},
-				{
-					title: {
-						text: "Contributing",
-					},
-					interactions: [
-						{
-							className: "action",
-							label: {
-								text: "Report a problem",
-							},
-							submitters: [ {
-								text: "Submit anonymously",
-								onClick: (messageText, formFields, onSuccess, onError) => {
-									sendProblemReport(messageText, formFields)
-										.then(() => onSuccess())
-										.catch(() => onError());
-								},
-								message: {
-									rows: 3,
-									placeholder: "Optional message",
-								},
-								alerts: {
-									[PageAlertType.SUCCESS]: {
-										text: "Success",
-									},
-									[PageAlertType.FAILURE]: {
-										text: "Status {status}: {text}",
-									},
-									[PageAlertType.PENDING]: {
-										text: "Pending, do not exit page",
-									},
-								},
-							} ],
-							note: {
-								text: "Submits: version, url, keywords, message",
-							},
-						},
-						{
-							className: "link",
-							anchor: {
-								url: "https://github.com/searchmarkers/mark-my-search/issues/new",
-								text: "Have a problem or idea? Open an issue",
-							},
-						},
-						{
-							className: "link",
-							anchor: {
-								url: "https://github.com/searchmarkers/mark-my-search",
-								text: "Mark My Search is developed here",
+								text: "Use [Shift+Space] while editing or the 3-dots button, and click an option.",
 							},
 						},
 					],
@@ -248,21 +170,9 @@ See Features > Keyword Matching for details of these options.`,
 				},
 				{
 					title: {
-						text: "Features",
+						text: "Advanced Operation",
 					},
 					interactions: [
-						{
-							className: "action",
-							label: {
-								text: "Inserts highlighting for keyword matches in the page.",
-							},
-						},
-						{
-							className: "action",
-							label: {
-								text: "Inserts scroll markers showing the position of highlights.",
-							},
-						},
 						{
 							className: "action",
 							label: {

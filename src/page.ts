@@ -241,8 +241,8 @@ textarea
 .container-tab > .tab:hover
 	{ background: hsl(300 30% 22%); }
 .container-panel
-	{ flex: 1 1 auto; border-top: 2px solid hsl(300 100% 50%); border-top-left-radius: inherit; overflow-y: auto;
-	outline: none; background: hsl(300 100% 10%); }
+	{ flex: 1 1 auto; border-top: 2px ridge hsl(300 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
+	outline: none; background: hsl(300 26% 18%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
 .container-panel > .panel
@@ -557,8 +557,9 @@ textarea
 				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
 			};
 			if (labelInfo.setText) {
-				label.addEventListener("input", onChangeInternal);
-				label.addEventListener("blur", onChangeInternal);
+				const labelTextbox = label as HTMLInputElement;
+				labelTextbox.addEventListener("input", () => onChangeInternal());
+				labelTextbox.addEventListener("blur", () => onChangeInternal());
 			}
 			container.appendChild(label);
 			return checkboxId;
@@ -587,7 +588,8 @@ textarea
 		};
 
 		const insertTextbox = (container: HTMLElement, textboxInfo: PageInteractionInfo["textbox"],
-			getObjectIndex: () => number, containerIndex: number): HTMLInputElement | HTMLDivElement | undefined => {
+			getObjectIndex: () => number, containerIndex: number,
+			containerOverall?: HTMLElement): HTMLInputElement | HTMLDivElement | undefined => {
 			if (!textboxInfo) {
 				return;
 			}
@@ -601,12 +603,12 @@ textarea
 				if (textboxInfo.onLoad) {
 					textboxInfo.onLoad(text => textbox.value = text, getObjectIndex(), containerIndex);
 				}
-				const onChangeInternal = () => {
+				const onChangeInternal = (commitIfEmpty = false) => {
 					if (textboxInfo.list) {
 						// TODO make function
 						if (textbox.value && (container.lastElementChild as HTMLInputElement).value) {
 							insertTextboxElement(container);
-						} else if (!textbox.value && container.lastElementChild !== textbox && document.activeElement !== textbox) {
+						} else if (!textbox.value && container.lastElementChild !== textbox && commitIfEmpty) {
 							textbox.remove();
 						}
 						if (textbox.parentElement) {
@@ -623,8 +625,21 @@ textarea
 						textboxInfo.onChange(textbox.value, getObjectIndex(), containerIndex);
 					}
 				};
-				textbox.addEventListener("input", onChangeInternal);
-				textbox.addEventListener("blur", onChangeInternal);
+				textbox.addEventListener("input", () => onChangeInternal());
+				textbox.addEventListener("blur", () => onChangeInternal(true));
+				textbox.addEventListener("keydown", event => {
+					if (event.key === "Enter") {
+						const textboxes = Array.from(
+							(containerOverall ?? container).querySelectorAll("input[type=text]")
+						) as Array<HTMLInputElement>;
+						const textboxIndex = textboxes.indexOf(textbox) + (event.shiftKey ? -1 : 1);
+						if (textboxIndex < 0 || textboxIndex >= textboxes.length) {
+							onChangeInternal(true);
+							return;
+						}
+						textboxes[textboxIndex].select();
+					}
+				});
 				container.appendChild(textbox);
 				return textbox;
 			};
@@ -680,7 +695,7 @@ textarea
 					const insertRow = (rowInfo: PageInteractionObjectRowInfo) => {
 						const row = document.createElement("div");
 						row.classList.add(rowInfo.className);
-						insertTextbox(row, rowInfo.textbox, getObjectIndex, containerIndex);
+						insertTextbox(row, rowInfo.textbox, getObjectIndex, containerIndex, container);
 						const checkboxId = insertLabel(row, rowInfo.label, containerIndex);
 						insertCheckbox(row, rowInfo.checkbox, checkboxId, getObjectIndex, containerIndex);
 						column.appendChild(row);
@@ -711,19 +726,25 @@ textarea
 						});
 					}
 				};
-				inputMain.onblur = () => {
-					if (!inputMain.value && container.lastElementChild !== objectElement) {
+				const onChangeInternal = (commitIfEmpty = false) => {
+					if (!inputMain.value && commitIfEmpty) {
 						getArray().then(array => {
 							const index = getObjectIndex();
+							if (index >= array.length) {
+								return;
+							}
 							array.splice(index, 1);
 							objectInfo.list.setArray(array, containerIndex);
-							if (index + 1 < container.childElementCount) {
-								(container.children[index + 1].querySelector("input") as HTMLInputElement).select();
-							}
 							objectElement.remove();
 						});
 					}
 				};
+				inputMain.addEventListener("blur", () => onChangeInternal(container.lastElementChild !== objectElement));
+				inputMain.addEventListener("keydown", event => {
+					if (event.key === "Enter") {
+						onChangeInternal(true);
+					}
+				});
 			};
 			const list = document.createElement("div");
 			list.classList.add("organizer");
@@ -881,7 +902,7 @@ textarea
 			interaction.classList.add("interaction");
 			interaction.classList.add(interactionInfo.className);
 			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
-			const tempInsertOthers = () => {
+			const insertBody = () => {
 				insertObjectList(interaction, interactionInfo.object, index);
 				insertAnchor(interaction, interactionInfo.anchor);
 				insertSubmitters(interaction, interactionInfo.submitters, () => index);
@@ -892,14 +913,14 @@ textarea
 			const labelTextbox = interaction.querySelector("input") as HTMLInputElement;
 			if (interactionInfo.list) {
 				const listInfo = interactionInfo.list;
-				const onChangeInternal = () => {
+				const onChangeInternal = (commitIfEmpty = false) => {
 					index = Array.from(container.children).indexOf(interaction);
 					if (labelTextbox.value && ((container.lastElementChild as HTMLElement).querySelector("input") as HTMLInputElement).value) {
 						listInfo.pushEmpty().then(() => {
-							tempInsertOthers();
+							insertBody();
 							insertInteraction(container, interactionInfo);
 						});
-					} else if (!labelTextbox.value && container.lastElementChild !== interaction && document.activeElement !== labelTextbox) {
+					} else if (!labelTextbox.value && container.lastElementChild !== interaction && commitIfEmpty) {
 						if (index + 1 < container.childElementCount) {
 							(container.children[index + 1].querySelector("input") as HTMLInputElement).select();
 						}
@@ -907,19 +928,31 @@ textarea
 						listInfo.removeAt(index);
 					}
 				};
-				labelTextbox.addEventListener("input", onChangeInternal);
-				labelTextbox.addEventListener("blur", onChangeInternal);
+				labelTextbox.addEventListener("input", () => onChangeInternal());
+				labelTextbox.addEventListener("blur", () => onChangeInternal(true));
+				labelTextbox.addEventListener("keydown", event => {
+					if (event.key === "Enter") {
+						const textboxes = Array.from(container.children)
+							.map(child => child.querySelector("input[type=text]")) as Array<HTMLInputElement>;
+						const textboxIndex = textboxes.indexOf(labelTextbox) + (event.shiftKey ? -1 : 1);
+						if (textboxIndex < 0 || textboxIndex >= textboxes.length) {
+							onChangeInternal(true);
+							return;
+						}
+						textboxes[textboxIndex].select();
+					}
+				});
 				if (interactionInfo.label && interactionInfo.label.getText) {
 					interactionInfo.label.getText(index).then(text => {
 						if (text) {
-							tempInsertOthers();
+							insertBody();
 						}
 					});
 				} else {
-					tempInsertOthers();
+					insertBody();
 				}
 			} else {
-				tempInsertOthers();
+				insertBody();
 			}
 			container.appendChild(interaction);
 			return interaction;
