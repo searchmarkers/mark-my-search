@@ -41,7 +41,7 @@ const loadStartpage = (() => {
 										}, onSuccess);
 									} else {
 										chrome.runtime.sendMessage({
-											executeInTab: true,
+											toggleHighlightsOn: true,
 											makeUnique: true,
 											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
 										} as BackgroundMessage)
