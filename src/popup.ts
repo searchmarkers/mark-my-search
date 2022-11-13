@@ -558,10 +558,6 @@ body
 		`, false);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
-			"Experimental, look out for bugs!",
-		);
-		pageInsertWarning(
-			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
 			"List entries are saved as you type them. This will be more clear in future.",
 		);
 		pageInsertWarning(
