@@ -328,6 +328,10 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.runtime.onStartup.addListener(initialize);
 
 	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
+	getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).catch(error => { // TODO necessary? better workaround?
+		assert(false, "storage reinitialize", "storage get error when testing on wake", { error });
+		initializeStorage();
+	});
 })();
 
 (() => {
