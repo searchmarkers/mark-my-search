@@ -604,6 +604,9 @@ const executeScriptsInTab = async (tabId: number) => {
 };
 
 chrome.commands.onCommand.addListener(async commandString => {
+	if (commandString === "open-popup") {
+		chrome.browserAction["openPopup"]();
+	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id as number; // `tab.id` always defined for this case.
 	const commandInfo = parseCommand(commandString);
