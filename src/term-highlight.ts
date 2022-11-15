@@ -72,7 +72,7 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
-	matchMode: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
+	matchMode: MatchMode
 }
 
 interface UnbrokenNodeListItem {

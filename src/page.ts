@@ -392,6 +392,7 @@ textarea
 		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
 		if (inputFirst) {
 			if (inputFirst.type === "text") {
+				inputFirst.focus();
 				inputFirst.select();
 			} else {
 				inputFirst.focus();
@@ -526,7 +527,6 @@ textarea
 
 	const createSection = (() => {
 		const insertLabel = (container: HTMLElement, labelInfo: PageInteractionInfo["label"], containerIndex: number) => {
-			console.log(containerIndex);
 			if (!labelInfo) {
 				return;
 			}
@@ -553,7 +553,6 @@ textarea
 			})();
 			label.classList.add("label");
 			const onChangeInternal = () => {
-				console.log(containerIndex);
 				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
 			};
 			if (labelInfo.setText) {
@@ -637,6 +636,7 @@ textarea
 							onChangeInternal(true);
 							return;
 						}
+						textboxes[textboxIndex].focus();
 						textboxes[textboxIndex].select();
 					}
 				});
@@ -921,9 +921,6 @@ textarea
 							insertInteraction(container, interactionInfo);
 						});
 					} else if (!labelTextbox.value && container.lastElementChild !== interaction && commitIfEmpty) {
-						if (index + 1 < container.childElementCount) {
-							(container.children[index + 1].querySelector("input") as HTMLInputElement).select();
-						}
 						interaction.remove();
 						listInfo.removeAt(index);
 					}
@@ -939,6 +936,7 @@ textarea
 							onChangeInternal(true);
 							return;
 						}
+						textboxes[textboxIndex].focus();
 						textboxes[textboxIndex].select();
 					}
 				});
