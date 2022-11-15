@@ -259,9 +259,18 @@ const updateActionIcon = (enabled?: boolean) =>
 
 (() => {
 	/**
-	 * Registers items to selectively appear in context menus. These items serve as shortcuts for managing the extension.
+	 * Registers items to selectively appear in context menus, if not present, to serve as shortcuts for managing the extension.
 	 */
 	const createContextMenuItems = () => {
+		if (chrome.contextMenus.onClicked.hasListeners()) {
+			return;
+		}
+		chrome.contextMenus.removeAll();
+		chrome.contextMenus.create({
+			title: "&Highlight Selection",
+			id: "activate-research-tab",
+			contexts: [ "selection", "page" ],
+		});
 		chrome.contextMenus.onClicked.addListener((info, tab) => {
 			if (tab && tab.id !== undefined) {
 				log("research activation request", "context menu item activated", { tabId: tab.id });
@@ -270,15 +279,6 @@ const updateActionIcon = (enabled?: boolean) =>
 				assert(false, "research activation [from context menu] no request", "", { tab });
 			}
 		});
-	
-		return (() => {
-			chrome.contextMenus.removeAll();
-			chrome.contextMenus.create({
-				title: "&Highlight Selection",
-				id: "activate-research-tab",
-				contexts: [ "selection", "page" ],
-			});
-		})();
 	};
 
 	/**
@@ -520,13 +520,13 @@ const activateResearchInTab = async (tabId: number) => {
 	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 	const termsSelected = await getTermsSelectedInTab(tabId, 1);
 	if (termsSelected === undefined) {
-		log("research activation fail", "terms were not received in response, perhaps there is no script injected");
+		log("research activation fail", "terms were not received in response, perhaps no script is injected");
 		return;
 	}
-	const researchInstance = session.researchInstances[tabId] && local.persistResearchInstances
+	const researchInstance = session.researchInstances[tabId] && local.persistResearchInstances && !termsSelected.length
 		? session.researchInstances[tabId]
 		: await createResearchInstance({
-			terms: [],
+			terms: termsSelected,
 			autoOverwritable: false,
 		});
 	researchInstance.enabled = true;
