@@ -328,6 +328,10 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.runtime.onStartup.addListener(initialize);
 
 	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
+	getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).catch(error => { // TODO necessary? better workaround?
+		assert(false, "storage reinitialize", "storage get error when testing on wake", { error });
+		initializeStorage();
+	});
 })();
 
 (() => {
@@ -600,6 +604,9 @@ const executeScriptsInTab = async (tabId: number) => {
 };
 
 chrome.commands.onCommand.addListener(async commandString => {
+	if (commandString === "open-popup") {
+		chrome.browserAction["openPopup"]();
+	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id as number; // `tab.id` always defined for this case.
 	const commandInfo = parseCommand(commandString);
