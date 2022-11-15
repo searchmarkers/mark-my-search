@@ -391,11 +391,9 @@ textarea
 		const className = getPanelClassName(Array.from(frame.classList));
 		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
 		if (inputFirst) {
+			inputFirst.focus();
 			if (inputFirst.type === "text") {
-				inputFirst.focus();
 				inputFirst.select();
-			} else {
-				inputFirst.focus();
 			}
 		} else {
 			pageFocusScrollContainer();
