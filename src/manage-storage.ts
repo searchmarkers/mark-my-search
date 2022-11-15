@@ -33,6 +33,7 @@ type StorageSyncValues = {
 		performSearch: boolean
 		toggleHighlights: boolean
 		appendTerm: boolean
+		pinTerms: boolean
 	}
 	[StorageSync.BAR_LOOK]: {
 		showEditIcon: boolean
@@ -58,8 +59,6 @@ type TermList = {
 
 enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
 	RESEARCH_INSTANCES = "researchInstances",
-	_ID_R_INSTANCES = "idResearchInstances",
-    _TAB_R_INSTANCE_IDS = "tabResearchInstanceIds",
 	ENGINES = "engines",
 }
 
@@ -82,11 +81,9 @@ enum StorageSync {
 }
 
 interface ResearchInstance {
-	phrases: ReadonlyArray<string>
 	terms: MatchTerms
 	highlightsShown: boolean
 	autoOverwritable: boolean
-	persistent: boolean
 	enabled: boolean
 }
 
@@ -124,9 +121,10 @@ const defaultOptions: StorageSyncValues = {
 	},
 	barControlsShown: {
 		disableTabResearch: true,
-		performSearch: true,
+		performSearch: false,
 		toggleHighlights: true,
 		appendTerm: true,
+		pinTerms: true,
 	},
 	barLook: {
 		showEditIcon: true,
@@ -142,83 +140,27 @@ const defaultOptions: StorageSyncValues = {
 };
 
 /**
- * Calls a function which gets a particular area of storage, initializing storage and retrying **once** if an error is encountered.
- * @param callGetStorage Function to get any storage items from "session", "local", or "sync" storage.
- * @returns The storage returned by the storage getter.
- */
-const getStorageSafely = (callGetStorage: typeof getStorageSession | typeof getStorageLocal | typeof getStorageSync) =>
-	callGetStorage().catch(async () => {
-		// TODO use custom logging function
-		console.warn("Reinitialized storage due to error when getting storage items. Retrying.");
-		await initializeStorage();
-		return callGetStorage();
-	})
-;
-
-/**
  * Stores items to browser session storage.
  * @param items An object of items to create or update.
  */
 const setStorageSession = (items: StorageSessionValues) => {
-	items = { ...items };
-	if (StorageSession.RESEARCH_INSTANCES in items) {
-		// TODO disable object shallow copying when linking disabled in settings
-		const tabRInstances = items.researchInstances;
-		const tabs = Object.keys(tabRInstances);
-		const idRInstances: Array<ResearchInstance> = [];
-		const tabRInstanceIds = {};
-		items.researchInstances = {};
-		tabs.forEach(tab => {
-			const id = idRInstances.indexOf(tabRInstances[tab]);
-			if (id === -1) {
-				tabRInstanceIds[tab] = idRInstances.length;
-				idRInstances.push(tabRInstances[tab]);
-			} else {
-				tabRInstanceIds[tab] = id;
-			}
-		});
-		items[StorageSession._ID_R_INSTANCES] = idRInstances;
-		items[StorageSession._TAB_R_INSTANCE_IDS] = tabRInstanceIds;
-	}
 	return chrome.storage.session.set(items);
 };
 
 /**
  * Retrieves items from browser session storage.
- * @param keysParam An array of storage keys for which to retrieve the items.
+ * @param keys An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageSession = (
-	keysParam?: Array<StorageSession>
-): Promise<StorageSessionValues> => getStorageSafely(async () => {
-	const keys = keysParam === undefined
-		? undefined
-		: typeof(keysParam) === "string" ? [ keysParam ] : Array.from(new Set(keysParam));
-	const gettingRInstances = keys && keys.includes(StorageSession.RESEARCH_INSTANCES);
-	if (gettingRInstances) {
-		keys.splice(keys.indexOf(StorageSession.RESEARCH_INSTANCES), 1);
-		keys.push(StorageSession._ID_R_INSTANCES);
-		keys.push(StorageSession._TAB_R_INSTANCE_IDS);
-	}
+const getStorageSession = async (keys?: Array<StorageSession>): Promise<StorageSessionValues> => {
 	const session = await chrome.storage.session.get(keys) as StorageSessionValues;
-	if (gettingRInstances) {
-		const idRInstances = session[StorageSession._ID_R_INSTANCES];
-		const tabRInstanceIds = session[StorageSession._TAB_R_INSTANCE_IDS];
-		delete session[StorageSession._ID_R_INSTANCES];
-		delete session[StorageSession._TAB_R_INSTANCE_IDS];
-		const tabRInstances = {};
-		Object.keys(tabRInstanceIds).forEach(tab => {
-			tabRInstances[tab] = idRInstances[tabRInstanceIds[tab]];
-		});
-		session.researchInstances = tabRInstances;
-	}
 	if (session.engines) {
 		const engines = session.engines as Engines;
 		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
 	}
 	return session;
-}) as Promise<StorageSessionValues>;
+};
 
 /**
  * Stores items to browser local storage.
@@ -230,14 +172,12 @@ const setStorageLocal = (items: StorageLocalValues) => {
 
 /**
  * Retrieves items from browser local storage.
- * @param keysParam An array of storage keys for which to retrieve the items.
+ * @param keys An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
-const getStorageLocal = async (
-	keysParam?: Array<StorageLocal>
-): Promise<StorageLocalValues> => getStorageSafely(async () => {
-	return chrome.storage.local.get(keysParam) as Promise<StorageLocalValues>;
-}) as Promise<StorageLocalValues>;
+const getStorageLocal = async (keys?: Array<StorageLocal>): Promise<StorageLocalValues> => {
+	return chrome.storage.local.get(keys) as Promise<StorageLocalValues>;
+};
 
 /**
  * Stores items to browser sync storage.
@@ -249,14 +189,12 @@ const setStorageSync = (items: StorageSyncValues) => {
 
 /**
  * Retrieves items from browser synced storage.
- * @param keysParam An array of storage keys for which to retrieve the items.
+ * @param keys An array of storage keys for which to retrieve the items.
  * @returns A promise that resolves with an object containing the requested items.
  */
-const getStorageSync = (
-	keysParam?: Array<StorageSync>
-): Promise<StorageSyncValues> => getStorageSafely(async () => {
-	return chrome.storage.sync.get(keysParam) as Promise<StorageSyncValues>;
-}) as Promise<StorageSyncValues>;
+const getStorageSync = async (keys?: Array<StorageSync>): Promise<StorageSyncValues> => {
+	return chrome.storage.sync.get(keys) as Promise<StorageSyncValues>;
+};
 
 /**
  * Sets internal storage to its default working values.

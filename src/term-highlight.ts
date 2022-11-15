@@ -11,7 +11,7 @@ type ControlButtonInfo = {
 	path?: string
 	label?: string
 	containerId: ElementID
-	onclick?: () => void
+	onclick?: (control: HTMLElement) => void
 	setUp?: (container: HTMLElement) => void
 }
 type ElementsHighlightBoxesInfo = Map<HTMLElement, Array<HighlightBoxInfo>>
@@ -35,6 +35,7 @@ enum ElementClass {
 	CONTROL_BUTTON = "control-button",
 	CONTROL_REVEAL = "control-reveal",
 	CONTROL_EDIT = "control-edit",
+	PIN = "pin",
 	BAR_CONTROL = "bar-control",
 	OPTION_LIST = "options",
 	OPTION = "option",
@@ -74,7 +75,7 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
-	matchMode: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
+	matchMode: MatchMode
 }
 
 interface HighlightBoxInfo {
@@ -189,7 +190,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 
 /* || Bar */
 #${getSel(ElementID.BAR)}
-	{ all: revert; position: fixed; z-index: ${zIndexMax}; color-scheme: light; font-size: 14.6px; line-height: initial; user-select: none; }
+	{ all: revert; position: fixed; top: 0; left: 0; z-index: ${zIndexMax};
+	color-scheme: light; font-size: 14.6px; line-height: initial; user-select: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} *
@@ -569,14 +571,15 @@ const insertTermInput = (() => {
 				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
 				termChanged: term,
 				termChangedIdx: TermChange.REMOVE,
-			});
+			} as BackgroundMessage);
 		} else if (replaces && inputValue !== term.phrase) {
 			const termChanged = new MatchTerm(inputValue, term.matchMode);
 			chrome.runtime.sendMessage({
 				terms: terms.map((term, i) => i === idx ? termChanged : term),
 				termChanged,
 				termChangedIdx: idx,
-			});
+				toggleAutoOverwritable: false,
+			} as BackgroundMessage);
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
 				allowStemOverride: true,
@@ -585,7 +588,8 @@ const insertTermInput = (() => {
 				terms: terms.concat(termChanged),
 				termChanged,
 				termChangedIdx: TermChange.CREATE,
-			});
+				toggleAutoOverwritable: false,
+			} as BackgroundMessage);
 		}
 	};
 
@@ -1164,7 +1168,7 @@ const insertControls = (() => {
 			if (hideWhenInactive) {
 				container.classList.add(getSel(ElementClass.DISABLED));
 			}
-			button.onclick = info.onclick ?? null;
+			button.onclick = () => (info.onclick ?? (() => undefined))(container);
 			if (info.setUp) {
 				info.setUp(container);
 			}
@@ -1221,6 +1225,17 @@ const insertControls = (() => {
 						);
 						pad.appendChild(controlReveal);
 						container.appendChild(optionList);
+					},
+				},
+				pinTerms: {
+					buttonClass: ElementClass.PIN,
+					path: "/icons/pin.svg",
+					containerId: ElementID.BAR_CONTROLS,
+					onclick: control => {
+						control.remove();
+						chrome.runtime.sendMessage({
+							toggleAutoOverwritable: false,
+						} as BackgroundMessage);
 					},
 				},
 			} as Record<ControlButtonName, ControlButtonInfo>)[barControlName], hideWhenInactive)
@@ -1957,9 +1972,10 @@ const getTermsFromSelection = () => {
 			highlightsShown: false,
 			barControlsShown: {
 				disableTabResearch: true,
-				performSearch: true,
+				performSearch: false,
 				toggleHighlights: true,
 				appendTerm: true,
+				pinTerms: true,
 			},
 			barLook: {
 				showEditIcon: true,
@@ -2003,8 +2019,13 @@ const getTermsFromSelection = () => {
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
 			Object.entries(message.barControlsShown ?? {}).forEach(([ key, value ]) => {
-				controlsInfo.barControlsShown[key] = value;
+				if (key !== "pinTerms") {
+					controlsInfo.barControlsShown[key] = value;
+				}
 			});
+			if (message.autoOverwritable !== undefined) {
+				controlsInfo.barControlsShown.pinTerms = message.autoOverwritable;
+			}
 			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 				controlsInfo.barLook[key] = value;
 			});
@@ -2045,6 +2066,11 @@ const getTermsFromSelection = () => {
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
 				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
+			}
+			const pinSelector = `.${getSel(ElementClass.PIN)}`;
+			if (!controlsInfo.barControlsShown.pinTerms
+				&& document.querySelector(pinSelector)) {
+				(document.querySelector(pinSelector) as HTMLElement).remove();
 			}
 			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
 		});
