@@ -529,7 +529,6 @@ const activateResearchInTab = async (tabId: number) => {
 			terms: termsSelected,
 			autoOverwritable: false,
 		});
-	console.log(researchInstance);
 	researchInstance.enabled = true;
 	researchInstance.autoOverwritable = false;
 	session.researchInstances[tabId] = researchInstance;
