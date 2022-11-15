@@ -328,6 +328,10 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.runtime.onStartup.addListener(initialize);
 
 	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
+	getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).catch(error => { // TODO necessary? better workaround?
+		assert(false, "storage reinitialize", "storage get error when testing on wake", { error });
+		initializeStorage();
+	});
 })();
 
 (() => {
@@ -477,9 +481,9 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 	}).then(value => {
 		log("pilot function injection finish", "", logMetadata);
 		return value;
-	}).catch(() =>
-		log("pilot function injection fail", "injection not permitted in this tab", logMetadata)
-	);
+	}).catch(() => {
+		log("pilot function injection fail", "injection not permitted in this tab", logMetadata);
+	});
 };
 
 /**
@@ -604,9 +608,9 @@ const executeScriptsInTab = async (tabId: number) => {
 	}).then(value => {
 		log("script injection finish (silent failure possible)", "", logMetadata);
 		return value;
-	}).catch(() =>
-		log("script injection fail", "injection not permitted in this tab", logMetadata)
-	);
+	}).catch(() => {
+		log("script injection fail", "injection not permitted in this tab", logMetadata);
+	});
 };
 
 chrome.commands.onCommand.addListener(async commandString => {

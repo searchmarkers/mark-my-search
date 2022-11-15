@@ -350,9 +350,7 @@ const loadPopup = (() => {
 									,
 									setArray: (array, index) =>
 										getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
-											console.log(sync.termLists[index].terms);
 											sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
-											console.log(array);
 											setStorageSync(sync);
 										})
 									,
