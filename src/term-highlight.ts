@@ -1458,36 +1458,46 @@ const highlightsGenerateForBranch = (() => {
 	 * @param node A root node under which to match terms and insert highlights.
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param nodes Consecutive text nodes to highlight inside.
-	 * @param visitSiblings Whether to visit the siblings of the root node.
 	 */
-	const insertHighlights = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
-		nodes: Array<Text>, elementsBoxesInfo: ElementsHighlightBoxesInfo, visitSiblings = true) => {
+	const insertHighlights = (
+		terms: MatchTerms,
+		node: Node,
+		firstChildKey: "firstChild" | "lastChild",
+		nextSiblingKey: "nextSibling" | "previousSibling",
+		gatherOnlyToBreak: boolean,
+		highlightTags: HighlightTags,
+		nodes: Array<Text>,
+		elementsBoxesInfo: ElementsHighlightBoxesInfo,
+	) => {
 		// TODO support for <iframe>?
+		//console.log(gatherOnlyToBreak);
 		do {
-			switch (node.nodeType) {
-			case (1): // Node.ELEMENT_NODE
-			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
-				if (!highlightTags.reject.has((node as Element).tagName as TagName)) {
-					const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
+			if (node.nodeType === 3) {
+				nodes.push(node as Text);
+				//console.log(node);
+			} else if ((node.nodeType === 1 || node.nodeType === 11)
+				&& !highlightTags.reject.has((node as Element).tagName as TagName)
+			) {
+				//console.log("broken", node);
+				const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
+				if (breaksFlow && (nodes.length || gatherOnlyToBreak)) {
+					if (gatherOnlyToBreak) {
+						return;
+					}
+					highlightInBlock(terms, nodes, elementsBoxesInfo);
+					nodes.splice(0, nodes.length);
+				}
+				if (node[firstChildKey]) {
+					insertHighlights(terms, node[firstChildKey] as ChildNode, firstChildKey, nextSiblingKey, gatherOnlyToBreak,
+						highlightTags, nodes, elementsBoxesInfo);
 					if (breaksFlow && nodes.length) {
 						highlightInBlock(terms, nodes, elementsBoxesInfo);
 						nodes.splice(0, nodes.length);
 					}
-					if (node.firstChild) {
-						insertHighlights(terms, node.firstChild, highlightTags, nodes, elementsBoxesInfo);
-						if (breaksFlow && nodes.length) {
-							highlightInBlock(terms, nodes, elementsBoxesInfo);
-							nodes.splice(0, nodes.length);
-						}
-					}
 				}
-				break;
-			} case (3): { // Node.TEXT_NODE
-				nodes.push(node as Text);
-				break;
-			}}
-			node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
-		} while (node && visitSiblings);
+			}
+			node = node[nextSiblingKey] as ChildNode; // May be null (checked by loop condition)
+		} while (node);
 	};
 
 	return (terms: MatchTerms, root: Node,
@@ -1495,13 +1505,27 @@ const highlightsGenerateForBranch = (() => {
 		getNextHighlightClassName: GetNextHighlightClassName) => {
 		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
 		const range = document.createRange();
-		const elementHighlightsInfo: ElementsHighlightBoxesInfo = new Map;
+		const elementBoxesInfo: ElementsHighlightBoxesInfo = new Map;
 		if (root.nodeType === Node.TEXT_NODE) {
-			highlightInBlock(terms, [ root as Text ], elementHighlightsInfo);
-		} else {
-			insertHighlights(terms, root, highlightTags, [], elementHighlightsInfo, false);
+			highlightInBlock(terms, [ root as Text ], elementBoxesInfo);
+		} else if (root.firstChild) {
+			const nodes: Array<Text> = [];
+			//const breaksFlow = !highlightTags.flow.has((root as Element).tagName as TagName);
+			let sibling = root.firstChild as Element;
+			while ((sibling = sibling.parentElement as Element) && highlightTags.flow.has(sibling.tagName as TagName)) {
+				insertHighlights(terms, sibling, "lastChild", "previousSibling", true, highlightTags, nodes, elementBoxesInfo);
+			}
+			nodes.reverse();
+			insertHighlights(terms, root.firstChild as Node, "firstChild", "nextSibling", false, highlightTags, nodes, elementBoxesInfo);
+			sibling = root.lastChild as Element;
+			while ((sibling = sibling.parentElement as Element) && highlightTags.flow.has(sibling.tagName as TagName)) {
+				insertHighlights(terms, sibling, "firstChild", "nextSibling", true, highlightTags, nodes, elementBoxesInfo);
+			}
+			if (nodes.length) {
+				highlightInBlock(terms, nodes, elementBoxesInfo);
+			}
 		}
-		const styleText = Array.from(elementHighlightsInfo).map(([ element, boxesInfo ]) => {
+		const styleText = Array.from(elementBoxesInfo).map(([ element, boxesInfo ]) => {
 			const highlightId = getNextHighlightClassName.next().value;
 			let elementRects = Array.from(element.getClientRects());
 			if (!elementRects.length) {
