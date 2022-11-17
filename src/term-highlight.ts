@@ -1437,7 +1437,7 @@ const highlightsGenerateForBranch = (() => {
 					boxesInfo.push({
 						term,
 						node,
-						start: highlightStart - textStart,
+						start: Math.max(0, highlightStart - textStart),
 						end: Math.min(highlightEnd - textStart, node.length)
 					});
 					if (highlightEnd <= textEnd) {
@@ -1506,24 +1506,32 @@ const highlightsGenerateForBranch = (() => {
 		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
 		const range = document.createRange();
 		const elementBoxesInfo: ElementsHighlightBoxesInfo = new Map;
-		if (root.nodeType === Node.TEXT_NODE) {
-			highlightInBlock(terms, [ root as Text ], elementBoxesInfo);
-		} else if (root.firstChild) {
-			const nodes: Array<Text> = [];
-			//const breaksFlow = !highlightTags.flow.has((root as Element).tagName as TagName);
-			let sibling = root.firstChild as Element;
-			while ((sibling = sibling.parentElement as Element) && highlightTags.flow.has(sibling.tagName as TagName)) {
+		const nodes: Array<Text> = [];
+		const allowsFlow = root.nodeType !== 1 || highlightTags.flow.has((root as Element).tagName as TagName);
+		//console.log("\n\n\n");
+		if (allowsFlow && root.previousSibling) {
+			let sibling = root.previousSibling;
+			//console.log(sibling);
+			while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
 				insertHighlights(terms, sibling, "lastChild", "previousSibling", true, highlightTags, nodes, elementBoxesInfo);
+				sibling = sibling.parentElement as HTMLElement;
 			}
 			nodes.reverse();
-			insertHighlights(terms, root.firstChild as Node, "firstChild", "nextSibling", false, highlightTags, nodes, elementBoxesInfo);
-			sibling = root.lastChild as Element;
-			while ((sibling = sibling.parentElement as Element) && highlightTags.flow.has(sibling.tagName as TagName)) {
+		}
+		if (root.firstChild) {
+			//console.log(root.firstChild);
+			insertHighlights(terms, root.firstChild, "firstChild", "nextSibling", false, highlightTags, nodes, elementBoxesInfo);
+		}
+		if (allowsFlow && (root.nodeType === 3 || root.nextSibling)) {
+			let sibling = root.nodeType === 3 ? root : root.nextSibling as Node;
+			//console.log(sibling);
+			while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
 				insertHighlights(terms, sibling, "firstChild", "nextSibling", true, highlightTags, nodes, elementBoxesInfo);
+				sibling = sibling.parentElement as HTMLElement;
 			}
-			if (nodes.length) {
-				highlightInBlock(terms, nodes, elementBoxesInfo);
-			}
+		}
+		if (nodes.length) {
+			highlightInBlock(terms, nodes, elementBoxesInfo);
 		}
 		const styleText = Array.from(elementBoxesInfo).map(([ element, boxesInfo ]) => {
 			const highlightId = getNextHighlightClassName.next().value;
@@ -1676,13 +1684,13 @@ const getObserverNodeHighlighter = (() => {
  * Starts a mutation observer for highlighting, listening for DOM mutations then selectively highlighting under affected nodes.
  * @param observer An observer which selectively performs highlighting on observing changes.
  */
-const highlightInNodesOnMutation = (observer: MutationObserver) =>
+const highlightInNodesOnMutation = (observer: MutationObserver) => {
 	observer.observe(document.body, {
 		subtree: true,
 		childList: true,
 		characterData: true,
-	})
-;
+	});
+};
 
 /**
  * Stops a mutation observer for highlighting, thus halting continuous highlighting.
