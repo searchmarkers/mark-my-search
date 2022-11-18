@@ -1533,6 +1533,7 @@ const highlightsGenerateForBranch = (() => {
 		if (nodes.length) {
 			highlightInBlock(terms, nodes, elementBoxesInfo);
 		}
+		const elementHighlightIds: Array<[ HTMLElement, string ]> = [];
 		const styleText = Array.from(elementBoxesInfo).map(([ element, boxesInfo ]) => {
 			const highlightId = getNextHighlightClassName.next().value;
 			let elementRects = Array.from(element.getClientRects());
@@ -1542,7 +1543,7 @@ const highlightsGenerateForBranch = (() => {
 			const boxes = JSON.parse(
 				getComputedStyle(element).getPropertyValue("--mms-boxes").toString() || "[]",
 			) as Array<HighlightBox>;
-			element.setAttribute("highlight", highlightId);
+			elementHighlightIds.push([ element, highlightId ]);
 			return constructHighlightStyleRule(
 				highlightId,
 				boxes.filter(box => terms.every((term, i) =>
@@ -1581,6 +1582,9 @@ const highlightsGenerateForBranch = (() => {
 				})),
 			);
 		}).join("\n") + "\n";
+		elementHighlightIds.forEach(([ element, highlightId ]) => {
+			element.setAttribute("highlight", highlightId);
+		});
 		setTimeout(() => style.textContent += styleText);
 		requestRefreshIndicators.next();
 	};
