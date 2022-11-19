@@ -30,7 +30,7 @@ type PageInteractionInfo = {
 	className: string
 	list?: {
 		getLength: () => Promise<number>
-		pushEmpty: () => Promise<void>
+		pushWithName: (name: string) => Promise<void>
 		removeAt: (index: number) => void
 	}
 	label?: {
@@ -914,7 +914,7 @@ textarea
 				const onChangeInternal = (commitIfEmpty = false) => {
 					index = Array.from(container.children).indexOf(interaction);
 					if (labelTextbox.value && ((container.lastElementChild as HTMLElement).querySelector("input") as HTMLInputElement).value) {
-						listInfo.pushEmpty().then(() => {
+						listInfo.pushWithName(labelTextbox.value).then(() => {
 							insertBody();
 							insertInteraction(container, interactionInfo);
 						});
