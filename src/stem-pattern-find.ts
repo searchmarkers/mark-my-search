@@ -42,6 +42,7 @@ const getWordPatternStrings = (() => { // TODO maybe rename as inflection finder
 			"ce",
 			"ces",
 			"a",
+			"as",
 			"ata",
 			"able", "ables", "abled", "abling", "ablings", "abler", "ablers", "ably", "ability", "abilities",
 			"ac",
@@ -144,7 +145,7 @@ const getWordPatternStrings = (() => { // TODO maybe rename as inflection finder
 			"ence", "ences", "enced", "encing", "encings", "encer", "encers", "entific", "entifics", "entist", "entists"
 			,	"tific", "tifics", "tist", "tists"
 			,	"iet", "iety", "ietal", "ietism", "ietific", "ieisfics", "ietist", "ietists",
-			"g", "gs", "ged", "ging", "gings", "ger", "gers",
+			"g", "ge", "gs", "ged", "ging", "gings", "ger", "gers",
 			"ng", "ngs", "nged", "nging", "ngings", "nger", "ngers", "ngster", "ngsters",
 			"re", "res", "ring", "rings", "red", "rer", "rers", "ration", "rations",
 			"ate", "ates", "ated", "ater", "aters", "ating", "ation", "ations", "ative",
@@ -237,6 +238,7 @@ const getWordPatternStrings = (() => { // TODO maybe rename as inflection finder
 			"trophy",
 			"tude",
 			"t", "ts", "ting", "tings", "ter", "ters", "tive", "tives",
+			"trar", "trars",
 			"ty",
 			"ties",
 			"ular",

@@ -96,15 +96,19 @@ const loadPopup = (() => {
 							checkbox: {
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-									const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-									setChecked(isTabResearchPage(session.researchInstances, tab.id as number));
+									setChecked(tab.id === undefined ? false :
+										isTabResearchPage(
+											(await getStorageSession([ StorageSession.RESEARCH_INSTANCES ])).researchInstances, tab.id));
 								},
 								onToggle: checked => {
 									if (checked) {
 										getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
-											const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-											const researchInstance = session.researchInstances[tab.id as number];
+											if (tab.id === undefined) {
+												return;
+											}
+											const local = await getStorageLocal([ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
+											const researchInstance = session.researchInstances[tab.id];
 											if (researchInstance && local.persistResearchInstances) {
 												researchInstance.enabled = true;
 											}
@@ -130,27 +134,29 @@ const loadPopup = (() => {
 							checkbox: {
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-									const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-									setChecked(!!session.researchInstances[tab.id as number]);
+									setChecked(tab.id === undefined ? false :
+										!!(await getStorageSession([ StorageSession.RESEARCH_INSTANCES ])).researchInstances[tab.id]);
 								},
-								onToggle: checked => {
-									getStorageSession([ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
-										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-										if (checked) {
-											session.researchInstances[tab.id as number] = {
-												enabled: false,
-												autoOverwritable: false,
-												highlightsShown: true,
-												terms: [],
-											};
-										} else {
-											delete session.researchInstances[tab.id as number];
-											chrome.runtime.sendMessage({
-												disableTabResearch: true,
-											} as BackgroundMessage);
-										}
-										setStorageSession(session);
-									});
+								onToggle: async checked => {
+									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+									if (tab.id === undefined) {
+										return;
+									}
+									const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+									if (checked) {
+										session.researchInstances[tab.id] = {
+											enabled: false,
+											autoOverwritable: false,
+											highlightsShown: true,
+											terms: [],
+										};
+									} else {
+										delete session.researchInstances[tab.id];
+										chrome.runtime.sendMessage({
+											disableTabResearch: true,
+										} as BackgroundMessage);
+									}
+									setStorageSession(session);
 								},
 							},
 						},
@@ -306,10 +312,10 @@ const loadPopup = (() => {
 										sync.termLists.length
 									)
 								,
-								pushEmpty: () =>
+								pushWithName: name =>
 									getStorageSync([ StorageSync.TERM_LISTS ]).then(sync => {
 										sync.termLists.push({
-											name: "",
+											name,
 											terms: [],
 											urlFilter: [],
 										});
@@ -520,9 +526,12 @@ const loadPopup = (() => {
 									text: "Highlight in current tab",
 									onClick: async (messageText, formFields, onSuccess, onError, index) => {
 										const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+										if (tab.id === undefined) {
+											return;
+										}
 										const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
 										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-										const researchInstance = session.researchInstances[tab.id as number];
+										const researchInstance = session.researchInstances[tab.id];
 										if (researchInstance && !researchInstance.enabled) {
 											researchInstance.enabled = true;
 											await setStorageSession(session);
@@ -553,6 +562,8 @@ const loadPopup = (() => {
 		loadPage(panelsInfo, `
 body
 	{ width: 300px; height: 540px; user-select: none; }
+.container-panel > .panel, .brand
+	{ margin-inline: 0; }
 		`, false);
 		pageInsertWarning(
 			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
