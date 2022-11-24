@@ -31,6 +31,8 @@ enum OptionClass {
 
 enum PreferenceType {
 	BOOLEAN,
+	INTEGER,
+	FLOAT,
 	TEXT,
 	ARRAY,
 }
@@ -105,35 +107,37 @@ label[for]:hover
 		save.textContent = "Save Changes";
 		form.appendChild(save);
 		const valuesCurrent = {};
-		form.onsubmit = event => {
+		form.addEventListener("submit", event => {
 			event.preventDefault();
 			// TODO remove code duplication using function
 			Object.keys(tabInfo.options).forEach(optionKey => {
 				const optionInfo = tabInfo.options[optionKey];
 				const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
 				Object.keys(preferences).forEach(preferenceKey => {
-					const isSinglePreference = optionKey === preferenceKey;
-					const preferenceInfo = isSinglePreference ? optionInfo : preferences[preferenceKey];
-					const className = isSinglePreference ? optionKey : `${optionKey}-${preferenceKey}`;
+					const preferenceInfo = preferences[preferenceKey];
+					const className = `${optionKey}-${preferenceKey}`;
 					const input = document.getElementsByClassName(className)[0];
 					if (!input) {
 						return;
 					}
-					const valueNew = input["type"] === "checkbox" ? input["checked"] : input["value"];
-					const value = preferenceInfo.type === PreferenceType.ARRAY
-						? valueNew.split(",") : valueNew;
-					if (isSinglePreference) {
-						sync[optionKey] = value;
-					} else {
-						sync[optionKey][preferenceKey] = value;
-					}
-					valuesCurrent[optionKey][preferenceKey] = valueNew;
+					const valueEnteredString = input["value"] as string;
+					const valueEnteredBool = input["checked"] as boolean;
+					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
+					sync[optionKey][preferenceKey] = ((type: PreferenceType) => { // Convert value for storage.
+						if (type === PreferenceType.ARRAY) {
+							return valueEnteredString.split(",");
+						} else if (type === PreferenceType.INTEGER || type === PreferenceType.FLOAT) {
+							return Number(valueEnteredString);
+						}
+						return valueEntered;
+					})(preferenceInfo.type);
+					valuesCurrent[optionKey][preferenceKey] = valueEntered;
 					Array.from(document.getElementsByClassName(OptionClass.MODIFIED))
 						.forEach((preferenceLabel: HTMLElement) => preferenceLabel.classList.remove(OptionClass.MODIFIED));
 				});
 			});
 			setStorageSync(sync);
-		};
+		});
 		Object.keys(tabInfo.options).forEach(optionKey => {
 			valuesCurrent[optionKey] = {};
 			const optionInfo = tabInfo.options[optionKey];
@@ -154,7 +158,6 @@ label[for]:hover
 			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
 			Object.keys(preferences).forEach((preferenceKey, i) => {
 				const preferenceInfo = preferences[preferenceKey];
-				const isSinglePreference = optionKey === preferenceKey; // TODO replace heuristic of 'optionKey === preferenceKey'
 				const row = document.createElement("div");
 				const addCell = (node: Node, isInFirstColumn = false) => {
 					const cell = document.createElement("div");
@@ -174,15 +177,15 @@ label[for]:hover
 				const input = document.createElement("input");
 				input.id = inputId;
 				input.type = inputDefault.type;
-				input.classList.add(isSinglePreference ? optionKey : `${optionKey}-${preferenceKey}`);
+				input.classList.add(`${optionKey}-${preferenceKey}`);
 				addCell(preferenceLabel, true);
 				addCell(input);
 				addCell(inputDefault);
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW);
 				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
-				const valueDefault = isSinglePreference ? defaultOptions[optionKey] : defaultOptions[optionKey][preferenceKey];
-				const value = isSinglePreference ? sync[optionKey] : sync[optionKey][preferenceKey];
+				const valueDefault = defaultOptions[optionKey][preferenceKey];
+				const value = sync[optionKey][preferenceKey];
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
 					input.disabled = true;
@@ -246,6 +249,22 @@ label[for]:hover
 						showRevealIcon: {
 							label: "Display a menu button in controls with match options",
 							type: PreferenceType.BOOLEAN,
+						},
+						fontSize: {
+							label: "Font size",
+							type: PreferenceType.TEXT,
+						},
+						opacityTerm: {
+							label: "Opacity of keyword buttons",
+							type: PreferenceType.FLOAT,
+						},
+						opacityControl: {
+							label: "Opacity of other buttons",
+							type: PreferenceType.FLOAT,
+						},
+						borderRadius: {
+							label: "Radius of rounded corners",
+							type: PreferenceType.TEXT,
 						},
 					},
 				},
