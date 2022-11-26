@@ -1407,6 +1407,154 @@ const getAncestorHighlightable = (node: Node) => {
 	return ancestor;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: HighlightTags) => {
+	const parent = node.parentElement as Element;
+	if (highlightTags.flow.has(parent.tagName as TagName)) {
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+		walker.currentNode = node;
+		let breakFirst: Element | null = walker.previousNode() as Element;
+		while (breakFirst && highlightTags.flow.has(breakFirst.tagName as TagName)) {
+			breakFirst = breakFirst !== parent ? walker.previousNode() as Element : null;
+		}
+		walker.currentNode = node.nextSibling ?? node;
+		let breakLast: Element | null = node.nextSibling ? walker.nextNode() as Element : null;
+		while (breakLast && highlightTags.flow.has(breakLast.tagName as TagName)) {
+			breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
+		}
+		if (breakFirst && breakLast) {
+			calculateBoxesInfoTemp(terms, parent, highlightTags);
+		} else {
+			onNodeMovedTemp(terms, parent, highlightTags);
+		}
+	} else {
+		calculateBoxesInfoTemp(terms, parent, highlightTags);
+	}
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: HighlightTags) => {
+	if (highlightTags.flow.has(element.tagName as TagName)) {
+		onNodeMovedTemp(terms, element, highlightTags);
+	} else {
+		calculateBoxesInfoTemp(terms, element, highlightTags);
+	}
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags) => {
+	if (highlightTags.flow.has(parent.tagName as TagName)) {
+		//insertHighlights(terms, parent, )
+	}
+};
+
+/**
+ * Highlights terms in a 'flow' of consecutive text nodes.
+ * @param terms Terms to find and highlight.
+ * @param nodes Consecutive text nodes to highlight inside.
+ */
+const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
+	const textFlow = nodes.map(node => node.textContent).join("");
+	for (const term of terms) {
+		let i = 0;
+		let node = nodes[0];
+		let textStart = 0;
+		let textEnd = node.length;
+		const matches = textFlow.matchAll(term.pattern);
+		for (const match of matches) {
+			const highlightStart = match.index as number;
+			const highlightEnd = highlightStart + match[0].length;
+			while (textEnd <= highlightStart) {
+				i++;
+				node = nodes[i];
+				textStart = textEnd;
+				textEnd += node.length;
+			}
+			// eslint-disable-next-line no-constant-condition
+			while (true) {
+				const ancestor = getAncestorHighlightable(node);
+				const elementHighlighting = ancestor["elementHighlighting"] as ElementHighlighting;
+				// TODO migrate boxesInfo to 'flow' level.
+				elementHighlighting.boxesInfo.push({
+					term,
+					node,
+					start: Math.max(0, highlightStart - textStart),
+					end: Math.min(highlightEnd - textStart, node.length)
+				});
+				if (highlightEnd <= textEnd) {
+					break;
+				}
+				i++;
+				node = nodes[i];
+				textStart = textEnd;
+				textEnd += node.length;
+			}
+		}
+	}
+};
+
+const addForAncestorsTemp = (element: Element) => {
+	if (!element["elementHighlighting"]) {
+		element["elementHighlighting"] = {
+			highlightId: "",
+			flows: [],
+			boxesInfo: [],
+			boxes: [],
+		} as ElementHighlighting;
+		addForAncestorsTemp(element.parentElement as Element);
+	}
+};
+
+/**
+ * Highlights occurrences of terms in text nodes under a node in the DOM tree.
+ * @param terms Terms to find and highlight.
+ * @param node A root node under which to match terms and insert highlights.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param nodes Consecutive text nodes to highlight inside.
+ */
+const insertHighlights = (
+	terms: MatchTerms,
+	node: Node,
+	firstChildKey: "firstChild" | "lastChild",
+	nextSiblingKey: "nextSibling" | "previousSibling",
+	gatherOnlyToBreak: boolean,
+	ignoreFirstFlow: boolean,
+	highlightTags: HighlightTags,
+	nodes: Array<Text>,
+) => {
+	// TODO support for <iframe>?
+	do {
+		if (node.nodeType === 3) {
+			nodes.push(node as Text);
+		} else if ((node.nodeType === 1 || node.nodeType === 11)
+			&& !highlightTags.reject.has((node as Element).tagName as TagName)
+		) {
+			addForAncestorsTemp(node as Element);
+			const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
+			if (breaksFlow && (nodes.length || gatherOnlyToBreak)) {
+				if (gatherOnlyToBreak) {
+					return;
+				}
+				if (ignoreFirstFlow) {
+					ignoreFirstFlow = false;
+				} else {
+					highlightInFlow(terms, nodes);
+				}
+				nodes.splice(0, nodes.length);
+			}
+			if (node[firstChildKey]) {
+				insertHighlights(terms, node[firstChildKey] as ChildNode, firstChildKey, nextSiblingKey,
+					gatherOnlyToBreak, ignoreFirstFlow, highlightTags, nodes);
+				if (breaksFlow && nodes.length) {
+					highlightInFlow(terms, nodes);
+					nodes.splice(0, nodes.length);
+				}
+			}
+		}
+		node = node[nextSiblingKey] as ChildNode; // May be null (checked by loop condition)
+	} while (node);
+};
+
 /**
  * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
  * @param terms Terms to find, highlight, and mark.
@@ -1414,197 +1562,93 @@ const getAncestorHighlightable = (node: Node) => {
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
  */
-const highlightsGenerateForBranch = (() => {
-	/**
-	 * Highlights terms in a 'flow' of consecutive text nodes.
-	 * @param terms Terms to find and highlight.
-	 * @param nodes Consecutive text nodes to highlight inside.
-	 */
-	const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
-		const textFlow = nodes.map(node => node.textContent).join("");
-		for (const term of terms) {
-			let i = 0;
-			let node = nodes[0];
-			let textStart = 0;
-			let textEnd = node.length;
-			const matches = textFlow.matchAll(term.pattern);
-			for (const match of matches) {
-				const highlightStart = match.index as number;
-				const highlightEnd = highlightStart + match[0].length;
-				while (textEnd <= highlightStart) {
-					i++;
-					node = nodes[i];
-					textStart = textEnd;
-					textEnd += node.length;
-				}
-				// eslint-disable-next-line no-constant-condition
-				while (true) {
-					const ancestor = getAncestorHighlightable(node);
-					const elementHighlighting = ancestor["elementHighlighting"] as ElementHighlighting;
-					// TODO migrate boxesInfo to 'flow' level.
-					elementHighlighting.boxesInfo.push({
-						term,
-						node,
-						start: Math.max(0, highlightStart - textStart),
-						end: Math.min(highlightEnd - textStart, node.length)
-					});
-					if (highlightEnd <= textEnd) {
+const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
+	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
+	getNextHighlightClassName: GetNextHighlightClassName) => {
+	const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+	const range = document.createRange();
+	const nodes: Array<Text> = [];
+	const allowsFlow = root.nodeType !== 1 || highlightTags.flow.has((root as Element).tagName as TagName);
+	if (allowsFlow && root.previousSibling) {
+		let sibling = root.previousSibling;
+		while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
+			insertHighlights(terms, sibling, "lastChild", "previousSibling", true, false, highlightTags, nodes);
+			sibling = sibling.parentElement as HTMLElement;
+		}
+		nodes.reverse();
+	}
+	if (root.firstChild) {
+		insertHighlights(terms, root.firstChild, "firstChild", "nextSibling", false, false, highlightTags, nodes);
+	}
+	if (allowsFlow && (root.nodeType === 3 || root.nextSibling)) {
+		let sibling = root.nodeType === 3 ? root : root.nextSibling as Node;
+		while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
+			insertHighlights(terms, sibling, "firstChild", "nextSibling", true, false, highlightTags, nodes);
+			sibling = sibling.parentElement as HTMLElement;
+		}
+	}
+	if (nodes.length) {
+		highlightInFlow(terms, nodes);
+	}
+	const getStyleText = (element: HTMLElement): string => {
+		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
+		if (!elementHighlighting) {
+			return "";
+		}
+		let styleText = "";
+		if (elementHighlighting.boxesInfo.length) {
+			if (elementHighlighting.highlightId === "") {
+				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
+			}
+			let elementRects = Array.from(element.getClientRects());
+			if (!elementRects.length) {
+				elementRects = [ element.getBoundingClientRect() ];
+			}
+			element.setAttribute("highlight", elementHighlighting.highlightId);
+			elementHighlighting.boxes.splice(0, elementHighlighting.boxes.length);
+			elementHighlighting.boxesInfo.forEach(boxInfo => {
+				range.setStart(boxInfo.node, boxInfo.start);
+				range.setEnd(boxInfo.node, boxInfo.end);
+				const textRects = Array.from(range.getClientRects());
+				const textRectBounding = textRects[0] ?? range.getBoundingClientRect();
+				let x = 0;
+				let y = 0;
+				for (const elementRect of elementRects) {
+					if (elementRect.bottom > textRectBounding.top) {
+						x += textRectBounding.x - elementRect.x;
+						y = textRectBounding.y - elementRect.y;
 						break;
-					}
-					i++;
-					node = nodes[i];
-					textStart = textEnd;
-					textEnd += node.length;
-				}
-			}
-		}
-	};
-
-	const addForAncestorsTemp = (element: Element) => {
-		if (!element["elementHighlighting"]) {
-			element["elementHighlighting"] = {
-				highlightId: "",
-				flows: [],
-				boxesInfo: [],
-				boxes: [],
-			} as ElementHighlighting;
-			addForAncestorsTemp(element.parentElement as Element);
-		}
-	};
-
-	/**
-	 * Highlights occurrences of terms in text nodes under a node in the DOM tree.
-	 * @param terms Terms to find and highlight.
-	 * @param node A root node under which to match terms and insert highlights.
-	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
-	 * @param nodes Consecutive text nodes to highlight inside.
-	 */
-	const insertHighlights = (
-		terms: MatchTerms,
-		node: Node,
-		firstChildKey: "firstChild" | "lastChild",
-		nextSiblingKey: "nextSibling" | "previousSibling",
-		gatherOnlyToBreak: boolean,
-		highlightTags: HighlightTags,
-		nodes: Array<Text>,
-	) => {
-		// TODO support for <iframe>?
-		do {
-			if (node.nodeType === 3) {
-				nodes.push(node as Text);
-			} else if ((node.nodeType === 1 || node.nodeType === 11)
-				&& !highlightTags.reject.has((node as Element).tagName as TagName)
-			) {
-				addForAncestorsTemp(node as Element);
-				const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
-				if (breaksFlow && (nodes.length || gatherOnlyToBreak)) {
-					if (gatherOnlyToBreak) {
-						return;
-					}
-					highlightInFlow(terms, nodes);
-					nodes.splice(0, nodes.length);
-				}
-				if (node[firstChildKey]) {
-					insertHighlights(terms, node[firstChildKey] as ChildNode, firstChildKey, nextSiblingKey, gatherOnlyToBreak,
-						highlightTags, nodes);
-					if (breaksFlow && nodes.length) {
-						highlightInFlow(terms, nodes);
-						nodes.splice(0, nodes.length);
+					} else {
+						x += elementRect.width;
 					}
 				}
-			}
-			node = node[nextSiblingKey] as ChildNode; // May be null (checked by loop condition)
-		} while (node);
-	};
-
-	return (terms: MatchTerms, root: Node,
-		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
-		getNextHighlightClassName: GetNextHighlightClassName) => {
-		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-		const range = document.createRange();
-		const nodes: Array<Text> = [];
-		const allowsFlow = root.nodeType !== 1 || highlightTags.flow.has((root as Element).tagName as TagName);
-		if (allowsFlow && root.previousSibling) {
-			let sibling = root.previousSibling;
-			while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
-				insertHighlights(terms, sibling, "lastChild", "previousSibling", true, highlightTags, nodes);
-				sibling = sibling.parentElement as HTMLElement;
-			}
-			nodes.reverse();
-		}
-		if (root.firstChild) {
-			insertHighlights(terms, root.firstChild, "firstChild", "nextSibling", false, highlightTags, nodes);
-		}
-		if (allowsFlow && (root.nodeType === 3 || root.nextSibling)) {
-			let sibling = root.nodeType === 3 ? root : root.nextSibling as Node;
-			while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
-				insertHighlights(terms, sibling, "firstChild", "nextSibling", true, highlightTags, nodes);
-				sibling = sibling.parentElement as HTMLElement;
-			}
-		}
-		if (nodes.length) {
-			highlightInFlow(terms, nodes);
-		}
-		const getStyleText = (element: HTMLElement): string => {
-			const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
-			if (!elementHighlighting) {
-				return "";
-			}
-			let styleText = "";
-			if (elementHighlighting.boxesInfo.length) {
-				if (elementHighlighting.highlightId === "") {
-					elementHighlighting.highlightId = getNextHighlightClassName.next().value;
-				}
-				let elementRects = Array.from(element.getClientRects());
-				if (!elementRects.length) {
-					elementRects = [ element.getBoundingClientRect() ];
-				}
-				element.setAttribute("highlight", elementHighlighting.highlightId);
-				elementHighlighting.boxes.splice(0, elementHighlighting.boxes.length);
-				elementHighlighting.boxesInfo.forEach(boxInfo => {
-					range.setStart(boxInfo.node, boxInfo.start);
-					range.setEnd(boxInfo.node, boxInfo.end);
-					const textRects = Array.from(range.getClientRects());
-					const textRectBounding = textRects[0] ?? range.getBoundingClientRect();
-					let x = 0;
-					let y = 0;
-					for (const elementRect of elementRects) {
-						if (elementRect.bottom > textRectBounding.top) {
-							x += textRectBounding.x - elementRect.x;
-							y = textRectBounding.y - elementRect.y;
-							break;
-						} else {
-							x += elementRect.width;
-						}
+				let textRectBottomLast = -1;
+				let width = 0;
+				for (const textRect of textRects) {
+					if (textRect.top > textRectBottomLast) {
+						textRectBottomLast = textRect.bottom;
+						width += textRect.width;
 					}
-					let textRectBottomLast = -1;
-					let width = 0;
-					for (const textRect of textRects) {
-						if (textRect.top > textRectBottomLast) {
-							textRectBottomLast = textRect.bottom;
-							width += textRect.width;
-						}
-					}
-					elementHighlighting.boxes.push({
-						selector: boxInfo.term.selector,
-						x,
-						y,
-						width: width || textRectBounding.width,
-						height: textRectBounding.height,
-					});
+				}
+				elementHighlighting.boxes.push({
+					selector: boxInfo.term.selector,
+					x,
+					y,
+					width: width || textRectBounding.width,
+					height: textRectBounding.height,
 				});
-				//elementHighlighting.boxes = elementHighlighting.boxes.filter(box => terms.every(term =>
-				//	box.selector !== term.selector
-				//));
-				styleText = constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes) + "\n";
-			}
-			return styleText + (Array.from(element.children) as Array<HTMLElement>)
-				.map(element => getStyleText(element)).join("\n") + "\n";
-		};
-		style.textContent = getStyleText(document.body);
-		requestRefreshIndicators.next();
+			});
+			//elementHighlighting.boxes = elementHighlighting.boxes.filter(box => terms.every(term =>
+			//	box.selector !== term.selector
+			//));
+			styleText = constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes) + "\n";
+		}
+		return styleText + (Array.from(element.children) as Array<HTMLElement>)
+			.map(element => getStyleText(element)).join("\n") + "\n";
 	};
-})();
+	style.textContent = getStyleText(document.body);
+	requestRefreshIndicators.next();
+};
 
 /**
  * Remove highlights for matches of terms.
