@@ -15,6 +15,9 @@ class PainterHighlights {
 		const boxes = JSON.parse(properties.get("--mms-boxes").toString() || "[]") as Array<HighlightBox>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.selector];
+			if (!style) {
+				return;
+			}
 			ctx.strokeStyle = `hsl(${style.hue} 100% 10% / 0.4)`;
 			ctx.strokeRect(box.x, box.y, box.width, box.height);
 			ctx.fillStyle = `hsl(${style.hue} 100% 60% / 0.4)`;
