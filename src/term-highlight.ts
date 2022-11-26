@@ -1407,8 +1407,8 @@ const getAncestorHighlightable = (node: Node) => {
 	return ancestor;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: HighlightTags) => {
+const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
+	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
 	const parent = node.parentElement as Element;
 	if (highlightTags.flow.has(parent.tagName as TagName)) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
@@ -1423,29 +1423,100 @@ const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: Highlight
 			breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
 		}
 		if (breakFirst && breakLast) {
-			calculateBoxesInfoTemp(terms, parent, highlightTags);
+			calculateBoxesInfoTemp(terms, parent, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 		} else {
-			onNodeMovedTemp(terms, parent, highlightTags);
+			onNodeMovedTemp(terms, parent, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 		}
 	} else {
-		calculateBoxesInfoTemp(terms, parent, highlightTags);
+		calculateBoxesInfoTemp(terms, parent, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 	}
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: HighlightTags) => {
+const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: HighlightTags,
+	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
 	if (highlightTags.flow.has(element.tagName as TagName)) {
-		onNodeMovedTemp(terms, element, highlightTags);
+		onNodeMovedTemp(terms, element, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 	} else {
-		calculateBoxesInfoTemp(terms, element, highlightTags);
+		calculateBoxesInfoTemp(terms, element, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 	}
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags) => {
+const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags,
+	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
 	if (highlightTags.flow.has(parent.tagName as TagName)) {
-		//insertHighlights(terms, parent, )
+		const nodes: Array<Text> = [];
+		insertHighlights(terms, parent, "firstChild", "nextSibling", false, true, highlightTags, nodes);
+		if (nodes.length) {
+			highlightInFlow(terms, nodes);
+		}
+	} else {
+		insertHighlights(terms, parent, "firstChild", "nextSibling", false, false, highlightTags, []);
 	}
+	const range = document.createRange();
+	const elementHighlightIds: Array<[ Element, string ]> = [];
+	const getStyleText = (element: HTMLElement): string => {
+		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
+		if (!elementHighlighting) {
+			return "";
+		}
+		let styleText = "";
+		if (elementHighlighting.boxesInfo.length) {
+			if (elementHighlighting.highlightId === "") {
+				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
+			}
+			let elementRects = Array.from(element.getClientRects());
+			if (!elementRects.length) {
+				elementRects = [ element.getBoundingClientRect() ];
+			}
+			elementHighlightIds.push([ element, elementHighlighting.highlightId ]);
+			elementHighlighting.boxes.splice(0, elementHighlighting.boxes.length);
+			elementHighlighting.boxesInfo.forEach(boxInfo => {
+				range.setStart(boxInfo.node, boxInfo.start);
+				range.setEnd(boxInfo.node, boxInfo.end);
+				const textRects = Array.from(range.getClientRects());
+				const textRectBounding = textRects[0] ?? range.getBoundingClientRect();
+				let x = 0;
+				let y = 0;
+				for (const elementRect of elementRects) {
+					if (elementRect.bottom > textRectBounding.top) {
+						x += textRectBounding.x - elementRect.x;
+						y = textRectBounding.y - elementRect.y;
+						break;
+					} else {
+						x += elementRect.width;
+					}
+				}
+				let textRectBottomLast = -1;
+				let width = 0;
+				for (const textRect of textRects) {
+					if (textRect.top > textRectBottomLast) {
+						textRectBottomLast = textRect.bottom;
+						width += textRect.width;
+					}
+				}
+				elementHighlighting.boxes.push({
+					selector: boxInfo.term.selector,
+					x,
+					y,
+					width: width || textRectBounding.width,
+					height: textRectBounding.height,
+				});
+			});
+			//elementHighlighting.boxes = elementHighlighting.boxes.filter(box => terms.every(term =>
+			//	box.selector !== term.selector
+			//));
+			styleText = constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes) + "\n";
+		}
+		return styleText + (Array.from(element.children) as Array<HTMLElement>)
+			.map(element => getStyleText(element)).join("\n") + "\n";
+	};
+	const styleText = getStyleText(document.body);
+	elementHighlightIds.forEach(([ element, highlightId ]) => {
+		element.setAttribute("highlight", highlightId);
+	});
+	const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+	setTimeout(() => style.textContent = styleText);
+	requestRefreshIndicators.next();
 };
 
 /**
@@ -1725,17 +1796,27 @@ const getObserverNodeHighlighter = (() => {
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				if ( mutation.target.parentElement && mutation.type === "characterData") {
-					highlightsRemoveForBranch([], getAncestorHighlightable(mutation.target).parentElement as HTMLElement);
-					highlightsGenerateForBranch(terms, mutation.target, highlightTags, requestRefreshIndicators,
-						getNextHighlightClassName);
+					onElementMovedTemp(terms, mutation.target.parentElement, highlightTags,
+						requestRefreshIndicators, getNextHighlightClassName);
+					//highlightsRemoveForBranch([], getAncestorHighlightable(mutation.target).parentElement as HTMLElement);
+					//highlightsGenerateForBranch(terms, mutation.target, highlightTags, requestRefreshIndicators,
+					//	getNextHighlightClassName);
 				}
 				for (const node of Array.from(mutation.addedNodes)) {
-					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
-					if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
-						highlightsRemoveForBranch([], node as HTMLElement | DocumentFragment);
-						highlightsGenerateForBranch(terms, node, highlightTags, requestRefreshIndicators,
-							getNextHighlightClassName);
+					if (node.nodeType === Node.ELEMENT_NODE) {
+						if (canHighlightElement(rejectSelector, node as Element)) {
+							onElementMovedTemp(terms, node as Element, highlightTags,
+								requestRefreshIndicators, getNextHighlightClassName);
+						}
+					} else if (node.nodeType === Node.TEXT_NODE) {
+						onNodeMovedTemp(terms, node, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 					}
+					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
+					//if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
+					//	highlightsRemoveForBranch([], node as HTMLElement | DocumentFragment);
+					//	highlightsGenerateForBranch(terms, node, highlightTags, requestRefreshIndicators,
+					//		getNextHighlightClassName);
+					//}
 				}
 			}
 			terms.forEach(term => updateTermOccurringStatus(term));
