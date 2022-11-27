@@ -1444,7 +1444,6 @@ const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: 
 
 const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
-	console.log(parent);
 	if (!parent.firstChild) {
 		return;
 	}
@@ -1523,7 +1522,9 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
 	};
 	collectStyleRules(parent);
 	elementHighlightIds.forEach(([ element, highlightId ]) => {
-		element.setAttribute("highlight", highlightId);
+		if (!element.hasAttribute("highlight")) {
+			element.setAttribute("highlight", highlightId);
+		}
 	});
 	styleRules.forEach(([ rule, idx ]) => {
 		if (idx !== styleSheet.cssRules.length) {
@@ -1541,7 +1542,6 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
  */
 const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
 	const textFlow = nodes.map(node => node.textContent).join("");
-	console.log([ ...nodes ]);
 	for (const term of terms) {
 		let i = 0;
 		let node = nodes[0];
@@ -1680,6 +1680,7 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 	if (nodes.length) {
 		highlightInFlow(terms, nodes);
 	}
+	const elementHighlightIds: Array<[ Element, string ]> = [];
 	const styleSheet = style.sheet as CSSStyleSheet;
 	const styleRules: Array<[ string, number ]> = [];
 	let styleRuleIdx = styleSheet.cssRules.length;
@@ -1700,7 +1701,7 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 			if (!elementRects.length) {
 				elementRects = [ element.getBoundingClientRect() ];
 			}
-			element.setAttribute("highlight", elementHighlighting.highlightId);
+			elementHighlightIds.push([ element, elementHighlighting.highlightId ]);
 			elementHighlighting.boxes.splice(0, elementHighlighting.boxes.length);
 			elementHighlighting.boxesInfo.forEach(boxInfo => {
 				range.setStart(boxInfo.node, boxInfo.start);
@@ -1742,6 +1743,11 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 		(Array.from(element.children) as Array<HTMLElement>).forEach(element => collectStyleRules(element));
 	};
 	collectStyleRules(document.body);
+	elementHighlightIds.forEach(([ element, highlightId ]) => {
+		if (!element.hasAttribute("highlight")) {
+			element.setAttribute("highlight", highlightId);
+		}
+	});
 	styleRules.forEach(([ rule, idx ]) => {
 		if (idx !== styleSheet.cssRules.length) {
 			styleSheet.deleteRule(idx);
