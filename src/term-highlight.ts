@@ -17,14 +17,8 @@ type ControlButtonInfo = {
 type ElementHighlighting = {
 	highlightId: string
 	styleRuleIdx: number
-	flows: Array<{
-		id: number
-		text: string
-		nodeStart: Text
-		nodeEnd: Text
-	}>
-	boxesInfo: Array<HighlightInfo>
-	boxes: Array<HighlightBox>
+	isPaintable: boolean
+	flows: Array<HighlightFlow>
 }
 type TermSelectorStyles = Record<string, TermStyle>
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
@@ -87,6 +81,14 @@ interface ControlsInfo {
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
 	matchMode: MatchMode
+}
+
+interface HighlightFlow {
+	text: string
+	nodeStart: Text
+	nodeEnd: Text
+	boxesInfo: Array<HighlightInfo>
+	boxes: Array<HighlightBox>
 }
 
 interface HighlightInfo {
@@ -1394,6 +1396,7 @@ const insertScrollMarkers = (terms: MatchTerms, highlightTags: HighlightTags, hu
 };
 
 // TODO document
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getAncestorHighlightable = (node: Node) => {
 	let ancestor = node.parentElement as HTMLElement;
 	// eslint-disable-next-line no-constant-condition
@@ -1410,7 +1413,10 @@ const getAncestorHighlightable = (node: Node) => {
 
 const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
-	const parent = node.parentElement as Element;
+	const parent = node.parentElement;
+	if (!parent) {
+		return;
+	}
 	if (highlightTags.flow.has(parent.tagName as TagName)) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
 		walker.currentNode = node;
@@ -1442,46 +1448,32 @@ const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: 
 	}
 };
 
-const updateStyle = (root: Element, getNextHighlightClassName: GetNextHighlightClassName) => {
-	const range = document.createRange();
-	const elementHighlightIds: Array<[ Element, string ]> = [];
-	const style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
-	const styleSheet = style.sheet as CSSStyleSheet;
-	const styleRules: Array<[ string, number ]> = [];
-	let styleRuleIdx = styleSheet.cssRules.length;
-	const collectStyleRules = (element: HTMLElement) => {
+const updateStyle = (() => {
+	const calculateBoxes = (owner: Element, element: Element, range: Range): Array<HighlightBox> => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
-		if (!elementHighlighting) {
-			return "";
+		if (!elementHighlighting || elementHighlighting.flows.every(flow => flow.boxesInfo.length === 0)) {
+			return [];
 		}
-		if (elementHighlighting.boxesInfo.length) {
-			if (elementHighlighting.highlightId === "") {
-				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
-			}
-			if (elementHighlighting.styleRuleIdx === -1) {
-				elementHighlighting.styleRuleIdx = styleRuleIdx;
-				styleRuleIdx++;
-			}
-			let elementRects = Array.from(element.getClientRects());
-			if (!elementRects.length) {
-				elementRects = [ element.getBoundingClientRect() ];
-			}
-			elementHighlightIds.push([ element, elementHighlighting.highlightId ]);
-			elementHighlighting.boxes.splice(0, elementHighlighting.boxes.length);
-			elementHighlighting.boxesInfo.forEach(boxInfo => {
+		let ownerRects = Array.from(owner.getClientRects());
+		if (!ownerRects.length) {
+			ownerRects = [ owner.getBoundingClientRect() ];
+		}
+		elementHighlighting.flows.forEach(flow => {
+			flow.boxes.splice(0, flow.boxes.length);
+			flow.boxesInfo.forEach(boxInfo => {
 				range.setStart(boxInfo.node, boxInfo.start);
 				range.setEnd(boxInfo.node, boxInfo.end);
 				const textRects = Array.from(range.getClientRects());
 				const textRectBounding = textRects[0] ?? range.getBoundingClientRect();
 				let x = 0;
 				let y = 0;
-				for (const elementRect of elementRects) {
-					if (elementRect.bottom > textRectBounding.top) {
-						x += textRectBounding.x - elementRect.x;
-						y = textRectBounding.y - elementRect.y;
+				for (const ownerRect of ownerRects) {
+					if (ownerRect.bottom > textRectBounding.top) {
+						x += textRectBounding.x - ownerRect.x;
+						y = textRectBounding.y - ownerRect.y;
 						break;
 					} else {
-						x += elementRect.width;
+						x += ownerRect.width;
 					}
 				}
 				let textRectBottomLast = -1;
@@ -1492,7 +1484,7 @@ const updateStyle = (root: Element, getNextHighlightClassName: GetNextHighlightC
 						width += textRect.width;
 					}
 				}
-				elementHighlighting.boxes.push({
+				flow.boxes.push({
 					selector: boxInfo.term.selector,
 					x,
 					y,
@@ -1500,28 +1492,68 @@ const updateStyle = (root: Element, getNextHighlightClassName: GetNextHighlightC
 					height: textRectBounding.height,
 				});
 			});
-			//elementHighlighting.boxes = elementHighlighting.boxes.filter(box => terms.every(term =>
-			//	box.selector !== term.selector
-			//));
-			styleRules.push([ constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes), elementHighlighting.styleRuleIdx ]);
-		}
-		(Array.from(element.children) as Array<HTMLElement>).forEach(element => collectStyleRules(element));
+		});
+		return elementHighlighting.flows.flatMap(flow => flow.boxes);
 	};
-	collectStyleRules(document.body);
-	elementHighlightIds.forEach(([ element, highlightId ]) => {
-		if (!element.hasAttribute("highlight")) {
-			element.setAttribute("highlight", highlightId);
+
+	const getBoxesOwned = (owner: Element, element: Element, range: Range): Array<HighlightBox> =>
+		calculateBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
+			(child["elementHighlighting"] ? !(child["elementHighlighting"] as ElementHighlighting).isPaintable : false)
+				? getBoxesOwned(owner, child, range) : []
+		))
+	;
+
+	const collectStyleRules = (element: Element, getNextHighlightClassName: GetNextHighlightClassName,
+		range: Range, styleRuleIdxPtr: { value: number },
+		styleRules: Array<[ string, number ]>, elementHighlightIds: Array<[ Element, string ]>) => {
+		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
+		if (!elementHighlighting) {
+			return "";
 		}
-	});
-	styleRules.forEach(([ rule, idx ]) => {
-		if (idx !== styleSheet.cssRules.length) {
-			styleSheet.deleteRule(idx);
+		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
+		if (boxes.length) {
+			if (elementHighlighting.highlightId === "") {
+				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
+			}
+			if (elementHighlighting.styleRuleIdx === -1) {
+				elementHighlighting.styleRuleIdx = styleRuleIdxPtr.value;
+				styleRuleIdxPtr.value++;
+			}
+			elementHighlightIds.push([ element, elementHighlighting.highlightId ]);
+			styleRules.push([
+				constructHighlightStyleRule(elementHighlighting.highlightId, boxes),
+				elementHighlighting.styleRuleIdx,
+			]);
 		}
-		styleSheet.insertRule(rule, idx);
-	});
-};
+		(Array.from(element.children) as Array<HTMLElement>).forEach(element =>
+			collectStyleRules(element, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules, elementHighlightIds)
+		);
+	};
+
+	return (root: Element, getNextHighlightClassName: GetNextHighlightClassName) => {
+		const range = document.createRange();
+		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+		const styleSheet = style.sheet as CSSStyleSheet;
+		const styleRuleIdxPtr = { value: styleSheet.cssRules.length };
+		const styleRules: Array<[ string, number ]> = [];
+		const elementHighlightIds: Array<[ Element, string ]> = [];
+		collectStyleRules(root, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules, elementHighlightIds);
+		elementHighlightIds.forEach(([ element, highlightId ]) => {
+			if (!element.hasAttribute("highlight")) {
+				element.setAttribute("highlight", highlightId);
+			}
+		});
+		styleRules.forEach(([ rule, idx ]) => {
+			if (idx !== styleSheet.cssRules.length) {
+				styleSheet.deleteRule(idx);
+			}
+			styleSheet.insertRule(rule, idx);
+		});
+	};
+})();
 
 const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
 	if (!parent.firstChild) {
 		return;
@@ -1535,7 +1567,7 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
 	} else {
 		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, false, highlightTags, []);
 	}
-	updateStyle(parent, getNextHighlightClassName);
+	//updateStyle(parent, getNextHighlightClassName);
 	//requestRefreshIndicators.next();
 };
 
@@ -1545,13 +1577,23 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
  * @param nodes Consecutive text nodes to highlight inside.
  */
 const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
-	const textFlow = nodes.map(node => node.textContent).join("");
+	const flow: HighlightFlow = {
+		text: nodes.map(node => node.textContent).join(""),
+		nodeStart: nodes[0],
+		nodeEnd: nodes[nodes.length - 1],
+		boxesInfo: [],
+		boxes: [],
+	};
+	const parent = ((flow.nodeStart.parentElement as Element).contains(flow.nodeEnd.parentElement as Element)
+		? flow.nodeStart.parentElement : flow.nodeEnd.parentElement) as Element;
+	const elementHighlighting = parent["elementHighlighting"] as ElementHighlighting;
+	elementHighlighting.flows.push(flow);
 	for (const term of terms) {
 		let i = 0;
 		let node = nodes[0];
 		let textStart = 0;
 		let textEnd = node.length;
-		const matches = textFlow.matchAll(term.pattern);
+		const matches = flow.text.matchAll(term.pattern);
 		for (const match of matches) {
 			const highlightStart = match.index as number;
 			const highlightEnd = highlightStart + match[0].length;
@@ -1563,10 +1605,7 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
 			}
 			// eslint-disable-next-line no-constant-condition
 			while (true) {
-				const ancestor = getAncestorHighlightable(node);
-				const elementHighlighting = ancestor["elementHighlighting"] as ElementHighlighting;
-				// TODO migrate boxesInfo to 'flow' level.
-				elementHighlighting.boxesInfo.push({
+				flow.boxesInfo.push({
 					term,
 					node,
 					start: Math.max(0, highlightStart - textStart),
@@ -1589,9 +1628,8 @@ const addForAncestorsTemp = (element: Element) => {
 		element["elementHighlighting"] = {
 			highlightId: "",
 			styleRuleIdx: -1,
+			isPaintable: !element.closest("a"),
 			flows: [],
-			boxesInfo: [],
-			boxes: [],
 		} as ElementHighlighting;
 		if (element.parentElement) {
 			addForAncestorsTemp(element.parentElement);
@@ -1693,20 +1731,24 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
  * @param root A root node under which to remove highlights.
  */
 const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | DocumentFragment = document.body) => {
-	const style = document.getElementById(getSel(ElementID.STYLE_PAINT));
-	if (style) {
-		const rules = (style.textContent as string).trimEnd().split("\n");
-		for (const element of Array.from(root.querySelectorAll("[highlight]"))) {
-			const highlightId = element.getAttribute("highlight") as string;
-			const highlightIdSelector = `[highlight*=${highlightId}]`;
+	for (const element of Array.from(root.querySelectorAll("[highlight]"))) {
+		const filterBoxesInfo = (element: Element) => {
 			const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
-			const boxes = elementHighlighting.boxes;
-			rules[rules.findIndex(rule => rule.includes(highlightIdSelector))] = terms.length ? constructHighlightStyleRule(
-				highlightId,
-				boxes.filter(box => terms.every(term => box.selector !== term.selector)),
-			) : "";
-		}
-		style.textContent = rules.join("\n") + "\n";
+			if (!elementHighlighting) {
+				return;
+			}
+			elementHighlighting.flows.forEach(flow => {
+				flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.selector !== boxInfo.term.selector));
+			});
+			Array.from(element.children).forEach(child => filterBoxesInfo(child));
+		};
+		filterBoxesInfo(element);
+		// FIXME currently waits for styles to be updated (temporary solution)
+		//styleSheet.deleteRule(elementHighlighting.styleRuleIdx);
+		//styleSheet.insertRule(constructHighlightStyleRule(
+		//	elementHighlighting.highlightId,
+		//	boxes.filter(box => terms.every(term => box.selector !== term.selector)),
+		//), elementHighlighting.styleRuleIdx);
 	}
 	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 		root = (root as DocumentFragment).getRootNode() as HTMLElement;
@@ -1902,7 +1944,7 @@ const getTermsFromSelection = () => {
 					const idx = terms.length - 1;
 					insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
 					termsToHighlight.push(terms[idx]);
-					termsToPurge.push(terms[idx]);
+					termsToPurge.push(terms[idx]); //FIXME why was this here?
 				} else {
 					const term = terms[termToUpdateIdx];
 					termsToPurge.push(Object.assign({}, term));
@@ -2132,9 +2174,8 @@ const getTermsFromSelection = () => {
 		const rootHighlighting: ElementHighlighting = {
 			highlightId: "",
 			styleRuleIdx: -1,
+			isPaintable: true,
 			flows: [],
-			boxesInfo: [],
-			boxes: [],
 		};
 		document.body["elementHighlighting"] = rootHighlighting;
 		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
@@ -2217,5 +2258,10 @@ const getTermsFromSelection = () => {
 			}
 			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
 		});
+		const a = () => {
+			updateStyle(document.body, getNextHighlightClassName);
+			setTimeout(a, 400);
+		};
+		setTimeout(a, 400);
 	};
 })()();
