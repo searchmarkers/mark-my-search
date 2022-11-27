@@ -16,6 +16,7 @@ type ControlButtonInfo = {
 }
 type ElementHighlighting = {
 	highlightId: string
+	styleRuleIdx: number
 	flows: Array<{
 		id: number
 		text: string
@@ -1443,26 +1444,37 @@ const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: 
 
 const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightClassName: GetNextHighlightClassName) => {
+	console.log(parent);
+	if (!parent.firstChild) {
+		return;
+	}
 	if (highlightTags.flow.has(parent.tagName as TagName)) {
 		const nodes: Array<Text> = [];
-		insertHighlights(terms, parent, "firstChild", "nextSibling", false, true, highlightTags, nodes);
+		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, true, highlightTags, nodes);
 		if (nodes.length) {
 			highlightInFlow(terms, nodes);
 		}
 	} else {
-		insertHighlights(terms, parent, "firstChild", "nextSibling", false, false, highlightTags, []);
+		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, false, highlightTags, []);
 	}
 	const range = document.createRange();
 	const elementHighlightIds: Array<[ Element, string ]> = [];
-	const getStyleText = (element: HTMLElement): string => {
+	const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+	const styleSheet = style.sheet as CSSStyleSheet;
+	const styleRules: Array<[ string, number ]> = [];
+	let styleRuleIdx = styleSheet.cssRules.length;
+	const collectStyleRules = (element: Element) => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
 		if (!elementHighlighting) {
 			return "";
 		}
-		let styleText = "";
 		if (elementHighlighting.boxesInfo.length) {
 			if (elementHighlighting.highlightId === "") {
 				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
+			}
+			if (elementHighlighting.styleRuleIdx === -1) {
+				elementHighlighting.styleRuleIdx = styleRuleIdx;
+				styleRuleIdx++;
 			}
 			let elementRects = Array.from(element.getClientRects());
 			if (!elementRects.length) {
@@ -1505,18 +1517,21 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
 			//elementHighlighting.boxes = elementHighlighting.boxes.filter(box => terms.every(term =>
 			//	box.selector !== term.selector
 			//));
-			styleText = constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes) + "\n";
+			styleRules.push([ constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes), elementHighlighting.styleRuleIdx ]);
 		}
-		return styleText + (Array.from(element.children) as Array<HTMLElement>)
-			.map(element => getStyleText(element)).join("\n") + "\n";
+		(Array.from(element.children) as Array<HTMLElement>).forEach(element => collectStyleRules(element));
 	};
-	const styleText = getStyleText(document.body);
+	collectStyleRules(parent);
 	elementHighlightIds.forEach(([ element, highlightId ]) => {
 		element.setAttribute("highlight", highlightId);
 	});
-	const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-	setTimeout(() => style.textContent = styleText);
-	requestRefreshIndicators.next();
+	styleRules.forEach(([ rule, idx ]) => {
+		if (idx !== styleSheet.cssRules.length) {
+			styleSheet.deleteRule(idx);
+		}
+		styleSheet.insertRule(rule, idx);
+	});
+	//requestRefreshIndicators.next();
 };
 
 /**
@@ -1526,6 +1541,7 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
  */
 const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
 	const textFlow = nodes.map(node => node.textContent).join("");
+	console.log([ ...nodes ]);
 	for (const term of terms) {
 		let i = 0;
 		let node = nodes[0];
@@ -1568,11 +1584,14 @@ const addForAncestorsTemp = (element: Element) => {
 	if (!element["elementHighlighting"]) {
 		element["elementHighlighting"] = {
 			highlightId: "",
+			styleRuleIdx: -1,
 			flows: [],
 			boxesInfo: [],
 			boxes: [],
 		} as ElementHighlighting;
-		addForAncestorsTemp(element.parentElement as Element);
+		if (element.parentElement) {
+			addForAncestorsTemp(element.parentElement);
+		}
 	}
 };
 
@@ -1661,15 +1680,21 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 	if (nodes.length) {
 		highlightInFlow(terms, nodes);
 	}
-	const getStyleText = (element: HTMLElement): string => {
+	const styleSheet = style.sheet as CSSStyleSheet;
+	const styleRules: Array<[ string, number ]> = [];
+	let styleRuleIdx = styleSheet.cssRules.length;
+	const collectStyleRules = (element: HTMLElement) => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
 		if (!elementHighlighting) {
 			return "";
 		}
-		let styleText = "";
 		if (elementHighlighting.boxesInfo.length) {
 			if (elementHighlighting.highlightId === "") {
 				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
+			}
+			if (elementHighlighting.styleRuleIdx === -1) {
+				elementHighlighting.styleRuleIdx = styleRuleIdx;
+				styleRuleIdx++;
 			}
 			let elementRects = Array.from(element.getClientRects());
 			if (!elementRects.length) {
@@ -1712,12 +1737,17 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 			//elementHighlighting.boxes = elementHighlighting.boxes.filter(box => terms.every(term =>
 			//	box.selector !== term.selector
 			//));
-			styleText = constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes) + "\n";
+			styleRules.push([ constructHighlightStyleRule(elementHighlighting.highlightId, elementHighlighting.boxes), elementHighlighting.styleRuleIdx ]);
 		}
-		return styleText + (Array.from(element.children) as Array<HTMLElement>)
-			.map(element => getStyleText(element)).join("\n") + "\n";
+		(Array.from(element.children) as Array<HTMLElement>).forEach(element => collectStyleRules(element));
 	};
-	style.textContent = getStyleText(document.body);
+	collectStyleRules(document.body);
+	styleRules.forEach(([ rule, idx ]) => {
+		if (idx !== styleSheet.cssRules.length) {
+			styleSheet.deleteRule(idx);
+		}
+		styleSheet.insertRule(rule, idx);
+	});
 	requestRefreshIndicators.next();
 };
 
@@ -1798,9 +1828,6 @@ const getObserverNodeHighlighter = (() => {
 				if ( mutation.target.parentElement && mutation.type === "characterData") {
 					onElementMovedTemp(terms, mutation.target.parentElement, highlightTags,
 						requestRefreshIndicators, getNextHighlightClassName);
-					//highlightsRemoveForBranch([], getAncestorHighlightable(mutation.target).parentElement as HTMLElement);
-					//highlightsGenerateForBranch(terms, mutation.target, highlightTags, requestRefreshIndicators,
-					//	getNextHighlightClassName);
 				}
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
@@ -1811,12 +1838,6 @@ const getObserverNodeHighlighter = (() => {
 					} else if (node.nodeType === Node.TEXT_NODE) {
 						onNodeMovedTemp(terms, node, highlightTags, requestRefreshIndicators, getNextHighlightClassName);
 					}
-					// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
-					//if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
-					//	highlightsRemoveForBranch([], node as HTMLElement | DocumentFragment);
-					//	highlightsGenerateForBranch(terms, node, highlightTags, requestRefreshIndicators,
-					//		getNextHighlightClassName);
-					//}
 				}
 			}
 			terms.forEach(term => updateTermOccurringStatus(term));
@@ -2174,6 +2195,7 @@ const getTermsFromSelection = () => {
 		};
 		const rootHighlighting: ElementHighlighting = {
 			highlightId: "",
+			styleRuleIdx: -1,
 			flows: [],
 			boxesInfo: [],
 			boxes: [],
