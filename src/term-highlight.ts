@@ -1456,8 +1456,7 @@ const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: 
 };
 
 const updateStyle = (() => {
-	const calculateBoxes = (owner: Element, element: Element, range: Range,
-		visibilityObserver: IntersectionObserver): Array<HighlightBox> => {
+	const calculateBoxes = (owner: Element, element: Element, range: Range): Array<HighlightBox> => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
 		if (!elementHighlighting || elementHighlighting.flows.every(flow => flow.boxesInfo.length === 0)) {
 			return [];
@@ -1500,28 +1499,22 @@ const updateStyle = (() => {
 					height: textRectBounding.height,
 				});
 			});
-			if (flow.boxesInfo.length) {
-				visibilityObserver.observe(owner);
-			} else {
-				visibilityObserver.unobserve(owner);
-			}
 		});
 		return elementHighlighting.flows.flatMap(flow => flow.boxes);
 	};
 
-	const getBoxesOwned = (owner: Element, element: Element, range: Range,
-		visibilityObserver: IntersectionObserver): Array<HighlightBox> =>
-		calculateBoxes(owner, element, range, visibilityObserver).concat(Array.from(element.children).flatMap(child =>
+	const getBoxesOwned = (owner: Element, element: Element, range: Range): Array<HighlightBox> =>
+		calculateBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
 			(child["elementHighlighting"] ? !(child["elementHighlighting"] as ElementHighlighting).isPaintable : false)
-				? getBoxesOwned(owner, child, range, visibilityObserver) : []
+				? getBoxesOwned(owner, child, range) : []
 		))
 	;
 
-	const collectStyleRules = (element: Element, recurse: boolean, getNextHighlightClassName: GetNextHighlightClassName,
-		visibilityObserver: IntersectionObserver, range: Range, styleRuleIdxPtr: { value: number },
+	const collectStyleRules = (element: Element, recurse: boolean,
+		getNextHighlightClassName: GetNextHighlightClassName, range: Range, styleRuleIdxPtr: { value: number },
 		styleRules: Array<[ string, number ]>, elementHighlightIds: Array<[ Element, string ]>) => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
-		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range, visibilityObserver);
+		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
 		if (boxes.length) {
 			if (elementHighlighting.highlightId === "") {
 				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
@@ -1538,14 +1531,12 @@ const updateStyle = (() => {
 		}
 		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
 			if (child["elementHighlighting"]) {
-				collectStyleRules(child, recurse, getNextHighlightClassName, visibilityObserver,
-					range, styleRuleIdxPtr, styleRules, elementHighlightIds);
+				collectStyleRules(child, recurse, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules, elementHighlightIds);
 			}
 		});
 	};
 
-	return (root: Element, recurse: boolean, getNextHighlightClassName: GetNextHighlightClassName,
-		visibilityObserver: IntersectionObserver) => {
+	return (root: Element, recurse: boolean, getNextHighlightClassName: GetNextHighlightClassName) => {
 		const range = document.createRange();
 		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
 		const styleSheet = style.sheet as CSSStyleSheet;
@@ -1553,8 +1544,7 @@ const updateStyle = (() => {
 		const styleRules: Array<[ string, number ]> = [];
 		const elementHighlightIds: Array<[ Element, string ]> = [];
 		// 'root' must have [elementHighlighting].
-		collectStyleRules(root, recurse, getNextHighlightClassName, visibilityObserver,
-			range, styleRuleIdxPtr, styleRules, elementHighlightIds);
+		collectStyleRules(root, recurse, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules, elementHighlightIds);
 		elementHighlightIds.forEach(([ element, highlightId ]) => {
 			if (!element.hasAttribute("highlight")) {
 				element.setAttribute("highlight", highlightId);
@@ -1578,14 +1568,14 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
 	}
 	if (highlightTags.flow.has(parent.tagName as TagName)) {
 		const nodes: Array<Text> = [];
-		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, true, highlightTags, nodes);
+		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, true, highlightTags, nodes, visibilityObserver);
 		if (nodes.length) {
-			highlightInFlow(terms, nodes);
+			highlightInFlow(terms, nodes, visibilityObserver);
 		}
 	} else {
-		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, false, highlightTags, []);
+		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, false, highlightTags, [], visibilityObserver);
 	}
-	updateStyle(parent, true, getNextHighlightClassName, visibilityObserver);
+	//updateStyle(parent, true, getNextHighlightClassName);
 	requestRefreshIndicators.next();
 };
 
@@ -1594,7 +1584,7 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
  * @param terms Terms to find and highlight.
  * @param nodes Consecutive text nodes to highlight inside.
  */
-const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
+const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>, visibilityObserver: IntersectionObserver) => {
 	const flow: HighlightFlow = {
 		text: nodes.map(node => node.textContent).join(""),
 		nodeStart: nodes[0],
@@ -1639,6 +1629,9 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>) => {
 			}
 		}
 	}
+	if (flow.boxesInfo.length) {
+		visibilityObserver.observe(getAncestorHighlightable(parent.firstChild as Node));
+	}
 };
 
 const addForAncestorsTemp = (element: Element) => {
@@ -1671,6 +1664,7 @@ const insertHighlights = (
 	ignoreFirstFlow: boolean,
 	highlightTags: HighlightTags,
 	nodes: Array<Text>,
+	visibilityObserver: IntersectionObserver,
 ) => {
 	// TODO support for <iframe>?
 	do {
@@ -1688,15 +1682,15 @@ const insertHighlights = (
 				if (ignoreFirstFlow) {
 					ignoreFirstFlow = false;
 				} else {
-					highlightInFlow(terms, nodes);
+					highlightInFlow(terms, nodes, visibilityObserver);
 				}
 				nodes.splice(0, nodes.length);
 			}
 			if (node[firstChildKey]) {
 				insertHighlights(terms, node[firstChildKey] as ChildNode, firstChildKey, nextSiblingKey,
-					gatherOnlyToBreak, ignoreFirstFlow, highlightTags, nodes);
+					gatherOnlyToBreak, ignoreFirstFlow, highlightTags, nodes, visibilityObserver);
 				if (breaksFlow && nodes.length) {
-					highlightInFlow(terms, nodes);
+					highlightInFlow(terms, nodes, visibilityObserver);
 					nodes.splice(0, nodes.length);
 				}
 			}
@@ -1720,26 +1714,26 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 	if (allowsFlow && root.previousSibling) {
 		let sibling = root.previousSibling;
 		while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
-			insertHighlights(terms, sibling, "lastChild", "previousSibling", true, false, highlightTags, nodes);
+			insertHighlights(terms, sibling, "lastChild", "previousSibling", true, false, highlightTags, nodes, visibilityObserver);
 			sibling = sibling.parentElement as HTMLElement;
 		}
 		nodes.reverse();
 	}
 	if (root.firstChild) {
-		insertHighlights(terms, root.firstChild, "firstChild", "nextSibling", false, false, highlightTags, nodes);
+		insertHighlights(terms, root.firstChild, "firstChild", "nextSibling", false, false, highlightTags, nodes, visibilityObserver);
 	}
 	if (allowsFlow && (root.nodeType === 3 || root.nextSibling)) {
 		let sibling = root.nodeType === 3 ? root : root.nextSibling as Node;
 		while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
-			insertHighlights(terms, sibling, "firstChild", "nextSibling", true, false, highlightTags, nodes);
+			insertHighlights(terms, sibling, "firstChild", "nextSibling", true, false, highlightTags, nodes, visibilityObserver);
 			sibling = sibling.parentElement as HTMLElement;
 		}
 	}
 	if (nodes.length) {
-		highlightInFlow(terms, nodes);
+		highlightInFlow(terms, nodes, visibilityObserver);
 	}
 	updateStyle(root.nodeType === Node.ELEMENT_NODE ? root as Element : root.parentElement as Element, true,
-		getNextHighlightClassName, visibilityObserver);
+		getNextHighlightClassName);
 	requestRefreshIndicators.next();
 };
 
@@ -2203,11 +2197,11 @@ const getTermsFromSelection = () => {
 		const getNextHighlightClassName = getNextHighlightClassNameFn();
 		const visibilityObserver = new IntersectionObserver(entries => entries.forEach(entry => {
 			const elementHighlighting = entry.target["elementHighlighting"] as ElementHighlighting;
-			if (entry.isIntersecting && elementHighlighting && elementHighlighting.flows.some(flow => flow.boxesInfo.length)) {
-				console.log(entry.target);
-				updateStyle(entry.target, false, getNextHighlightClassName, visibilityObserver);
+			if (entry.isIntersecting && elementHighlighting) {
+				console.log(entry.target, getAncestorHighlightable(entry.target.firstChild as Node));
+				updateStyle(getAncestorHighlightable(entry.target.firstChild as Node), false, getNextHighlightClassName);
 			}
-		}), { threshold: 0 });
+		}), { rootMargin: "100px" });
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, getNextHighlightClassName,
 			visibilityObserver,
 			highlightTags, terms);
