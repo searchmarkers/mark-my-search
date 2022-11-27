@@ -1493,10 +1493,10 @@ const updateStyle = (() => {
 				}
 				flow.boxes.push({
 					selector: boxInfo.term.selector,
-					x,
-					y,
-					width: width || textRectBounding.width,
-					height: textRectBounding.height,
+					x: Math.round(x),
+					y: Math.round(y),
+					width: Math.round((width || textRectBounding.width)),
+					height: Math.round(textRectBounding.height),
 				});
 			});
 		});
@@ -1511,19 +1511,19 @@ const updateStyle = (() => {
 	;
 
 	const collectStyleRules = (element: Element, recurse: boolean,
-		getNextHighlightClassName: GetNextHighlightClassName, range: Range, styleRuleIdxPtr: { value: number },
-		styleRules: Array<[ string, number ]>, elementHighlightIds: Array<[ Element, string ]>) => {
+		getNextHighlightId: GetNextHighlightClassName, range: Range, styleRuleIdxPtr: { value: number },
+		styleRules: Array<[ string, number ]>) => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
 		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
 		if (boxes.length) {
 			if (elementHighlighting.highlightId === "") {
-				elementHighlighting.highlightId = getNextHighlightClassName.next().value;
+				elementHighlighting.highlightId = getNextHighlightId.next().value;
+				element.setAttribute("highlight", elementHighlighting.highlightId);
 			}
 			if (elementHighlighting.styleRuleIdx === -1) {
 				elementHighlighting.styleRuleIdx = styleRuleIdxPtr.value;
 				styleRuleIdxPtr.value++;
 			}
-			elementHighlightIds.push([ element, elementHighlighting.highlightId ]);
 			styleRules.push([
 				constructHighlightStyleRule(elementHighlighting.highlightId, boxes),
 				elementHighlighting.styleRuleIdx,
@@ -1531,7 +1531,7 @@ const updateStyle = (() => {
 		}
 		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
 			if (child["elementHighlighting"]) {
-				collectStyleRules(child, recurse, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules, elementHighlightIds);
+				collectStyleRules(child, recurse, getNextHighlightId, range, styleRuleIdxPtr, styleRules);
 			}
 		});
 	};
@@ -1542,16 +1542,13 @@ const updateStyle = (() => {
 		const styleSheet = style.sheet as CSSStyleSheet;
 		const styleRuleIdxPtr = { value: styleSheet.cssRules.length };
 		const styleRules: Array<[ string, number ]> = [];
-		const elementHighlightIds: Array<[ Element, string ]> = [];
 		// 'root' must have [elementHighlighting].
-		collectStyleRules(root, recurse, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules, elementHighlightIds);
-		elementHighlightIds.forEach(([ element, highlightId ]) => {
-			if (!element.hasAttribute("highlight")) {
-				element.setAttribute("highlight", highlightId);
-			}
-		});
+		collectStyleRules(root, recurse, getNextHighlightClassName, range, styleRuleIdxPtr, styleRules);
 		styleRules.forEach(([ rule, idx ]) => {
 			if (idx !== styleSheet.cssRules.length) {
+				if (styleSheet.cssRules.item(idx)?.cssText === rule) {
+					return;
+				}
 				styleSheet.deleteRule(idx);
 			}
 			styleSheet.insertRule(rule, idx);
@@ -1594,8 +1591,7 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>, visibilityObserv
 	};
 	const parent = ((flow.nodeStart.parentElement as Element).contains(flow.nodeEnd.parentElement as Element)
 		? flow.nodeStart.parentElement : flow.nodeEnd.parentElement) as Element;
-	const elementHighlighting = parent["elementHighlighting"] as ElementHighlighting;
-	elementHighlighting.flows.push(flow);
+	(parent["elementHighlighting"] as ElementHighlighting).flows.push(flow);
 	for (const term of terms) {
 		let i = 0;
 		let node = nodes[0];
@@ -1775,7 +1771,7 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 
 // TODO document
 const constructHighlightStyleRule = (highlightId: string, boxes: Array<HighlightBox>): string =>
-	`body [highlight*=${highlightId}] { --mms-boxes: ${JSON.stringify(boxes)}; }`
+	`body [highlight*="${highlightId}"] { --mms-boxes: ${JSON.stringify(boxes)}; }`
 ;
 
 /**
@@ -1958,7 +1954,7 @@ const getTermsFromSelection = () => {
 					const idx = terms.length - 1;
 					insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
 					termsToHighlight.push(terms[idx]);
-					termsToPurge.push(terms[idx]); //FIXME why was this here?
+					//termsToPurge.push(terms[idx]); FIXME why was this here?
 				} else {
 					const term = terms[termToUpdateIdx];
 					termsToPurge.push(Object.assign({}, term));
@@ -2198,7 +2194,6 @@ const getTermsFromSelection = () => {
 		const visibilityObserver = new IntersectionObserver(entries => entries.forEach(entry => {
 			const elementHighlighting = entry.target["elementHighlighting"] as ElementHighlighting;
 			if (entry.isIntersecting && elementHighlighting) {
-				console.log(entry.target, getAncestorHighlightable(entry.target.firstChild as Node));
 				updateStyle(getAncestorHighlightable(entry.target.firstChild as Node), false, getNextHighlightClassName);
 			}
 		}), { rootMargin: "100px" });
