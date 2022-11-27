@@ -1704,7 +1704,8 @@ const insertHighlights = (
  */
 const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
-	getNextHighlightClassName: GetNextHighlightClassName, visibilityObserver: IntersectionObserver) => {
+	getNextHighlightClassName: GetNextHighlightClassName,
+	visibilityObserver: IntersectionObserver, elementsVisible: Set<Element>) => {
 	const nodes: Array<Text> = [];
 	const allowsFlow = root.nodeType !== 1 || highlightTags.flow.has((root as Element).tagName as TagName);
 	if (allowsFlow && root.previousSibling) {
@@ -1728,9 +1729,14 @@ const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
 	if (nodes.length) {
 		highlightInFlow(terms, nodes, visibilityObserver);
 	}
-	updateStyle(root.nodeType === Node.ELEMENT_NODE ? root as Element : root.parentElement as Element, true,
-		getNextHighlightClassName);
-	requestRefreshIndicators.next();
+	elementsVisible.forEach(element => {
+		updateStyle(getAncestorHighlightable(element.firstChild as Node), false, getNextHighlightClassName);
+	});
+	//setTimeout(() =>
+	//	updateStyle(root.nodeType === Node.ELEMENT_NODE ? root as Element : root.parentElement as Element, true,
+	//		getNextHighlightClassName)
+	//);
+	//requestRefreshIndicators.next();
 };
 
 /**
@@ -1865,11 +1871,12 @@ const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
 const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
-	getNextHighlightClassName: GetNextHighlightClassName, visibilityObserver: IntersectionObserver,
+	getNextHighlightClassName: GetNextHighlightClassName,
+	visibilityObserver: IntersectionObserver, elementsVisible: Set<Element>,
 ) => {
 	highlightsRemoveForBranch(termsToPurge);
 	highlightsGenerateForBranch(terms, document.body, highlightTags, requestRefreshIndicators,
-		getNextHighlightClassName, visibilityObserver);
+		getNextHighlightClassName, visibilityObserver, elementsVisible);
 	terms.forEach(term => updateTermOccurringStatus(term));
 	highlightInNodesOnMutation(observer);
 };
@@ -1940,7 +1947,7 @@ const getTermsFromSelection = () => {
 			highlightTags: HighlightTags, hues: TermHues,
 			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
 			getNextHighlightClassName: GetNextHighlightClassName,
-			visibilityObserver: IntersectionObserver,
+			visibilityObserver: IntersectionObserver, elementsVisible: Set<Element>,
 			termsUpdate?: MatchTerms, termUpdate?: MatchTerm,
 			termToUpdateIdx?: TermChange.CREATE | TermChange.REMOVE | number,
 		) => {
@@ -1989,7 +1996,7 @@ const getTermsFromSelection = () => {
 			beginHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
 				highlightTags, requestRefreshIndicators, observer,
-				getNextHighlightClassName, visibilityObserver,
+				getNextHighlightClassName, visibilityObserver, elementsVisible,
 			);
 		};
 	})();
@@ -2191,10 +2198,16 @@ const getTermsFromSelection = () => {
 		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
 		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
 		const getNextHighlightClassName = getNextHighlightClassNameFn();
+		const elementsVisible: Set<Element> = new Set;
 		const visibilityObserver = new IntersectionObserver(entries => entries.forEach(entry => {
 			const elementHighlighting = entry.target["elementHighlighting"] as ElementHighlighting;
-			if (entry.isIntersecting && elementHighlighting) {
-				updateStyle(getAncestorHighlightable(entry.target.firstChild as Node), false, getNextHighlightClassName);
+			if (entry.isIntersecting) {
+				if (elementHighlighting) {
+					elementsVisible.add(entry.target);
+					updateStyle(getAncestorHighlightable(entry.target.firstChild as Node), false, getNextHighlightClassName);
+				}
+			} else {
+				elementsVisible.delete(entry.target);
 			}
 		}), { rootMargin: "100px" });
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, getNextHighlightClassName,
@@ -2257,7 +2270,7 @@ const getTermsFromSelection = () => {
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //
 					getNextHighlightClassName, //
-					visibilityObserver, //
+					visibilityObserver, elementsVisible, //
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
 			}
