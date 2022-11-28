@@ -1575,8 +1575,7 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
 	const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 		ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
 	const ancestor = getAncestorCommon(flow.nodeStart.parentElement as Element, flow.nodeEnd);
-	const ancestorHighlighting = ancestor["elementHighlighting"] as ElementHighlighting;
-	ancestorHighlighting.flows.push(flow);
+	(ancestor["elementHighlighting"] as ElementHighlighting).flows.push(flow);
 	for (const term of terms) {
 		let i = 0;
 		let node = nodes[0];
@@ -1611,10 +1610,12 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
 		}
 	}
 	if (flow.boxesInfo.length) {
-		keepStyleUpdated(getAncestorHighlightable(ancestor.firstChild as Node));
-		if (ancestorHighlighting.highlightId === "") {
-			ancestorHighlighting.highlightId = getNextHighlightId.next().value;
-			ancestor.setAttribute("highlight", ancestorHighlighting.highlightId);
+		const ancestorHighlightable = getAncestorHighlightable(ancestor.firstChild as Node);
+		keepStyleUpdated(ancestorHighlightable);
+		if ((ancestorHighlightable["elementHighlighting"] as ElementHighlighting).highlightId === "") {
+			const highlighting = ancestorHighlightable["elementHighlighting"] as ElementHighlighting;
+			highlighting.highlightId = getNextHighlightId.next().value;
+			ancestorHighlightable.setAttribute("highlight", highlighting.highlightId);
 		}
 	}
 };
