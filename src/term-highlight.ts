@@ -802,8 +802,8 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 const updateTermOccurringStatus = (term: MatchTerm) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-	const hasOccurrences = document.body.querySelector("[highlight]");
-	controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
+	const occurs = !!document.body.querySelector("[highlight]");
+	controlPad.classList[occurs ? "remove" : "add"](getSel(ElementClass.DISABLED));
 };
 
 /**
@@ -811,16 +811,24 @@ const updateTermOccurringStatus = (term: MatchTerm) => {
  * @param term A term to update the tooltip for.
  */
 const updateTermTooltip = (() => {
+	const getFlows = (element: Element): Array<HighlightFlow> =>
+		(element["elementHighlighting"] as ElementHighlighting).flows.concat(Array.from(element.children)
+			.filter(child => child["elementHighlighting"])
+			.map(child => getFlows(child))
+			.reduce((flowPrevious, flow) => flowPrevious.concat(flow), [])
+		)
+	;
+
 	/**
 	 * Gets the number of matches for a term in the document.
 	 * @param term A term to get the occurrence count for.
 	 * @returns The occurrence count for the term.
 	 */
-	const getOccurrenceCount = (term: MatchTerm) => { // TODO make accurate
-		const occurrences = Array.from(document.body.querySelectorAll("[highlight]"));
-		const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
-		return matches ? matches.length : 0;
-	};
+	const getOccurrenceCount = (term: MatchTerm) =>
+		getFlows(document.body)
+			.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
+			.reduce((a, b) => a + b, 0)
+	;
 
 	return (term: MatchTerm) => {
 		const controlPad = (getControl(term) as HTMLElement)
