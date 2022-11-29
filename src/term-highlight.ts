@@ -1428,14 +1428,17 @@ const getAncestorHighlightable = (node: Node) => {
 	return ancestor;
 };
 
-const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
+const calculateBoxesInfoForFlowOwners = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightId: GetNextHighlightID,
 	keepStyleUpdated: KeepStyleUpdated) => {
+	// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
+	// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 	const parent = node.parentElement;
 	if (!parent) {
 		return;
 	}
 	if (highlightTags.flow.has(parent.tagName as TagName)) {
+		// The parent may include non self-contained flows.
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
 		walker.currentNode = node;
 		let breakFirst: Element | null = walker.previousNode() as Element;
@@ -1448,26 +1451,35 @@ const onNodeMovedTemp = (terms: MatchTerms, node: Node, highlightTags: Highlight
 			breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
 		}
 		if (breakFirst && breakLast) {
-			calculateBoxesInfoTemp(terms, parent, highlightTags,
+			// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
+			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin.
+			calculateBoxesInfo(terms, parent, highlightTags,
 				requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 		} else {
-			onNodeMovedTemp(terms, parent, highlightTags,
+			// The flow containing the node may leave the parent, which we assume disrupted the text flows of an ancestor.
+			calculateBoxesInfoForFlowOwners(terms, parent, highlightTags,
 				requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 		}
 	} else {
-		calculateBoxesInfoTemp(terms, parent, highlightTags,
+		// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
+		// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin.
+		calculateBoxesInfo(terms, parent, highlightTags,
 			requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 	}
 };
 
-const onElementMovedTemp = (terms: MatchTerms, element: Element, highlightTags: HighlightTags,
+const calculateBoxesInfoForFlowOwnersFromContent = (terms: MatchTerms, element: Element, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightId: GetNextHighlightID,
 	keepStyleUpdated: KeepStyleUpdated) => {
+	// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
+	// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 	if (highlightTags.flow.has(element.tagName as TagName)) {
-		onNodeMovedTemp(terms, element, highlightTags,
+		// The element may include non self-contained flows.
+		calculateBoxesInfoForFlowOwners(terms, element, highlightTags,
 			requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 	} else {
-		calculateBoxesInfoTemp(terms, element, highlightTags,
+		// The element can only include self-contained flows, so flows need only be recalculated below the element.
+		calculateBoxesInfo(terms, element, highlightTags,
 			requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 	}
 };
@@ -1614,24 +1626,24 @@ const updateStyle = (styleRules: Array<[ string, number ]>) => {
 	});
 };
 
-const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags,
+const calculateBoxesInfo = (terms: MatchTerms, flowOwner: Element, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightId: GetNextHighlightID,
 	keepStyleUpdated: KeepStyleUpdated) => {
-	if (parent.id === "links") {
-		console.log(parent);
+	if (flowOwner.id === "links") {
+		console.log(flowOwner);
 	}
-	if (!parent.firstChild) {
+	if (!flowOwner.firstChild) {
 		return;
 	}
-	if (highlightTags.flow.has(parent.tagName as TagName)) {
+	if (highlightTags.flow.has(flowOwner.tagName as TagName)) {
 		const nodes: Array<Text> = [];
-		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, true, highlightTags, nodes,
+		insertHighlights(terms, flowOwner.firstChild, "firstChild", "nextSibling", false, true, highlightTags, nodes,
 			getNextHighlightId, keepStyleUpdated);
 		if (nodes.length) {
 			highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated);
 		}
 	} else {
-		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, false, highlightTags, [],
+		insertHighlights(terms, flowOwner.firstChild, "firstChild", "nextSibling", false, false, highlightTags, [],
 			getNextHighlightId, keepStyleUpdated);
 	}
 	requestRefreshIndicators.next();
@@ -1766,53 +1778,6 @@ const insertHighlights = (
 };
 
 /**
- * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
- * @param terms Terms to find, highlight, and mark.
- * @param root A node under which to find and highlight term occurrences.
- * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
- * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
- */
-const highlightsGenerateForBranch = (terms: MatchTerms, root: Node,
-	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators,
-	getNextHighlightId: GetNextHighlightID, keepStyleUpdated: KeepStyleUpdated, elementsVisible: Set<Element>) => {
-	const nodes: Array<Text> = [];
-	const allowsFlow = root.nodeType !== 1 || highlightTags.flow.has((root as Element).tagName as TagName);
-	if (allowsFlow && root.previousSibling) {
-		let sibling = root.previousSibling;
-		while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
-			insertHighlights(terms, sibling, "lastChild", "previousSibling", true, false, highlightTags, nodes,
-				getNextHighlightId, keepStyleUpdated);
-			sibling = sibling.parentElement as HTMLElement;
-		}
-		nodes.reverse();
-	}
-	if (root.firstChild) {
-		insertHighlights(terms, root.firstChild, "firstChild", "nextSibling", false, false, highlightTags, nodes,
-			getNextHighlightId, keepStyleUpdated);
-	}
-	if (allowsFlow && (root.nodeType === 3 || root.nextSibling)) {
-		let sibling = root.nodeType === 3 ? root : root.nextSibling as Node;
-		while (sibling.nodeType === 3 || (sibling.nodeType === 1 && highlightTags.flow.has((sibling as HTMLElement).tagName as TagName))) {
-			insertHighlights(terms, sibling, "firstChild", "nextSibling", true, false, highlightTags, nodes,
-				getNextHighlightId, keepStyleUpdated);
-			sibling = sibling.parentElement as HTMLElement;
-		}
-	}
-	if (nodes.length) {
-		highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated);
-	}
-	let styleRules: ReturnType<typeof getStyleRules> = [];
-	elementsVisible.forEach(element => {
-		styleRules = styleRules.concat(getStyleRules(
-			getAncestorHighlightable(element.firstChild as Node),
-			false,
-		));
-	});
-	updateStyle(styleRules);
-	requestRefreshIndicators.next();
-};
-
-/**
  * Remove highlights for matches of terms.
  * @param terms Terms for which to remove highlights. If left empty, all highlights are removed.
  * @param root A root node under which to remove highlights.
@@ -1888,17 +1853,17 @@ const getObserverNodeHighlighter = (() => {
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
 				if (mutation.target.parentElement && mutation.type === "characterData") {
-					onElementMovedTemp(terms, mutation.target.parentElement, highlightTags,
+					calculateBoxesInfoForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
 						requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 				}
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
 						if (canHighlightElement(rejectSelector, node as Element)) {
-							onElementMovedTemp(terms, node as Element, highlightTags,
+							calculateBoxesInfoForFlowOwnersFromContent(terms, node as Element, highlightTags,
 								requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 						}
 					} else if (node.nodeType === Node.TEXT_NODE) {
-						onNodeMovedTemp(terms, node, highlightTags,
+						calculateBoxesInfoForFlowOwners(terms, node, highlightTags,
 							requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 					}
 				}
@@ -1927,28 +1892,6 @@ const highlightInNodesOnMutation = (observer: MutationObserver) => {
 const highlightInNodesOnMutationDisconnect = (observer: MutationObserver) =>
 	observer.disconnect()
 ;
-
-/**
- * Removes previous highlighting, then highlights the document using the terms supplied.
- * Disables then restarts continuous highlighting.
- * @param terms Terms to be continuously found and highlighted within the DOM.
- * @param termsToPurge Terms for which to remove previous highlights.
- * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
- * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
- * @param observer An observer which selectively performs highlighting on observing changes.
- */
-const beginHighlighting = (
-	terms: MatchTerms, termsToPurge: MatchTerms,
-	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
-	getNextHighlightId: GetNextHighlightID,
-	keepStyleUpdated: KeepStyleUpdated, elementsVisible: Set<Element>,
-) => {
-	highlightsRemoveForBranch(termsToPurge);
-	highlightsGenerateForBranch(terms, document.body, highlightTags, requestRefreshIndicators,
-		getNextHighlightId, keepStyleUpdated, elementsVisible);
-	terms.forEach(term => updateTermOccurringStatus(term));
-	highlightInNodesOnMutation(observer);
-};
 
 /**
  * Extracts terms from the currently user-selected string.
@@ -2030,7 +1973,6 @@ const getTermsFromSelection = () => {
 					const idx = terms.length - 1;
 					insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
 					termsToHighlight.push(terms[idx]);
-					//termsToPurge.push(terms[idx]); FIXME why was this here?
 				} else {
 					const term = terms[termToUpdateIdx];
 					termsToPurge.push(Object.assign({}, term));
@@ -2062,11 +2004,14 @@ const getTermsFromSelection = () => {
 				return;
 			}
 			fillStylesheetContent(terms, hues, controlsInfo);
-			beginHighlighting(
-				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-				highlightTags, requestRefreshIndicators, observer,
-				getNextHighlightId, keepStyleUpdated, elementsVisible,
-			);
+			highlightsRemoveForBranch(termsToPurge);
+			calculateBoxesInfo(terms, document.body, highlightTags, requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
+			updateStyle(Array.from(new Set(
+				Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
+			)).flatMap(ancestor => getStyleRules(ancestor, false)));
+			requestRefreshIndicators.next();
+			terms.forEach(term => updateTermOccurringStatus(term));
+			highlightInNodesOnMutation(observer);
 		};
 	})();
 
@@ -2298,7 +2243,7 @@ const getTermsFromSelection = () => {
 					elementsVisible.delete(entry.target);
 					shiftObserver.unobserve(entry.target);
 				}
-			}), { rootMargin: "100px" });
+			}), { rootMargin: "400px" });
 			return element => visibilityObserver.observe(element);
 		})();
 		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
