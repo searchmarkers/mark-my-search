@@ -70,6 +70,8 @@ enum ElementID {
 	BAR_TERMS = "bar-terms",
 	BAR_CONTROLS = "bar-controls",
 	MARKER_GUTTER = "markers",
+	DRAW_CONTAINER = "draw-container",
+	DRAW_ELEMENT = "draw",
 }
 
 enum TermChange {
@@ -111,6 +113,8 @@ interface TermStyle {
 	hue: number
 }
 
+const usePaintNotElement = !this.browser;
+
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
  * __Always__ use for ID, class, and at-rule identifiers.
@@ -127,7 +131,7 @@ const getSel = (identifier: ElementID | ElementClass | AtRuleID, argument?: stri
  * @param terms Terms to account for and style.
  * @param hues Color hues for term styles to cycle through.
  */
-const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
+const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: ControlsInfo) => {
 	const style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
 	const zIndexMax = 2**31 - 1;
 	const makeImportant = (styleText: string): string =>
@@ -139,7 +143,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues) => {
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
 	{ width: 5em; padding: 0 2px 0 2px; margin-left: 4px; border: none; outline: revert;
-	box-sizing: unset; font-family: revert; white-space: pre; color: #000; }
+	box-sizing: unset; font-family: revert; white-space: pre; color: hsl(0 0% 0%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled *,
 #${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)}
@@ -205,7 +209,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Bar */
 #${getSel(ElementID.BAR)}
 	{ all: revert; position: fixed; top: 0; left: 0; z-index: ${zIndexMax};
-	color-scheme: light; font-size: 14.6px; line-height: initial; user-select: none; }
+	color-scheme: light; font-size: ${controlsInfo.barLook.fontSize}; line-height: initial; user-select: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} *
@@ -229,9 +233,10 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus .${getSel(ElementClass.OPTION)}::first-letter
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
-	{ display: none; position: absolute; flex-direction: column; width: max-content; padding: 0; margin: 0; z-index: 1; }
+	{ display: none; position: absolute; flex-direction: column; padding: 0; width: max-content; margin: 0 0 0 4px;
+	z-index: 1; font-size: max(14px, 0.8em); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ display: block; padding-block: 2px; margin-left: 3px; font-size: small; background: hsl(0 0% 94% / 0.76);
+	{ display: block; padding-block: 2px; background: hsl(0 0% 94% / 0.76);
 	color: hsl(0 0% 6%); filter: grayscale(100%); width: 100%; text-align: left;
 	border-width: 2px; border-color: hsl(0 0% 40% / 0.7); border-left-style: solid; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
@@ -242,10 +247,10 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}
 	{ white-space: pre; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ display: flex; height: 1.3em; border-style: none; border-radius: 4px; box-shadow: 1px 1px 5px;
-	background: hsl(0 0% 90% / 0.8); color: #000; }
+	{ display: flex; height: 1.3em; background: hsl(0 0% 90% / ${controlsInfo.barLook.opacityControl}); color: hsl(0 0% 0%);
+	border-style: none; border-radius: ${controlsInfo.barLook.borderRadius}; box-shadow: 1px 1px 5px; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: hsl(0 0% 90% / 0.4); }
+	{ background: hsl(0 0% 90% / min(${controlsInfo.barLook.opacityControl}, 0.4)); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:hover
 	{ background: hsl(0 0% 65%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:active
@@ -253,9 +258,9 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)} > :not(#${getSel(ElementID.BAR_TERMS)})
 > .${getSel(ElementClass.DISABLED)}:not(:focus-within, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: none; }
-#${getSel(ElementID.BAR)} #${getSel(ElementID.BAR_TERMS)}
+#${getSel(ElementID.BAR)}:not(.${getSel(ElementClass.DISABLED)}) #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL_PAD)}.${getSel(ElementClass.DISABLED)}
-	{ display: flex; background: hsl(0 0% 80% / 0.6); }
+	{ display: flex; background: hsl(0 0% 80% / min(${controlsInfo.barLook.opacityTerm}, 0.6)); }
 /**/
 
 /* || Term Scroll Markers */
@@ -273,7 +278,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
 /**/
 	`) + `
-/* || Term Highlight */
+${usePaintNotElement ? `/* || Term Highlight */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [highlight]
 	{ background-image: paint(highlights) !important; --mms-styles: ${JSON.stringify((() => {
 		const styles: TermSelectorStyles = {};
@@ -282,7 +287,11 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 		});
 		return styles;
 	})())}; }
-/**/
+/**/` : `
+#${getSel(ElementID.DRAW_CONTAINER)}
+	{ position: fixed; width: 100%; height: 100%; z-index: -99999; }
+#${getSel(ElementID.DRAW_CONTAINER)} > *
+	{ position: fixed; width: 100%; height: 100%; }`}
 
 /* || Transitions */
 @keyframes ${getSel(AtRuleID.MARKER_ON)}
@@ -296,6 +305,15 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 		const hue = hues[i % hues.length];
 		term.hue = hue;
 		style.textContent += makeImportant(`
+/* || Term Highlights */
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
+~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)},
+#${getSel(ElementID.BAR)}
+~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
+	{ background: ${getBackgroundStyle(i, hues.length, `hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
+	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }
+/**/
+
 /* || Term Scroll Markers */
 #${getSel(ElementID.MARKER_GUTTER)} .${getSel(ElementClass.TERM, term.selector)}
 	{ background: hsl(${hue} 100% 44%); }
@@ -304,10 +322,21 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Term Control Buttons */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(i, hues.length, `hsl(${hue} 70% 70% / 0.8)`, `hsl(${hue} 70% 88% / 0.8)`)}; }
-#${getSel(ElementID.BAR_TERMS)}.${getSel(ElementClass.DISABLED)} .${getSel(ElementClass.TERM, term.selector)}
+	{ background: ${getBackgroundStyle(
+		i,
+		hues.length,
+		`hsl(${hue} 70% 70% / ${controlsInfo.barLook.opacityTerm})`,
+		`hsl(${hue} 70% 88% / ${controlsInfo.barLook.opacityTerm})`,
+	)}; }
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.DISABLED)}
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_PAD)}
-	{ background: ${getBackgroundStyle(i, hues.length, `hsl(${hue} 70% 70% / 0.4)`, `hsl(${hue} 70% 88% / 0.4)`)}; }
+	{ background: ${getBackgroundStyle(
+		i,
+		hues.length,
+		`hsl(${hue} 70% 70% / min(${controlsInfo.barLook.opacityTerm}, 0.4))`,
+		`hsl(${hue} 70% 88% / min(${controlsInfo.barLook.opacityTerm}, 0.4))`,
+	)}; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.TERM, term.selector)}
 .${getSel(ElementClass.CONTROL_BUTTON)}:hover:not(:disabled)
 	{ background: hsl(${hue} 70% 80%); }
@@ -1267,7 +1296,7 @@ const insertControls = (() => {
 
 	return (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
 		highlightTags: HighlightTags, hues: TermHues) => {
-		fillStylesheetContent(terms, hues);
+		fillStylesheetContent(terms, hues, controlsInfo);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
 		bar.ondragstart = event => event.preventDefault();
@@ -1499,8 +1528,7 @@ const getStyleRules = (() => {
 	;
 
 	const collectStyleRules = (element: Element, recurse: boolean,
-		range: Range, styleRuleIdxPtr: { value: number },
-		styleRules: Array<[ string, number ]>) => {
+		range: Range, styleRuleIdxPtr: { value: number }, styleRules: Array<[ string, number ]>) => {
 		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
 		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
 		if (boxes.length) {
@@ -1520,13 +1548,54 @@ const getStyleRules = (() => {
 		});
 	};
 
-	return (root: Element, recurse: boolean): Array<[ string, number ]> => {
-		const range = document.createRange();
+	const collectElements = (element: Element, recurse: boolean, range: Range, containers: Array<Element>) => {
+		const elementHighlighting = element["elementHighlighting"] as ElementHighlighting;
+		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
+		if (boxes.length) {
+			const container = document.createElement("div");
+			container.id = getSel(ElementID.DRAW_ELEMENT, elementHighlighting.highlightId);
+			boxes.forEach(box => {
+				const element = document.createElement("div");
+				element.style.position = "absolute";
+				element.style.left = box.x.toString() + "px";
+				element.style.top = box.y.toString() + "px";
+				element.style.width = box.width.toString() + "px";
+				element.style.height = box.height.toString() + "px";
+				element.classList.add(getSel(ElementClass.TERM, box.selector));
+				container.appendChild(element);
+			});
+			containers.push(container);
+		}
+		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
+			if (child["elementHighlighting"]) {
+				collectElements(child, recurse, range, containers);
+			}
+		});
+	};
+
+	return usePaintNotElement ? (root: Element, recurse: boolean): Array<[ string, number ]> => {
 		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
 		const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
 		const styleRules: Array<[ string, number ]> = [];
 		// 'root' must have [elementHighlighting].
-		collectStyleRules(root, recurse, range, styleRuleIdxPtr, styleRules);
+		collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
+		return styleRules;
+	} : (root: Element, recurse: boolean): Array<[ string, number ]> => {
+		const containers: Array<Element> = [];
+		collectElements(root, recurse, document.createRange(), containers);
+		const parent = document.getElementById(getSel(ElementID.DRAW_CONTAINER)) as Element;
+		containers.forEach(container => {
+			const containerExisting = document.getElementById(container.id);
+			if (containerExisting) {
+				containerExisting.remove();
+			}
+			parent.appendChild(container);
+		});
+		const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+		const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
+		const styleRules: Array<[ string, number ]> = [];
+		// 'root' must have [elementHighlighting].
+		collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
 		return styleRules;
 	};
 })();
@@ -1548,6 +1617,9 @@ const updateStyle = (styleRules: Array<[ string, number ]>) => {
 const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightId: GetNextHighlightID,
 	keepStyleUpdated: KeepStyleUpdated) => {
+	if (parent.id === "links") {
+		console.log(parent);
+	}
 	if (!parent.firstChild) {
 		return;
 	}
@@ -1562,7 +1634,6 @@ const calculateBoxesInfoTemp = (terms: MatchTerms, parent: Element, highlightTag
 		insertHighlights(terms, parent.firstChild, "firstChild", "nextSibling", false, false, highlightTags, [],
 			getNextHighlightId, keepStyleUpdated);
 	}
-	//updateStyle(parent, true, getNextHighlightId);
 	requestRefreshIndicators.next();
 };
 
@@ -1772,8 +1843,10 @@ const highlightsRemoveForBranch = (terms: MatchTerms = [], root: HTMLElement | D
 };
 
 // TODO document
-const constructHighlightStyleRule = (highlightId: string, boxes: Array<HighlightBox>): string =>
+const constructHighlightStyleRule = usePaintNotElement ? (highlightId: string, boxes: Array<HighlightBox>): string =>
 	`body [highlight*="${highlightId}"] { --mms-boxes: ${JSON.stringify(boxes)}; }`
+	: (highlightId: string): string =>
+		`body [highlight*="${highlightId}"] { background: -moz-element(#${getSel(ElementID.DRAW_ELEMENT, highlightId)}) no-repeat !important; }`
 ;
 
 /**
@@ -1814,7 +1887,7 @@ const getObserverNodeHighlighter = (() => {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
-				if ( mutation.target.parentElement && mutation.type === "characterData") {
+				if (mutation.target.parentElement && mutation.type === "characterData") {
 					onElementMovedTemp(terms, mutation.target.parentElement, highlightTags,
 						requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 				}
@@ -1976,7 +2049,7 @@ const getTermsFromSelection = () => {
 						removeTermControl(termRemovedPreviousIdx);
 						terms.splice(termRemovedPreviousIdx, 1);
 						highlightsRemoveForBranch([ termUpdate ]);
-						fillStylesheetContent(terms, hues);
+						fillStylesheetContent(terms, hues, controlsInfo);
 						requestRefreshIndicators.next();
 						return;
 					}
@@ -1988,7 +2061,7 @@ const getTermsFromSelection = () => {
 			} else {
 				return;
 			}
-			fillStylesheetContent(terms, hues);
+			fillStylesheetContent(terms, hues, controlsInfo);
 			beginHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
 				highlightTags, requestRefreshIndicators, observer,
@@ -2010,6 +2083,11 @@ const getTermsFromSelection = () => {
 			const style = document.createElement("style");
 			style.id = getSel(ElementID.STYLE_PAINT);
 			document.head.appendChild(style);
+		}
+		if (!document.getElementById(getSel(ElementID.DRAW_CONTAINER))) {
+			const container = document.createElement("div");
+			container.id = getSel(ElementID.DRAW_CONTAINER);
+			document.body.insertAdjacentElement("afterend", container);
 		}
 	};
 
@@ -2153,22 +2231,28 @@ const getTermsFromSelection = () => {
 
 	return () => {
 		window[WindowFlag.EXECUTION_UNNECESSARY] = true;
-		CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/draw-highlights.js"));
+		if (usePaintNotElement) {
+			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/draw-highlights.js"));
+		}
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
-		const controlsInfo: ControlsInfo = {
+		const controlsInfo: ControlsInfo = { // These values are irrelevant. They should be overridden by highlight messages.
 			highlightsShown: false,
 			barControlsShown: {
-				disableTabResearch: true,
+				disableTabResearch: false,
 				performSearch: false,
-				toggleHighlights: true,
-				appendTerm: true,
-				pinTerms: true,
+				toggleHighlights: false,
+				appendTerm: false,
+				pinTerms: false,
 			},
 			barLook: {
-				showEditIcon: true,
-				showRevealIcon: true,
+				showEditIcon: false,
+				showRevealIcon: false,
+				fontSize: "",
+				opacityControl: 0,
+				opacityTerm: 0,
+				borderRadius: "",
 			},
 			matchMode: {
 				regex: false,
@@ -2179,7 +2263,7 @@ const getTermsFromSelection = () => {
 			},
 		};
 		const highlightTags: HighlightTags = {
-			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title" ]),
+			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title", "textarea" ]),
 			flow: getHighlightTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
 				"mms-h" as HTMLElementTagName ]),
 			// break: any other class of element
