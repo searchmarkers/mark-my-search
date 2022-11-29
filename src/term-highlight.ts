@@ -1,8 +1,7 @@
 type BrowserCommands = Array<chrome.commands.Command>
-type TagName = HTMLElementTagName | Uppercase<HTMLElementTagName>
 type HighlightTags = {
-	reject: ReadonlySet<TagName>,
-	flow: ReadonlySet<TagName>,
+	reject: ReadonlySet<string>,
+	flow: ReadonlySet<string>,
 }
 type TermHues = Array<number>
 type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
@@ -1437,17 +1436,17 @@ const calculateBoxesInfoForFlowOwners = (terms: MatchTerms, node: Node, highligh
 	if (!parent) {
 		return;
 	}
-	if (highlightTags.flow.has(parent.tagName as TagName)) {
+	if (highlightTags.flow.has(parent.tagName)) {
 		// The parent may include non self-contained flows.
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
 		walker.currentNode = node;
 		let breakFirst: Element | null = walker.previousNode() as Element;
-		while (breakFirst && highlightTags.flow.has(breakFirst.tagName as TagName)) {
+		while (breakFirst && highlightTags.flow.has(breakFirst.tagName)) {
 			breakFirst = breakFirst !== parent ? walker.previousNode() as Element : null;
 		}
 		walker.currentNode = node.nextSibling ?? node;
 		let breakLast: Element | null = node.nextSibling ? walker.nextNode() as Element : null;
-		while (breakLast && highlightTags.flow.has(breakLast.tagName as TagName)) {
+		while (breakLast && highlightTags.flow.has(breakLast.tagName)) {
 			breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
 		}
 		if (breakFirst && breakLast) {
@@ -1473,7 +1472,7 @@ const calculateBoxesInfoForFlowOwnersFromContent = (terms: MatchTerms, element: 
 	keepStyleUpdated: KeepStyleUpdated) => {
 	// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
 	// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
-	if (highlightTags.flow.has(element.tagName as TagName)) {
+	if (highlightTags.flow.has(element.tagName)) {
 		// The element may include non self-contained flows.
 		calculateBoxesInfoForFlowOwners(terms, element, highlightTags,
 			requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
@@ -1629,23 +1628,14 @@ const updateStyle = (styleRules: Array<[ string, number ]>) => {
 const calculateBoxesInfo = (terms: MatchTerms, flowOwner: Element, highlightTags: HighlightTags,
 	requestRefreshIndicators: RequestRefreshIndicators, getNextHighlightId: GetNextHighlightID,
 	keepStyleUpdated: KeepStyleUpdated) => {
-	if (flowOwner.id === "links") {
-		console.log(flowOwner);
-	}
 	if (!flowOwner.firstChild) {
 		return;
 	}
-	if (highlightTags.flow.has(flowOwner.tagName as TagName)) {
-		const nodes: Array<Text> = [];
-		insertHighlights(terms, flowOwner.firstChild, "firstChild", "nextSibling", false, true, highlightTags, nodes,
-			getNextHighlightId, keepStyleUpdated);
-		if (nodes.length) {
-			highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated);
-		}
-	} else {
-		insertHighlights(terms, flowOwner.firstChild, "firstChild", "nextSibling", false, false, highlightTags, [],
-			getNextHighlightId, keepStyleUpdated);
-	}
+	const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
+	const textFlows = getTextFlows(flowOwner.firstChild, "firstChild", "nextSibling", highlightTags);
+	textFlows.slice(breaksFlow ? 0 : 1, (breaksFlow && textFlows[textFlows.length - 1].length) ? undefined : -1).forEach(nodes =>
+		highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated)
+	);
 	requestRefreshIndicators.next();
 };
 
@@ -1711,7 +1701,10 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
 	}
 };
 
-const addForAncestorsTemp = (element: Element) => {
+const addForBranchTemp = (element: Element, highlightTags: HighlightTags) => {
+	if (highlightTags.reject.has(element.tagName)) {
+		return;
+	}
 	if (!element["elementHighlighting"]) {
 		element["elementHighlighting"] = {
 			highlightId: "",
@@ -1719,62 +1712,46 @@ const addForAncestorsTemp = (element: Element) => {
 			isPaintable: !element.closest("a"),
 			flows: [],
 		} as ElementHighlighting;
-		if (element.parentElement) {
-			addForAncestorsTemp(element.parentElement);
-		}
 	}
+	Array.from(element.children).forEach(child => addForBranchTemp(child, highlightTags));
 };
 
-/**
+/** TODO update documentation
  * Highlights occurrences of terms in text nodes under a node in the DOM tree.
- * @param terms Terms to find and highlight.
  * @param node A root node under which to match terms and insert highlights.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
- * @param nodes Consecutive text nodes to highlight inside.
+ * @param textFlow Consecutive text nodes to highlight inside.
  */
-const insertHighlights = (
-	terms: MatchTerms,
+const getTextFlows = (
 	node: Node,
 	firstChildKey: "firstChild" | "lastChild",
 	nextSiblingKey: "nextSibling" | "previousSibling",
-	gatherOnlyToBreak: boolean,
-	ignoreFirstFlow: boolean,
 	highlightTags: HighlightTags,
-	nodes: Array<Text>,
-	getNextHighlightId: GetNextHighlightID,
-	keepStyleUpdated: KeepStyleUpdated,
-) => {
+	textFlows: Array<Array<Text>> = [ [] ],
+	textFlow: Array<Text> = textFlows[0],
+): Array<Array<Text>> => {
 	// TODO support for <iframe>?
 	do {
 		if (node.nodeType === 3) {
-			nodes.push(node as Text);
-		} else if ((node.nodeType === 1 || node.nodeType === 11)
-			&& !highlightTags.reject.has((node as Element).tagName as TagName)
-		) {
-			addForAncestorsTemp(node as Element);
-			const breaksFlow = !highlightTags.flow.has((node as Element).tagName as TagName);
-			if (breaksFlow && (nodes.length || gatherOnlyToBreak)) {
-				if (gatherOnlyToBreak) {
-					return;
-				}
-				if (ignoreFirstFlow) {
-					ignoreFirstFlow = false;
-				} else {
-					highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated);
-				}
-				nodes.splice(0, nodes.length);
+			textFlow.push(node as Text);
+		} else if ((node.nodeType === 1 || node.nodeType === 11) && !highlightTags.reject.has((node as Element).tagName)) {
+			const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+			if (breaksFlow && textFlow.length) {
+				textFlow = [];
+				textFlows.push(textFlow);
 			}
 			if (node[firstChildKey]) {
-				insertHighlights(terms, node[firstChildKey] as ChildNode, firstChildKey, nextSiblingKey,
-					gatherOnlyToBreak, ignoreFirstFlow, highlightTags, nodes, getNextHighlightId, keepStyleUpdated);
-				if (breaksFlow && nodes.length) {
-					highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated);
-					nodes.splice(0, nodes.length);
+				getTextFlows(node[firstChildKey] as ChildNode, firstChildKey, nextSiblingKey, highlightTags, textFlows, textFlow);
+				textFlow = textFlows[textFlows.length - 1];
+				if (breaksFlow && textFlow.length) {
+					textFlow = [];
+					textFlows.push(textFlow);
 				}
 			}
 		}
 		node = node[nextSiblingKey] as ChildNode; // May be null (checked by loop condition)
 	} while (node);
+	return textFlows;
 };
 
 /**
@@ -1859,6 +1836,7 @@ const getObserverNodeHighlighter = (() => {
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
 						if (canHighlightElement(rejectSelector, node as Element)) {
+							addForBranchTemp(node as Element, highlightTags);
 							calculateBoxesInfoForFlowOwnersFromContent(terms, node as Element, highlightTags,
 								requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 						}
@@ -2004,12 +1982,12 @@ const getTermsFromSelection = () => {
 				return;
 			}
 			fillStylesheetContent(terms, hues, controlsInfo);
+			addForBranchTemp(document.body, highlightTags);
 			highlightsRemoveForBranch(termsToPurge);
 			calculateBoxesInfo(terms, document.body, highlightTags, requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 			updateStyle(Array.from(new Set(
 				Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
 			)).flatMap(ancestor => getStyleRules(ancestor, false)));
-			requestRefreshIndicators.next();
 			terms.forEach(term => updateTermOccurringStatus(term));
 			highlightInNodesOnMutation(observer);
 		};
@@ -2170,8 +2148,8 @@ const getTermsFromSelection = () => {
 	 * @param tagsLower An array of tag names in their lowercase form.
 	 * @returns The corresponding set of tag names in all forms necessary.
 	 */
-	const getHighlightTagsSet = (tagsLower: Array<HTMLElementTagName>) =>
-		new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ])) as ReadonlySet<TagName>
+	const getHighlightTagsSet = (tagsLower: Array<keyof HTMLElementTagNameMap>) =>
+		new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
 	;
 
 	return () => {
@@ -2210,24 +2188,15 @@ const getTermsFromSelection = () => {
 		const highlightTags: HighlightTags = {
 			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title", "textarea" ]),
 			flow: getHighlightTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
-				"mms-h" as HTMLElementTagName ]),
+				"mms-h" as keyof HTMLElementTagNameMap ]),
 			// break: any other class of element
 		};
-		const rootHighlighting: ElementHighlighting = {
-			highlightId: "",
-			styleRuleIdx: -1,
-			isPaintable: true,
-			flows: [],
-		};
-		document.body["elementHighlighting"] = rootHighlighting;
 		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
 		const elementsVisible: Set<Element> = new Set;
 		const keepStyleUpdated: KeepStyleUpdated = (() => {
 			const shiftObserver = new ResizeObserver(entries => entries.forEach(entry => {
 				if (entry.target["elementHighlighting"]) {
-					updateStyle(
-						getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false),
-					);
+					updateStyle(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
 				}
 			}));
 			const visibilityObserver = new IntersectionObserver(entries => entries.forEach(entry => {
@@ -2235,9 +2204,7 @@ const getTermsFromSelection = () => {
 					if (entry.target["elementHighlighting"]) {
 						elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
-						updateStyle(
-							getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false),
-						);
+						updateStyle(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
 					}
 				} else {
 					elementsVisible.delete(entry.target);

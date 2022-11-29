@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>
 
 /**
