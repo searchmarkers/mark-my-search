@@ -1452,6 +1452,7 @@ const calculateBoxesInfoForFlowOwners = (terms: MatchTerms, node: Node, highligh
 		if (breakFirst && breakLast) {
 			// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
 			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin.
+			// (Example can be seen when loading DuckDuckGo results dynamically) FIXME
 			calculateBoxesInfo(terms, parent, highlightTags,
 				requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
 		} else {
@@ -1633,23 +1634,24 @@ const calculateBoxesInfo = (terms: MatchTerms, flowOwner: Element, highlightTags
 	}
 	const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
 	const textFlows = getTextFlows(flowOwner.firstChild, "firstChild", "nextSibling", highlightTags);
-	textFlows.slice(breaksFlow ? 0 : 1, (breaksFlow && textFlows[textFlows.length - 1].length) ? undefined : -1).forEach(nodes =>
-		highlightInFlow(terms, nodes, getNextHighlightId, keepStyleUpdated)
-	);
+	removeFlowsForBranchTemp(flowOwner, highlightTags);
+	textFlows // The first flow is always before the first break, and the last after the last. Either may be empty.
+		.slice((breaksFlow && textFlows[0].length) ? 0 : 1, (breaksFlow && textFlows[textFlows.length - 1].length) ? undefined : -1)
+		.forEach(textFlow => highlightInFlow(terms, textFlow, getNextHighlightId, keepStyleUpdated));
 	requestRefreshIndicators.next();
 };
 
-/**
+/** TODO update documentation
  * Highlights terms in a 'flow' of consecutive text nodes.
  * @param terms Terms to find and highlight.
- * @param nodes Consecutive text nodes to highlight inside.
+ * @param textFlow Consecutive text nodes to highlight inside.
  */
-const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
+const highlightInFlow = (terms: MatchTerms, textFlow: Array<Text>,
 	getNextHighlightId: GetNextHighlightID, keepStyleUpdated: KeepStyleUpdated) => {
 	const flow: HighlightFlow = {
-		text: nodes.map(node => node.textContent).join(""),
-		nodeStart: nodes[0],
-		nodeEnd: nodes[nodes.length - 1],
+		text: textFlow.map(node => node.textContent).join(""),
+		nodeStart: textFlow[0],
+		nodeEnd: textFlow[textFlow.length - 1],
 		boxesInfo: [],
 		boxes: [],
 	};
@@ -1659,7 +1661,7 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
 	(ancestor["elementHighlighting"] as ElementHighlighting).flows.push(flow);
 	for (const term of terms) {
 		let i = 0;
-		let node = nodes[0];
+		let node = textFlow[0];
 		let textStart = 0;
 		let textEnd = node.length;
 		const matches = flow.text.matchAll(term.pattern);
@@ -1668,7 +1670,7 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
 			const highlightEnd = highlightStart + match[0].length;
 			while (textEnd <= highlightStart) {
 				i++;
-				node = nodes[i];
+				node = textFlow[i];
 				textStart = textEnd;
 				textEnd += node.length;
 			}
@@ -1684,7 +1686,7 @@ const highlightInFlow = (terms: MatchTerms, nodes: Array<Text>,
 					break;
 				}
 				i++;
-				node = nodes[i];
+				node = textFlow[i];
 				textStart = textEnd;
 				textEnd += node.length;
 			}
@@ -1716,6 +1718,16 @@ const addForBranchTemp = (element: Element, highlightTags: HighlightTags) => {
 	Array.from(element.children).forEach(child => addForBranchTemp(child, highlightTags));
 };
 
+const removeFlowsForBranchTemp = (element: Element, highlightTags: HighlightTags) => {
+	if (highlightTags.reject.has(element.tagName)) {
+		return;
+	}
+	if (element["elementHighlighting"]) {
+		(element["elementHighlighting"] as ElementHighlighting).flows = [];
+	}
+	Array.from(element.children).forEach(child => removeFlowsForBranchTemp(child, highlightTags));
+};
+
 /** TODO update documentation
  * Highlights occurrences of terms in text nodes under a node in the DOM tree.
  * @param node A root node under which to match terms and insert highlights.
@@ -1736,7 +1748,7 @@ const getTextFlows = (
 			textFlow.push(node as Text);
 		} else if ((node.nodeType === 1 || node.nodeType === 11) && !highlightTags.reject.has((node as Element).tagName)) {
 			const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
-			if (breaksFlow && textFlow.length) {
+			if (breaksFlow && (textFlow.length || textFlows.length === 1)) { // Ensure the first flow is always the one before a break.
 				textFlow = [];
 				textFlows.push(textFlow);
 			}
@@ -1749,7 +1761,7 @@ const getTextFlows = (
 				}
 			}
 		}
-		node = node[nextSiblingKey] as ChildNode; // May be null (checked by loop condition)
+		node = node[nextSiblingKey] as ChildNode; // May be null (checked by loop condition).
 	} while (node);
 	return textFlows;
 };
