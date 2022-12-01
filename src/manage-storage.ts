@@ -215,16 +215,16 @@ const initializeStorage = async () => {
 	const local = await getStorageLocal();
 	const localOld = { ...local };
 	const toRemove: Array<string> = [];
-	await setStorageLocal(local);
-	if (chrome.storage["session"]) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
-		await chrome.storage.local.remove(toRemove);
-	}
 	if (fixObjectWithDefaults(local, {
 		enabled: true,
 		followLinks: true,
 		persistResearchInstances: true,
 	} as StorageLocalValues, toRemove)) {
 		console.warn("Storage 'local' cleanup rectified issues. Results:", localOld, local); // Use standard logging system?
+	}
+	await setStorageLocal(local);
+	if (chrome.storage["session"]) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
+		await chrome.storage.local.remove(toRemove);
 	}
 	await setStorageSession({
 		researchInstances: {},
