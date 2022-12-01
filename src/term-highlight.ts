@@ -1997,11 +1997,13 @@ const getTermsFromSelection = () => {
 			addForBranchTemp(document.body, highlightTags);
 			highlightsRemoveForBranch(termsToPurge);
 			calculateBoxesInfo(terms, document.body, highlightTags, requestRefreshIndicators, getNextHighlightId, keepStyleUpdated);
-			updateStyle(Array.from(new Set(
-				Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
-			)).flatMap(ancestor => getStyleRules(ancestor, false)));
-			terms.forEach(term => updateTermOccurringStatus(term));
-			highlightInNodesOnMutation(observer);
+			setTimeout(() => {
+				updateStyle(Array.from(new Set(
+					Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
+				)).flatMap(ancestor => getStyleRules(ancestor, false)));
+				terms.forEach(term => updateTermOccurringStatus(term));
+				highlightInNodesOnMutation(observer);
+			});
 		};
 	})();
 
