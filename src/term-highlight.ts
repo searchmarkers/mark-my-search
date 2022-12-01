@@ -284,6 +284,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 ${
 	usePaintNotElement
 		? `/* || Term Highlight */
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] > a
+	{ background: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id]
 	{ background-image: paint(highlights) !important; --mms-styles: ${JSON.stringify((() => {
 		const styles: TermSelectorStyles = {};
@@ -1648,7 +1650,7 @@ const calculateBoxesInfo = (terms: MatchTerms, flowOwner: Element, highlightTags
 	textFlows // The first flow is always before the first break, and the last after the last. Either may be empty.
 		.slice((breaksFlow && textFlows[0].length) ? 0 : 1, (breaksFlow && textFlows[textFlows.length - 1].length) ? undefined : -1)
 		.forEach(textFlow => highlightInFlow(terms, textFlow, getHighlightingId, keepStyleUpdated));
-	requestRefreshIndicators.next();
+	requestRefreshIndicators.next(); // Major performance hit when using very small delay or small delay maximum for debounce.
 };
 
 /** TODO update documentation
@@ -1852,6 +1854,11 @@ const getObserverNodeHighlighter = (() => {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			for (const mutation of mutations) {
+				for (const node of Array.from(mutation.addedNodes)) {
+					if (node.nodeType === Node.ELEMENT_NODE) {
+						addForBranchTemp(node as Element, highlightTags);
+					}
+				}
 				if (mutation.target.parentElement && mutation.type === "characterData") {
 					calculateBoxesInfoForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
 						requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
@@ -1859,7 +1866,6 @@ const getObserverNodeHighlighter = (() => {
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
 						if (canHighlightElement(rejectSelector, node as Element)) {
-							addForBranchTemp(node as Element, highlightTags);
 							calculateBoxesInfoForFlowOwnersFromContent(terms, node as Element, highlightTags,
 								requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
 						}
@@ -2008,12 +2014,12 @@ const getTermsFromSelection = () => {
 			addForBranchTemp(document.body, highlightTags);
 			highlightsRemoveForBranch(termsToPurge);
 			calculateBoxesInfo(terms, document.body, highlightTags, requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
+			highlightInNodesOnMutation(observer);
 			setTimeout(() => {
 				updateStyle(Array.from(new Set(
 					Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
 				)).flatMap(ancestor => getStyleRules(ancestor, false)));
 				terms.forEach(term => updateTermOccurringStatus(term));
-				highlightInNodesOnMutation(observer);
 			});
 		};
 	})();
@@ -2048,8 +2054,8 @@ const getTermsFromSelection = () => {
 	 */
 	const requestRefreshIndicatorsFn = function* (terms: MatchTerms,
 		highlightTags: HighlightTags, hues: TermHues): RequestRefreshIndicators {
-		const requestWaitDuration = 400;
-		const reschedulingDelayMax = 1000;
+		const requestWaitDuration = 150;
+		const reschedulingDelayMax = 2000;
 		const reschedulingRequestCountMargin = 1;
 		let timeRequestAcceptedLast = 0;
 		let requestCount = 0;
