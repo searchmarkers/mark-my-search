@@ -83,6 +83,7 @@ enum TermChange {
 }
 
 interface ControlsInfo {
+	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
@@ -121,7 +122,7 @@ interface TermStyle {
  * Painting is faster and simpler to implement, but is not supported by Firefox or Safari as of 2022-12-01.
  * This affects the __Paint__ algorithm only, having no effect when __Classic__ is in use.
  */
-const usePaintNotElement = !this.browser;
+const useElementForPaint = !this.browser;
 
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
@@ -284,11 +285,26 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Term Highlights */
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
+${
+	// eslint-disable-next-line no-constant-condition
+	true
+		? `
+mms-h
+	{ font: inherit; }
+.${getSel(ElementClass.FOCUS_CONTAINER)}
+	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }`
+		: ""
+}
 /**/
 	`) + `
 ${
-	usePaintNotElement
-		? `/* || Term Highlight */
+	useElementForPaint
+		? `
+#${getSel(ElementID.DRAW_CONTAINER)}
+	{ position: fixed; width: 100%; height: 100%; z-index: -99999; }
+#${getSel(ElementID.DRAW_CONTAINER)} > *
+	{ position: fixed; width: 100%; height: 100%; }`
+		: `/* || Term Highlight */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] > a
 	{ background: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id]
@@ -300,11 +316,6 @@ ${
 		return styles;
 	})())}; }
 /**/`
-		: `
-#${getSel(ElementID.DRAW_CONTAINER)}
-	{ position: fixed; width: 100%; height: 100%; z-index: -99999; }
-#${getSel(ElementID.DRAW_CONTAINER)} > *
-	{ position: fixed; width: 100%; height: 100%; }`
 }
 
 /* || Transitions */
@@ -327,12 +338,24 @@ ${
 		term.hue = hue;
 		style.textContent += makeImportant(`
 /* || Term Highlights */
+${
+	// eslint-disable-next-line no-constant-condition
+	true
+		? `
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
+~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
+#${getSel(ElementID.BAR)}
+~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
+	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
+	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
+		: `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
 ~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
-	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }
+	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
+}
 /**/
 
 /* || Term Scroll Markers */
@@ -833,12 +856,21 @@ const selectInputTextAll = (input: HTMLInputElement) =>
  * Updates the look of a term control to reflect whether or not it occurs within the document.
  * @param term A term to update the term control status for.
  */
-const updateTermOccurringStatus = (term: MatchTerm) => {
-	const controlPad = (getControl(term) as HTMLElement)
-		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-	const occurs = !!document.body.querySelector("[markmysearch-h_id]");
-	controlPad.classList[occurs ? "remove" : "add"](getSel(ElementClass.DISABLED));
-};
+// eslint-disable-next-line no-constant-condition
+const updateTermOccurringStatus = true
+	? (term: MatchTerm) => {
+		const controlPad = (getControl(term) as HTMLElement)
+			.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
+		const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length !== 0;
+		controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
+	}
+	: (term: MatchTerm) => {
+		const controlPad = (getControl(term) as HTMLElement)
+			.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
+		const occurs = !!document.body.querySelector("[markmysearch-h_id]");
+		controlPad.classList[occurs ? "remove" : "add"](getSel(ElementClass.DISABLED));
+	}
+;
 
 /**
  * Updates the tooltip of a term control to reflect current highlighting or extension information as appropriate.
@@ -858,10 +890,17 @@ const updateTermTooltip = (() => {
 	 * @param term A term to get the occurrence count for.
 	 * @returns The occurrence count for the term.
 	 */
-	const getOccurrenceCount = (term: MatchTerm) =>
-		getFlows(document.body)
-			.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
-			.reduce((a, b) => a + b, 0)
+	// eslint-disable-next-line no-constant-condition
+	const getOccurrenceCount = true
+		? (term: MatchTerm) => { // TODO make accurate
+			const occurrences = Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)));
+			const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
+			return matches ? matches.length : 0;
+		}
+		: (term: MatchTerm) =>
+			getFlows(document.body)
+				.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
+				.reduce((a, b) => a + b, 0)
 	;
 
 	return (term: MatchTerm) => {
@@ -1682,11 +1721,11 @@ const boxesInfoRemoveForTerms = (terms: MatchTerms = [], root: HTMLElement | Doc
 };
 
 // TODO document
-const constructHighlightStyleRule = usePaintNotElement
-	? (highlightId: string, boxes: Array<HighlightBox>): string =>
-		`body [markmysearch-h_id="${highlightId}"] { --mms-boxes: ${JSON.stringify(boxes)}; }`
-	: (highlightId: string): string =>
+const constructHighlightStyleRule = useElementForPaint
+	? (highlightId: string): string =>
 		`body [markmysearch-h_id="${highlightId}"] { background: -moz-element(#${getSel(ElementID.DRAW_ELEMENT, highlightId)}) no-repeat !important; }`
+	: (highlightId: string, boxes: Array<HighlightBox>): string =>
+		`body [markmysearch-h_id="${highlightId}"] { --mms-boxes: ${JSON.stringify(boxes)}; }`
 ;
 
 const getStyleRules = (() => {
@@ -1790,16 +1829,8 @@ const getStyleRules = (() => {
 		});
 	};
 
-	return usePaintNotElement
+	return useElementForPaint
 		? (root: Element, recurse: boolean): Array<[ string, number ]> => {
-			const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-			const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
-			const styleRules: Array<[ string, number ]> = [];
-			// 'root' must have [elementInfo].
-			collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
-			return styleRules;
-		}
-		: (root: Element, recurse: boolean): Array<[ string, number ]> => {
 			const containers: Array<Element> = [];
 			collectElements(root, recurse, document.createRange(), containers);
 			const parent = document.getElementById(getSel(ElementID.DRAW_CONTAINER)) as Element;
@@ -1810,6 +1841,14 @@ const getStyleRules = (() => {
 				}
 				parent.appendChild(container);
 			});
+			const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+			const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
+			const styleRules: Array<[ string, number ]> = [];
+			// 'root' must have [elementInfo].
+			collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
+			return styleRules;
+		}
+		: (root: Element, recurse: boolean): Array<[ string, number ]> => {
 			const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
 			const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
 			const styleRules: Array<[ string, number ]> = [];
@@ -1834,6 +1873,262 @@ const styleUpdate = (styleRules: Array<[ string, number ]>) => {
 };
 
 /*
+LEGACY
+Obsolete versions of methods to support the classic highlighting algorithm.
+*/
+
+interface UnbrokenNodeListItem {
+	value: Text
+	next: UnbrokenNodeListItem | null
+}
+
+// Singly linked list implementation for efficient highlight matching of node DOM 'flow' groups
+class UnbrokenNodeList {
+	first: UnbrokenNodeListItem | null;
+	last: UnbrokenNodeListItem | null;
+
+	push (value: Text) {
+		if (this.last) {
+			this.last.next = { value, next: null };
+			this.last = this.last.next;
+		} else {
+			this.first = { value, next: null };
+			this.last = this.first;
+		}
+	}
+
+	insertAfter (itemBefore: UnbrokenNodeListItem | null, value: Text | null) {
+		if (value) {
+			if (itemBefore) {
+				itemBefore.next = { next: itemBefore.next, value };
+			} else {
+				this.first = { next: this.first, value };
+			}
+		}
+	}
+
+	getText () {
+		let text = "";
+		let current = this.first;
+		do {
+			text += (current as UnbrokenNodeListItem).value.textContent;
+		// eslint-disable-next-line no-cond-assign
+		} while (current = (current as UnbrokenNodeListItem).next);
+		return text;
+	}
+
+	clear () {
+		this.first = null;
+		this.last = null;
+	}
+
+	*[Symbol.iterator] () {
+		let current = this.first;
+		do {
+			yield current as UnbrokenNodeListItem;
+		// eslint-disable-next-line no-cond-assign
+		} while (current = (current as UnbrokenNodeListItem).next);
+	}
+}
+
+/**
+ * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
+ * @param terms Terms to find, highlight, and mark.
+ * @param rootNode A node under which to find and highlight term occurrences.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
+ */
+const generateTermHighlightsUnderNode = (() => {
+	/**
+	 * Highlights a term matched in a text node.
+	 * @param term The term matched.
+	 * @param textEndNode The text node to highlight inside.
+	 * @param start The first character index of the match within the text node.
+	 * @param end The last character index of the match within the text node.
+	 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
+	 * @param nodeItemPrevious The previous item in the text node list.
+	 * @returns The new previous item (the item just highlighted).
+	 */
+	const highlightInsideNode = (term: MatchTerm, textEndNode: Node, start: number, end: number,
+		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null): UnbrokenNodeListItem => {
+		// TODO add strategy for mitigating damage (caused by programmatic changes by the website)
+		const text = textEndNode.textContent as string;
+		const textStart = text.substring(0, start);
+		const highlight = document.createElement("mms-h");
+		highlight.classList.add(getSel(ElementClass.TERM, term.selector));
+		highlight.textContent = text.substring(start, end);
+		textEndNode.textContent = text.substring(end);
+		(textEndNode.parentNode as Node).insertBefore(highlight, textEndNode);
+		nodeItems.insertAfter(nodeItemPrevious, highlight.firstChild as Text);
+		if (textStart !== "") {
+			const textStartNode = document.createTextNode(textStart);
+			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
+			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
+			return ((nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem)
+				.next as UnbrokenNodeListItem;
+		}
+		return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem;
+	};
+
+	/**
+	 * Highlights terms in a block of consecutive text nodes.
+	 * @param terms Terms to find and highlight.
+	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
+	 */
+	const highlightInBlock = (terms: MatchTerms, nodeItems: UnbrokenNodeList) => {
+		const textFlow = nodeItems.getText();
+		for (const term of terms) {
+			let nodeItemPrevious: UnbrokenNodeListItem | null = null;
+			let nodeItem: UnbrokenNodeListItem | null = nodeItems.first as UnbrokenNodeListItem;
+			let textStart = 0;
+			let textEnd = nodeItem.value.length;
+			const matches = textFlow.matchAll(term.pattern);
+			for (const match of matches) {
+				let highlightStart = match.index as number;
+				const highlightEnd = highlightStart + match[0].length;
+				while (textEnd <= highlightStart) {
+					nodeItemPrevious = nodeItem;
+					nodeItem = nodeItem.next as UnbrokenNodeListItem;
+					textStart = textEnd;
+					textEnd += nodeItem.value.length;
+				}
+				// eslint-disable-next-line no-constant-condition
+				while (true) {
+					nodeItemPrevious = highlightInsideNode(
+						term,
+						nodeItem.value,
+						highlightStart - textStart,
+						Math.min(highlightEnd - textStart, textEnd),
+						nodeItems,
+						nodeItemPrevious,
+					);
+					highlightStart = textEnd;
+					textStart = highlightEnd;
+					if (highlightEnd <= textEnd) {
+						break;
+					}
+					nodeItemPrevious = nodeItem;
+					nodeItem = nodeItem.next as UnbrokenNodeListItem;
+					textStart = textEnd;
+					textEnd += nodeItem.value.length;
+				}
+			}
+		}
+	};
+
+	/**
+	 * Highlights occurrences of terms in text nodes under a node in the DOM tree.
+	 * @param terms Terms to find and highlight.
+	 * @param node A root node under which to match terms and insert highlights.
+	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+	 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
+	 * @param visitSiblings Whether to visit the siblings of the root node.
+	 */
+	const insertHighlights = (terms: MatchTerms, node: Node, highlightTags: HighlightTags,
+		nodeItems = new UnbrokenNodeList, visitSiblings = true) => {
+		// TODO support for <iframe>?
+		do {
+			switch (node.nodeType) {
+			case (1): // Node.ELEMENT_NODE
+			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
+				if (!highlightTags.reject.has((node as Element).tagName)) {
+					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+					if (breaksFlow && nodeItems.first) {
+						highlightInBlock(terms, nodeItems);
+						nodeItems.clear();
+					}
+					if (node.firstChild) {
+						insertHighlights(terms, node.firstChild, highlightTags, nodeItems);
+						if (breaksFlow && nodeItems.first) {
+							highlightInBlock(terms, nodeItems);
+							nodeItems.clear();
+						}
+					}
+				}
+				break;
+			} case (3): { // Node.TEXT_NODE
+				nodeItems.push(node as Text);
+				break;
+			}}
+			node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
+		} while (node && visitSiblings);
+	};
+
+	return (terms: MatchTerms, rootNode: Node,
+		highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators) => {
+		if (rootNode.nodeType === Node.TEXT_NODE) {
+			const nodeItems = new UnbrokenNodeList;
+			nodeItems.push(rootNode as Text);
+			highlightInBlock(terms, nodeItems);
+		} else {
+			insertHighlights(terms, rootNode, highlightTags, new UnbrokenNodeList, false);
+		}
+		requestRefreshIndicators.next();
+	};
+})();
+
+/**
+ * Remove all uses of a class name in elements under a root node in the DOM tree.
+ * @param className A class name to purge.
+ * @param root A root node under which to purge the class (non-inclusive).
+ * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
+ * @param predicate A function called for each element, the condition of which must be met in order to purge from that element.
+ */
+const purgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "",
+	predicate?: (classList: DOMTokenList) => boolean) =>
+	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(predicate
+		? element => predicate(element.classList) ? element.classList.remove(className) : undefined
+		: element => element.classList.remove(className) // Predicate not called when not supplied, for efficiency (bulk purges)
+	)
+;
+
+/**
+ * Revert all direct DOM tree changes under a root node introduced by the extension.
+ * Circumstantial and non-direct alterations may remain.
+ * @param classNames Class names of the highlights to remove. If left empty, all highlights are removed.
+ * @param root A root node under which to remove highlights.
+ */
+const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
+	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
+	for (const highlight of Array.from(highlights)) {
+		highlight.outerHTML = highlight.innerHTML;
+	}
+	if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+		root = (root as DocumentFragment).getRootNode() as HTMLElement;
+		if (root.nodeType === Node.TEXT_NODE) {
+			return;
+		}
+	}
+	purgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
+	purgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
+	elementsRemakeUnfocusable(root as HTMLElement);
+};
+
+/**
+ * Removes previous highlighting, then highlights the document using the terms supplied.
+ * Disables then restarts continuous highlighting.
+ * @param terms Terms to be continuously found and highlighted within the DOM.
+ * @param termsToPurge Terms for which to remove previous highlights.
+ * @param pageModifyEnabled Indicates whether to modify page content.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
+ * @param observer An observer which selectively performs highlighting on observing changes.
+ */
+const beginHighlighting = (
+	terms: MatchTerms, termsToPurge: MatchTerms,
+	pageModifyEnabled: boolean,
+	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
+) => {
+	highlightInNodesOnMutationDisconnect(observer);
+	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
+	if (pageModifyEnabled) {
+		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
+		terms.forEach(term => updateTermOccurringStatus(term));
+		highlightInNodesOnMutation(observer);
+	}
+};
+
+/*
 ADMINISTRATION
 Methods for managing the various content components of the highlighter and its UI.
 */
@@ -1855,36 +2150,56 @@ const getObserverNodeHighlighter = (() => {
 		!element.closest(rejectSelector) && element.tagName !== "MMS-H"
 	;
 
-	return (requestRefreshIndicators: RequestRefreshIndicators, getHighlightingId: GetHighlightingID,
-		keepStyleUpdated: KeepStyleUpdated,
-		highlightTags: HighlightTags, terms: MatchTerms) => {
-		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		return new MutationObserver(mutations => {
-			for (const mutation of mutations) {
-				for (const node of Array.from(mutation.addedNodes)) {
-					if (node.nodeType === Node.ELEMENT_NODE) {
-						cacheExtend(node as Element, highlightTags);
+	// eslint-disable-next-line no-constant-condition
+	return true
+		? (requestRefreshIndicators: RequestRefreshIndicators, getHighlightingId: GetHighlightingID,
+			keepStyleUpdated: KeepStyleUpdated,
+			highlightTags: HighlightTags, terms: MatchTerms) => {
+			const rejectSelector = Array.from(highlightTags.reject).join(", ");
+			return new MutationObserver(mutations => {
+				for (const mutation of mutations) {
+					for (const node of Array.from(mutation.addedNodes)) {
+						// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
+						if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
+							restoreNodes([], node as HTMLElement | DocumentFragment);
+							generateTermHighlightsUnderNode(terms, node, highlightTags, requestRefreshIndicators);
+						}
 					}
 				}
-				if (mutation.target.parentElement && mutation.type === "characterData") {
-					boxesInfoCalculateForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
-						requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
-				}
-				for (const node of Array.from(mutation.addedNodes)) {
-					if (node.nodeType === Node.ELEMENT_NODE) {
-						if (canHighlightElement(rejectSelector, node as Element)) {
-							boxesInfoCalculateForFlowOwnersFromContent(terms, node as Element, highlightTags,
-								requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
+				terms.forEach(term => updateTermOccurringStatus(term));
+			});
+		}
+		: (requestRefreshIndicators: RequestRefreshIndicators, getHighlightingId: GetHighlightingID,
+			keepStyleUpdated: KeepStyleUpdated,
+			highlightTags: HighlightTags, terms: MatchTerms) => {
+			const rejectSelector = Array.from(highlightTags.reject).join(", ");
+			return new MutationObserver(mutations => {
+				for (const mutation of mutations) {
+					for (const node of Array.from(mutation.addedNodes)) {
+						if (node.nodeType === Node.ELEMENT_NODE) {
+							cacheExtend(node as Element, highlightTags);
 						}
-					} else if (node.nodeType === Node.TEXT_NODE) {
-						boxesInfoCalculateForFlowOwners(terms, node, highlightTags,
+					}
+					if (mutation.target.parentElement && mutation.type === "characterData") {
+						boxesInfoCalculateForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
 							requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
 					}
+					for (const node of Array.from(mutation.addedNodes)) {
+						if (node.nodeType === Node.ELEMENT_NODE) {
+							if (canHighlightElement(rejectSelector, node as Element)) {
+								boxesInfoCalculateForFlowOwnersFromContent(terms, node as Element, highlightTags,
+									requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
+							}
+						} else if (node.nodeType === Node.TEXT_NODE) {
+							boxesInfoCalculateForFlowOwners(terms, node, highlightTags,
+								requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
+						}
+					}
 				}
-			}
-			terms.forEach(term => updateTermOccurringStatus(term));
-		});
-	};
+				terms.forEach(term => updateTermOccurringStatus(term));
+			});
+		}
+	;
 })();
 
 /**
@@ -2018,16 +2333,25 @@ const getTermsFromSelection = () => {
 				return;
 			}
 			fillStylesheetContent(terms, hues, controlsInfo);
-			cacheExtend(document.body, highlightTags);
-			boxesInfoRemoveForTerms(termsToPurge);
-			boxesInfoCalculate(terms, document.body, highlightTags, requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
-			highlightInNodesOnMutation(observer);
-			setTimeout(() => {
-				styleUpdate(Array.from(new Set(
-					Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
-				)).flatMap(ancestor => getStyleRules(ancestor, false)));
-				terms.forEach(term => updateTermOccurringStatus(term));
-			});
+			// eslint-disable-next-line no-constant-condition
+			if (true) {
+				beginHighlighting(
+					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+					controlsInfo.pageModifyEnabled,
+					highlightTags, requestRefreshIndicators, observer,
+				);
+			} else {
+				cacheExtend(document.body, highlightTags);
+				boxesInfoRemoveForTerms(termsToPurge);
+				boxesInfoCalculate(terms, document.body, highlightTags, requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
+				highlightInNodesOnMutation(observer);
+				setTimeout(() => {
+					styleUpdate(Array.from(new Set(
+						Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
+					)).flatMap(ancestor => getStyleRules(ancestor, false)));
+					terms.forEach(term => updateTermOccurringStatus(term));
+				});
+			}
 		};
 	})();
 
@@ -2191,13 +2515,14 @@ const getTermsFromSelection = () => {
 
 	return () => {
 		window[WindowFlag.EXECUTION_UNNECESSARY] = true;
-		if (usePaintNotElement) {
+		if (!useElementForPaint) {
 			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/draw-highlights.js"));
 		}
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = { // These values are irrelevant. They should be overridden by highlight messages.
+			pageModifyEnabled: true,
 			highlightsShown: false,
 			barControlsShown: {
 				disableTabResearch: false,

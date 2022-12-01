@@ -104,6 +104,21 @@ const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearc
 };
 
 /**
+ * Determines whether the user has permitted pages with the given URL to be deeply modified during highlighting,
+ * which is powerful but may be destructive.
+ * @param urlString The valid URL string corresponding to a page to be potentially highlighted.
+ * @param urlFilters URL filter preferences.
+ * @returns `true` if the corresponding page may be modified, `false` otherwise.
+ */
+const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues[StorageSync.URL_FILTERS]) => {
+	try {
+		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
+	} catch {
+		return true;
+	}
+};
+
+/**
  * Determines whether a URL is filtered in by a given URL filter.
  * @param url A URL object.
  * @param urlFilter A URL filter array, the component strings of which may contain wildcards.
@@ -393,6 +408,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
 				matchMode: sync.matchModeDefaults,
+				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
 			if (termsDistinctFromLists.length) {
 				setStorageSession(session);
@@ -687,6 +703,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
 				matchMode: sync.matchModeDefaults,
+				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
 				command: message.highlightCommand,
 			});
 		} else if (message.terms !== undefined) {

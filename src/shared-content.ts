@@ -219,6 +219,7 @@ interface HighlightMessage {
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
 	deactivate?: boolean
+	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	autoOverwritable?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
