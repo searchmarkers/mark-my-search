@@ -170,13 +170,15 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)}
 .${getSel(ElementClass.CONTROL_PAD)} .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: none; }
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)})
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.PRIMARY)}
 	{ display: block; }
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)} input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)})
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.CONTROL_PAD)}
+input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)})
 + .${getSel(ElementClass.CONTROL_EDIT)} .${getSel(ElementClass.SECONDARY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
@@ -353,7 +355,8 @@ ${
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
-~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
+~ #${getSel(ElementID.DRAW_CONTAINER)}
+.${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
 	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
 }
@@ -442,25 +445,85 @@ const elementsRemakeUnfocusable = (root = document.body) => {
  * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
  * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const jumpToTermPaint = (() => {
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
-		const getFocusRange = (): Range => {
-			const selection = document.getSelection();
-			const selected = selection ? selection.anchorNode : null;
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			const focused = document.activeElement;
-			const range = document.createRange();
-			if (!selected) {
-				//range.setStart(focused ?? reverse ? getNodeFinal(document.body) : document.body);
+	const getNodeFinal = (node: Node): Node =>
+		node.lastChild ? getNodeFinal(node.lastChild) : node
+	;
+
+	/**
+	 * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
+	 * @param element An element.
+	 * @returns `true` if visible, `false` otherwise.
+	 */
+	const isVisible = (element: HTMLElement) => // TODO improve
+		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
+		&& getComputedStyle(element).visibility !== "hidden"
+	;
+
+	const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
+		element.focus({ preventScroll: true });
+		if (document.activeElement !== element) {
+			if (filter(element)) {
+				focusClosest(element.parentElement as HTMLElement, filter);
+			} else if (document.activeElement) {
+				(document.activeElement as HTMLElement).blur();
 			}
-			return range;
-		};
-		const range = getFocusRange();
-		console.log(range);
+		}
+	};
+
+	return (reverse: boolean, term?: MatchTerm, nodeStart?: Node) => {
+		purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
+		const selection = document.getSelection();
+		if (!selection) {
+			return;
+		}
+		const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
+		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
+		const nodeSelected = selection ? selection.anchorNode : null;
+		const nodeFocused = document.activeElement
+			? (document.activeElement === document.body || bar.contains(document.activeElement))
+				? null
+				: document.activeElement as HTMLElement
+			: null;
+		const nodeCurrent = nodeStart ?? (nodeFocused
+			? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
+			: nodeSelected ?? nodeBegin);
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
+			element[ElementProperty.INFO]
+			&& (element[ElementProperty.INFO] as ElementInfo).flows.some(flow =>
+				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.selector === term.selector) : flow.boxesInfo.length
+			) && isVisible(element)
+				? NodeFilter.FILTER_ACCEPT
+				: NodeFilter.FILTER_SKIP
+		);
+		walker.currentNode = nodeCurrent;
+		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
+		if (nodeFocused) {
+			nodeFocused.blur();
+		}
+		const element = walker[nextNodeMethod]() as HTMLElement | null;
+		if (!element) {
+			if (!nodeStart) {
+				jumpToTermPaint(reverse, term, nodeBegin);
+			}
+			return;
+		}
+		element.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
+		console.log(element);
+		focusClosest(element, element =>
+			element[ElementProperty.INFO] && !!(element[ElementProperty.INFO] as ElementInfo).flows
+		);
+		selection.setBaseAndExtent(element, 0, element, 0);
+		element.scrollIntoView({ behavior: "smooth", block: "center" });
 	};
 })();
+
+const jumpToTerm = (highlightTags: HighlightTags, reverse: boolean, term: MatchTerm | undefined,
+	controlsInfo: ControlsInfo) =>
+	controlsInfo.classicReplacesPaint
+		? jumpToTermClassic(highlightTags, reverse, term)
+		: jumpToTermPaint(reverse, term)
+;
 
 /*
 USER INTERFACE
@@ -829,14 +892,14 @@ const getTermControlMatchModeFromClassList = (classList: DOMTokenList): MatchMod
  * @param idx The index of the term.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  */
-const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: HighlightTags) => {
+const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: HighlightTags, controlsInfo: ControlsInfo) => {
 	const control = getControl(undefined, idx) as HTMLElement;
 	control.className = "";
 	control.classList.add(getSel(ElementClass.CONTROL));
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
-	controlContent.onclick = () => jumpToTermClassic(highlightTags, false, term);
+	controlContent.onclick = () => jumpToTerm(highlightTags, false, term, controlsInfo);
 	controlContent.textContent = term.phrase;
 	// TODO make function
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
@@ -1018,7 +1081,7 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
-	controlContent.onclick = () => jumpToTermClassic(highlightTags, false, term);
+	controlContent.onclick = () => jumpToTerm(highlightTags, false, term, controlsInfo);
 	controlPad.appendChild(controlContent);
 	const controlEdit = document.createElement("button");
 	controlEdit.type = "button";
@@ -2382,7 +2445,7 @@ const getTermsFromSelection = () => {
 					term.matchMode = termUpdate.matchMode;
 					term.phrase = termUpdate.phrase;
 					term.compile();
-					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags);
+					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags, controlsInfo);
 					termsToHighlight.push(term);
 				}
 			} else if (termsUpdate !== undefined) {
@@ -2420,7 +2483,8 @@ const getTermsFromSelection = () => {
 			} else {
 				cacheExtend(document.body, highlightTags);
 				boxesInfoRemoveForTerms(termsToPurge);
-				boxesInfoCalculate(terms, document.body, highlightTags, requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
+				boxesInfoCalculate(terms, document.body, highlightTags,
+					requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
 				highlightInNodesOnMutation(observer);
 				setTimeout(() => {
 					styleUpdate(Array.from(new Set(
@@ -2464,7 +2528,9 @@ const getTermsFromSelection = () => {
 		highlightTags: HighlightTags, hues: TermHues, controlsInfo: ControlsInfo): RequestRefreshIndicators {
 		const getRequestWaitDuration = () => controlsInfo.classicReplacesPaint ? 1000 : 150;
 		const getReschedulingDelayMax = () => controlsInfo.classicReplacesPaint ? 5000 : 2000;
-		const getInsertScrollMarkersFn = () => controlsInfo.classicReplacesPaint ? insertScrollMarkersClassic : insertScrollMarkersPaint;
+		const getInsertScrollMarkersFn = () => controlsInfo.classicReplacesPaint
+			? insertScrollMarkersClassic
+			: insertScrollMarkersPaint;
 		const reschedulingRequestCountMargin = 1;
 		let timeRequestAcceptedLast = 0;
 		let requestCount = 0;
@@ -2498,7 +2564,7 @@ const getTermsFromSelection = () => {
 	 * @param terms Terms being controlled, highlighted, and jumped to.
 	 */
 	const produceEffectOnCommandFn = function* (terms: MatchTerms,
-		highlightTags: HighlightTags): ProduceEffectOnCommand {
+		highlightTags: HighlightTags, controlsInfo: ControlsInfo): ProduceEffectOnCommand {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
 		while (true) {
@@ -2517,11 +2583,8 @@ const getTermsFromSelection = () => {
 				selectModeFocus = !selectModeFocus;
 				break;
 			} case CommandType.ADVANCE_GLOBAL: {
-				if (selectModeFocus) {
-					jumpToTermClassic(highlightTags, commandInfo.reversed ?? false, terms[focusedIdx]);
-				} else {
-					jumpToTermClassic(highlightTags, commandInfo.reversed ?? false);
-				}
+				jumpToTerm(highlightTags, commandInfo.reversed ?? false, selectModeFocus ? terms[focusedIdx] : undefined,
+					controlsInfo);
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
 				const control = getControl(undefined, commandInfo.termIdx);
@@ -2568,7 +2631,7 @@ const getTermsFromSelection = () => {
 				focusedIdx = getFocusedIdx(commandInfo.termIdx as number);
 				barTerms.classList.add(getSel(ElementClass.CONTROL_PAD, focusedIdx));
 				if (!selectModeFocus) {
-					jumpToTermClassic(highlightTags, commandInfo.reversed as boolean, terms[focusedIdx]);
+					jumpToTerm(highlightTags, commandInfo.reversed as boolean, terms[focusedIdx], controlsInfo);
 				}
 				break;
 			}}
@@ -2660,7 +2723,7 @@ const getTermsFromSelection = () => {
 				},
 			};
 		})();
-		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
+		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags, controlsInfo);
 		const getHighlightingId = getHighlightingIdFn();
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, getHighlightingId,
 			keepStyleUpdated, highlightTags, terms, controlsInfo);
