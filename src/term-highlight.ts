@@ -1458,7 +1458,7 @@ Methods for handling scrollbar highlight-flow position markers.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param hues Color hues for term styles to cycle through.
  */
-const insertScrollMarkers = (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
+const insertScrollMarkersPaint = (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
 	if (terms.length === 0) {
 		return; // Efficient escape in case of no possible markers to be inserted.
 	}
@@ -2094,6 +2094,67 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
 };
 
 /**
+ * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
+ * @param terms Terms highlighted in the page to mark the scroll position of.
+ * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
+ * @param hues Color hues for term styles to cycle through.
+ */
+const insertScrollMarkersClassic = (() => {
+	/**
+	 * Extracts the selector of a term from its prefixed class name form.
+	 * @param highlightClassName The single class name of a term highlight.
+	 * @returns The corresponding term selector.
+	 */
+	const getTermSelector = (highlightClassName: string) =>
+		highlightClassName.slice(getSel(ElementClass.TERM).length + 1)
+	;
+
+	return (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
+		if (terms.length === 0) {
+			return; // No terms results in an empty selector, which is not allowed.
+		}
+		const regexMatchTermSelector = new RegExp(`\\b${getSel(ElementClass.TERM)}(?:-\\w+)+\\b`);
+		const containerBlockSelector = getContainerBlockSelector(highlightTags);
+		const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
+		const containersInfo: Array<{
+			container: HTMLElement
+			termsAdded: Set<string>
+		}> = [];
+		let markersHtml = "";
+		document.body.querySelectorAll(terms
+			.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
+			.map(term => `mms-h.${getSel(ElementClass.TERM, term.selector)}`)
+			.join(", ")
+		).forEach((highlight: HTMLElement) => {
+			const container = getContainerBlock(highlight, highlightTags, containerBlockSelector);
+			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
+			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
+			const yRelative = getElementYRelative(container);
+			let markerCss = `top: ${yRelative * 100}%;`;
+			if (containerIdx !== -1) {
+				if (containersInfo[containerIdx].container === container) {
+					if (containersInfo[containerIdx].termsAdded.has(getTermSelector(className))) {
+						return;
+					} else {
+						const termsAddedCount = Array.from(containersInfo[containerIdx].termsAdded).length;
+						markerCss += `padding-left: ${termsAddedCount * 5}px; z-index: ${termsAddedCount * -1}`;
+						containersInfo[containerIdx].termsAdded.add(getTermSelector(className));
+					}
+				} else {
+					containersInfo.splice(containerIdx);
+					containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
+				}
+			} else {
+				containersInfo.push({ container, termsAdded: new Set([ getTermSelector(className) ]) });
+			}
+			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
+		});
+		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
+		gutter.innerHTML = markersHtml;
+	};
+})();
+
+/**
  * Removes previous highlighting, then highlights the document using the terms supplied.
  * Disables then restarts continuous highlighting.
  * @param terms Terms to be continuously found and highlighted within the DOM.
@@ -2109,7 +2170,9 @@ const beginHighlighting = (
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
-	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
+	if (termsToPurge.length) {
+		restoreNodes(termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)));
+	}
 	generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
 	terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
 	highlightInNodesOnMutation(observer);
@@ -2368,28 +2431,30 @@ const getTermsFromSelection = () => {
 	 */
 	const requestRefreshIndicatorsFn = function* (terms: MatchTerms,
 		highlightTags: HighlightTags, hues: TermHues, controlsInfo: ControlsInfo): RequestRefreshIndicators {
-		const requestWaitDuration = 150;
-		const reschedulingDelayMax = 2000;
+		const getRequestWaitDuration = () => controlsInfo.classicReplacesPaint ? 1000 : 150;
+		const getReschedulingDelayMax = () => controlsInfo.classicReplacesPaint ? 5000 : 2000;
+		const getInsertScrollMarkersFn = () => controlsInfo.classicReplacesPaint ? insertScrollMarkersClassic : insertScrollMarkersPaint;
 		const reschedulingRequestCountMargin = 1;
 		let timeRequestAcceptedLast = 0;
 		let requestCount = 0;
 		const scheduleRefresh = () =>
 			setTimeout(() => {
+				console.log(getRequestWaitDuration());
 				const dateMs = Date.now();
 				if (requestCount > reschedulingRequestCountMargin
-					&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax) {
+					&& dateMs < timeRequestAcceptedLast + getReschedulingDelayMax()) {
 					requestCount = 0;
 					scheduleRefresh();
 					return;
 				}
 				requestCount = 0;
-				insertScrollMarkers(terms, highlightTags, hues);
+				getInsertScrollMarkersFn()(terms, highlightTags, hues);
 				terms.forEach(term => updateTermTooltip(term, controlsInfo));
-			}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates).
+			}, getRequestWaitDuration() + 50); // Arbitrary small amount added to account for lag (preventing lost updates).
 		while (true) {
 			requestCount++;
 			const dateMs = Date.now();
-			if (dateMs > timeRequestAcceptedLast + requestWaitDuration) {
+			if (dateMs > timeRequestAcceptedLast + getRequestWaitDuration()) {
 				timeRequestAcceptedLast = dateMs;
 				scheduleRefresh();
 			}
@@ -2539,7 +2604,7 @@ const getTermsFromSelection = () => {
 		};
 		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues, controlsInfo);
 		const elementsVisible: Set<Element> = new Set;
-		const keepStyleUpdated: KeepStyleUpdated = (() => {
+		const { keepStyleUpdated, stopObserving }: { keepStyleUpdated: KeepStyleUpdated, stopObserving: () => void } = (() => {
 			const shiftObserver = new ResizeObserver(entries => entries.forEach(entry => {
 				if (entry.target[ElementProperty.INFO]) {
 					styleUpdate(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
@@ -2557,7 +2622,13 @@ const getTermsFromSelection = () => {
 					shiftObserver.unobserve(entry.target);
 				}
 			}), { rootMargin: "400px" });
-			return element => visibilityObserver.observe(element);
+			return {
+				keepStyleUpdated: element => visibilityObserver.observe(element),
+				stopObserving: () => {
+					shiftObserver.disconnect();
+					visibilityObserver.disconnect();
+				},
+			};
 		})();
 		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
 		const getHighlightingId = getHighlightingIdFn();
@@ -2579,9 +2650,13 @@ const getTermsFromSelection = () => {
 			}
 			if (message.useClassicHighlighting !== undefined) {
 				controlsInfo.classicReplacesPaint = message.useClassicHighlighting;
+				console.log(controlsInfo.classicReplacesPaint);
 			}
 			if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
+				if (!controlsInfo.pageModifyEnabled) {
+					stopObserving();
+				}
 			}
 			if (message.extensionCommands) {
 				commands.splice(0);
