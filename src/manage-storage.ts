@@ -43,7 +43,8 @@ type StorageSyncValues = {
 		opacityTerm: number
 		borderRadius: string
 	}
-	[StorageSync.HIGHLIGHT_LOOK]: {
+	[StorageSync.HIGHLIGHT_METHOD]: {
+		classicReplacesPaint: boolean
 		hues: Array<number>
 	}
 	[StorageSync.URL_FILTERS]: {
@@ -80,7 +81,7 @@ enum StorageSync {
 	SHOW_HIGHLIGHTS = "showHighlights",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
-	HIGHLIGHT_LOOK = "highlightLook",
+	HIGHLIGHT_METHOD = "highlightMethod",
 	URL_FILTERS = "urlFilters",
 	TERM_LISTS = "termLists",
 }
@@ -142,7 +143,8 @@ const defaultOptions: StorageSyncValues = {
 		opacityTerm: 0.86,
 		borderRadius: "4px",
 	},
-	highlightLook: {
+	highlightMethod: {
+		classicReplacesPaint: false,
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 	urlFilters: {

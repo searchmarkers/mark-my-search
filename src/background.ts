@@ -352,7 +352,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			StorageSync.SHOW_HIGHLIGHTS,
 			StorageSync.BAR_CONTROLS_SHOWN,
 			StorageSync.BAR_LOOK,
-			StorageSync.HIGHLIGHT_LOOK,
+			StorageSync.HIGHLIGHT_METHOD,
 			StorageSync.MATCH_MODE_DEFAULTS,
 			StorageSync.URL_FILTERS,
 			StorageSync.TERM_LISTS,
@@ -406,8 +406,9 @@ const updateActionIcon = (enabled?: boolean) =>
 				autoOverwritable: researchInstance.autoOverwritable,
 				barControlsShown: sync.barControlsShown,
 				barLook: sync.barLook,
-				highlightLook: sync.highlightLook,
+				highlightLook: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
+				useClassicHighlighting: sync.highlightMethod.classicReplacesPaint,
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
 			if (termsDistinctFromLists.length) {
@@ -688,7 +689,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			const sync = await getStorageSync([
 				StorageSync.BAR_CONTROLS_SHOWN,
 				StorageSync.BAR_LOOK,
-				StorageSync.HIGHLIGHT_LOOK,
+				StorageSync.HIGHLIGHT_METHOD,
 				StorageSync.MATCH_MODE_DEFAULTS,
 				StorageSync.URL_FILTERS,
 			]);
@@ -701,8 +702,9 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				autoOverwritable: researchInstance.autoOverwritable,
 				barControlsShown: sync.barControlsShown,
 				barLook: sync.barLook,
-				highlightLook: sync.highlightLook,
+				highlightLook: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
+				useClassicHighlighting: sync.highlightMethod.classicReplacesPaint,
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
 				command: message.highlightCommand,
 			});

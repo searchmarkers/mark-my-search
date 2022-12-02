@@ -1,8 +1,8 @@
 class PainterHighlights {
 	static get inputProperties () {
 		return [
-			"--mms-styles",
-			"--mms-boxes",
+			"--markmysearch-styles",
+			"--markmysearch-boxes",
 		];
 	}
 
@@ -11,8 +11,8 @@ class PainterHighlights {
 		size: { width: number, height: number },
 		properties: { get: (property: string) => { toString: () => string } },
 	) {
-		const selectorStyles = JSON.parse(properties.get("--mms-styles").toString() || "{}") as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--mms-boxes").toString() || "[]") as Array<HighlightBox>;
+		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles").toString() || "{}") as TermSelectorStyles;
+		const boxes = JSON.parse(properties.get("--markmysearch-boxes").toString() || "[]") as Array<HighlightBox>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.selector];
 			if (!style) {
@@ -26,4 +26,4 @@ class PainterHighlights {
 	}
 }
 
-globalThis["registerPaint"]("highlights", PainterHighlights);
+globalThis["registerPaint"]("markmysearch-highlights", PainterHighlights);

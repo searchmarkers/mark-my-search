@@ -83,6 +83,7 @@ enum TermChange {
 }
 
 interface ControlsInfo {
+	classicReplacesPaint: boolean
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
@@ -120,9 +121,9 @@ interface TermStyle {
 /**
  * Whether the preferred `paint()` CSS function (Painting API) should be used over the experimental `element()`.
  * Painting is faster and simpler to implement, but is not supported by Firefox or Safari as of 2022-12-01.
- * This affects the __Paint__ algorithm only, having no effect when __Classic__ is in use.
+ * This affects the __Paint__ algorithm only, with no effect when __Classic__ is in use.
  */
-const useElementForPaint = !this.browser;
+const useElementForPaint = this.browser;
 
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
@@ -286,8 +287,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }
 ${
-	// eslint-disable-next-line no-constant-condition
-	true
+	controlsInfo.classicReplacesPaint
 		? `
 mms-h
 	{ font: inherit; }
@@ -298,17 +298,19 @@ mms-h
 /**/
 	`) + `
 ${
-	useElementForPaint
-		? `
+	controlsInfo.classicReplacesPaint
+		? ""
+		: useElementForPaint
+			? `
 #${getSel(ElementID.DRAW_CONTAINER)}
 	{ position: fixed; width: 100%; height: 100%; z-index: -99999; }
 #${getSel(ElementID.DRAW_CONTAINER)} > *
 	{ position: fixed; width: 100%; height: 100%; }`
-		: `/* || Term Highlight */
+			: `/* || Term Highlight */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] > a
 	{ background: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id]
-	{ background-image: paint(highlights) !important; --mms-styles: ${JSON.stringify((() => {
+	{ background-image: paint(markmysearch-highlights) !important; --markmysearch-styles: ${JSON.stringify((() => {
 		const styles: TermSelectorStyles = {};
 		terms.forEach((term, i) => {
 			styles[term.selector] = { hue: hues[i % hues.length] };
@@ -339,8 +341,7 @@ ${
 		style.textContent += makeImportant(`
 /* || Term Highlights */
 ${
-	// eslint-disable-next-line no-constant-condition
-	true
+	controlsInfo.classicReplacesPaint
 		? `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
@@ -852,70 +853,56 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 	input.setSelectionRange(0, input.value.length)
 ;
 
+const getHighlightFlows = (element: Element): Array<HighlightFlow> =>
+	(element[ElementProperty.INFO] as ElementInfo).flows.concat(Array.from(element.children)
+		.filter(child => child[ElementProperty.INFO])
+		.map(child => getHighlightFlows(child))
+		.reduce((flowPrevious, flow) => flowPrevious.concat(flow), [])
+	)
+;
+
+/**
+ * Gets the number of matches for a term in the document.
+ * @param term A term to get the occurrence count for.
+ * @returns The occurrence count for the term.
+ */
+const getTermOccurrenceCount = (term: MatchTerm, controlsInfo: ControlsInfo): number => controlsInfo.classicReplacesPaint
+	? (() => { // Increasingly inaccurate as highlights elements are more often split.
+		const occurrences = Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)));
+		const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
+		return matches ? matches.length : 0;
+	})()
+	: getHighlightFlows(document.body)
+		.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
+		.reduce((a, b) => a + b, 0)
+;
+
 /**
  * Updates the look of a term control to reflect whether or not it occurs within the document.
  * @param term A term to update the term control status for.
  */
-// eslint-disable-next-line no-constant-condition
-const updateTermOccurringStatus = true
-	? (term: MatchTerm) => {
-		const controlPad = (getControl(term) as HTMLElement)
-			.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-		const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length !== 0;
-		controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
-	}
-	: (term: MatchTerm) => {
-		const controlPad = (getControl(term) as HTMLElement)
-			.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-		const occurs = !!document.body.querySelector("[markmysearch-h_id]");
-		controlPad.classList[occurs ? "remove" : "add"](getSel(ElementClass.DISABLED));
-	}
-;
+const updateTermOccurringStatus = (term: MatchTerm, controlsInfo: ControlsInfo) => {
+	const controlPad = (getControl(term) as HTMLElement)
+		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
+	controlPad.classList[getTermOccurrenceCount(term, controlsInfo) ? "remove" : "add"](getSel(ElementClass.DISABLED));
+};
 
 /**
  * Updates the tooltip of a term control to reflect current highlighting or extension information as appropriate.
  * @param term A term to update the tooltip for.
  */
-const updateTermTooltip = (() => {
-	const getFlows = (element: Element): Array<HighlightFlow> =>
-		(element[ElementProperty.INFO] as ElementInfo).flows.concat(Array.from(element.children)
-			.filter(child => child[ElementProperty.INFO])
-			.map(child => getFlows(child))
-			.reduce((flowPrevious, flow) => flowPrevious.concat(flow), [])
-		)
-	;
-
-	/**
-	 * Gets the number of matches for a term in the document.
-	 * @param term A term to get the occurrence count for.
-	 * @returns The occurrence count for the term.
-	 */
-	// eslint-disable-next-line no-constant-condition
-	const getOccurrenceCount = true
-		? (term: MatchTerm) => { // TODO make accurate
-			const occurrences = Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)));
-			const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
-			return matches ? matches.length : 0;
-		}
-		: (term: MatchTerm) =>
-			getFlows(document.body)
-				.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
-				.reduce((a, b) => a + b, 0)
-	;
-
-	return (term: MatchTerm) => {
-		const controlPad = (getControl(term) as HTMLElement)
-			.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-		const controlContent = controlPad
-			.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
-		const occurrenceCount = getOccurrenceCount(term);
-		controlContent.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
-			!occurrenceCount || !term.command ? ""
-				: occurrenceCount === 1 ? `\nJump to: ${term.command} or ${term.commandReverse}`
-					: `\nJump to next: ${term.command}\nJump to previous: ${term.commandReverse}`
-		}`;
-	};
-})();
+const updateTermTooltip = (term: MatchTerm, controlsInfo: ControlsInfo) => {
+	const controlPad = (getControl(term) as HTMLElement)
+		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
+	const controlContent = controlPad
+		.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
+	const occurrenceCount = getTermOccurrenceCount(term, controlsInfo);
+	controlContent.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
+		!occurrenceCount || !term.command ? ""
+			: occurrenceCount === 1 ? `\nJump to: ${term.command} or ${term.commandReverse}`
+				: `\nJump to next: ${term.command}\nJump to previous: ${term.commandReverse}`
+	}`;
+};
 
 /**
  * Gets the term match type identifier for a match option.
@@ -1725,7 +1712,7 @@ const constructHighlightStyleRule = useElementForPaint
 	? (highlightId: string): string =>
 		`body [markmysearch-h_id="${highlightId}"] { background: -moz-element(#${getSel(ElementID.DRAW_ELEMENT, highlightId)}) no-repeat !important; }`
 	: (highlightId: string, boxes: Array<HighlightBox>): string =>
-		`body [markmysearch-h_id="${highlightId}"] { --mms-boxes: ${JSON.stringify(boxes)}; }`
+		`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`
 ;
 
 const getStyleRules = (() => {
@@ -1882,7 +1869,9 @@ interface UnbrokenNodeListItem {
 	next: UnbrokenNodeListItem | null
 }
 
-// Singly linked list implementation for efficient highlight matching of node DOM 'flow' groups
+/**
+ * Singly linked list implementation for efficient highlight matching of node DOM 'flow' groups.
+ */
 class UnbrokenNodeList {
 	first: UnbrokenNodeListItem | null;
 	last: UnbrokenNodeListItem | null;
@@ -2116,16 +2105,14 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
  */
 const beginHighlighting = (
 	terms: MatchTerms, termsToPurge: MatchTerms,
-	pageModifyEnabled: boolean,
+	controlsInfo: ControlsInfo,
 	highlightTags: HighlightTags, requestRefreshIndicators: RequestRefreshIndicators, observer: MutationObserver,
 ) => {
 	highlightInNodesOnMutationDisconnect(observer);
 	restoreNodes(termsToPurge.length ? termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)) : []);
-	if (pageModifyEnabled) {
-		generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
-		terms.forEach(term => updateTermOccurringStatus(term));
-		highlightInNodesOnMutation(observer);
-	}
+	generateTermHighlightsUnderNode(terms, document.body, highlightTags, requestRefreshIndicators);
+	terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
+	highlightInNodesOnMutation(observer);
 };
 
 /*
@@ -2150,30 +2137,23 @@ const getObserverNodeHighlighter = (() => {
 		!element.closest(rejectSelector) && element.tagName !== "MMS-H"
 	;
 
-	// eslint-disable-next-line no-constant-condition
-	return true
-		? (requestRefreshIndicators: RequestRefreshIndicators, getHighlightingId: GetHighlightingID,
-			keepStyleUpdated: KeepStyleUpdated,
-			highlightTags: HighlightTags, terms: MatchTerms) => {
-			const rejectSelector = Array.from(highlightTags.reject).join(", ");
-			return new MutationObserver(mutations => {
+	return (requestRefreshIndicators: RequestRefreshIndicators, getHighlightingId: GetHighlightingID,
+		keepStyleUpdated: KeepStyleUpdated,
+		highlightTags: HighlightTags, terms: MatchTerms, controlsInfo: ControlsInfo) => {
+		const rejectSelector = Array.from(highlightTags.reject).join(", ");
+		return new MutationObserver(mutations => {
+			if (controlsInfo.classicReplacesPaint) {
 				for (const mutation of mutations) {
 					for (const node of Array.from(mutation.addedNodes)) {
-						// Node.ELEMENT_NODE, Node.DOCUMENT_FRAGMENT_NODE
-						if ((node.nodeType === 1 || node.nodeType === 11) && canHighlightElement(rejectSelector, node as Element)) {
+						if ((node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE)
+							&& canHighlightElement(rejectSelector, node as Element)) {
 							restoreNodes([], node as HTMLElement | DocumentFragment);
 							generateTermHighlightsUnderNode(terms, node, highlightTags, requestRefreshIndicators);
 						}
 					}
 				}
-				terms.forEach(term => updateTermOccurringStatus(term));
-			});
-		}
-		: (requestRefreshIndicators: RequestRefreshIndicators, getHighlightingId: GetHighlightingID,
-			keepStyleUpdated: KeepStyleUpdated,
-			highlightTags: HighlightTags, terms: MatchTerms) => {
-			const rejectSelector = Array.from(highlightTags.reject).join(", ");
-			return new MutationObserver(mutations => {
+				terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
+			} else {
 				for (const mutation of mutations) {
 					for (const node of Array.from(mutation.addedNodes)) {
 						if (node.nodeType === Node.ELEMENT_NODE) {
@@ -2196,10 +2176,10 @@ const getObserverNodeHighlighter = (() => {
 						}
 					}
 				}
-				terms.forEach(term => updateTermOccurringStatus(term));
-			});
-		}
-	;
+				terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
+			}
+		});
+	};
 })();
 
 /**
@@ -2333,12 +2313,15 @@ const getTermsFromSelection = () => {
 				return;
 			}
 			fillStylesheetContent(terms, hues, controlsInfo);
-			// eslint-disable-next-line no-constant-condition
-			if (true) {
+			if (!controlsInfo.pageModifyEnabled) {
+				const bar = document.getElementById(getSel(ElementID.BAR)) as Element;
+				bar.classList.add(getSel(ElementClass.DISABLED));
+				return;
+			}
+			if (controlsInfo.classicReplacesPaint) {
 				beginHighlighting(
 					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-					controlsInfo.pageModifyEnabled,
-					highlightTags, requestRefreshIndicators, observer,
+					controlsInfo, highlightTags, requestRefreshIndicators, observer,
 				);
 			} else {
 				cacheExtend(document.body, highlightTags);
@@ -2349,7 +2332,7 @@ const getTermsFromSelection = () => {
 					styleUpdate(Array.from(new Set(
 						Array.from(elementsVisible).map(element => getAncestorHighlightable(element.firstChild as Node))
 					)).flatMap(ancestor => getStyleRules(ancestor, false)));
-					terms.forEach(term => updateTermOccurringStatus(term));
+					terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
 				});
 			}
 		};
@@ -2384,7 +2367,7 @@ const getTermsFromSelection = () => {
 	 * @param hues Color hues for term styles to cycle through.
 	 */
 	const requestRefreshIndicatorsFn = function* (terms: MatchTerms,
-		highlightTags: HighlightTags, hues: TermHues): RequestRefreshIndicators {
+		highlightTags: HighlightTags, hues: TermHues, controlsInfo: ControlsInfo): RequestRefreshIndicators {
 		const requestWaitDuration = 150;
 		const reschedulingDelayMax = 2000;
 		const reschedulingRequestCountMargin = 1;
@@ -2401,7 +2384,7 @@ const getTermsFromSelection = () => {
 				}
 				requestCount = 0;
 				insertScrollMarkers(terms, highlightTags, hues);
-				terms.forEach(term => updateTermTooltip(term));
+				terms.forEach(term => updateTermTooltip(term, controlsInfo));
 			}, requestWaitDuration + 50); // Arbitrary small amount added to account for lag (preventing lost updates).
 		while (true) {
 			requestCount++;
@@ -2521,8 +2504,9 @@ const getTermsFromSelection = () => {
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
-		const controlsInfo: ControlsInfo = { // These values are irrelevant. They should be overridden by highlight messages.
-			pageModifyEnabled: true,
+		const controlsInfo: ControlsInfo = { // Unless otherwise indicated, the values assigned here are arbitrary and to be overriden.
+			classicReplacesPaint: false, // Currently has an effect.
+			pageModifyEnabled: true, // Currently has an effect.
 			highlightsShown: false,
 			barControlsShown: {
 				disableTabResearch: false,
@@ -2553,7 +2537,7 @@ const getTermsFromSelection = () => {
 				"mms-h" as keyof HTMLElementTagNameMap ]),
 			// break: any other class of element
 		};
-		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
+		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues, controlsInfo);
 		const elementsVisible: Set<Element> = new Set;
 		const keepStyleUpdated: KeepStyleUpdated = (() => {
 			const shiftObserver = new ResizeObserver(entries => entries.forEach(entry => {
@@ -2578,7 +2562,7 @@ const getTermsFromSelection = () => {
 		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
 		const getHighlightingId = getHighlightingIdFn();
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, getHighlightingId,
-			keepStyleUpdated, highlightTags, terms);
+			keepStyleUpdated, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 		insertStyleElements();
 		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
@@ -2592,6 +2576,12 @@ const getTermsFromSelection = () => {
 					details.highlightsShown = controlsInfo.highlightsShown;
 				}
 				sendResponse(details);
+			}
+			if (message.useClassicHighlighting !== undefined) {
+				controlsInfo.classicReplacesPaint = message.useClassicHighlighting;
+			}
+			if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
+				controlsInfo.pageModifyEnabled = message.enablePageModify;
 			}
 			if (message.extensionCommands) {
 				commands.splice(0);

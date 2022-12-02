@@ -4,7 +4,7 @@ type OptionsInfo = Array<{
 		label: string
 		preferences?: Partial<Record<keyof StorageSyncValues["barControlsShown"]
 			| keyof StorageSyncValues["barLook"]
-			| keyof StorageSyncValues["highlightLook"]
+			| keyof StorageSyncValues["highlightMethod"]
 			| keyof StorageSyncValues["showHighlights"]
 			| keyof StorageSyncValues["autoFindOptions"]
 			| keyof StorageSyncValues["matchModeDefaults"], {
@@ -268,9 +268,13 @@ label[for]:hover
 						},
 					},
 				},
-				highlightLook: {
-					label: "Keyword highlighting style",
+				highlightMethod: {
+					label: "Keyword highlighting method and style",
 					preferences: {
+						classicReplacesPaint: {
+							label: "Use instant highlighting (may damage websites)",
+							type: PreferenceType.BOOLEAN,
+						},
 						hues: {
 							label: "Highlight color hue cycle",
 							type: PreferenceType.ARRAY,
