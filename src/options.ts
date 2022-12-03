@@ -9,6 +9,7 @@ type OptionsInfo = Array<{
 			| keyof StorageSyncValues["autoFindOptions"]
 			| keyof StorageSyncValues["matchModeDefaults"], {
 			label: string
+			tooltip?: string
 			type: PreferenceType
 		}>>
 		type?: PreferenceType
@@ -171,6 +172,7 @@ label[for]:hover
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
 				preferenceLabel.textContent = preferenceInfo.label;
+				preferenceLabel.title = preferenceInfo.tooltip ?? "";
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
 				inputDefault.disabled = true;
@@ -272,7 +274,25 @@ label[for]:hover
 					label: "Keyword highlighting method and style",
 					preferences: {
 						classicReplacesPaint: {
-							label: "Use instant highlighting (may damage websites)",
+							label: "Use CLASSIC highlighting (hover for details)",
+							tooltip:
+`Mark My Search has two highlighting methods. \
+CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
+PAINT is an alternative model invented for Mark My Search.
+
+CLASSIC
+• Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.
+	• Rendering is expensive, and makes the page sluggish when there are many highlights.
+• Not efficient at matching time. The page can freeze for several seconds if many highlights are inserted.
+• Causes parts of webpages to look different or break.
+
+PAINT
+• Not efficient at idle time. Highlight positions need to be recalculated on scrolling or layout changing.
+	• Smooth but CPU heavy.
+	• Large numbers of highlights are handled well.
+• Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
+• Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
+							,
 							type: PreferenceType.BOOLEAN,
 						},
 						hues: {

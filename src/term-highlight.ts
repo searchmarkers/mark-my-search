@@ -96,7 +96,6 @@ interface HighlightFlow {
 	nodeStart: Text
 	nodeEnd: Text
 	boxesInfo: Array<HighlightBoxInfo>
-	boxes: Array<HighlightBox>
 }
 
 interface HighlightBoxInfo {
@@ -104,6 +103,7 @@ interface HighlightBoxInfo {
 	node: Text
 	start: number
 	end: number
+	boxes: Array<HighlightBox>
 }
 
 interface HighlightBox {
@@ -116,6 +116,7 @@ interface HighlightBox {
 
 interface TermStyle {
 	hue: number
+	cycle: number
 }
 
 /**
@@ -315,7 +316,10 @@ ${
 	{ background-image: paint(markmysearch-highlights) !important; --markmysearch-styles: ${JSON.stringify((() => {
 		const styles: TermSelectorStyles = {};
 		terms.forEach((term, i) => {
-			styles[term.selector] = { hue: hues[i % hues.length] };
+			styles[term.selector] = {
+				hue: hues[i % hues.length],
+				cycle: Math.floor(i / hues.length),
+			};
 		});
 		return styles;
 	})())}; }
@@ -333,12 +337,17 @@ ${
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		const isAboveStyleLevel = (level: number) => i >= hues.length * level;
-		const getBackgroundStyle = (colorA: string, colorB: string) =>
+		const getBackgroundStylePaint = (colorA: string, colorB: string) =>
 			isAboveStyleLevel(1)
-				?  `repeating-linear-gradient(${
+				? `linear-gradient(${isAboveStyleLevel(2) ? colorB : colorA} 50%, ${isAboveStyleLevel(2) ? colorA : colorB} 50%)`
+				: colorA;
+		const getBackgroundStyleClassic = (colorA: string, colorB: string) =>
+			isAboveStyleLevel(1)
+				? `repeating-linear-gradient(${
 					isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
 				}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
 				: colorA;
+		const getBackgroundStyle = controlsInfo.classicReplacesPaint ? getBackgroundStyleClassic : getBackgroundStylePaint;
 		term.hue = hue;
 		style.textContent += makeImportant(`
 /* || Term Highlights */
@@ -439,6 +448,16 @@ const elementsRemakeUnfocusable = (root = document.body) => {
 		});
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const jumpToScrollMarkerPaint = (term: MatchTerm | undefined, container: HTMLElement) => {
+	// Depends on scroll markers refreshed Paint implementation (TODO)
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const jumpToScrollMarker = (term: MatchTerm | undefined, container: HTMLElement, controlsInfo: ControlsInfo) =>
+	jumpToScrollMarkerClassic(term, container)
+;
+
 /**
  * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
@@ -471,7 +490,7 @@ const jumpToTermPaint = (() => {
 		}
 	};
 
-	return (reverse: boolean, term?: MatchTerm, nodeStart?: Node) => {
+	return (controlsInfo: ControlsInfo, reverse: boolean, term?: MatchTerm, nodeStart?: Node) => {
 		purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
 		const selection = document.getSelection();
 		if (!selection) {
@@ -504,25 +523,25 @@ const jumpToTermPaint = (() => {
 		const element = walker[nextNodeMethod]() as HTMLElement | null;
 		if (!element) {
 			if (!nodeStart) {
-				jumpToTermPaint(reverse, term, nodeBegin);
+				jumpToTermPaint(controlsInfo, reverse, term, nodeBegin);
 			}
 			return;
 		}
 		element.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
-		console.log(element);
 		focusClosest(element, element =>
 			element[ElementProperty.INFO] && !!(element[ElementProperty.INFO] as ElementInfo).flows
 		);
 		selection.setBaseAndExtent(element, 0, element, 0);
 		element.scrollIntoView({ behavior: "smooth", block: "center" });
+		jumpToScrollMarker(term, element, controlsInfo);
 	};
 })();
 
 const jumpToTerm = (highlightTags: HighlightTags, reverse: boolean, term: MatchTerm | undefined,
 	controlsInfo: ControlsInfo) =>
 	controlsInfo.classicReplacesPaint
-		? jumpToTermClassic(highlightTags, reverse, term)
-		: jumpToTermPaint(reverse, term)
+		? jumpToTermClassic(controlsInfo, highlightTags, reverse, term)
+		: jumpToTermPaint(controlsInfo, reverse, term)
 ;
 
 /*
@@ -1499,7 +1518,6 @@ const flowsCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 		nodeStart: textFlow[0],
 		nodeEnd: textFlow[textFlow.length - 1],
 		boxesInfo: [],
-		boxes: [],
 	};
 	const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 		ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
@@ -1526,7 +1544,8 @@ const flowsCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 					term,
 					node,
 					start: Math.max(0, highlightStart - textStart),
-					end: Math.min(highlightEnd - textStart, node.length)
+					end: Math.min(highlightEnd - textStart, node.length),
+					boxes: [],
 				});
 				if (highlightEnd <= textEnd) {
 					break;
@@ -1666,41 +1685,38 @@ const getStyleRules = (() => {
 			ownerRects = [ owner.getBoundingClientRect() ];
 		}
 		elementInfo.flows.forEach(flow => {
-			flow.boxes.splice(0, flow.boxes.length);
 			flow.boxesInfo.forEach(boxInfo => {
+				boxInfo.boxes.splice(0, boxInfo.boxes.length);
 				range.setStart(boxInfo.node, boxInfo.start);
 				range.setEnd(boxInfo.node, boxInfo.end);
-				const textRects = Array.from(range.getClientRects());
-				const textRectBounding = textRects[0] ?? range.getBoundingClientRect();
-				let x = 0;
-				let y = 0;
-				for (const ownerRect of ownerRects) {
-					if (ownerRect.bottom > textRectBounding.top) {
-						x += textRectBounding.x - ownerRect.x;
-						y = textRectBounding.y - ownerRect.y;
-						break;
-					} else {
-						x += ownerRect.width;
+				const textRects = range.getClientRects();
+				for (let i = 0; i < textRects.length; i++) {
+					const textRect = textRects.item(i) as DOMRect;
+					if (i !== 0 && textRect.x === (textRects.item(i - 1) as DOMRect).x && textRect.y === (textRects.item(i - 1) as DOMRect).y) {
+						continue;
 					}
-				}
-				let textRectBottomLast = -1;
-				let width = 0;
-				for (const textRect of textRects) {
-					if (textRect.top > textRectBottomLast) {
-						textRectBottomLast = textRect.bottom;
-						width += textRect.width;
+					let x = 0;
+					let y = 0;
+					for (const ownerRect of ownerRects) {
+						if (ownerRect.bottom > textRect.top) {
+							x += textRect.x - ownerRect.x;
+							y = textRect.y - ownerRect.y;
+							break;
+						} else {
+							x += ownerRect.width;
+						}
 					}
+					boxInfo.boxes.push({
+						selector: boxInfo.term.selector,
+						x: Math.round(x),
+						y: Math.round(y),
+						width: Math.round(textRect.width),
+						height: Math.round(textRect.height),
+					});
 				}
-				flow.boxes.push({
-					selector: boxInfo.term.selector,
-					x: Math.round(x),
-					y: Math.round(y),
-					width: Math.round((width || textRectBounding.width)),
-					height: Math.round(textRectBounding.height),
-				});
 			});
 		});
-		return elementInfo.flows.flatMap(flow => flow.boxes);
+		return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes));
 	};
 
 	const getBoxesOwned = (owner: Element, element: Element, range: Range): Array<HighlightBox> =>
@@ -1715,6 +1731,7 @@ const getStyleRules = (() => {
 		const elementInfo = element[ElementProperty.INFO] as ElementInfo;
 		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
 		if (boxes.length) {
+			console.log(elementInfo);
 			if (elementInfo.styleRuleIdx === -1) {
 				elementInfo.styleRuleIdx = styleRuleIdxPtr.value;
 				styleRuleIdxPtr.value++;
@@ -1757,7 +1774,11 @@ const getStyleRules = (() => {
 	};
 
 	return useElementForPaint
-		? (root: Element, recurse: boolean): Array<[ string, number ]> => {
+		? (root: Element, recurse: boolean, styleRuleCount = -1): Array<[ string, number ]> => {
+			if (styleRuleCount === -1) {
+				const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+				styleRuleCount = (style.sheet as CSSStyleSheet).cssRules.length;
+			}
 			const containers: Array<Element> = [];
 			collectElements(root, recurse, document.createRange(), containers);
 			const parent = document.getElementById(getSel(ElementID.DRAW_CONTAINER)) as Element;
@@ -1768,16 +1789,18 @@ const getStyleRules = (() => {
 				}
 				parent.appendChild(container);
 			});
-			const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-			const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
+			const styleRuleIdxPtr = { value: styleRuleCount };
 			const styleRules: Array<[ string, number ]> = [];
 			// 'root' must have [elementInfo].
 			collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
 			return styleRules;
 		}
-		: (root: Element, recurse: boolean): Array<[ string, number ]> => {
-			const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-			const styleRuleIdxPtr = { value: (style.sheet as CSSStyleSheet).cssRules.length };
+		: (root: Element, recurse: boolean, styleRuleCount = -1): Array<[ string, number ]> => {
+			if (styleRuleCount === -1) {
+				const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+				styleRuleCount = (style.sheet as CSSStyleSheet).cssRules.length;
+			}
+			const styleRuleIdxPtr = { value: styleRuleCount };
 			const styleRules: Array<[ string, number ]> = [];
 			// 'root' must have [elementInfo].
 			collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
@@ -1789,13 +1812,22 @@ const styleUpdate = (styleRules: Array<[ string, number ]>) => {
 	const styleSheet = (document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement)
 		.sheet as CSSStyleSheet;
 	styleRules.forEach(([ rule, idx ]) => {
-		if (idx !== styleSheet.cssRules.length) {
+		const length = styleSheet.cssRules.length;
+		while (idx > styleSheet.cssRules.length) {
+			styleSheet.insertRule("body {}", styleSheet.cssRules.length);
+		}
+		if (idx < length) {
+			console.log("here");
+			console.log(idx, styleSheet.cssRules.length);
 			if (styleSheet.cssRules.item(idx)?.cssText === rule) {
 				return;
 			}
 			styleSheet.deleteRule(idx);
+			console.log("replaced:");
 		}
+		console.log(idx, styleSheet.cssRules.length);
 		styleSheet.insertRule(rule, idx);
+		console.log(idx, styleSheet.cssRules.length);
 	});
 };
 
@@ -2094,6 +2126,26 @@ const insertScrollMarkersClassic = (() => {
 	};
 })();
 
+// TODO document
+const jumpToScrollMarkerClassic = (term: MatchTerm | undefined, container: HTMLElement) => {
+	const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
+	elementsPurgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
+	// eslint-disable-next-line no-constant-condition
+	[6, 5, 4, 3, 2].some(precisionFactor => {
+		const precision = 10**precisionFactor;
+		const scrollMarker = scrollMarkerGutter.querySelector(
+			`${term ? `.${getSel(ElementClass.TERM, term.selector)}` : ""}[top^="${
+				Math.trunc(getElementYRelative(container) * precision) / precision
+			}"]`
+		) as HTMLElement | null;
+		if (scrollMarker) {
+			scrollMarker.classList.add(getSel(ElementClass.FOCUS));
+			return true;
+		}
+		return false;
+	});
+};
+
 /**
  * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
@@ -2121,26 +2173,6 @@ const jumpToTermClassic = (() => {
 			focusVisible: true, // Very sparse browser compatibility
 		} as FocusOptions)
 	;
-
-	// TODO document
-	const jumpToScrollMarker = (term: MatchTerm | undefined, container: HTMLElement) => {
-		const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
-		elementsPurgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
-		// eslint-disable-next-line no-constant-condition
-		[6, 5, 4, 3, 2].some(precisionFactor => {
-			const precision = 10**precisionFactor;
-			const scrollMarker = scrollMarkerGutter.querySelector(
-				`${term ? `.${getSel(ElementClass.TERM, term.selector)}` : ""}[top^="${
-					Math.trunc(getElementYRelative(container) * precision) / precision
-				}"]`
-			) as HTMLElement | null;
-			if (scrollMarker) {
-				scrollMarker.classList.add(getSel(ElementClass.FOCUS));
-				return true;
-			}
-			return false;
-		});
-	};
 
 	// TODO document
 	const selectNextElement = (reverse: boolean, walker: TreeWalker, walkSelectionFocusContainer: { accept: boolean },
@@ -2195,7 +2227,7 @@ const jumpToTermClassic = (() => {
 		return selectNextElement(reverse, walker, walkSelectionFocusContainer, highlightTags, elementToSelect);
 	};
 
-	return (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
+	return (controlsInfo: ControlsInfo, highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) => {
 		const termSelector = term ? getSel(ElementClass.TERM, term.selector) : "";
 		const focusBase = document.body
 			.getElementsByClassName(getSel(ElementClass.FOCUS))[0] as HTMLElement;
@@ -2244,7 +2276,7 @@ const jumpToTermClassic = (() => {
 		document.body.querySelectorAll(`.${getSel(ElementClass.REMOVE)}`).forEach((element: HTMLElement) => {
 			element.remove();
 		});
-		jumpToScrollMarker(term, container);
+		jumpToScrollMarker(term, container, controlsInfo);
 	};
 })();
 
@@ -2703,18 +2735,27 @@ const getTermsFromSelection = () => {
 					styleUpdate(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
 				}
 			}));
-			const visibilityObserver = new IntersectionObserver(entries => entries.forEach(entry => {
-				if (entry.isIntersecting) {
-					if (entry.target[ElementProperty.INFO]) {
-						elementsVisible.add(entry.target);
-						shiftObserver.observe(entry.target);
-						styleUpdate(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
+			const visibilityObserver = new IntersectionObserver(entries => {
+				let styleRules: Array<[ string, number ]> = [];
+				const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
+				const styleRuleCount = (style.sheet as CSSStyleSheet).cssRules.length;
+				entries.forEach(entry => {
+					if (entry.isIntersecting) {
+						if (entry.target[ElementProperty.INFO]) {
+							elementsVisible.add(entry.target);
+							shiftObserver.observe(entry.target);
+							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false, styleRuleCount + styleRules.length));
+						}
+					} else {
+						elementsVisible.delete(entry.target);
+						shiftObserver.unobserve(entry.target);
 					}
-				} else {
-					elementsVisible.delete(entry.target);
-					shiftObserver.unobserve(entry.target);
+				});
+				if (styleRules.length) {
+					styleUpdate(styleRules);
+					console.log("final:", styleRuleCount + styleRules.length, (style.sheet as CSSStyleSheet).cssRules.length);
 				}
-			}), { rootMargin: "400px" });
+			}, { rootMargin: "400px" });
 			return {
 				keepStyleUpdated: element => visibilityObserver.observe(element),
 				stopObserving: () => {
