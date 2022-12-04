@@ -336,9 +336,8 @@ ${
 	`;
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
-		const isAboveStyleLevel = (level: number) => i >= hues.length * level;
 		const cycle = Math.floor(i / hues.length);
-		console.log(cycle, Math.floor((cycle + 1) / 2));
+		const isAboveStyleLevel = (level: number) => cycle >= level;
 		const getBackgroundStylePaint = (colorA: string, colorB: string) => isAboveStyleLevel(1)
 			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
 				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
@@ -354,23 +353,15 @@ ${
 		term.hue = hue;
 		style.textContent += makeImportant(`
 /* || Term Highlights */
-${
-	controlsInfo.classicReplacesPaint
+${controlsInfo.classicReplacesPaint
 		? `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ body mms-h.${getSel(ElementClass.TERM, term.selector)},
 #${getSel(ElementID.BAR)}
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
+	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`)};
 	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
-		: `
-#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
-~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)},
-#${getSel(ElementID.BAR)}
-~ #${getSel(ElementID.DRAW_CONTAINER)}
-.${getSel(ElementClass.FOCUS_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
-	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 84% / 0.4)`)};
-	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
+		: ""
 }
 /**/
 
