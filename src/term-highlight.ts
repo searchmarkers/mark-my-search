@@ -337,10 +337,13 @@ ${
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		const isAboveStyleLevel = (level: number) => i >= hues.length * level;
-		const getBackgroundStylePaint = (colorA: string, colorB: string) =>
-			isAboveStyleLevel(1)
-				? `linear-gradient(${isAboveStyleLevel(2) ? colorB : colorA} 50%, ${isAboveStyleLevel(2) ? colorA : colorB} 50%)`
-				: colorA;
+		const cycle = Math.floor(i / hues.length);
+		console.log(cycle, Math.floor((cycle + 1) / 2));
+		const getBackgroundStylePaint = (colorA: string, colorB: string) => isAboveStyleLevel(1)
+			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
+				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
+			)})`
+			: colorA;
 		const getBackgroundStyleClassic = (colorA: string, colorB: string) =>
 			isAboveStyleLevel(1)
 				? `repeating-linear-gradient(${
