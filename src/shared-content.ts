@@ -225,7 +225,7 @@ interface HighlightMessage {
 	autoOverwritable?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
-	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_METHOD]
+	highlightMethod?: StorageSyncValues[StorageSync.HIGHLIGHT_METHOD]
 	matchMode?: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
 }
 

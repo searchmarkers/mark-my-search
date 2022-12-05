@@ -114,6 +114,11 @@ interface HighlightBox {
 	height: number
 }
 
+interface HighlightStyleRuleInfo {
+	rule: string
+	element: Element
+}
+
 interface TermStyle {
 	hue: number
 	cycle: number
@@ -1721,23 +1726,18 @@ const getStyleRules = (() => {
 	;
 
 	const collectStyleRules = (element: Element, recurse: boolean,
-		range: Range, styleRuleIdxPtr: { value: number }, styleRules: Array<[ string, number ]>) => {
+		range: Range, styleRules: Array<HighlightStyleRuleInfo>) => {
 		const elementInfo = element[ElementProperty.INFO] as ElementInfo;
 		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
 		if (boxes.length) {
-			console.log(elementInfo);
-			if (elementInfo.styleRuleIdx === -1) {
-				elementInfo.styleRuleIdx = styleRuleIdxPtr.value;
-				styleRuleIdxPtr.value++;
-			}
-			styleRules.push([
-				constructHighlightStyleRule(elementInfo.id, boxes),
-				elementInfo.styleRuleIdx,
-			]);
+			styleRules.push({
+				rule: constructHighlightStyleRule(elementInfo.id, boxes),
+				element,
+			});
 		}
 		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
 			if (child[ElementProperty.INFO]) {
-				collectStyleRules(child, recurse, range, styleRuleIdxPtr, styleRules);
+				collectStyleRules(child, recurse, range, styleRules);
 			}
 		});
 	};
@@ -1768,11 +1768,7 @@ const getStyleRules = (() => {
 	};
 
 	return useElementForPaint
-		? (root: Element, recurse: boolean, styleRuleCount = -1): Array<[ string, number ]> => {
-			if (styleRuleCount === -1) {
-				const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-				styleRuleCount = (style.sheet as CSSStyleSheet).cssRules.length;
-			}
+		? (root: Element, recurse: boolean): Array<HighlightStyleRuleInfo> => {
 			const containers: Array<Element> = [];
 			collectElements(root, recurse, document.createRange(), containers);
 			const parent = document.getElementById(getSel(ElementID.DRAW_CONTAINER)) as Element;
@@ -1783,45 +1779,33 @@ const getStyleRules = (() => {
 				}
 				parent.appendChild(container);
 			});
-			const styleRuleIdxPtr = { value: styleRuleCount };
-			const styleRules: Array<[ string, number ]> = [];
+			const styleRules: Array<HighlightStyleRuleInfo> = [];
 			// 'root' must have [elementInfo].
-			collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
+			collectStyleRules(root, recurse, document.createRange(), styleRules);
 			return styleRules;
 		}
-		: (root: Element, recurse: boolean, styleRuleCount = -1): Array<[ string, number ]> => {
-			if (styleRuleCount === -1) {
-				const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-				styleRuleCount = (style.sheet as CSSStyleSheet).cssRules.length;
-			}
-			const styleRuleIdxPtr = { value: styleRuleCount };
-			const styleRules: Array<[ string, number ]> = [];
+		: (root: Element, recurse: boolean): Array<HighlightStyleRuleInfo> => {
+			const styleRules: Array<HighlightStyleRuleInfo> = [];
 			// 'root' must have [elementInfo].
-			collectStyleRules(root, recurse, document.createRange(), styleRuleIdxPtr, styleRules);
+			collectStyleRules(root, recurse, document.createRange(), styleRules);
 			return styleRules;
 		};
 })();
 
-const styleUpdate = (styleRules: Array<[ string, number ]>) => {
+const styleUpdate = (styleRules: Array<HighlightStyleRuleInfo>) => {
 	const styleSheet = (document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement)
 		.sheet as CSSStyleSheet;
-	styleRules.forEach(([ rule, idx ]) => {
-		const length = styleSheet.cssRules.length;
-		while (idx > styleSheet.cssRules.length) {
-			styleSheet.insertRule("body {}", styleSheet.cssRules.length);
-		}
-		if (idx < length) {
-			console.log("here");
-			console.log(idx, styleSheet.cssRules.length);
-			if (styleSheet.cssRules.item(idx)?.cssText === rule) {
+	styleRules.forEach(({ rule, element }) => {
+		const elementInfo = element[ElementProperty.INFO] as ElementInfo;
+		if (elementInfo.styleRuleIdx === -1) {
+			elementInfo.styleRuleIdx = styleSheet.cssRules.length;
+		} else {
+			if (styleSheet.cssRules.item(elementInfo.styleRuleIdx)?.cssText === rule) {
 				return;
 			}
-			styleSheet.deleteRule(idx);
-			console.log("replaced:");
+			styleSheet.deleteRule(elementInfo.styleRuleIdx);
 		}
-		console.log(idx, styleSheet.cssRules.length);
-		styleSheet.insertRule(rule, idx);
-		console.log(idx, styleSheet.cssRules.length);
+		styleSheet.insertRule(rule, elementInfo.styleRuleIdx);
 	});
 };
 
@@ -2044,7 +2028,8 @@ const purgeClass = (className: string, root: HTMLElement = document.body, select
  * @param root A root node under which to remove highlights.
  */
 const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
-	const highlights = root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h");
+	const highlights = Array.from(root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h"))
+		.reverse();
 	for (const highlight of Array.from(highlights)) {
 		highlight.outerHTML = highlight.innerHTML;
 	}
@@ -2730,15 +2715,13 @@ const getTermsFromSelection = () => {
 				}
 			}));
 			const visibilityObserver = new IntersectionObserver(entries => {
-				let styleRules: Array<[ string, number ]> = [];
-				const style = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement;
-				const styleRuleCount = (style.sheet as CSSStyleSheet).cssRules.length;
+				let styleRules: Array<HighlightStyleRuleInfo> = [];
 				entries.forEach(entry => {
 					if (entry.isIntersecting) {
 						if (entry.target[ElementProperty.INFO]) {
 							elementsVisible.add(entry.target);
 							shiftObserver.observe(entry.target);
-							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false, styleRuleCount + styleRules.length));
+							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
 						}
 					} else {
 						elementsVisible.delete(entry.target);
@@ -2747,12 +2730,12 @@ const getTermsFromSelection = () => {
 				});
 				if (styleRules.length) {
 					styleUpdate(styleRules);
-					console.log("final:", styleRuleCount + styleRules.length, (style.sheet as CSSStyleSheet).cssRules.length);
 				}
 			}, { rootMargin: "400px" });
 			return {
 				keepStyleUpdated: element => visibilityObserver.observe(element),
 				stopObserving: () => {
+					elementsVisible.clear();
 					shiftObserver.disconnect();
 					visibilityObserver.disconnect();
 				},
@@ -2800,9 +2783,9 @@ const getTermsFromSelection = () => {
 			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 				controlsInfo.barLook[key] = value;
 			});
-			if (message.highlightLook) {
+			if (message.highlightMethod) {
 				hues.splice(0);
-				message.highlightLook.hues.forEach(hue => hues.push(hue));
+				message.highlightMethod.hues.forEach(hue => hues.push(hue));
 			}
 			if (message.matchMode) {
 				Object.assign(controlsInfo.matchMode, message.matchMode);
@@ -2812,8 +2795,10 @@ const getTermsFromSelection = () => {
 			}
 			if (message.deactivate) {
 				highlightInNodesOnMutationDisconnect(observer);
+				stopObserving();
 				terms.splice(0);
 				removeControls();
+				restoreNodes();
 				boxesInfoRemoveForTerms();
 			}
 			if (message.termUpdate || (message.terms !== undefined && (
