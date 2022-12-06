@@ -36,6 +36,7 @@ enum PreferenceType {
 	FLOAT,
 	TEXT,
 	ARRAY,
+	ARRAY_NUMBER,
 }
 
 /**
@@ -125,8 +126,8 @@ label[for]:hover
 					const valueEnteredBool = input["checked"] as boolean;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
 					sync[optionKey][preferenceKey] = ((type: PreferenceType) => { // Convert value for storage.
-						if (type === PreferenceType.ARRAY) {
-							return valueEnteredString.split(",");
+						if (type === PreferenceType.ARRAY || type === PreferenceType.ARRAY_NUMBER) {
+							return valueEnteredString.split(",").map(item => type === PreferenceType.ARRAY_NUMBER ? Number(item) : item);
 						} else if (type === PreferenceType.INTEGER || type === PreferenceType.FLOAT) {
 							return Number(valueEnteredString);
 						}
@@ -297,7 +298,7 @@ PAINT
 						},
 						hues: {
 							label: "Highlight color hue cycle",
-							type: PreferenceType.ARRAY,
+							type: PreferenceType.ARRAY_NUMBER,
 						},
 					},
 				},
