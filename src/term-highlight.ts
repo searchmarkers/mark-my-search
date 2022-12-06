@@ -315,7 +315,7 @@ ${
 #${getSel(ElementID.DRAW_CONTAINER)} > *
 	{ position: fixed; width: 100%; height: 100%; }`
 			: `/* || Term Highlight */
-#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] > a
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] [markmysearch-h_beneath]
 	{ background: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id]
 	{ background-image: paint(markmysearch-highlights) !important; --markmysearch-styles: ${JSON.stringify((() => {
@@ -328,6 +328,8 @@ ${
 		});
 		return styles;
 	})())}; }
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] > :not([markmysearch-h_id])
+	{ --markmysearch-styles: unset; --markmysearch-boxes: unset; }
 /**/`
 }
 
@@ -1307,7 +1309,8 @@ const insertControls = (() => {
 		bar.appendChild(barControls);
 		document.body.insertAdjacentElement("beforebegin", bar);
 		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) =>
-			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo));
+			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo)
+		);
 		const termCommands = getTermCommands(commands);
 		terms.forEach((term, i) => insertTermControl(terms, i, termCommands.down[i], termCommands.up[i],
 			controlsInfo, highlightTags));
@@ -1318,19 +1321,9 @@ const insertControls = (() => {
 })();
 
 /**
- * Empty the custom stylesheet, remove the control bar and marker gutter, and purge term focus class names.
+ * Remove the control bar and marker gutter and purge term focus class names.
  */
 const removeControls = () => {
-	const style = document.getElementById(getSel(ElementID.STYLE));
-	if (!style || style.textContent === "") {
-		return;
-	}
-	style.textContent = "";
-	const stylePaint = document.getElementById(getSel(ElementID.STYLE_PAINT));
-	if (!stylePaint) {
-		return;
-	}
-	//stylePaint.textContent = "";
 	const bar = document.getElementById(getSel(ElementID.BAR));
 	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER));
 	if (bar) {
@@ -1375,9 +1368,9 @@ const getAncestorHighlightable = (node: Node) => {
 	let ancestor = node.parentElement as HTMLElement;
 	// eslint-disable-next-line no-constant-condition
 	while (true) {
-		const ancestorAboveAnchor = (ancestor as HTMLElement).closest("a")?.parentElement as HTMLElement;
-		if (ancestorAboveAnchor) {
-			ancestor = ancestorAboveAnchor;
+		const ancestorUnhighlightable = (ancestor as HTMLElement).closest("a");
+		if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+			ancestor = ancestorUnhighlightable.parentElement;
 		} else {
 			break;
 		}
@@ -1441,10 +1434,7 @@ HIGHLIGHTING - MAIN
 Methods for calculating and interpreting highlighting caches, as well as managing associated styling and attributes.
 */
 
-const cacheExtend = (element: Element, highlightTags: HighlightTags) => {
-	if (highlightTags.reject.has(element.tagName)) {
-		return;
-	}
+const cacheExtend = (element: Element, highlightTags: HighlightTags, cacheModify = (element: Element) => {
 	if (!element[ElementProperty.INFO]) {
 		element[ElementProperty.INFO] = {
 			id: "",
@@ -1453,7 +1443,27 @@ const cacheExtend = (element: Element, highlightTags: HighlightTags) => {
 			flows: [],
 		} as ElementInfo;
 	}
-	Array.from(element.children).forEach(child => cacheExtend(child, highlightTags));
+}) => {
+	if (!highlightTags.reject.has(element.tagName)) {
+		cacheModify(element);
+		Array.from(element.children).forEach(child => cacheExtend(child, highlightTags));
+	}
+};
+
+const highlightingAttributesCleanup = (root: Element) => {
+	root.querySelectorAll("[markmysearch-h_id]").forEach(element => {
+		element.removeAttribute("markmysearch-h_id");
+	});
+	root.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
+		element.removeAttribute("markmysearch-h_beneath");
+	});
+};
+
+const markElementsUpToHighlightable = (element: Element) => {
+	if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
+		element.setAttribute("markmysearch-h_beneath", "");
+		markElementsUpToHighlightable(element.parentElement as Element);
+	}
 };
 
 /** TODO update documentation
@@ -1564,6 +1574,7 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 			highlighting.id = getHighlightingId.next().value;
 			ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
 		}
+		markElementsUpToHighlightable(ancestor);
 	}
 };
 
@@ -2511,7 +2522,7 @@ const getTermsFromSelection = () => {
 	/**
 	 * Inserts a uniquely identified CSS stylesheet to perform all extension styling.
 	 */
-	const insertStyleElements = () => {
+	const styleElementsInsert = () => {
 		if (!document.getElementById(getSel(ElementID.STYLE))) {
 			const style = document.createElement("style");
 			style.id = getSel(ElementID.STYLE);
@@ -2526,6 +2537,19 @@ const getTermsFromSelection = () => {
 			const container = document.createElement("div");
 			container.id = getSel(ElementID.DRAW_CONTAINER);
 			document.body.insertAdjacentElement("afterend", container);
+		}
+	};
+
+	const styleElementsCleanup = () => {
+		const style = document.getElementById(getSel(ElementID.STYLE));
+		if (style && style.textContent !== "") {
+			style.textContent = "";
+		}
+		const stylePaint = document.getElementById(getSel(ElementID.STYLE_PAINT)) as HTMLStyleElement | null;
+		if (stylePaint && stylePaint.sheet) {
+			while (stylePaint.sheet.cssRules.length) {
+				stylePaint.sheet.deleteRule(0);
+			}
 		}
 	};
 
@@ -2747,7 +2771,7 @@ const getTermsFromSelection = () => {
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, getHighlightingId,
 			keepStyleUpdated, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-		insertStyleElements();
+		styleElementsInsert();
 		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
 			sendResponse: (response: HighlightDetails) => void) => {
 			if (message.getDetails) {
@@ -2800,7 +2824,11 @@ const getTermsFromSelection = () => {
 				terms.splice(0);
 				removeControls();
 				restoreNodes();
-				boxesInfoRemoveForTerms();
+				styleElementsCleanup();
+				document.querySelectorAll("*").forEach(element => {
+					element[ElementProperty.INFO] = undefined;
+				});
+				highlightingAttributesCleanup(document.body);
 			}
 			if (message.termUpdate || (message.terms !== undefined && (
 				!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
