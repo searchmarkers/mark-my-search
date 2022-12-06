@@ -1510,7 +1510,7 @@ const flowsRemove = (element: Element, highlightTags: HighlightTags) => {
  * @param terms Terms to find and highlight.
  * @param textFlow Consecutive text nodes to highlight inside.
  */
-const flowsCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
+const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 	getHighlightingId: GetHighlightingID, keepStyleUpdated: KeepStyleUpdated) => {
 	const flow: HighlightFlow = {
 		text: textFlow.map(node => node.textContent).join(""),
@@ -1578,7 +1578,7 @@ const boxesInfoCalculate = (terms: MatchTerms, flowOwner: Element, highlightTags
 	flowsRemove(flowOwner, highlightTags);
 	textFlows // The first flow is always before the first break, and the last after the last. Either may be empty.
 		.slice((breaksFlow && textFlows[0].length) ? 0 : 1, (breaksFlow && textFlows[textFlows.length - 1].length) ? undefined : -1)
-		.forEach(textFlow => flowsCacheWithBoxesInfo(terms, textFlow, getHighlightingId, keepStyleUpdated));
+		.forEach(textFlow => flowCacheWithBoxesInfo(terms, textFlow, getHighlightingId, keepStyleUpdated));
 	requestRefreshIndicators.next(); // Major performance hit when using very small delay or small delay maximum for debounce.
 };
 
@@ -1606,8 +1606,7 @@ const boxesInfoCalculateForFlowOwners = (terms: MatchTerms, node: Node, highligh
 		}
 		if (breakFirst && breakLast) {
 			// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
-			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin.
-			// (Example can be seen when loading DuckDuckGo results dynamically) FIXME
+			// ALL flows of descendants are recalculated. See below.
 			boxesInfoCalculate(terms, parent, highlightTags,
 				requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
 		} else {
@@ -1617,7 +1616,9 @@ const boxesInfoCalculateForFlowOwners = (terms: MatchTerms, node: Node, highligh
 		}
 	} else {
 		// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
-		// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin.
+		// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin;
+		// example can be seen when loading DuckDuckGo results dynamically. Could be fixed by discarding text flows which start
+		// or end inside elements which do not contain and are not contained by a given element. Will not implement.
 		boxesInfoCalculate(terms, parent, highlightTags,
 			requestRefreshIndicators, getHighlightingId, keepStyleUpdated);
 	}
