@@ -316,7 +316,7 @@ ${
 	{ position: fixed; width: 100%; height: 100%; }`
 			: `/* || Term Highlight */
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] [markmysearch-h_beneath]
-	{ background: none; }
+	{ background-color: transparent; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id]
 	{ background-image: paint(markmysearch-highlights) !important; --markmysearch-styles: ${JSON.stringify((() => {
 		const styles: TermSelectorStyles = {};
