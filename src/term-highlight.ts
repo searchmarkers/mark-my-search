@@ -129,7 +129,7 @@ interface TermStyle {
  * Painting is faster and simpler to implement, but is not supported by Firefox or Safari as of 2022-12-01.
  * This affects the __Paint__ algorithm only, with no effect when __Classic__ is in use.
  */
-const useElementForPaint = this.browser;
+const usePaintFallback = this.browser;
 
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
@@ -308,7 +308,7 @@ mms-h
 ${
 	controlsInfo.classicReplacesPaint
 		? ""
-		: useElementForPaint
+		: usePaintFallback
 			? `
 #${getSel(ElementID.DRAW_CONTAINER)}
 	{ position: fixed; width: 100%; height: 100%; z-index: -99999; }
@@ -1674,7 +1674,7 @@ const boxesInfoRemoveForTerms = (terms: MatchTerms = [], root: HTMLElement | Doc
 };
 
 // TODO document
-const constructHighlightStyleRule = useElementForPaint
+const constructHighlightStyleRule = usePaintFallback
 	? (highlightId: string): string =>
 		`body [markmysearch-h_id="${highlightId}"] { background: -moz-element(#${
 			getSel(ElementID.DRAW_ELEMENT, highlightId)
@@ -1779,7 +1779,7 @@ const getStyleRules = (() => {
 		});
 	};
 
-	return useElementForPaint
+	return usePaintFallback
 		? (root: Element, recurse: boolean): Array<HighlightStyleRuleInfo> => {
 			const containers: Array<Element> = [];
 			collectElements(root, recurse, document.createRange(), containers);
@@ -2692,7 +2692,7 @@ const getTermsFromSelection = () => {
 
 	return () => {
 		window[WindowFlag.EXECUTION_UNNECESSARY] = true;
-		if (!useElementForPaint) {
+		if (!usePaintFallback) {
 			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/draw-highlights.js"));
 		}
 		const commands: BrowserCommands = [];
