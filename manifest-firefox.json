@@ -96,11 +96,9 @@
 			"description": "Focus input for appending a term"
 		},
 		"step-global": {
-			"suggested_key": { "default": "F2" },
 			"description": "Step to and select next highlight"
 		},
 		"step-global-reverse": {
-			"suggested_key": { "default": "Shift+F2" },
 			"description": "Step to and select previous highlight"
 		},
 		"advance-global": {
