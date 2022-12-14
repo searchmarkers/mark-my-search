@@ -264,6 +264,7 @@ enum CommandType {
 	TOGGLE_SELECT,
 	ADVANCE_GLOBAL,
 	SELECT_TERM,
+	STEP_GLOBAL,
 	FOCUS_TERM_INPUT,
 }
 
@@ -340,6 +341,12 @@ const parseCommand = (commandString: string): CommandInfo => {
 			return { type: CommandType.TOGGLE_HIGHLIGHTS };
 		} case "select": {
 			return { type: CommandType.TOGGLE_SELECT };
+		}}
+		break;
+	} case "step": {
+		switch (parts[1]) {
+		case "global": {
+			return { type: CommandType.STEP_GLOBAL, reversed: parts[2] === "reverse" };
 		}}
 		break;
 	} case "advance": {
