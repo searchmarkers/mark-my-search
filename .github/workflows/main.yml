@@ -52,7 +52,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "mark_my_search-*.zip"
           replacesArtifacts: true
-          name: "Auto-Release Version ${{ env.VERSION }}"
+          draft: true
           generateReleaseNotes: true
           allowUpdates: true
       - name: Repository Pages dispatch
