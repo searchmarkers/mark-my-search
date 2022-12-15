@@ -532,8 +532,9 @@ const loadPopup = (() => {
 										const sync = await getStorageSync([ StorageSync.TERM_LISTS ]);
 										const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 										const researchInstance = session.researchInstances[tab.id];
-										if (researchInstance && !researchInstance.enabled) {
+										if (researchInstance && (!researchInstance.enabled || !researchInstance.autoOverwritable)) {
 											researchInstance.enabled = true;
+											researchInstance.autoOverwritable = false;
 											await setStorageSession(session);
 										}
 										chrome.runtime.sendMessage({
@@ -546,6 +547,7 @@ const loadPopup = (() => {
 												: sync.termLists[index].terms,
 											makeUnique: true,
 											toggleHighlightsOn: true,
+											toggleAutoOverwritableOn: false,
 										} as BackgroundMessage);
 										onSuccess();
 									},

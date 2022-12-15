@@ -249,7 +249,7 @@ interface BackgroundMessage {
 	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean
-	toggleAutoOverwritable?: boolean
+	toggleAutoOverwritableOn?: boolean
 	performSearch?: boolean
 }
 

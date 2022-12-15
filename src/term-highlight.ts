@@ -202,7 +202,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)}, .${getSel(ElementClass.MATCH_REGEX)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
-	{ text-decoration: underline; }
+	{ text-decoration: underline; text-decoration-skip-ink: none; }
 #${getSel(ElementID.BAR_CONTROLS)}
 .${getSel(ElementClass.BAR_CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
@@ -712,7 +712,7 @@ const insertTermInput = (() => {
 				terms: terms.map((term, i) => i === idx ? termChanged : term),
 				termChanged,
 				termChangedIdx: idx,
-				toggleAutoOverwritable: false,
+				toggleAutoOverwritableOn: false,
 			} as BackgroundMessage);
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
@@ -722,7 +722,7 @@ const insertTermInput = (() => {
 				terms: terms.concat(termChanged),
 				termChanged,
 				termChangedIdx: TermChange.CREATE,
-				toggleAutoOverwritable: false,
+				toggleAutoOverwritableOn: false,
 			} as BackgroundMessage);
 		}
 	};
@@ -779,7 +779,7 @@ const insertTermInput = (() => {
 				return; // Focus has been delegated to another element and will be on the input when this class is removed
 			}
 			resetInput();
-			resetTermControlInputsVisibility();
+			termControlInputsVisibilityReset();
 			input.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 		});
 		input.addEventListener("focusout", () => {
@@ -831,7 +831,7 @@ const insertTermInput = (() => {
 			case "Enter": {
 				if (event.shiftKey) {
 					hide();
-					resetTermControlInputsVisibility();
+					termControlInputsVisibilityReset();
 				} else {
 					commit(term, terms);
 					resetInput(input.value);
@@ -841,7 +841,7 @@ const insertTermInput = (() => {
 			case "Escape": {
 				resetInput();
 				hide();
-				resetTermControlInputsVisibility();
+				termControlInputsVisibilityReset();
 				return;
 			}
 			case "ArrowLeft":
@@ -1142,7 +1142,7 @@ const createTermOptionMenu = (
 	controlReveal.addEventListener("click", () => {
 		const input = controlReveal.parentElement ? controlReveal.parentElement.querySelector("input") : null;
 		const willFocusInput = input ? input.getBoundingClientRect().width > 0 : false;
-		resetTermControlInputsVisibility();
+		termControlInputsVisibilityReset();
 		if (input && willFocusInput) {
 			input.focus();
 		}
@@ -1368,7 +1368,7 @@ const insertControls = (() => {
 					onclick: control => {
 						control.remove();
 						chrome.runtime.sendMessage({
-							toggleAutoOverwritable: false,
+							toggleAutoOverwritableOn: false,
 						} as BackgroundMessage);
 					},
 				},
@@ -1381,16 +1381,29 @@ const insertControls = (() => {
 		fillStylesheetContent(terms, hues, controlsInfo);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
-		bar.ondragstart = event => event.preventDefault();
-		bar.onmouseenter = () => {
-			resetTermControlInputsVisibility();
+		bar.addEventListener("dragstart", event => event.preventDefault());
+		const fixVisibility = () => {
+			termControlInputsVisibilityReset();
 			const controlInput = document.activeElement;
 			if (controlInput && controlInput.tagName === "INPUT"
 				&& controlInput.closest(`#${getSel(ElementID.BAR)}`)) {
 				controlInput.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
 			}
 		};
-		bar.onmouseleave = bar.onmouseenter;
+		bar.addEventListener("mouseenter", fixVisibility);
+		bar.addEventListener("mouseleave", fixVisibility);
+		//bar.addEventListener("focusin", event => {
+		//});
+		window.addEventListener("keydown", event => {
+			if (event.key === "Tab" && !event.shiftKey) {
+				const controlInput = (getControlAppendTerm() as Element).querySelector("input") as HTMLInputElement;
+				if (document.activeElement === controlInput && controlInput.value !== "") {
+					event.preventDefault();
+					controlInput.blur();
+					controlInput.focus();
+				}
+			}
+		});
 		if (controlsInfo.highlightsShown) {
 			bar.classList.add(getSel(ElementClass.HIGHLIGHTS_SHOWN));
 		}
@@ -1430,6 +1443,9 @@ const removeControls = () => {
 	const bar = document.getElementById(getSel(ElementID.BAR));
 	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER));
 	if (bar) {
+		if (document.activeElement && bar.contains(document.activeElement)) {
+			(document.activeElement as HTMLElement).blur();
+		}
 		bar.remove();
 	}
 	if (gutter) {
@@ -1443,7 +1459,7 @@ const removeControls = () => {
 /**
  * Removes the visibility classes of all term control inputs, resetting their visibility.
  */
-const resetTermControlInputsVisibility = () =>
+const termControlInputsVisibilityReset = () =>
 	purgeClass(
 		getSel(ElementClass.OVERRIDE_VISIBILITY),
 		document.getElementById(getSel(ElementID.BAR)) as HTMLElement,
@@ -1944,6 +1960,7 @@ const getTermsFromSelection = () => {
 	const produceEffectOnCommandFn = function* (terms: MatchTerms, highlightTags: HighlightTags) {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
+		let focusReturnElement: Element | null = null;
 		while (true) {
 			const commandInfo: CommandInfo = yield;
 			if (!commandInfo) {
@@ -1976,7 +1993,7 @@ const getTermsFromSelection = () => {
 					break;
 				}
 				const selection = getSelection();
-				const focusReturnElement = document.activeElement;
+				const activeElementOriginal = document.activeElement;
 				const selectionReturnRanges = selection
 					? Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i))
 					: null;
@@ -1984,6 +2001,10 @@ const getTermsFromSelection = () => {
 				input.select();
 				control.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				selectInputTextAll(input);
+				if (activeElementOriginal && activeElementOriginal.closest(`#${getSel(ElementID.BAR)}`)) {
+					break; // Focus was already in bar, so focus return should not be updated.
+				}
+				focusReturnElement = activeElementOriginal;
 				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 				const returnSelection = (event: FocusEvent) => {
 					if (event.relatedTarget) {
