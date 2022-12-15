@@ -458,7 +458,7 @@ const stepToTerm = (() => {
 		element = getContainingHighlight(element);
 		const elementFirst = getSiblingHighlightFinal(element, element, "previousSibling");
 		const elementLast = getSiblingHighlightFinal(element, element, "nextSibling");
-		(document.getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
+		(getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
 		element.scrollIntoView({ block: "center" });
 		jumpToScrollMarkerDuplicate(undefined, getContainerBlock(element, highlightTags));
 	};
@@ -466,7 +466,7 @@ const stepToTerm = (() => {
 	return (highlightTags: HighlightTags, reversed: boolean, nodeStart?: Node) => {
 		purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
 		purgeClass(getSel(ElementClass.FOCUS));
-		const selection = document.getSelection();
+		const selection = getSelection();
 		const bar = document.getElementById(getSel(ElementID.BAR));
 		if (!selection || !bar) {
 			return;
@@ -609,7 +609,7 @@ const jumpToTerm = (() => {
 			.getElementsByClassName(getSel(ElementClass.FOCUS))[0] as HTMLElement;
 		const focusContainer = document.body
 			.getElementsByClassName(getSel(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
-		const selection = document.getSelection();
+		const selection = getSelection();
 		const activeElement = document.activeElement;
 		if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
 			(activeElement as HTMLInputElement).blur();
@@ -677,6 +677,7 @@ const insertTermInput = (() => {
 			assert(false, "term input no select", "required element(s) not found", { control });
 			return;
 		}
+		input.focus();
 		input.select();
 		if (shiftCaretRight !== undefined) {
 			const caretPosition = shiftCaretRight ? 0 : -1;
@@ -795,6 +796,7 @@ const insertTermInput = (() => {
 		});
 		const show = (event: MouseEvent) => {
 			event.preventDefault();
+			input.focus();
 			input.select();
 			selectInputTextAll(input);
 		};
@@ -1392,15 +1394,24 @@ const insertControls = (() => {
 		};
 		bar.addEventListener("mouseenter", fixVisibility);
 		bar.addEventListener("mouseleave", fixVisibility);
-		//bar.addEventListener("focusin", event => {
-		//});
 		window.addEventListener("keydown", event => {
-			if (event.key === "Tab" && !event.shiftKey) {
+			if (event.key === "Tab") {
 				const controlInput = (getControlAppendTerm() as Element).querySelector("input") as HTMLInputElement;
-				if (document.activeElement === controlInput && controlInput.value !== "") {
+				if (!event.shiftKey && document.activeElement === controlInput && controlInput.value !== "") {
 					event.preventDefault();
 					controlInput.blur();
 					controlInput.focus();
+					return;
+				}
+				if (document.activeElement && bar.contains(document.activeElement)) {
+					const control = document.activeElement.closest(`.${getSel(ElementClass.CONTROL)}`)
+						?? document.activeElement.closest(`.${getSel(ElementClass.BAR_CONTROL)}`);
+					if (control && (
+						//(control === (control.parentElement as Element).firstElementChild && event.shiftKey) ||
+						(control === getControlAppendTerm() && !event.shiftKey))) {
+						event.preventDefault();
+						(document.activeElement as HTMLElement).blur();
+					}
 				}
 			}
 		});
@@ -1791,7 +1802,7 @@ const beginHighlighting = (
  * with some other punctuation characters removed.
  */
 const getTermsFromSelection = () => {
-	const selection = document.getSelection();
+	const selection = getSelection();
 	const terms: MatchTerms = [];
 	if (selection && selection.anchorNode) {
 		const termsAll = selection.toString().split(/\r|\p{Zs}|\p{Po}|\p{Cc}/gu)
@@ -1842,7 +1853,9 @@ const getTermsFromSelection = () => {
 			removeControls();
 			insertControls(terms, controlsInfo, commands, highlightTags, hues);
 			if (focusingControlAppend) {
-				((getControl() as HTMLElement).querySelector("input") as HTMLInputElement).select();
+				const input = (getControl() as HTMLElement).querySelector("input") as HTMLInputElement;
+				input.focus();
+				input.select();
 			}
 		};
 	
@@ -1960,7 +1973,10 @@ const getTermsFromSelection = () => {
 	const produceEffectOnCommandFn = function* (terms: MatchTerms, highlightTags: HighlightTags) {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
-		let focusReturnElement: Element | null = null;
+		const focusReturnInfo: { element: HTMLElement | null, selectionRanges: Array<Range> | null } = {
+			element: null,
+			selectionRanges: null,
+		};
 		while (true) {
 			const commandInfo: CommandInfo = yield;
 			if (!commandInfo) {
@@ -1992,19 +2008,19 @@ const getTermsFromSelection = () => {
 				if (!control || !input) {
 					break;
 				}
-				const selection = getSelection();
-				const activeElementOriginal = document.activeElement;
-				const selectionReturnRanges = selection
-					? Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i))
-					: null;
+				const selection = getSelection() as Selection;
+				const activeElementOriginal = document.activeElement as HTMLElement;
+				const selectionRangesOriginal = Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i));
 				control.classList.add(getSel(ElementClass.OVERRIDE_VISIBILITY));
+				input.focus();
 				input.select();
 				control.classList.remove(getSel(ElementClass.OVERRIDE_VISIBILITY));
 				selectInputTextAll(input);
 				if (activeElementOriginal && activeElementOriginal.closest(`#${getSel(ElementID.BAR)}`)) {
 					break; // Focus was already in bar, so focus return should not be updated.
 				}
-				focusReturnElement = activeElementOriginal;
+				focusReturnInfo.element = activeElementOriginal;
+				focusReturnInfo.selectionRanges = selectionRangesOriginal;
 				const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 				const returnSelection = (event: FocusEvent) => {
 					if (event.relatedTarget) {
@@ -2019,12 +2035,12 @@ const getTermsFromSelection = () => {
 						return;
 					}
 					bar.removeEventListener("focusout", returnSelection);
-					if (focusReturnElement && focusReturnElement["focus"]) {
-						(focusReturnElement as HTMLElement).focus({ preventScroll: true });
+					if (focusReturnInfo.element) {
+						focusReturnInfo.element.focus({ preventScroll: true });
 					}
-					if (selection && selectionReturnRanges !== null) {
+					if (focusReturnInfo.selectionRanges) {
 						selection.removeAllRanges();
-						selectionReturnRanges.forEach(range => selection.addRange(range));
+						focusReturnInfo.selectionRanges.forEach(range => selection.addRange(range));
 					}
 				};
 				bar.addEventListener("focusout", returnSelection);
