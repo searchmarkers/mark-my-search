@@ -194,9 +194,11 @@ label[for]:hover
 					inputDefault[propertyKey as string] = valueDefault;
 					input[propertyKey as string] = value;
 					valuesCurrent[optionKey][preferenceKey] = input[propertyKey];
-					input.oninput = () =>
-						preferenceLabel.classList[input[propertyKey] === valuesCurrent[optionKey][preferenceKey]
-							? "remove" : "add"](OptionClass.MODIFIED);
+					input.addEventListener("input", () =>
+						preferenceLabel.classList[
+							input[propertyKey] === valuesCurrent[optionKey][preferenceKey] ? "remove" : "add"
+						](OptionClass.MODIFIED)
+					);
 				}
 			});
 		});

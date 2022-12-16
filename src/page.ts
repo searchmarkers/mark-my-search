@@ -577,9 +577,9 @@ textarea
 				checkboxInfo.onLoad(checked => checkbox.checked = checked, getObjectIndex(), containerIndex);
 			}
 			if (checkboxInfo.onToggle) {
-				checkbox.onchange = () =>
+				checkbox.addEventListener("change", () =>
 					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, getObjectIndex(), containerIndex) : undefined
-				;
+				);
 			}
 			return checkbox;
 		};
@@ -708,7 +708,7 @@ textarea
 				}
 				const inputMain = objectElement.querySelector("input") as HTMLInputElement;
 				let newElementQueued = false;
-				inputMain.oninput = () => {
+				inputMain.addEventListener("input", () => {
 					if (inputMain.value && ((container.lastElementChild as HTMLInputElement).querySelector("input") as HTMLInputElement).value && !newElementQueued) {
 						newElementQueued = true;
 						getArray().then(async array => {
@@ -723,7 +723,7 @@ textarea
 							newElementQueued = false;
 						});
 					}
-				};
+				});
 				const onChangeInternal = (commitIfEmpty = false) => {
 					if (!inputMain.value && commitIfEmpty) {
 						getArray().then(array => {
@@ -803,7 +803,7 @@ textarea
 			button.textContent = submitterInfo.text;
 			container.appendChild(button);
 			let getMessageText = () => "";
-			button.onclick = () => {
+			button.addEventListener("click", () => {
 				button.disabled = true;
 				clearAlerts(container, [ PageAlertType.PENDING, PageAlertType.FAILURE ]);
 				submitterInfo.onClick(
@@ -843,7 +843,7 @@ textarea
 					submitterInfo.alerts, //
 					button, //
 				);
-			};
+			});
 			if (submitterInfo.message) {
 				const messageInfo = submitterInfo.message;
 				const messageBox = (messageInfo.singleline

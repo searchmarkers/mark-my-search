@@ -11,7 +11,7 @@ type ControlButtonInfo = {
 	path?: string
 	label?: string
 	containerId: ElementID
-	onclick?: (control: HTMLElement) => void
+	onClick?: (control: HTMLElement) => void
 	setUp?: (container: HTMLElement) => void
 }
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
@@ -33,7 +33,6 @@ enum ElementClass {
 	CONTROL_REVEAL = "control-reveal",
 	CONTROL_EDIT = "control-edit",
 	PIN = "pin",
-	BAR_CONTROL = "bar-control",
 	OPTION_LIST = "options",
 	OPTION = "option",
 	TERM = "term",
@@ -51,14 +50,15 @@ enum ElementClass {
 	SECONDARY = "secondary",
 	OVERRIDE_VISIBILITY = "override-visibility",
 	OVERRIDE_FOCUS = "override-focus",
+	BAR_CONTROLS = "bar-controls",
 }
 
 enum ElementID {
 	STYLE = "style",
 	BAR = "bar",
-	BAR_OPTIONS = "bar-options",
+	BAR_LEFT = "bar-left",
 	BAR_TERMS = "bar-terms",
-	BAR_CONTROLS = "bar-controls",
+	BAR_RIGHT = "bar-right",
 	MARKER_GUTTER = "markers",
 }
 
@@ -155,7 +155,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: 
 #${getSel(ElementID.BAR)} ::selection
 	{ background: Highlight; color: HighlightText; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} input,
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)} input
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROLS)} .${getSel(ElementClass.CONTROL)} input
 	{ width: 5em; padding: 0 2px 0 2px; margin-left: 4px; border: none; outline: revert;
 	box-sizing: unset; font-family: revert; white-space: pre; color: hsl(0 0% 0%); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)} button:disabled,
@@ -164,9 +164,9 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: 
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)}),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)}),
-#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROL)}
+#${getSel(ElementID.BAR)}:not(:hover) .${getSel(ElementClass.BAR_CONTROLS)} .${getSel(ElementClass.CONTROL)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_FOCUS)}),
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROL)}
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.BAR_CONTROLS)} .${getSel(ElementClass.CONTROL)}
 input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ width: 0; padding: 0; margin: 0; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_REVEAL)} img
@@ -191,31 +191,31 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Term Matching Option Hints */
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.MATCH_REGEX)} .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-weight: bold; }
-#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
+#${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_REGEX)}
 .${getSel(ElementClass.CONTROL_CONTENT)}::before
 	{ content: "(.*)"; margin-right: 2px; font-weight: bold; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
-#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
+#${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_CASE)}
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-top: 0; border-top: 1px dashed black; }
 #${getSel(ElementID.BAR_TERMS)}
 .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)}, .${getSel(ElementClass.MATCH_REGEX)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ text-decoration: underline; text-decoration-skip-ink: none; }
-#${getSel(ElementID.BAR_CONTROLS)}
-.${getSel(ElementClass.BAR_CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
+#${getSel(ElementID.BAR_RIGHT)}
+.${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ border-bottom: 3px solid #666; }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
-#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
+#${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-style: italic; }
-#${getSel(ElementID.BAR_CONTROLS)} .${getSel(ElementClass.BAR_CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+#${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ border-left: 3px dashed black; }
 /**/
@@ -804,7 +804,7 @@ const insertTermInput = (() => {
 			input.blur();
 		};
 		if (controlEdit) {
-			controlEdit.onclick = event => {
+			controlEdit.addEventListener("click", event => {
 				if (!input.classList.contains(getSel(ElementClass.OVERRIDE_VISIBILITY)) || getComputedStyle(input).width === "0") {
 					show(event);
 				} else {
@@ -812,23 +812,23 @@ const insertTermInput = (() => {
 					commit(term, terms);
 					hide();
 				}
-			};
-			controlEdit.oncontextmenu = event => {
+			});
+			controlEdit.addEventListener("contextmenu", event => {
 				event.preventDefault();
 				input.value = "";
 				commit(term, terms);
 				hide();
-			};
-			controlContent.oncontextmenu = show;
+			});
+			controlContent.addEventListener("contextmenu", show);
 		} else if (!replaces) {
 			const button = controlPad.querySelector("button") as HTMLButtonElement;
-			button.onclick = show;
-			button.oncontextmenu = show;
+			button.addEventListener("click", show);
+			button.addEventListener("contextmenu", show);
 		}
 		(new ResizeObserver(entries =>
 			entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
 		)).observe(input);
-		input.onkeydown = event => {
+		input.addEventListener("keydown", event => {
 			switch (event.key) {
 			case "Enter": {
 				if (event.shiftKey) {
@@ -865,7 +865,7 @@ const insertTermInput = (() => {
 				return;
 			}
 			}
-		};
+		});
 		insertInput(input);
 		return input;
 	};
@@ -904,7 +904,7 @@ const getControl = (term?: MatchTerm, idx?: number): Element | null => {
  * @returns The control if present, `null` otherwise.
  */
 const getControlAppendTerm = (): Element | null =>
-	(document.getElementById(getSel(ElementID.BAR_CONTROLS)) as HTMLElement).firstElementChild
+	(document.getElementById(getSel(ElementID.BAR_RIGHT)) as HTMLElement).firstElementChild
 ;
 
 /**
@@ -1017,7 +1017,7 @@ const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: Highlig
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
-	controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
+	controlContent.onclick = () => jumpToTerm(highlightTags, false, term); // Overrides previous event handler in case of new term.
 	controlContent.textContent = term.phrase;
 	// TODO make function
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
@@ -1051,12 +1051,12 @@ const createTermOption = (term: MatchTerm, text: string,
 	option.classList.add(getSel(ElementClass.OPTION));
 	option.tabIndex = -1;
 	option.textContent = getTermOptionText(term.matchMode[matchType], text);
-	option.onmouseup = () => {
+	option.addEventListener("mouseup", () => {
 		if (!option.matches(":active")) {
 			onActivated(matchType);
 		}
-	};
-	option.onclick = () => onActivated(matchType);
+	});
+	option.addEventListener("click", () => onActivated(matchType));
 	return option;
 };
 
@@ -1133,8 +1133,8 @@ const createTermOptionMenu = (
 		});
 		optionList.blur();
 	};
-	optionList.onkeydown = event => handleKeyEvent(event, false);
-	optionList.onkeyup = event => handleKeyEvent(event);
+	optionList.addEventListener("keydown", event => handleKeyEvent(event, false));
+	optionList.addEventListener("keyup", event => handleKeyEvent(event));
 	const controlReveal = document.createElement("button");
 	controlReveal.type = "button";
 	controlReveal.classList.add(getSel(ElementClass.CONTROL_BUTTON));
@@ -1199,7 +1199,7 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
-	controlContent.onclick = () => jumpToTerm(highlightTags, false, term);
+	controlContent.onclick = () => jumpToTerm(highlightTags, false, term); // Hack: archaic event handler property for overriding.
 	controlPad.appendChild(controlContent);
 	const controlEdit = document.createElement("button");
 	controlEdit.type = "button";
@@ -1276,8 +1276,8 @@ const insertControls = (() => {
 		const insertControlWithInfo = (barControlName: ControlButtonName, info: ControlButtonInfo,
 			hideWhenInactive: boolean) => {
 			const container = document.createElement("div");
-			container.classList.add(getSel(ElementClass.BAR_CONTROL)); // TODO redundant? can use CSS to select partial class
-			container.classList.add(getSel(ElementClass.BAR_CONTROL, barControlName));
+			container.classList.add(getSel(ElementClass.CONTROL)); // TODO redundant? can use CSS to select partial class
+			container.classList.add(getSel(ElementClass.CONTROL, barControlName));
 			container.tabIndex = -1;
 			const pad = document.createElement("div");
 			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
@@ -1304,7 +1304,10 @@ const insertControls = (() => {
 			if (hideWhenInactive) {
 				container.classList.add(getSel(ElementClass.DISABLED));
 			}
-			button.onclick = () => (info.onclick ?? (() => undefined))(container);
+			if (info.onClick) {
+				const onClick = info.onClick;
+				button.addEventListener("click", () => onClick(container));
+			}
 			if (info.setUp) {
 				info.setUp(container);
 			}
@@ -1316,29 +1319,29 @@ const insertControls = (() => {
 			insertControlWithInfo(barControlName, ({
 				disableTabResearch: {
 					path: "/icons/close.svg",
-					containerId: ElementID.BAR_OPTIONS,	
-					onclick: () => chrome.runtime.sendMessage({
+					containerId: ElementID.BAR_LEFT,	
+					onClick: () => chrome.runtime.sendMessage({
 						disableTabResearch: true,
 					} as BackgroundMessage),
 				},
 				performSearch: {
 					path: "/icons/search.svg",
-					containerId: ElementID.BAR_OPTIONS,
-					onclick: () => chrome.runtime.sendMessage({
+					containerId: ElementID.BAR_LEFT,
+					onClick: () => chrome.runtime.sendMessage({
 						performSearch: true,
 					} as BackgroundMessage),
 				},
 				toggleHighlights: {
 					path: "/icons/show.svg",
-					containerId: ElementID.BAR_OPTIONS,
-					onclick: () => chrome.runtime.sendMessage({
+					containerId: ElementID.BAR_LEFT,
+					onClick: () => chrome.runtime.sendMessage({
 						toggleHighlightsOn: !controlsInfo.highlightsShown,
 					} as BackgroundMessage),
 				},
 				appendTerm: {
 					buttonClass: ElementClass.CONTROL_CONTENT,
 					path: "/icons/create.svg",
-					containerId: ElementID.BAR_CONTROLS,
+					containerId: ElementID.BAR_RIGHT,
 					setUp: container => {
 						const pad = container.querySelector(`.${getSel(ElementClass.CONTROL_PAD)}`) as HTMLElement;
 						insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input));
@@ -1366,8 +1369,8 @@ const insertControls = (() => {
 				pinTerms: {
 					buttonClass: ElementClass.PIN,
 					path: "/icons/pin.svg",
-					containerId: ElementID.BAR_CONTROLS,
-					onclick: control => {
+					containerId: ElementID.BAR_RIGHT,
+					onClick: control => {
 						control.remove();
 						chrome.runtime.sendMessage({
 							toggleAutoOverwritableOn: false,
@@ -1404,8 +1407,7 @@ const insertControls = (() => {
 					return;
 				}
 				if (document.activeElement && bar.contains(document.activeElement)) {
-					const control = document.activeElement.closest(`.${getSel(ElementClass.CONTROL)}`)
-						?? document.activeElement.closest(`.${getSel(ElementClass.BAR_CONTROL)}`);
+					const control = document.activeElement.closest(`.${getSel(ElementClass.CONTROL)}`);
 					if (control && (
 						//(control === (control.parentElement as Element).firstElementChild && event.shiftKey) ||
 						(control === getControlAppendTerm() && !event.shiftKey))) {
@@ -1421,15 +1423,17 @@ const insertControls = (() => {
 		if (!controlsInfo.pageModifyEnabled) {
 			bar.classList.add(getSel(ElementClass.DISABLED));
 		}
-		const barOptions = document.createElement("span");
-		barOptions.id = getSel(ElementID.BAR_OPTIONS);
+		const barLeft = document.createElement("span");
+		barLeft.id = getSel(ElementID.BAR_LEFT);
+		barLeft.classList.add(getSel(ElementClass.BAR_CONTROLS));
 		const barTerms = document.createElement("span");
 		barTerms.id = getSel(ElementID.BAR_TERMS);
-		const barControls = document.createElement("span");
-		barControls.id = getSel(ElementID.BAR_CONTROLS);
-		bar.appendChild(barOptions);
+		const barRight = document.createElement("span");
+		barRight.id = getSel(ElementID.BAR_RIGHT);
+		barRight.classList.add(getSel(ElementClass.BAR_CONTROLS));
+		bar.appendChild(barLeft);
 		bar.appendChild(barTerms);
-		bar.appendChild(barControls);
+		bar.appendChild(barRight);
 		document.body.insertAdjacentElement("beforebegin", bar);
 		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) =>
 			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo));
