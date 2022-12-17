@@ -675,12 +675,12 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			query: session.researchInstances[senderTabId].terms.map(term => term.phrase).join(" "),
 			tabId: senderTabId,
 		});
-	} else if (message.toggleAutoOverwritable === undefined || Object.keys(message).length > 1) {
+	} else if (message.toggleAutoOverwritableOn === undefined || Object.keys(message).length > 1) {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
 		if (message.makeUnique || !isTabResearchPage(session.researchInstances, senderTabId)) {
 			const researchInstance = await createResearchInstance({
 				terms: message.terms,
-				autoOverwritable: message.toggleAutoOverwritable ?? true,
+				autoOverwritable: message.toggleAutoOverwritableOn ?? true,
 			});
 			session.researchInstances[senderTabId] = researchInstance;
 		}
@@ -694,7 +694,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 				StorageSync.URL_FILTERS,
 			]);
 			researchInstance.highlightsShown = message.toggleHighlightsOn ?? researchInstance.highlightsShown;
-			researchInstance.autoOverwritable = message.toggleAutoOverwritable ?? researchInstance.autoOverwritable;
+			researchInstance.autoOverwritable = message.toggleAutoOverwritableOn ?? researchInstance.autoOverwritable;
 			setStorageSession(session);
 			await activateHighlightingInTab(senderTabId, {
 				terms: researchInstance.terms,
@@ -711,7 +711,7 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 			const researchInstance = session.researchInstances[senderTabId];
 			researchInstance.terms = message.terms;
 			researchInstance.highlightsShown = message.toggleHighlightsOn ?? researchInstance.highlightsShown;
-			researchInstance.autoOverwritable = message.toggleAutoOverwritable ?? researchInstance.autoOverwritable;
+			researchInstance.autoOverwritable = message.toggleAutoOverwritableOn ?? researchInstance.autoOverwritable;
 			setStorageSession(session);
 			const highlightMessage: HighlightMessage = { terms: message.terms };
 			highlightMessage.termUpdate = message.termChanged;
@@ -723,9 +723,9 @@ const handleMessage = async (message: BackgroundMessage, senderTabId: number) =>
 		}
 		return;
 	}
-	if (message.toggleAutoOverwritable !== undefined) {
+	if (message.toggleAutoOverwritableOn !== undefined) {
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		session.researchInstances[senderTabId].autoOverwritable = message.toggleAutoOverwritable;
+		session.researchInstances[senderTabId].autoOverwritable = message.toggleAutoOverwritableOn;
 		setStorageSession(session);
 	}
 };
