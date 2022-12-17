@@ -1033,6 +1033,40 @@ textarea
 			tab.textContent = panelInfo.name.text;
 			tabContainer.appendChild(tab);
 		});
+		// TODO handle multiple tabs correctly
+		// TODO visual indication of letter
+		const lettersTaken: Set<string> = new Set;
+		const info: Array<{ letter: string, checkboxInfo?: PageInteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
+			sectionInfo.interactions
+				.map(interactionInfo => {
+					if (interactionInfo.checkbox && interactionInfo.label) {
+						const letter = Array.from(interactionInfo.label.text).find(letter => !lettersTaken.has(letter));
+						if (letter) {
+							lettersTaken.add(letter);
+							return { letter, checkboxInfo: interactionInfo.checkbox };
+						}
+					}
+					return { letter: "" };
+				})
+				.filter(info => info.letter !== "")
+		));
+		addEventListener("keydown", event => {
+			if (!event.altKey || !event.shiftKey) {
+				return;
+			}
+			info.some(info => {
+				if (info.letter !== event.key) {
+					return false;
+				}
+				if (info.checkboxInfo && info.checkboxInfo.autoId) {
+					const checkbox = document.getElementById(info.checkboxInfo.autoId) as HTMLInputElement;
+					checkbox.focus();
+					checkbox.click();
+					event.preventDefault();
+				}
+				return true;
+			});
+		});
 		handleTabs(shiftModifierIsRequired);
 		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
 		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
