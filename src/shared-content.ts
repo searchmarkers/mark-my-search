@@ -133,11 +133,11 @@ class MatchTerm {
 		}${
 			getDiacriticsMatchingPatternStringSafe(getHyphenatedPatternString(sanitize(patternStringPrefix.slice(0, -1))))
 		}${
-			getDiacriticsMatchingPatternStringSafe(sanitize(patternStringPrefix.at(-1) as string))
+			getDiacriticsMatchingPatternStringSafe(sanitize(patternStringPrefix[patternStringPrefix.length - 1]))
 		}(?:${
 			patternStringSuffix ? optionalHyphenStandin + getDiacriticsMatchingPatternStringSafe(patternStringSuffix) : ""
 		})?${
-			getBoundaryTest(patternStringPrefix.at(-1) as string)
+			getBoundaryTest(patternStringPrefix[patternStringPrefix.length - 1])
 		}`.replace(new RegExp(optionalHyphenStandin, "g"), optionalHyphen);
 		this.pattern = new RegExp(patternString, flags);
 	}
@@ -163,7 +163,8 @@ class Engine {
 			this.pathname = [ parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined) ];
 		} else {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			const [ param, arg ] = Array.from(urlDynamic.searchParams).find(param => param[1].includes("%s")) ?? [ "", "" ];
+			const [ param, arg ] = (Array.from(urlDynamic.searchParams as unknown as ArrayLike<string>))
+				.find(param => param[1].includes("%s")) ?? [ "", "" ];
 			this.param = param;
 		}
 	}
