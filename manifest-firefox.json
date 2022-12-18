@@ -4,11 +4,7 @@
 	"description": "Highlight searched keywords. Find matches instantly.",
 	"version": "1.11.1",
 
-	"browser_specific_settings": {
-		"gecko": {
-			"id": "mark-my-search@ator-dev"
-		}
-	},
+	"browser_specific_settings.gecko.id": "mark-my-search@ator-dev",
 
 	"icons": {
 		"48": "/icons/mms.svg",
@@ -76,58 +72,188 @@
 			"description": "Open the options page"
 		},
 		"toggle-research-tab": {
-			"suggested_key": { "default": "Alt+Shift+M" },
+			"suggested_key.default": "Alt+Shift+M",
 			"description": "Find in current tab"
 		},
 		"toggle-research-global": {
+			"suggested_key.default": "Alt+Shift+J",
 			"description": "Enable/disable automatic web search marking"
 		},
 		"toggle-bar": {
 			"description": "Show/hide toolbar"
 		},
 		"toggle-highlights": {
-			"suggested_key": { "default": "Alt+Shift+D" },
+			"suggested_key.default": "Alt+Shift+D",
 			"description": "Show/hide highlighting"
 		},
 		"toggle-select": {
 			"description": "Enable/disable sticky term jumping mode"
 		},
 		"focus-term-append": {
+			"suggested_key.default": "Alt+Period",
 			"description": "Focus input for appending a term"
 		},
 		"step-global": {
+			"suggested_key.default": "F2",
 			"description": "Step to and select next highlight"
 		},
 		"step-global-reverse": {
+			"suggested_key.default": "Shift+F2",
 			"description": "Step to and select previous highlight"
 		},
 		"advance-global": {
-			"suggested_key": { "default": "Alt+Space" },
+			"suggested_key": {
+				"windows": "Alt+A",
+				"default": "Alt+Space"
+			},
 			"description": "Jump to next highlight block"
 		},
 		"advance-global-reverse": {
-			"suggested_key": { "default": "Alt+Shift+Space" },
+			"suggested_key": {
+				"windows": "Alt+Shift+A",
+				"default": "Alt+Shift+Space"
+			},
 			"description": "Jump to previous highlight block"
 		},
-		"select-term-0": { "description": "Jump to next (1st keyword)" },
-		"select-term-1": { "description": "Jump to next (2nd keyword)" },
-		"select-term-2": { "description": "Jump to next (3rd keyword)" },
-		"select-term-3": { "description": "Jump to next (4th keyword)" },
-		"select-term-4": { "description": "Jump to next (5th keyword)" },
-		"select-term-5": { "description": "Jump to next (6th keyword)" },
-		"select-term-6": { "description": "Jump to next (7th keyword)" },
-		"select-term-7": { "description": "Jump to next (8th keyword)" },
-		"select-term-8": { "description": "Jump to next (9th keyword)" },
-		"select-term-9": { "description": "Jump to next (10th keyword)" },
-		"select-term-0-reverse": { "description": "Jump to previous (1st keyword)" },
-		"select-term-1-reverse": { "description": "Jump to previous (2nd keyword)" },
-		"select-term-2-reverse": { "description": "Jump to previous (3rd keyword)" },
-		"select-term-3-reverse": { "description": "Jump to previous (4th keyword)" },
-		"select-term-4-reverse": { "description": "Jump to previous (5th keyword)" },
-		"select-term-5-reverse": { "description": "Jump to previous (6th keyword)" },
-		"select-term-6-reverse": { "description": "Jump to previous (7th keyword)" },
-		"select-term-7-reverse": { "description": "Jump to previous (8th keyword)" },
-		"select-term-8-reverse": { "description": "Jump to previous (9th keyword)" },
-		"select-term-9-reverse": { "description": "Jump to previous (10th keyword)" }
+		"select-term-0": {
+			"suggested_key": {
+				"windows": "Alt+1",
+				"default": "Alt+Shift+1"
+			},
+			"description": "Jump to next (1st keyword)"
+		},
+		"select-term-1": {
+			"suggested_key": {
+				"windows": "Alt+2",
+				"default": "Alt+Shift+2"
+			},
+			"description": "Jump to next (2nd keyword)"
+		},
+		"select-term-2": {
+			"suggested_key": {
+				"windows": "Alt+3",
+				"default": "Alt+Shift+3"
+			},
+			"description": "Jump to next (3rd keyword)"
+		},
+		"select-term-3": {
+			"suggested_key": {
+				"windows": "Alt+4",
+				"default": "Alt+Shift+4"
+			},
+			"description": "Jump to next (4th keyword)"
+		},
+		"select-term-4": {
+			"suggested_key": {
+				"windows": "Alt+5",
+				"default": "Alt+Shift+5"
+			},
+			"description": "Jump to next (5th keyword)"
+		},
+		"select-term-5": {
+			"suggested_key": {
+				"windows": "Alt+6",
+				"default": "Alt+Shift+6"
+			},
+			"description": "Jump to next (6th keyword)"
+		},
+		"select-term-6": {
+			"suggested_key": {
+				"windows": "Alt+7",
+				"default": "Alt+Shift+7"
+			},
+			"description": "Jump to next (7th keyword)"
+		},
+		"select-term-7": {
+			"suggested_key": {
+				"windows": "Alt+8",
+				"default": "Alt+Shift+8"
+			},
+			"description": "Jump to next (8th keyword)"
+		},
+		"select-term-8": {
+			"suggested_key": {
+				"windows": "Alt+9",
+				"default": "Alt+Shift+9"
+			},
+			"description": "Jump to next (9th keyword)"
+		},
+		"select-term-9": {
+			"suggested_key": {
+				"windows": "Alt+0",
+				"default": "Alt+Shift+0"
+			},
+			"description": "Jump to next (10th keyword)"
+		},
+		"select-term-0-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+1",
+				"default": "Ctrl+Shift+1"
+			},
+			"description": "Jump to previous (1st keyword)"
+		},
+		"select-term-1-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+2",
+				"default": "Ctrl+Shift+2"
+			},
+			"description": "Jump to previous (2nd keyword)"
+		},
+		"select-term-2-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+3",
+				"default": "Ctrl+Shift+3"
+			},
+			"description": "Jump to previous (3rd keyword)"
+		},
+		"select-term-3-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+4",
+				"default": "Ctrl+Shift+4"
+			},
+			"description": "Jump to previous (4th keyword)"
+		},
+		"select-term-4-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+5",
+				"default": "Ctrl+Shift+5"
+			},
+			"description": "Jump to previous (5th keyword)"
+		},
+		"select-term-5-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+6",
+				"default": "Ctrl+Shift+6"
+			},
+			"description": "Jump to previous (6th keyword)"
+		},
+		"select-term-6-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+7",
+				"default": "Ctrl+Shift+7"
+			},
+			"description": "Jump to previous (7th keyword)"
+		},
+		"select-term-7-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+8",
+				"default": "Ctrl+Shift+8"
+			},
+			"description": "Jump to previous (8th keyword)"
+		},
+		"select-term-8-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+9",
+				"default": "Ctrl+Shift+9"
+			},
+			"description": "Jump to previous (9th keyword)"
+		},
+		"select-term-9-reverse": {
+			"suggested_key": {
+				"windows": "Alt+Shift+0",
+				"default": "Ctrl+Shift+0"
+			},
+			"description": "Jump to previous (10th keyword)"
+		}
 	}
 }

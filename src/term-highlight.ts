@@ -895,7 +895,7 @@ const getControl = (term?: MatchTerm, idx?: number): Element | null => {
 		? barTerms.getElementsByClassName(getSel(ElementClass.TERM, term.selector))[0]
 		: idx === undefined || idx >= barTerms.children.length
 			? getControlAppendTerm()
-			: Array.from(barTerms.children).at(idx ?? -1) ?? null
+			: Array.from(barTerms.children)[idx ?? (barTerms.childElementCount - 1)] ?? null
 	);
 };
 
@@ -1187,7 +1187,7 @@ const openTermOptionMenu = (term: MatchTerm | undefined) => {
  */
 const insertTermControl = (terms: MatchTerms, idx: number, command: string, commandReverse: string,
 	controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
-	const term = terms.at(idx) as MatchTerm;
+	const term = terms[idx >= 0 ? idx : (terms.length + idx)] as MatchTerm;
 	const { optionList, controlReveal } = createTermOptionMenu(term, terms, controlsInfo);
 	const controlPad = document.createElement("div");
 	controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
