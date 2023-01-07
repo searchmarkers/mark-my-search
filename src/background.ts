@@ -406,24 +406,46 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
-	
-	chrome.tabs.onCreated.addListener(async tab => {
+
+	const tabCreated = async (tab: chrome.tabs.Tab) => {
 		const local = await getStorageLocal([ StorageLocal.FOLLOW_LINKS ]);
-		if (!local.followLinks
-			|| tab.id === undefined || tab.openerTabId === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
+		let openerTabId: number | undefined = tab.openerTabId;
+		if (!local.followLinks || tab.id === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
 			return;
+		}
+		if (openerTabId === undefined) {
+			if (!useChromeAPI()) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+				return;
+			}
+			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
+			if (openerTabId === undefined) {
+				return;
+			}
 		}
 		log("tab-communicate obligation check", "tab created", { tabId: tab.id });
 		const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
-		if (isTabResearchPage(session.researchInstances, tab.openerTabId)) {
-			const sync = await getStorageSync([ StorageSync.LINK_RESEARCH_TABS ]);
-			session.researchInstances[tab.id] = sync.linkResearchTabs
-				? session.researchInstances[tab.openerTabId]
-				: { ...session.researchInstances[tab.openerTabId] };
+		if (isTabResearchPage(session.researchInstances, openerTabId)) {
+			session.researchInstances[tab.id] = { ...session.researchInstances[openerTabId] };
 			setStorageSession(session);
 			pageModifyRemote(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache.
 		}
-	});
+	};
+
+	(() => {
+		const tabCreationQueue: Array<() => Promise<unknown>> = [];
+
+		chrome.tabs.onCreated.addListener(async tab => {
+			const tabCreationInProgress = !!tabCreationQueue.length;
+			tabCreationQueue.push(() => tabCreated(tab));
+			if (tabCreationInProgress) {
+				return;
+			}
+			while (tabCreationQueue.length) {
+				await tabCreationQueue[0]();
+				tabCreationQueue.shift();
+			}
+		});
+	})();
 
 	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 		if (changeInfo.url) {

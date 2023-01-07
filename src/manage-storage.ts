@@ -22,7 +22,6 @@ type StorageSyncValues = {
 		searchParams: Array<string>
 	}
 	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
-	[StorageSync.LINK_RESEARCH_TABS]: boolean
 	[StorageSync.SHOW_HIGHLIGHTS]: {
 		default: boolean
 		overrideSearchPages: boolean
@@ -76,7 +75,6 @@ enum StorageLocal {
 enum StorageSync {
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	MATCH_MODE_DEFAULTS = "matchModeDefaults",
-	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
@@ -121,7 +119,6 @@ const defaultOptions: StorageSyncValues = {
 		whole: false,
 		diacritics: false,
 	},
-	linkResearchTabs: false,
 	showHighlights: {
 		default: true,
 		overrideSearchPages: true,
