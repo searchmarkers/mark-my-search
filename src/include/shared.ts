@@ -1,3 +1,5 @@
+// FIXME this source file is bloated and included in too many places.
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>

@@ -29,10 +29,10 @@
 
 	"background": {
 		"scripts": [
-			"/dist/manage-storage.js",
-			"/dist/stem-pattern-find.js",
-			"/dist/diacritic-pattern.js",
-			"/dist/shared-content.js",
+			"/dist/include/storage.js",
+			"/dist/include/pattern-stem.js",
+			"/dist/include/pattern-diacritic.js",
+			"/dist/include/shared.js",
 			"/dist/background.js"
 		]
 	},

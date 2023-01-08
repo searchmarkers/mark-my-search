@@ -1,24 +1,24 @@
-enum ScriptLib { // Library scripts, which perform no action but provide utilities including types, enums, and functions.
-	STORAGE = "/dist/manage-storage.js",
-	STEMMING = "/dist/stem-pattern-find.js",
-	DIACRITICS = "/dist/diacritic-pattern.js",
-	COMMON = "/dist/shared-content.js",
+enum ScriptInclude { // Include scripts, which perform no action but provide utilities such as functions, classes, and enums.
+	STORAGE = "/dist/include/storage.js",
+	STEMMING = "/dist/include/pattern-stem.js",
+	DIACRITICS = "/dist/include/pattern-diacritic.js",
+	COMMON = "/dist/include/shared.js",
 }
 
 enum Script { // Handler scripts.
 	BACKGROUND = "/dist/background.js",
-	OPTIONS = "/dist/options.js",
-	POPUP = "/dist/popup.js",
-	CONTENT_MARKER = "/dist/term-highlight.js",
+	CONTENT = "/dist/content.js",
+	POPUP = "/dist/pages/popup-build.js",
+	OPTIONS = "/dist/pages/options.js",
 }
 
 if (/*isBrowserChromium()*/ !this.browser) {
 	// Firefox accepts a list of event page scripts, whereas Chromium only accepts service workers.
 	this["importScripts"](
-		ScriptLib.STORAGE,
-		ScriptLib.STEMMING,
-		ScriptLib.DIACRITICS,
-		ScriptLib.COMMON,
+		ScriptInclude.STORAGE,
+		ScriptInclude.STEMMING,
+		ScriptInclude.DIACRITICS,
+		ScriptInclude.COMMON,
 	);
 }
 
@@ -252,7 +252,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? getStorageLocal([ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
 		: chrome.action.setIcon({ path: useChromeAPI()
-			? enabled ? "/icons/mms-32.png" : "/icons/mms-off-32.png" // Chromium still has patchy SVG support
+			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
 ;
@@ -615,10 +615,10 @@ const executeScriptsInTab = async (tabId: number) => {
 	log("script injection start", "", logMetadata);
 	return chrome.scripting.executeScript({
 		files: [
-			ScriptLib.STEMMING,
-			ScriptLib.DIACRITICS,
-			ScriptLib.COMMON,
-			Script.CONTENT_MARKER,
+			ScriptInclude.STEMMING,
+			ScriptInclude.DIACRITICS,
+			ScriptInclude.COMMON,
+			Script.CONTENT,
 		],
 		target: { tabId },
 	}).then(value => {
