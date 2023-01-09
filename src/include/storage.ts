@@ -92,16 +92,15 @@ interface ResearchInstance {
 
 const defaultOptions: StorageSyncValues = {
 	autoFindOptions: {
-		searchParams: [ // Order of specificity as only the first found will be used.
-			"searchTerms",
-			"searchTerm",
+		searchParams: [ // Order of specificity, as only the first match will be used.
+			"search_terms", "search_term", "searchTerms", "searchTerm",
+			"search_query", "searchQuery",
 			"search",
 			"query",
 			"phrase",
-			"keywords",
-			"keyword",
-			"terms",
-			"term",
+			"keywords", "keyword",
+			"terms", "term",
+			// Short forms:
 			"s", "q", "p", "k",
 			// Special cases:
 			"_nkw", // eBay
