@@ -2,9 +2,9 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.11.1",
+	"version": "1.11.2",
 
-	"browser_specific_settings.gecko.id": "mark-my-search@ator-dev",
+	"browser_specific_settings": { "gecko": { "id": "mark-my-search@ator-dev" } },
 
 	"icons": {
 		"48": "/icons/mms.svg",
@@ -29,10 +29,10 @@
 
 	"background": {
 		"scripts": [
-			"/dist/manage-storage.js",
-			"/dist/stem-pattern-find.js",
-			"/dist/diacritic-pattern.js",
-			"/dist/shared-content.js",
+			"/dist/include/storage.js",
+			"/dist/include/pattern-stem.js",
+			"/dist/include/pattern-diacritic.js",
+			"/dist/include/shared.js",
 			"/dist/background.js"
 		]
 	},
@@ -72,33 +72,33 @@
 			"description": "Open the options page"
 		},
 		"toggle-research-tab": {
-			"suggested_key.default": "Alt+Shift+M",
+			"suggested_key": { "default": "Alt+Shift+M" },
 			"description": "Find in current tab"
 		},
 		"toggle-research-global": {
-			"suggested_key.default": "Alt+Shift+J",
+			"suggested_key": { "default": "Alt+Shift+J" },
 			"description": "Enable/disable automatic web search marking"
 		},
 		"toggle-bar": {
 			"description": "Show/hide toolbar"
 		},
 		"toggle-highlights": {
-			"suggested_key.default": "Alt+Shift+D",
+			"suggested_key": { "default": "Alt+Shift+D" },
 			"description": "Show/hide highlighting"
 		},
 		"toggle-select": {
 			"description": "Enable/disable sticky term jumping mode"
 		},
 		"focus-term-append": {
-			"suggested_key.default": "Alt+Period",
+			"suggested_key": { "default": "Alt+Period" },
 			"description": "Focus input for appending a term"
 		},
 		"step-global": {
-			"suggested_key.default": "F2",
+			"suggested_key": { "default": "F2" },
 			"description": "Step to and select next highlight"
 		},
 		"step-global-reverse": {
-			"suggested_key.default": "Shift+F2",
+			"suggested_key": { "default": "Shift+F2" },
 			"description": "Step to and select previous highlight"
 		},
 		"advance-global": {

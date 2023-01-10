@@ -223,7 +223,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Bar */
 #${getSel(ElementID.BAR)}
 	{ all: revert; position: fixed; top: 0; left: 0; z-index: ${zIndexMax};
-	color-scheme: light; font-size: ${controlsInfo.barLook.fontSize}; line-height: initial; user-select: none; }
+	color-scheme: light; font-size: ${controlsInfo.barLook.fontSize}; line-height: initial; user-select: none; pointer-events: none; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} *
@@ -235,8 +235,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	background: none; color: hsl(0 0% 0%); cursor: pointer; letter-spacing: normal; transition: unset; }
 #${getSel(ElementID.BAR)} > *
 	{ display: inline; }
-#${getSel(ElementID.BAR)} > * > *
-	{ display: inline-block; vertical-align: top; margin-left: 0.5em; }
+#${getSel(ElementID.BAR)} ${getSel(ElementClass.CONTROL)}
+	{ display: inline-block; vertical-align: top; margin-left: 0.5em; pointer-events: auto; }
 /**/
 
 /* || Term Pulldown */
