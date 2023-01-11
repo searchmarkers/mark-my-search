@@ -206,7 +206,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_RIGHT)}
 .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_STEM)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
-	{ border-bottom: 3px solid #666; }
+	{ border-bottom: 3px solid hsl(0 0% 38%); }
 #${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
 .${getSel(ElementClass.CONTROL_CONTENT)},
 #${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
@@ -416,10 +416,9 @@ const stepToTerm = (() => {
 			: highlight
 	;
 
-	const getContainingHighlight = (element: HTMLElement) =>
-		// Technically this should not be needed - however, the current Classic algorithm can incorrectly nest highlights.
+	const getTopLevelHighlight = (element: HTMLElement) =>
 		(element.parentElement as HTMLElement).closest("mms-h")
-			? getContainingHighlight((element as HTMLElement).closest("mms-h") as HTMLElement)
+			? getTopLevelHighlight((element.parentElement as HTMLElement).closest("mms-h") as HTMLElement)
 			: element
 	;
 
@@ -455,7 +454,7 @@ const stepToTerm = (() => {
 	};
 
 	const stepToElement = (element: HTMLElement, highlightTags: HighlightTags) => {
-		element = getContainingHighlight(element);
+		element = getTopLevelHighlight(element);
 		const elementFirst = getSiblingHighlightFinal(element, element, "previousSibling");
 		const elementLast = getSiblingHighlightFinal(element, element, "nextSibling");
 		(getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
@@ -485,7 +484,9 @@ const stepToTerm = (() => {
 			? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
 			: nodeSelected ?? nodeBegin);
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element.tagName === "MMS-H" && isVisible(element)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+			(element.parentElement as Element).closest("mms-h")
+				? NodeFilter.FILTER_REJECT
+				: (element.tagName === "MMS-H" && isVisible(element)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
 		);
 		walker.currentNode = nodeCurrent;
 		const element = walker[reversed ? "previousNode" : "nextNode"]() as HTMLElement | null;
@@ -772,6 +773,10 @@ const insertTermInput = (() => {
 		const replaces = idxCode !== TermChange.CREATE;
 		const input = document.createElement("input");
 		input.type = "text";
+		// Inputs should not be focusable unless user has already focused bar. (0)
+		if (!document.activeElement || !document.activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
+			input.tabIndex = -1;
+		}
 		const resetInput = (termText = controlContent.textContent as string) => {
 			input.value = replaces ? termText : "";
 		};
@@ -790,7 +795,8 @@ const insertTermInput = (() => {
 			}
 		});
 		input.addEventListener("keyup", event => {
-			if (event.key === "Tab") {
+			// First focus of an input does not allow immediate full-text selection.
+			if (event.key === "Tab") { // Simulate (delegated) if Tab was used to reach the input.
 				selectInputTextAll(input);
 			}
 		});
@@ -1397,6 +1403,22 @@ const insertControls = (() => {
 		};
 		bar.addEventListener("mouseenter", fixVisibility);
 		bar.addEventListener("mouseleave", fixVisibility);
+		// Inputs should not be focusable unless user has already focused bar. (1)
+		const inputsSetFocusable = (focusable: boolean) => {
+			bar.querySelectorAll("input").forEach(input => {
+				if (focusable) {
+					input.removeAttribute("tabindex");
+				} else {
+					input.tabIndex = -1;
+				}
+			});
+		};
+		bar.addEventListener("focusin", () => {
+			inputsSetFocusable(true);
+		});
+		bar.addEventListener("focusout", () => {
+			inputsSetFocusable(false);
+		});
 		window.addEventListener("keydown", event => {
 			if (event.key === "Tab") {
 				const controlInput = (getControlAppendTerm() as Element).querySelector("input") as HTMLInputElement;
