@@ -203,14 +203,14 @@ const loadPopup = (() => {
 							className: "link",
 							anchor: {
 								url: "https://github.com/searchmarkers/mark-my-search/issues/new",
-								text: "File a bug report",
+								text: "File an issue (GitHub)",
 							},
 						},
 						{
 							className: "link",
 							anchor: {
-								url: "https://github.com/searchmarkers/mark-my-search",
-								text: "Get involved!",
+								url: "mailto:ator-dev@protonmail.com?subject=Mark%20My%20Search%20support",
+								text: "Contact the developer",
 							},
 						},
 					],
@@ -563,7 +563,7 @@ const loadPopup = (() => {
 	return () => {
 		loadPage(panelsInfo, `
 body
-	{ width: 300px; height: 540px; user-select: none; }
+	{ width: 300px; height: 560px; user-select: none; }
 .container-panel > .panel, .brand
 	{ margin-inline: 0; }
 		`, false);

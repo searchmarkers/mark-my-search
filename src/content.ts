@@ -234,8 +234,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: flex; align-items: center; padding-inline: 4px; margin-block: 0; border: none; border-radius: inherit;
 	background: none; color: hsl(0 0% 0%); cursor: pointer; letter-spacing: normal; transition: unset; }
 #${getSel(ElementID.BAR)} > *
-	{ display: inline; }
-#${getSel(ElementID.BAR)} ${getSel(ElementClass.CONTROL)}
+	{ display: inline-block; }
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL)}
 	{ display: inline-block; vertical-align: top; margin-left: 0.5em; pointer-events: auto; }
 /**/
 
@@ -1423,12 +1423,12 @@ const insertControls = (() => {
 		if (!controlsInfo.pageModifyEnabled) {
 			bar.classList.add(getSel(ElementClass.DISABLED));
 		}
-		const barLeft = document.createElement("span");
+		const barLeft = document.createElement("div");
 		barLeft.id = getSel(ElementID.BAR_LEFT);
 		barLeft.classList.add(getSel(ElementClass.BAR_CONTROLS));
-		const barTerms = document.createElement("span");
+		const barTerms = document.createElement("div");
 		barTerms.id = getSel(ElementID.BAR_TERMS);
-		const barRight = document.createElement("span");
+		const barRight = document.createElement("div");
 		barRight.id = getSel(ElementID.BAR_RIGHT);
 		barRight.classList.add(getSel(ElementClass.BAR_CONTROLS));
 		bar.appendChild(barLeft);
