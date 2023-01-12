@@ -395,7 +395,7 @@ const revertElementsUnfocusable = (root = document.body) => {
 
 // TODO document
 const stepToTerm = (() => {
-	// FIXME borrowed from simplified Paint version, make global definition
+	// FIXME borrowed from simplified PAINT version, make global definition
 	const getNodeFinal = (node: Node): Node =>
 		node.lastChild ? getNodeFinal(node.lastChild) : node
 	;
@@ -480,9 +480,12 @@ const stepToTerm = (() => {
 				? null
 				: document.activeElement as HTMLElement
 			: null;
-		const nodeCurrent = nodeStart ?? (nodeFocused
-			? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
-			: nodeSelected ?? nodeBegin);
+		const nodeCurrent = nodeStart ?? (nodeSelected
+			? nodeSelected
+			: nodeFocused ?? nodeBegin);
+		if (document.activeElement) {
+			(document.activeElement as HTMLElement).blur();
+		}
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
 			(element.parentElement as Element).closest("mms-h")
 				? NodeFilter.FILTER_REJECT
@@ -495,9 +498,6 @@ const stepToTerm = (() => {
 				stepToTerm(highlightTags, reversed, nodeBegin);
 			}
 			return;
-		}
-		if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
 		}
 		stepToElement(element, highlightTags);
 	};
@@ -612,9 +612,6 @@ const jumpToTerm = (() => {
 			.getElementsByClassName(getSel(ElementClass.FOCUS_CONTAINER))[0] as HTMLElement;
 		const selection = getSelection();
 		const activeElement = document.activeElement;
-		if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
-			(activeElement as HTMLInputElement).blur();
-		}
 		const selectionFocus = selection && (!activeElement
 			|| activeElement === document.body || !document.body.contains(activeElement)
 			|| activeElement === focusBase || activeElement.contains(focusContainer)
@@ -1748,6 +1745,16 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
 	revertElementsUnfocusable(root as HTMLElement);
 };
 
+// TODO document
+const focusReturnToDocument = (): boolean => {
+	const activeElement = document.activeElement;
+	if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${getSel(ElementID.BAR)}`)) {
+		(activeElement as HTMLInputElement).blur();
+		return true;
+	}
+	return false;
+};
+
 /**
  * Gets a mutation observer which listens to document changes and performs partial highlights where necessary.
  * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
@@ -2019,14 +2026,14 @@ const getTermsFromSelection = () => {
 				selectModeFocus = !selectModeFocus;
 				break;
 			} case CommandType.STEP_GLOBAL: {
+				if (focusReturnToDocument()) {
+					break;
+				}
 				stepToTerm(highlightTags, commandInfo.reversed ?? false);
 				break;
 			} case CommandType.ADVANCE_GLOBAL: {
-				if (selectModeFocus) {
-					jumpToTerm(highlightTags, commandInfo.reversed ?? false, terms[focusedIdx]);
-				} else {
-					jumpToTerm(highlightTags, commandInfo.reversed ?? false);
-				}
+				focusReturnToDocument();
+				jumpToTerm(highlightTags, commandInfo.reversed ?? false, selectModeFocus ? terms[focusedIdx] : undefined);
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
 				const control = getControl(undefined, commandInfo.termIdx);
