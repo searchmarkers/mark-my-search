@@ -407,7 +407,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
 
-	const tabCreated = async (tab: chrome.tabs.Tab) => {
+	chrome.tabs.onCreated.addListener(async tab => {
 		const local = await storageGet("local", [ StorageLocal.FOLLOW_LINKS ]);
 		let openerTabId: number | undefined = tab.openerTabId;
 		if (!local.followLinks || tab.id === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
@@ -429,23 +429,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			storageSet("session", session);
 			pageModifyRemote(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache.
 		}
-	};
-
-	(() => {
-		const tabCreationQueue: Array<() => Promise<unknown>> = [];
-
-		chrome.tabs.onCreated.addListener(async tab => {
-			const tabCreationInProgress = !!tabCreationQueue.length;
-			tabCreationQueue.push(() => tabCreated(tab));
-			if (tabCreationInProgress) {
-				return;
-			}
-			while (tabCreationQueue.length) {
-				await tabCreationQueue[0]();
-				tabCreationQueue.shift();
-			}
-		});
-	})();
+	});
 
 	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 		if (changeInfo.url) {

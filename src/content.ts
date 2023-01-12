@@ -234,7 +234,7 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: flex; align-items: center; padding-inline: 4px; margin-block: 0; border: none; border-radius: inherit;
 	background: none; color: hsl(0 0% 0%); cursor: pointer; letter-spacing: normal; transition: unset; }
 #${getSel(ElementID.BAR)} > *
-	{ display: inline-block; }
+	{ display: inline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL)}
 	{ display: inline-block; vertical-align: top; margin-left: 0.5em; pointer-events: auto; }
 /**/
@@ -1385,7 +1385,7 @@ const insertControls = (() => {
 	})();
 
 	return (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
-		highlightTags: HighlightTags, hues: TermHues) => {
+		highlightTags: HighlightTags, hues: TermHues, produceEffectOnCommand: ProduceEffectOnCommand) => {
 		fillStylesheetContent(terms, hues, controlsInfo);
 		const bar = document.createElement("div");
 		bar.id = getSel(ElementID.BAR);
@@ -1418,21 +1418,23 @@ const insertControls = (() => {
 		});
 		window.addEventListener("keydown", event => {
 			if (event.key === "Tab") {
-				const controlInput = (getControlAppendTerm() as Element).querySelector("input") as HTMLInputElement;
-				if (!event.shiftKey && document.activeElement === controlInput && controlInput.value !== "") {
-					event.preventDefault();
-					controlInput.blur();
-					controlInput.focus();
+				const controlInput = document.activeElement as HTMLInputElement | null;
+				if (!controlInput || !bar.contains(controlInput)) {
 					return;
 				}
-				if (document.activeElement && bar.contains(document.activeElement)) {
-					const control = document.activeElement.closest(`.${getSel(ElementClass.CONTROL)}`);
-					if (control && (
-						//(control === (control.parentElement as Element).firstElementChild && event.shiftKey) ||
-						(control === getControlAppendTerm() && !event.shiftKey))) {
-						event.preventDefault();
-						(document.activeElement as HTMLElement).blur();
-					}
+				const control = controlInput.closest(`.${getSel(ElementClass.CONTROL)}`);
+				if (!control || !(event.shiftKey
+					? control === (document.getElementById(getSel(ElementID.BAR_TERMS)) as Element).firstElementChild
+					: control === getControlAppendTerm())) {
+					return;
+				}
+				event.preventDefault();
+				if (!event.shiftKey && controlInput.value.length) { // Force term-append to commit (add new term) then regain focus.
+					controlInput.blur();
+					// TODO ensure focus+selection is restored by a cleaner method
+					produceEffectOnCommand.next({ type: CommandType.FOCUS_TERM_INPUT });
+				} else {
+					controlInput.blur();
 				}
 			}
 		});
@@ -1880,11 +1882,11 @@ const getTermsFromSelection = () => {
 		 * @param hues Color hues for term styles to cycle through.
 		 */
 		const insertToolbar = (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
-			highlightTags: HighlightTags, hues: TermHues) => {
+			highlightTags: HighlightTags, hues: TermHues, produceEffectOnCommand: ProduceEffectOnCommand) => {
 			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
 				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
 			removeControls();
-			insertControls(terms, controlsInfo, commands, highlightTags, hues);
+			insertControls(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 			if (focusingControlAppend) {
 				const input = (getControl() as HTMLElement).querySelector("input") as HTMLInputElement;
 				input.focus();
@@ -1896,6 +1898,7 @@ const getTermsFromSelection = () => {
 			controlsInfo: ControlsInfo, commands: BrowserCommands,
 			highlightTags: HighlightTags, hues: TermHues,
 			observer: MutationObserver, requestRefreshIndicators: RequestRefreshIndicators,
+			produceEffectOnCommand: ProduceEffectOnCommand,
 			termsUpdate?: MatchTerms, termUpdate?: MatchTerm,
 			termToUpdateIdx?: TermChange.CREATE | TermChange.REMOVE | number,
 		) => {
@@ -1935,7 +1938,7 @@ const getTermsFromSelection = () => {
 				} else {
 					terms.splice(0);
 					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-					insertToolbar(terms, controlsInfo, commands, highlightTags, hues);
+					insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 				}
 			} else {
 				return;
@@ -2198,6 +2201,7 @@ const getTermsFromSelection = () => {
 					controlsInfo, commands, //
 					highlightTags, hues, //
 					observer, requestRefreshIndicators, //
+					produceEffectOnCommand, //
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
 			}
