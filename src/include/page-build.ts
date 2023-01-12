@@ -161,7 +161,7 @@ const sendEmail: (
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+	const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 	const phrases = session.researchInstances[tab.id as number]
 		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";

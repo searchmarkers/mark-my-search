@@ -92,7 +92,7 @@ label[for]:hover
 	 * @param optionsInfo Details of the options to present.
 	 */
 	const loadTab = async (tabIdx: number, tabContainer: HTMLElement, optionsInfo: OptionsInfo) => {
-		const sync = await getStorageSync();
+		const sync = await storageGet("sync");
 		const tabInfo = optionsInfo[tabIdx];
 		const tabButton = document.createElement("button");
 		tabButton.textContent = tabInfo.label;
@@ -136,7 +136,7 @@ label[for]:hover
 						.forEach((preferenceLabel: HTMLElement) => preferenceLabel.classList.remove(OptionClass.MODIFIED));
 				});
 			});
-			setStorageSync(sync);
+			storageSet("sync", sync);
 		});
 		Object.keys(tabInfo.options).forEach(optionKey => {
 			valuesCurrent[optionKey] = {};
@@ -184,7 +184,7 @@ label[for]:hover
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW);
 				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
-				const valueDefault = defaultOptions[optionKey][preferenceKey];
+				const valueDefault = optionsDefault[optionKey][preferenceKey];
 				const value = sync[optionKey][preferenceKey];
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
