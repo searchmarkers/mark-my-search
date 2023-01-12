@@ -172,7 +172,7 @@ const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> |
 const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
 	Promise<StorageAreaValues<Area>> =>
 {
-	if (Object.keys(storageCache[area]).length) {
+	if (keys && keys.every(key => storageCache[area][key as string] !== undefined)) {
 		return { ...storageCache[area] } as StorageAreaValues<Area>;
 	}
 	const store = await chrome.storage[area].get(keys) as StorageAreaValues<Area>;
@@ -181,12 +181,16 @@ const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array
 		const engines = storeAsSession.engines as Engines;
 		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
 	}
-	storageCache[area] = store;
+	Object.entries(store).forEach(([ key, value ]) => {
+		storageCache[area][key] = value;
+	});
 	return { ...store };
 };
 
 const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
-	storageCache[area] = store;
+	Object.entries(store).forEach(([ key, value ]) => {
+		storageCache[area][key] = value;
+	});
 	await chrome.storage[area].set(store);
 };
 
@@ -205,14 +209,14 @@ const storageInitialize = async () => {
 	} as StorageLocalValues, toRemove)) {
 		console.warn("Storage 'local' cleanup rectified issues. Results:", localOld, local); // Use standard logging system?
 	}
-	storageSet("local", local);
-	storageSet("session", {
-		researchInstances: {},
-		engines: {},
-	});
+	await storageSet("local", local);
 	if (chrome.storage["session"]) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
 		await chrome.storage.local.remove(toRemove);
 	}
+	await storageSet("session", {
+		researchInstances: {},
+		engines: {},
+	});
 };
 
 /**
@@ -273,3 +277,12 @@ const optionsRepair = async () => {
 	storageSet("sync", sync);
 	await chrome.storage.sync.remove(toRemove);
 };
+
+chrome.storage.onChanged.addListener((changes, area) => {
+	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
+		area = "session";
+	}
+	Object.entries(changes).forEach(([ key, value ]) => {
+		storageCache[area][key] = value.newValue;
+	});
+});

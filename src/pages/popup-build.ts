@@ -96,9 +96,10 @@ const loadPopup = (() => {
 							checkbox: {
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 									setChecked(tab.id === undefined ? false :
 										isTabResearchPage(
-											(await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ])).researchInstances, tab.id));
+											session.researchInstances, tab.id));
 								},
 								onToggle: checked => {
 									if (checked) {
