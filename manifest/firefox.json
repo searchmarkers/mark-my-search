@@ -4,7 +4,7 @@
 	"description": "Highlight searched keywords. Find matches instantly.",
 	"version": "1.11.2",
 
-	"browser_specific_settings": { "gecko": { "id": "mark-my-search@ator-dev" } },
+	"browser_specific_settings": { "gecko": { "id": "mark-my-search@searchmarkers.github.io" } },
 
 	"icons": {
 		"48": "/icons/mms.svg",
