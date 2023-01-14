@@ -1413,8 +1413,11 @@ const insertControls = (() => {
 		bar.addEventListener("focusin", () => {
 			inputsSetFocusable(true);
 		});
-		bar.addEventListener("focusout", () => {
-			inputsSetFocusable(false);
+		bar.addEventListener("focusout", event => {
+			// Only if focus is not moving (and has not already moved) somewhere else within the bar.
+			if (!bar.contains(event.relatedTarget as Node) && !bar.contains(document.activeElement)) {
+				inputsSetFocusable(false);
+			}
 		});
 		window.addEventListener("keydown", event => {
 			if (event.key === "Tab") {
