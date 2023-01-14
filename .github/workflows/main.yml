@@ -23,8 +23,7 @@ jobs:
       - name: npm install, compile, build
         run: |
           npm install
-          sudo apt install inkscape
-          npm show inkscape
+          sudo apt-get install inkscape
           npm run icons-convert
           npm run scripts-build
           npm run pack-firefox
