@@ -22,7 +22,7 @@ if (/*isBrowserChromium()*/ !this.browser) {
 	);
 }
 
-chrome.scripting = useChromeAPI() ? chrome.scripting : browser["scripting"];
+chrome.tabs.executeScript = useChromeAPI() ? chrome.tabs.executeScript : browser.tabs.executeScript;
 chrome.tabs.query = useChromeAPI() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
 chrome.tabs.sendMessage = useChromeAPI()
 	? chrome.tabs.sendMessage
@@ -251,7 +251,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? storageGet("local", [ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: useChromeAPI()
+		: chrome.browserAction.setIcon({ path: useChromeAPI()
 			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -461,7 +461,7 @@ const updateActionIcon = (enabled?: boolean) =>
  * @param highlightMessageToReceive A message to be received by the tab's highlighting script.
  * This script will first be injected if not already present.
  */
-const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) => {
+const activateHighlightingInTab3 = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) => {
 	const logMetadata = { tabId: targetTabId };
 	log("pilot function injection start", "", logMetadata);
 	await chrome.scripting.executeScript({
@@ -483,6 +483,26 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 		return value;
 	}).catch(() => {
 		log("pilot function injection fail", "injection not permitted in this tab", logMetadata);
+	});
+};
+const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) => {
+	highlightMessageToReceive = Object.assign(
+		{ extensionCommands: await chrome.commands.getAll() } as HighlightMessage,
+		highlightMessageToReceive,
+	);
+	const logMetadata = { tabId: targetTabId };
+	log("script injection [highlighting activation] start", "", logMetadata);
+	await executeScriptsInTab(targetTabId).then(value => {
+		log("script injection [highlighting activation] finish", "", logMetadata);
+		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
+		return value;
+	}).catch(() => {
+		log(
+			"script injection [highlighting activation] fail",
+			"injection not permitted in this tab (perhaps scripts were already injected), sending message regardless",
+			logMetadata,
+		);
+		chrome.tabs.sendMessage(targetTabId, highlightMessageToReceive);
 	});
 };
 
@@ -594,7 +614,7 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
  * Injects a highlighting script, composed of the highlighting code preceded by its dependencies, into a tab.
  * @param tabId The ID of a tab to execute the script in.
  */
-const executeScriptsInTab = async (tabId: number) => {
+const executeScriptsInTab3 = async (tabId: number) => {
 	const logMetadata = { tabId };
 	log("script injection start", "", logMetadata);
 	return chrome.scripting.executeScript({
@@ -613,9 +633,28 @@ const executeScriptsInTab = async (tabId: number) => {
 	});
 };
 
+const executeScriptsInTab = async (tabId: number) => {
+	const logMetadata = { tabId };
+	log("script injection start", "", logMetadata);
+	await (async () => {
+		const executions = [
+			ScriptInclude.STEMMING,
+			ScriptInclude.DIACRITICS,
+			ScriptInclude.COMMON,
+			Script.CONTENT,
+		].map(file => chrome.tabs.executeScript(tabId, { file }));
+		while (executions.length) {
+			await executions.pop();
+		}
+		log("script injection finish", "", logMetadata);
+	})().catch(() => {
+		log("script injection fail", "injection not permitted in this tab", logMetadata);
+	});
+};
+
 chrome.commands.onCommand.addListener(async commandString => {
 	if (commandString === "open-popup") {
-		(chrome.action["openPopup"] ?? (() => undefined))();
+		(chrome.browserAction["openPopup"] ?? (() => undefined))();
 	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id as number; // `tab.id` always defined for this case.
@@ -736,7 +775,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 	sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message.
 });
 
-chrome.action.onClicked.addListener(() =>
+chrome.browserAction.onClicked.addListener(() =>
 	chrome.permissions.request({ permissions: [ "bookmarks" ] })
 );
 
