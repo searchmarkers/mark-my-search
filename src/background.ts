@@ -363,6 +363,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
+		// If tab contains a search AND has auto-overwritable research or none: create research based on search (incl. term lists).
 		if (searchDetails.isSearch && (isResearchPage ? session.researchInstances[tabId].autoOverwritable : true)) {
 			const researchInstance = await createResearchInstance({
 				url: {
@@ -370,27 +371,39 @@ const updateActionIcon = (enabled?: boolean) =>
 					url: urlString,
 					engine: searchDetails.engine,
 				},
-				autoOverwritable: !termsFromLists.length,
+				autoOverwritable: !termsFromLists.length, // Searches are auto-overwritable, but term list research never is.
 			});
+			// Apply terms from term lists.
+			researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
 			const getPhrases = (researchInstance: ResearchInstance) => researchInstance.terms.map(term => term.phrase);
+			// If tab has no research OR has research (auto-overwritable) which does not match the new phrases: store new research.
 			if (!isResearchPage || !itemsMatch(getPhrases(session.researchInstances[tabId]), getPhrases(researchInstance))) {
 				session.researchInstances[tabId] = researchInstance;
 				const researchEnablementReason = isResearchPage
 					? "search detected in tab containing overwritable non-matching research"
 					: "search detected in tab";
-				log("tab-communicate research enable", researchEnablementReason, logMetadata);
-				researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
-				storageSet("session", { researchInstances: session.researchInstances } as StorageSessionValues);
+				log("tab-communicate research enable (not storing yet)", researchEnablementReason, logMetadata);
 			}
 		}
+		let highlightActivation: Promise<void> = (async () => undefined)();
+		// If tab *now* has research OR has applicable term lists: activate highlighting in tab.
 		if (isTabResearchPage(session.researchInstances, tabId) || termsFromLists.length) {
-			log("tab-communicate highlight activation request", "tab is currently a research page", logMetadata);
+			const highlightActivationReason = termsFromLists.length
+				? isTabResearchPage(session.researchInstances, tabId)
+					? "tab is currently a research page which term lists apply to"
+					: "tab is a page which terms lists apply to"
+				: "tab is currently a research page";
+			log("tab-communicate highlight activation request", highlightActivationReason, logMetadata);
 			const researchInstance = session.researchInstances[tabId] ?? await createResearchInstance({ autoOverwritable: false });
 			session.researchInstances[tabId] = researchInstance;
-			const termsDistinctFromLists = getTermsAdditionalDistinct(researchInstance.terms, termsFromLists);
-			researchInstance.terms = researchInstance.terms.concat(termsDistinctFromLists);
-			researchInstance.enabled = true; // Enable in case research existed but was disabled.
-			await activateHighlightingInTab(tabId, {
+			if (researchInstance.enabled) {
+				const termsDistinctFromLists = getTermsAdditionalDistinct(researchInstance.terms, termsFromLists);
+				researchInstance.terms = researchInstance.terms.concat(termsDistinctFromLists);
+			} else {
+				researchInstance.enabled = true;
+				researchInstance.terms = termsFromLists;
+			}
+			highlightActivation = activateHighlightingInTab(tabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
 				autoOverwritable: researchInstance.autoOverwritable,
@@ -400,10 +413,9 @@ const updateActionIcon = (enabled?: boolean) =>
 				matchMode: sync.matchModeDefaults,
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
-			if (termsDistinctFromLists.length) {
-				storageSet("session", session);
-			}
 		}
+		storageSet("session", { researchInstances: session.researchInstances } as StorageSessionValues);
+		await highlightActivation;
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
 
