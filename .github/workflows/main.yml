@@ -23,10 +23,10 @@ jobs:
       - name: npm install, compile, build
         run: |
           npm install
-          npm run compile
-          npm run build-firefox
-          npm run build-chromium
-          npm run build-opera
+          npm run icons-convert
+          npm run scripts-build
+          npm run pack-firefox
+          npm run pack-chromium
       - name: Tag overwrite
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,7 +36,7 @@ jobs:
           version=$( cat manifest-firefox.json | jq --raw-output '.version' )
           tag_name=v$version
           git config user.name "searchmarkers"
-          git config user.email "dev@example.com"
+          git config user.email "bot@searchmarkers.github.io"
           if [ $( git tag -l $tag_name ) ]; then
             git tag -d $tag_name
           fi
