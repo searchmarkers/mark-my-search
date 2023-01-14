@@ -2,7 +2,7 @@
 	"name": "mark-my-search",
 	"displayName": "Mark My Search",
 	"scripts": {
-		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do npm exec -- inkscape@latest icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do npm exec -- inkscape@latest icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
+		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do npm exec -- inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do npm exec -- inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
 		"scripts-build": "tsc -p tsconfig.json",
 		"prepare-firefox": "ln -fs manifest/firefox.json manifest.json",
 		"prepare-chromium": "ln -fs manifest/chromium.json manifest.json",
