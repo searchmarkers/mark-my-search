@@ -6,6 +6,7 @@ specifiers:
   '@typescript-eslint/eslint-plugin': ^5.46.1
   '@typescript-eslint/parser': ^5.46.1
   eslint: ^8.30.0
+  inkscape: ^3.1.1
   jq: ^1.7.2
   typescript: ^4.9.4
   winston: ^3.8.2
@@ -16,6 +17,7 @@ devDependencies:
   '@typescript-eslint/eslint-plugin': 5.46.1_mqzxmroayievgzgel6yrqgih5i
   '@typescript-eslint/parser': 5.46.1_lzzuuodtsqwxnvqeq4g4likcqa
   eslint: 8.30.0
+  inkscape: 3.1.1
   jq: 1.7.2
   typescript: 4.9.4
   winston: 3.8.2
@@ -754,6 +756,10 @@ packages:
       assert-plus: 1.0.0
     dev: true
 
+  /gettemporaryfilepath/1.0.1:
+    resolution: {integrity: sha512-MVCSgF1blIZuIV3KYhMKOwU1OSxPF1s+ZcyqWMSGR5Fzl6fN7EjIXDFGu9PmWAAwyGjMjmkS2ruqPaj13J3SXA==}
+    dev: true
+
   /glob-parent/5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
@@ -862,6 +868,14 @@ packages:
 
   /inherits/2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+    dev: true
+
+  /inkscape/3.1.1:
+    resolution: {integrity: sha512-2aaw4yTirwF2m6J3Tm8zxnRLQI0MKssw4pv4S2QNCy9TvVFy1Y5PW+bcMR41zpfc/kT9GZPp2c0Y7/nOx+zT+A==}
+    dependencies:
+      async: 3.2.4
+      gettemporaryfilepath: 1.0.1
+      semver: 7.3.8
     dev: true
 
   /is-arrayish/0.3.2:

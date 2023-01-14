@@ -2,7 +2,7 @@
 	"name": "mark-my-search",
 	"displayName": "Mark My Search",
 	"scripts": {
-		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
+		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do npx inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do npx inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
 		"scripts-build": "tsc -p tsconfig.json",
 		"prepare-firefox": "ln -fs manifest/firefox.json manifest.json",
 		"prepare-chromium": "ln -fs manifest/chromium.json manifest.json",
@@ -29,6 +29,7 @@
 		"@typescript-eslint/eslint-plugin": "^5.46.1",
 		"@typescript-eslint/parser": "^5.46.1",
 		"eslint": "^8.30.0",
+		"inkscape": "^3.1.1",
 		"jq": "^1.7.2",
 		"typescript": "^4.9.4",
 		"winston": "^3.8.2"
