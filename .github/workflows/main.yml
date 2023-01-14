@@ -23,7 +23,7 @@ jobs:
       - name: npm install, compile, build
         run: |
           npm install
-          npm exec -- inkscape@3.1.1 --help
+          npm exec --package=inkscape@3.1.1 -- inkscape --help
           npm show inkscape
           npm run icons-convert
           npm run scripts-build
