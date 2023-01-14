@@ -23,6 +23,7 @@ jobs:
       - name: npm install, compile, build
         run: |
           npm install
+          rm -rf .git/hooks
           npm run icons-convert
           npm run scripts-build
           npm run pack-firefox
