@@ -48,7 +48,7 @@
 				"/icons/close.svg",
 				"/icons/search.svg",
 				"/icons/show.svg",
-				"/icons/pin.svg",
+				"/icons/refresh.svg",
 				"/icons/create.svg",
 				"/icons/delete.svg",
 				"/icons/edit.svg",
@@ -83,7 +83,10 @@
 			"description": "Enable/disable sticky term jumping mode"
 		},
 		"focus-term-append": {
-			"description": "Focus input for appending a term"
+			"description": "Focus input for appending a keyword"
+		},
+		"terms-replace": {
+			"description": "Replace keywords with detected search keywords"
 		},
 		"step-global": {
 			"description": "Step to and select next highlight"

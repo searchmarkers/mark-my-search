@@ -239,6 +239,10 @@ label[for]:hover
 							label: "Append a new term to the toolbar",
 							type: PreferenceType.BOOLEAN,
 						},
+						replaceTerms: {
+							label: "Replace keywords with detected search keywords",
+							type: PreferenceType.BOOLEAN,
+						},
 					},
 				},
 				barLook: {

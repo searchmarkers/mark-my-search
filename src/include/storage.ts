@@ -32,7 +32,7 @@ type StorageSyncValues = {
 		performSearch: boolean
 		toggleHighlights: boolean
 		appendTerm: boolean
-		pinTerms: boolean
+		replaceTerms: boolean
 	}
 	[StorageSync.BAR_LOOK]: {
 		showEditIcon: boolean
@@ -100,7 +100,6 @@ enum StorageSync {
 interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
-	autoOverwritable: boolean
 	enabled: boolean
 }
 
@@ -122,7 +121,7 @@ const optionsDefault: StorageSyncValues = {
 		stoplist: [
 			"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
 			"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's",
+			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
 		],
 	},
 	matchModeDefaults: {
@@ -142,7 +141,7 @@ const optionsDefault: StorageSyncValues = {
 		performSearch: false,
 		toggleHighlights: true,
 		appendTerm: true,
-		pinTerms: true,
+		replaceTerms: true,
 	},
 	barLook: {
 		showEditIcon: true,

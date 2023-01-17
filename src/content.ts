@@ -11,7 +11,7 @@ type ControlButtonInfo = {
 	path?: string
 	label?: string
 	containerId: ElementID
-	onClick?: (control: HTMLElement) => void
+	onClick?: () => void
 	setUp?: (container: HTMLElement) => void
 }
 type RequestRefreshIndicators = Generator<undefined, never, unknown>
@@ -32,7 +32,6 @@ enum ElementClass {
 	CONTROL_BUTTON = "control-button",
 	CONTROL_REVEAL = "control-reveal",
 	CONTROL_EDIT = "control-edit",
-	PIN = "pin",
 	OPTION_LIST = "options",
 	OPTION = "option",
 	TERM = "term",
@@ -70,6 +69,7 @@ enum TermChange {
 interface ControlsInfo {
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
+	termsOnHold: MatchTerms
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
 	matchMode: MatchMode
@@ -700,29 +700,27 @@ const insertTermInput = (() => {
 				selectInput(getControl(undefined, idx + 1) as HTMLElement);
 				return;
 			}
-			chrome.runtime.sendMessage({
+			messageSendBackground({
 				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
 				termChanged: term,
 				termChangedIdx: TermChange.REMOVE,
-			} as BackgroundMessage);
+			});
 		} else if (replaces && inputValue !== term.phrase) {
 			const termChanged = new MatchTerm(inputValue, term.matchMode);
-			chrome.runtime.sendMessage({
+			messageSendBackground({
 				terms: terms.map((term, i) => i === idx ? termChanged : term),
 				termChanged,
 				termChangedIdx: idx,
-				toggleAutoOverwritableOn: false,
-			} as BackgroundMessage);
+			});
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
 				allowStemOverride: true,
 			});
-			chrome.runtime.sendMessage({
+			messageSendBackground({
 				terms: terms.concat(termChanged),
 				termChanged,
 				termChangedIdx: TermChange.CREATE,
-				toggleAutoOverwritableOn: false,
-			} as BackgroundMessage);
+			});
 		}
 	};
 
@@ -1101,7 +1099,7 @@ const createTermOptionMenu = (
 		const termUpdate = Object.assign({}, term);
 		termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
 		termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
-		chrome.runtime.sendMessage({
+		messageSendBackground({
 			terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
 			termChanged: termUpdate,
 			termChangedIdx: getTermIdx(term, terms),
@@ -1253,6 +1251,21 @@ const getTermCommands = (commands: BrowserCommands): { down: Array<string>, up: 
 	};
 };
 
+const controlGetClass = (controlName: ControlButtonName) =>
+	getSel(ElementClass.CONTROL, controlName)
+;
+
+const controlVisibilityUpdate = (controlName: ControlButtonName, controlsInfo: ControlsInfo, terms: MatchTerms) => {
+	const control = document.querySelector(`#${getSel(ElementID.BAR)} .${controlGetClass(controlName)}`);
+	if (control) {
+		const value = controlsInfo.barControlsShown[controlName];
+		const shown = controlName === "replaceTerms"
+			? (value && !controlsInfo.termsOnHold.every(termOnHold => terms.find(term => term.phrase === termOnHold.phrase)))
+			: value;
+		control.classList[shown ? "remove" : "add"](getSel(ElementClass.DISABLED));
+	}
+};
+
 /**
  * Inserts constant bar controls into the toolbar.
  * @param terms Terms highlighted in the page to mark the scroll position of.
@@ -1261,7 +1274,7 @@ const getTermCommands = (commands: BrowserCommands): { down: Array<string>, up: 
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param hues Color hues for term styles to cycle through.
  */
-const insertControls = (() => {
+const controlsInsert = (() => {
 	/**
 	 * Inserts a control.
 	 * @param terms Terms to be controlled and highlighted.
@@ -1269,18 +1282,18 @@ const insertControls = (() => {
 	 * @param hideWhenInactive Indicates whether to hide the control while not in interaction.
 	 * @param controlsInfo Details of controls to insert.
 	 */
-	const insertControl = (() => {
+	const controlInsert = (() => {
 		/**
 		 * Inserts a control given control button details.
-		 * @param barControlName A standard name for the control.
+		 * @param controlName A standard name for the control.
 		 * @param info Details about the control button to create.
 		 * @param hideWhenInactive Indicates whether to hide the control while not in interaction.
 		 */
-		const insertControlWithInfo = (barControlName: ControlButtonName, info: ControlButtonInfo,
+		const controlInsertWithInfo = (controlName: ControlButtonName, info: ControlButtonInfo,
 			hideWhenInactive: boolean) => {
 			const container = document.createElement("div");
-			container.classList.add(getSel(ElementClass.CONTROL)); // TODO redundant? can use CSS to select partial class
-			container.classList.add(getSel(ElementClass.CONTROL, barControlName));
+			container.classList.add(getSel(ElementClass.CONTROL));
+			container.classList.add(controlGetClass(controlName));
 			container.tabIndex = -1;
 			const pad = document.createElement("div");
 			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
@@ -1308,8 +1321,7 @@ const insertControls = (() => {
 				container.classList.add(getSel(ElementClass.DISABLED));
 			}
 			if (info.onClick) {
-				const onClick = info.onClick;
-				button.addEventListener("click", () => onClick(container));
+				button.addEventListener("click", info.onClick);
 			}
 			if (info.setUp) {
 				info.setUp(container);
@@ -1317,29 +1329,29 @@ const insertControls = (() => {
 			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(container);
 		};
 
-		return (terms: MatchTerms, barControlName: ControlButtonName, hideWhenInactive: boolean,
-			controlsInfo: ControlsInfo) =>
-			insertControlWithInfo(barControlName, ({
+		return (terms: MatchTerms, controlName: ControlButtonName, hideWhenInactive: boolean,
+			controlsInfo: ControlsInfo) => {
+			controlInsertWithInfo(controlName, ({
 				disableTabResearch: {
 					path: "/icons/close.svg",
 					containerId: ElementID.BAR_LEFT,	
-					onClick: () => chrome.runtime.sendMessage({
+					onClick: () => messageSendBackground({
 						disableTabResearch: true,
-					} as BackgroundMessage),
+					}),
 				},
 				performSearch: {
 					path: "/icons/search.svg",
 					containerId: ElementID.BAR_LEFT,
-					onClick: () => chrome.runtime.sendMessage({
+					onClick: () => messageSendBackground({
 						performSearch: true,
-					} as BackgroundMessage),
+					}),
 				},
 				toggleHighlights: {
 					path: "/icons/show.svg",
 					containerId: ElementID.BAR_LEFT,
-					onClick: () => chrome.runtime.sendMessage({
+					onClick: () => messageSendBackground({
 						toggleHighlightsOn: !controlsInfo.highlightsShown,
-					} as BackgroundMessage),
+					}),
 				},
 				appendTerm: {
 					buttonClass: ElementClass.CONTROL_CONTENT,
@@ -1369,19 +1381,18 @@ const insertControls = (() => {
 						container.appendChild(optionList);
 					},
 				},
-				pinTerms: {
-					buttonClass: ElementClass.PIN,
-					path: "/icons/pin.svg",
+				replaceTerms: {
+					path: "/icons/refresh.svg",
 					containerId: ElementID.BAR_RIGHT,
-					onClick: control => {
-						control.remove();
-						chrome.runtime.sendMessage({
-							toggleAutoOverwritableOn: false,
-						} as BackgroundMessage);
+					onClick: () => {
+						messageSendBackground({
+							terms: controlsInfo.termsOnHold,
+						});
 					},
 				},
-			} as Record<ControlButtonName, ControlButtonInfo>)[barControlName], hideWhenInactive)
-		;
+			} as Record<ControlButtonName, ControlButtonInfo>)[controlName], hideWhenInactive);
+			controlVisibilityUpdate(controlName, controlsInfo, terms);
+		};
 	})();
 
 	return (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
@@ -1459,8 +1470,9 @@ const insertControls = (() => {
 		bar.appendChild(barTerms);
 		bar.appendChild(barRight);
 		document.body.insertAdjacentElement("beforebegin", bar);
-		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) =>
-			insertControl(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo));
+		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) => {
+			controlInsert(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo);
+		});
 		const termCommands = getTermCommands(commands);
 		terms.forEach((term, i) => insertTermControl(terms, i, termCommands.down[i], termCommands.up[i],
 			controlsInfo, highlightTags));
@@ -1889,7 +1901,7 @@ const getTermsFromSelection = () => {
 			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
 				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
 			removeControls();
-			insertControls(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
+			controlsInsert(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 			if (focusingControlAppend) {
 				const input = (getControl() as HTMLElement).querySelector("input") as HTMLInputElement;
 				input.focus();
@@ -1974,7 +1986,9 @@ const getTermsFromSelection = () => {
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param hues Color hues for term styles to cycle through.
 	 */
-	const requestRefreshIndicatorsFn = function* (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
+	const requestRefreshIndicatorsFn = function* (
+		terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues
+	): RequestRefreshIndicators {
 		const requestWaitDuration = 1000;
 		const reschedulingDelayMax = 5000;
 		const reschedulingRequestCountMargin = 1;
@@ -2009,7 +2023,9 @@ const getTermsFromSelection = () => {
 	 * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
 	 * @param terms Terms being controlled, highlighted, and jumped to.
 	 */
-	const produceEffectOnCommandFn = function* (terms: MatchTerms, highlightTags: HighlightTags) {
+	const produceEffectOnCommandFn = function* (
+		terms: MatchTerms, highlightTags: HighlightTags, controlsInfo: ControlsInfo
+	): ProduceEffectOnCommand {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
 		const focusReturnInfo: { element: HTMLElement | null, selectionRanges: Array<Range> | null } = {
@@ -2030,6 +2046,11 @@ const getTermsFromSelection = () => {
 				break;
 			} case CommandType.TOGGLE_SELECT: {
 				selectModeFocus = !selectModeFocus;
+				break;
+			} case CommandType.REPLACE_TERMS: {
+				messageSendBackground({
+					terms: controlsInfo.termsOnHold,
+				});
 				break;
 			} case CommandType.STEP_GLOBAL: {
 				if (focusReturnToDocument()) {
@@ -2107,19 +2128,20 @@ const getTermsFromSelection = () => {
 	;
 
 	return () => {
-		window[WindowFlag.EXECUTION_UNNECESSARY] = true;
+		window[WindowFlag.SCRIPTS_LOADED] = true;
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = { // These values are irrelevant. They should be overridden by highlight messages.
 			pageModifyEnabled: false,
 			highlightsShown: false,
+			termsOnHold: [],
 			barControlsShown: {
 				disableTabResearch: false,
 				performSearch: false,
 				toggleHighlights: false,
 				appendTerm: false,
-				pinTerms: false,
+				replaceTerms: false,
 			},
 			barLook: {
 				showEditIcon: false,
@@ -2143,8 +2165,8 @@ const getTermsFromSelection = () => {
 				"mms-h" as HTMLElementTagName ]),
 			// break: any other class of element
 		};
-		const requestRefreshIndicators: RequestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
-		const produceEffectOnCommand: ProduceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags);
+		const requestRefreshIndicators = requestRefreshIndicatorsFn(terms, highlightTags, hues);
+		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags, controlsInfo);
 		const observer = getObserverNodeHighlighter(requestRefreshIndicators, highlightTags, terms);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 		insertStyleElement();
@@ -2164,14 +2186,10 @@ const getTermsFromSelection = () => {
 				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
-			Object.entries(message.barControlsShown ?? {}).forEach(([ key, value ]) => {
-				if (key !== "pinTerms") {
-					controlsInfo.barControlsShown[key] = value;
-				}
+			Object.entries(message.barControlsShown ?? {}).forEach(([ controlName, value ]: [ ControlButtonName, boolean ]) => {
+				controlsInfo.barControlsShown[controlName] = value;
+				controlVisibilityUpdate(controlName, controlsInfo, terms);
 			});
-			if (message.autoOverwritable !== undefined) {
-				controlsInfo.barControlsShown.pinTerms = message.autoOverwritable;
-			}
 			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 				controlsInfo.barLook[key] = value;
 			});
@@ -2184,6 +2202,9 @@ const getTermsFromSelection = () => {
 			}
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
+			}
+			if (message.termsOnHold) {
+				controlsInfo.termsOnHold = message.termsOnHold;
 			}
 			if (message.deactivate) {
 				terms.splice(0);
@@ -2207,6 +2228,7 @@ const getTermsFromSelection = () => {
 					produceEffectOnCommand, //
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
+				controlVisibilityUpdate("replaceTerms", controlsInfo, terms);
 			}
 			if (message.command) {
 				produceEffectOnCommand.next(message.command);
@@ -2214,11 +2236,6 @@ const getTermsFromSelection = () => {
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
 				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
-			}
-			const pinSelector = `.${getSel(ElementClass.PIN)}`;
-			if (!controlsInfo.barControlsShown.pinTerms
-				&& document.querySelector(pinSelector)) {
-				(document.querySelector(pinSelector) as HTMLElement).remove();
 			}
 			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
 		});

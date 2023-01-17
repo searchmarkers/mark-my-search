@@ -22,9 +22,9 @@ const loadPopup = (() => {
 									setChecked(local.enabled);
 								},
 								onToggle: checked => {
-									chrome.runtime.sendMessage({
+									messageSendBackground({
 										toggleResearchOn: checked,
-									} as BackgroundMessage);
+									});
 								},
 							},
 						},
@@ -113,16 +113,16 @@ const loadPopup = (() => {
 											if (researchInstance && local.persistResearchInstances) {
 												researchInstance.enabled = true;
 											}
-											chrome.runtime.sendMessage({
+											messageSendBackground({
 												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
 												makeUnique: true,
 												toggleHighlightsOn: true,
-											} as BackgroundMessage);
+											});
 										});
 									} else {
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											disableTabResearch: true,
-										} as BackgroundMessage);
+										});
 									}
 								}
 							},
@@ -147,7 +147,6 @@ const loadPopup = (() => {
 									if (checked) {
 										session.researchInstances[tab.id] = {
 											enabled: false,
-											autoOverwritable: false,
 											highlightsShown: true,
 											terms: [],
 										};
@@ -155,9 +154,9 @@ const loadPopup = (() => {
 									} else {
 										delete session.researchInstances[tab.id];
 										await storageSet("session", session);
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											disableTabResearch: true,
-										} as BackgroundMessage);
+										});
 									}
 								},
 							},
@@ -534,12 +533,11 @@ const loadPopup = (() => {
 										const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
 										const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 										const researchInstance = session.researchInstances[tab.id];
-										if (researchInstance && (!researchInstance.enabled || !researchInstance.autoOverwritable)) {
+										if (researchInstance) {
 											researchInstance.enabled = true;
-											researchInstance.autoOverwritable = false;
-											storageSet("session", session);
+											await storageSet("session", session);
 										}
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											terms: researchInstance
 												? researchInstance.terms.concat(
 													sync.termLists[index].terms.filter(termFromList =>
@@ -549,8 +547,7 @@ const loadPopup = (() => {
 												: sync.termLists[index].terms,
 											makeUnique: true,
 											toggleHighlightsOn: true,
-											toggleAutoOverwritableOn: false,
-										} as BackgroundMessage);
+										});
 										onSuccess();
 									},
 								},

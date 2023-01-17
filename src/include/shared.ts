@@ -58,7 +58,7 @@ const assert = (condition: unknown, problem: string, reason: string, metadata: R
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 enum WindowFlag {
-	EXECUTION_UNNECESSARY = "executionUnnecessary",
+	SCRIPTS_LOADED = "scriptsAreLoaded",
 }
 
 interface MatchMode {
@@ -223,10 +223,10 @@ interface HighlightMessage {
 	terms?: MatchTerms
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
+	termsOnHold?: MatchTerms
 	deactivate?: boolean
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
-	autoOverwritable?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
@@ -244,7 +244,7 @@ interface BackgroundMessage {
 	tabId?: number
 	highlightMessage?: HighlightMessage
 	highlightCommand?: CommandInfo
-	executeInTab?: boolean
+	executeInTabNoPilot?: boolean
 	terms?: MatchTerms
 	termChanged?: MatchTerm
 	termChangedIdx?: number
@@ -252,7 +252,6 @@ interface BackgroundMessage {
 	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean
-	toggleAutoOverwritableOn?: boolean
 	performSearch?: boolean
 }
 
@@ -265,6 +264,7 @@ enum CommandType {
 	TOGGLE_BAR,
 	TOGGLE_HIGHLIGHTS,
 	TOGGLE_SELECT,
+	REPLACE_TERMS,
 	ADVANCE_GLOBAL,
 	SELECT_TERM,
 	STEP_GLOBAL,
@@ -276,6 +276,18 @@ interface CommandInfo {
 	termIdx?: number
 	reversed?: boolean
 }
+
+// TODO document
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise<HighlightDetails> =>
+	chrome.tabs.sendMessage(tabId, message)
+;
+
+// TODO document
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const messageSendBackground = (message: BackgroundMessage): Promise<never> =>
+	chrome.runtime.sendMessage(message)
+;
 
 /**
  * Sanitizes a string for regex use by escaping all potential regex control characters.
@@ -344,6 +356,12 @@ const parseCommand = (commandString: string): CommandInfo => {
 			return { type: CommandType.TOGGLE_HIGHLIGHTS };
 		} case "select": {
 			return { type: CommandType.TOGGLE_SELECT };
+		}}
+		break;
+	} case "terms": {
+		switch (parts[1]) {
+		case "replace": {
+			return { type: CommandType.REPLACE_TERMS };
 		}}
 		break;
 	} case "step": {
