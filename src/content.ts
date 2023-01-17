@@ -1107,7 +1107,7 @@ const createTermOptionMenu = (
 	},
 ): { optionList: HTMLElement, controlReveal: HTMLButtonElement } => {
 	const termIsValid = terms.includes(term); // If virtual and used for appending terms, this will be `false`.
-	const optionList = document.createElement("menu");
+	const optionList = document.createElement("span");
 	optionList.classList.add(getSel(ElementClass.OPTION_LIST));
 	optionList.appendChild(createTermOption(term, "Case Sensitive", onActivated));
 	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
@@ -1190,7 +1190,7 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlsInfo: ControlsInfo, highlightTags: HighlightTags) => {
 	const term = terms[idx >= 0 ? idx : (terms.length + idx)] as MatchTerm;
 	const { optionList, controlReveal } = createTermOptionMenu(term, terms, controlsInfo);
-	const controlPad = document.createElement("div");
+	const controlPad = document.createElement("span");
 	controlPad.classList.add(getSel(ElementClass.CONTROL_PAD));
 	controlPad.classList.add(getSel(ElementClass.DISABLED));
 	controlPad.appendChild(controlReveal);
@@ -1220,7 +1220,7 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	insertTermInput(terms, controlPad, idx, input => controlPad.insertBefore(input, controlEdit));
 	term.command = command;
 	term.commandReverse = commandReverse;
-	const control = document.createElement("div");
+	const control = document.createElement("span");
 	control.classList.add(getSel(ElementClass.CONTROL));
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	control.appendChild(controlPad);
@@ -1291,11 +1291,11 @@ const controlsInsert = (() => {
 		 */
 		const controlInsertWithInfo = (controlName: ControlButtonName, info: ControlButtonInfo,
 			hideWhenInactive: boolean) => {
-			const container = document.createElement("div");
+			const container = document.createElement("span");
 			container.classList.add(getSel(ElementClass.CONTROL));
 			container.classList.add(controlGetClass(controlName));
 			container.tabIndex = -1;
-			const pad = document.createElement("div");
+			const pad = document.createElement("span");
 			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
 			pad.tabIndex = -1;
 			const button = document.createElement("button");
@@ -1310,7 +1310,7 @@ const controlsInsert = (() => {
 				button.appendChild(image);
 			}
 			if (info.label) {
-				const text = document.createElement("div");
+				const text = document.createElement("span");
 				text.tabIndex = -1;
 				text.textContent = info.label;
 				button.appendChild(text);
@@ -1458,12 +1458,12 @@ const controlsInsert = (() => {
 		if (!controlsInfo.pageModifyEnabled) {
 			bar.classList.add(getSel(ElementClass.DISABLED));
 		}
-		const barLeft = document.createElement("div");
+		const barLeft = document.createElement("span");
 		barLeft.id = getSel(ElementID.BAR_LEFT);
 		barLeft.classList.add(getSel(ElementClass.BAR_CONTROLS));
-		const barTerms = document.createElement("div");
+		const barTerms = document.createElement("span");
 		barTerms.id = getSel(ElementID.BAR_TERMS);
-		const barRight = document.createElement("div");
+		const barRight = document.createElement("span");
 		barRight.id = getSel(ElementID.BAR_RIGHT);
 		barRight.classList.add(getSel(ElementClass.BAR_CONTROLS));
 		bar.appendChild(barLeft);
