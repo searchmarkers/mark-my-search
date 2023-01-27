@@ -2930,7 +2930,7 @@ const getTermsFromSelection = () => {
 	return () => {
 		window[WindowFlag.SCRIPTS_LOADED] = true;
 		if (!usePaintFallback) {
-			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/draw-highlights.js"));
+			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
