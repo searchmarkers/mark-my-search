@@ -2,7 +2,8 @@ type OptionsInfo = Array<{
 	label: string
 	options: Partial<Record<keyof StorageSyncValues, {
 		label: string
-		preferences?: Partial<Record<keyof StorageSyncValues["barControlsShown"]
+		preferences?: Partial<Record<keyof StorageSyncValues["barCollapse"]
+			| keyof StorageSyncValues["barControlsShown"]
 			| keyof StorageSyncValues["barLook"]
 			| keyof StorageSyncValues["highlightLook"]
 			| keyof StorageSyncValues["showHighlights"]
@@ -292,6 +293,19 @@ label[for]:hover
 						},
 						overrideSearchPages: {
 							label: "Highlights are always visible on search pages",
+							type: PreferenceType.BOOLEAN,
+						},
+					},
+				},
+				barCollapse: {
+					label: "When to collapse the toolbar immediately",
+					preferences: {
+						fromSearch: {
+							label: "When started from a search",
+							type: PreferenceType.BOOLEAN,
+						},
+						fromTermListAuto: {
+							label: "When started from a keyword list automatically",
 							type: PreferenceType.BOOLEAN,
 						},
 					},

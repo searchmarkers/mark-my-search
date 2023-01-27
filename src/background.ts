@@ -43,7 +43,10 @@ const createResearchInstance = async (args: {
 	url?: { stoplist: Array<string>, url: string, engine?: Engine }
 	terms?: MatchTerms
 }): Promise<ResearchInstance> => {
-	const sync = await storageGet("sync", [ StorageSync.SHOW_HIGHLIGHTS ]);
+	const sync = await storageGet("sync", [
+		StorageSync.SHOW_HIGHLIGHTS,
+		StorageSync.BAR_COLLAPSE,
+	]);
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
@@ -56,6 +59,7 @@ const createResearchInstance = async (args: {
 				.filter(phrase => args.url ? !args.url.stoplist.includes(phrase) : false)
 				.map(phrase => new MatchTerm(phrase)),
 			highlightsShown: sync.showHighlights.default,
+			barCollapsed: sync.barCollapse.fromSearch,
 			enabled: true,
 		};
 	}
@@ -63,6 +67,7 @@ const createResearchInstance = async (args: {
 	return {
 		terms: args.terms,
 		highlightsShown: sync.showHighlights.default,
+		barCollapsed: false,
 		enabled: true,
 	};
 };
@@ -337,6 +342,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		const sync = await storageGet("sync", [
 			StorageSync.AUTO_FIND_OPTIONS,
 			StorageSync.SHOW_HIGHLIGHTS,
+			StorageSync.BAR_COLLAPSE,
 			StorageSync.BAR_CONTROLS_SHOWN,
 			StorageSync.BAR_LOOK,
 			StorageSync.HIGHLIGHT_LOOK,
@@ -390,21 +396,25 @@ const updateActionIcon = (enabled?: boolean) =>
 				: "tab is a research page";
 			log("tab-communicate highlight activation request", highlightActivationReason, logMetadata);
 			const researchInstance = session.researchInstances[tabId] ?? await createResearchInstance({});
-			session.researchInstances[tabId] = researchInstance;
 			researchInstance.terms = researchInstance.enabled
 				? researchInstance.terms.concat(getTermsAdditionalDistinct(researchInstance.terms, termsFromLists))
 				: termsFromLists;
 			researchInstance.enabled = true;
+			if (!isTabResearchPage(session.researchInstances, tabId)) {
+				researchInstance.barCollapsed = sync.barCollapse.fromTermListAuto;
+			}
 			highlightActivation = activateHighlightingInTab(tabId, {
 				terms: researchInstance.terms,
 				termsOnHold: searchDetails.isSearch ? undefined : [],
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
+				toggleBarCollapsedOn: researchInstance.barCollapsed,
 				barControlsShown: sync.barControlsShown,
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,
 				matchMode: sync.matchModeDefaults,
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
+			session.researchInstances[tabId] = researchInstance;
 		}
 		storageSet("session", { researchInstances: session.researchInstances } as StorageSessionValues);
 		await highlightActivation;
@@ -637,6 +647,18 @@ chrome.commands.onCommand.addListener(async commandString => {
 	} case CommandType.TOGGLE_HIGHLIGHTS: {
 		toggleHighlightsInTab(tabId);
 		return;
+	} case CommandType.TOGGLE_BAR: {
+		const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+		const researchInstance = session.researchInstances[tabId];
+		if (!researchInstance) {
+			return;
+		}
+		researchInstance.barCollapsed = !researchInstance.barCollapsed;
+		messageSendHighlight(tabId, {
+			toggleBarCollapsedOn: researchInstance.barCollapsed,
+		});
+		storageSet("session", session);
+		return;
 	}}
 	messageSendHighlight(tabId, { command: commandInfo });
 });
@@ -656,6 +678,13 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 	} else if (message.toggleResearchOn !== undefined) {
 		storageSet("local", { enabled: message.toggleResearchOn } as StorageLocalValues);
 		updateActionIcon(message.toggleResearchOn);
+	} else if (message.toggleBarCollapsedOn !== undefined) {
+		const session = await storageGet("session");
+		if (!isTabResearchPage(session.researchInstances, senderTabId)) {
+			return;
+		}
+		session.researchInstances[senderTabId].barCollapsed = message.toggleBarCollapsedOn;
+		storageSet("session", session);
 	} else if (message.disableTabResearch) {
 		deactivateResearchInTab(senderTabId);
 	} else if (message.performSearch) {
@@ -684,6 +713,7 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 			await activateHighlightingInTab(senderTabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, false),
+				toggleBarCollapsedOn: researchInstance.barCollapsed,
 				barControlsShown: sync.barControlsShown,
 				barLook: sync.barLook,
 				highlightLook: sync.highlightLook,

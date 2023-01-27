@@ -27,7 +27,12 @@ type StorageSyncValues = {
 		overrideSearchPages: boolean
 		overrideResearchPages: boolean
 	}
+	[StorageSync.BAR_COLLAPSE]: {
+		fromSearch: boolean
+		fromTermListAuto: boolean
+	}
 	[StorageSync.BAR_CONTROLS_SHOWN]: {
+		toggleBarCollapsed: boolean
 		disableTabResearch: boolean
 		performSearch: boolean
 		toggleHighlights: boolean
@@ -90,6 +95,7 @@ enum StorageSync {
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	MATCH_MODE_DEFAULTS = "matchModeDefaults",
 	SHOW_HIGHLIGHTS = "showHighlights",
+	BAR_COLLAPSE = "barCollapse",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
 	HIGHLIGHT_LOOK = "highlightLook",
@@ -100,6 +106,7 @@ enum StorageSync {
 interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
+	barCollapsed: boolean
 	enabled: boolean
 }
 
@@ -136,7 +143,12 @@ const optionsDefault: StorageSyncValues = {
 		overrideSearchPages: true,
 		overrideResearchPages: false,
 	},
+	barCollapse: {
+		fromSearch: false,
+		fromTermListAuto: false,
+	},
 	barControlsShown: {
+		toggleBarCollapsed: true,
 		disableTabResearch: true,
 		performSearch: false,
 		toggleHighlights: true,

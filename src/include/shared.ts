@@ -227,6 +227,7 @@ interface HighlightMessage {
 	deactivate?: boolean
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
+	toggleBarCollapsedOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 	highlightLook?: StorageSyncValues[StorageSync.HIGHLIGHT_LOOK]
@@ -252,6 +253,7 @@ interface BackgroundMessage {
 	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean
+	toggleBarCollapsedOn?: boolean
 	performSearch?: boolean
 }
 

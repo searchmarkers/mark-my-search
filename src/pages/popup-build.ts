@@ -146,9 +146,10 @@ const loadPopup = (() => {
 									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 									if (checked) {
 										session.researchInstances[tab.id] = {
-											enabled: false,
-											highlightsShown: true,
 											terms: [],
+											highlightsShown: true,
+											barCollapsed: false,
+											enabled: false,
 										};
 										await storageSet("session", session);
 									} else {

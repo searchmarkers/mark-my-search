@@ -45,6 +45,7 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
+				"/icons/arrow.svg",
 				"/icons/close.svg",
 				"/icons/search.svg",
 				"/icons/show.svg",

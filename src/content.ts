@@ -7,6 +7,7 @@ type HighlightTags = {
 type TermHues = Array<number>
 type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 type ControlButtonInfo = {
+	controlClasses?: Array<ElementClass>
 	buttonClass?: ElementClass
 	path?: string
 	label?: string
@@ -40,6 +41,8 @@ enum ElementClass {
 	FOCUS_REVERT = "focus-revert",
 	REMOVE = "remove",
 	DISABLED = "disabled",
+	COLLAPSED = "collapsed",
+	UNCOLLAPSIBLE = "uncollapsible",
 	MATCH_REGEX = "match-regex",
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
@@ -69,6 +72,7 @@ enum TermChange {
 interface ControlsInfo {
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
+	barCollapsed: boolean
 	termsOnHold: MatchTerms
 	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
@@ -237,6 +241,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 	{ display: inline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL)}
 	{ display: inline-block; vertical-align: top; margin-left: 0.5em; pointer-events: auto; }
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.COLLAPSED)} > * > *:not(.${getSel(ElementClass.UNCOLLAPSIBLE)})
+	{ display: none; }
 /**/
 
 /* || Term Pulldown */
@@ -925,7 +931,7 @@ const updateTermOccurringStatus = (term: MatchTerm) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
 	const hasOccurrences = document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)).length !== 0;
-	controlPad.classList[hasOccurrences ? "remove" : "add"](getSel(ElementClass.DISABLED));
+	controlPad.classList.toggle(getSel(ElementClass.DISABLED), !hasOccurrences);
 };
 
 /**
@@ -985,11 +991,11 @@ const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
  * @param classList The control element class list for a term.
  */
 const updateTermControlMatchModeClassList = (mode: MatchMode, classList: DOMTokenList) => {
-	classList[mode.regex ? "add" : "remove"](getSel(ElementClass.MATCH_REGEX));
-	classList[mode.case ? "add" : "remove"](getSel(ElementClass.MATCH_CASE));
-	classList[mode.stem ? "add" : "remove"](getSel(ElementClass.MATCH_STEM));
-	classList[mode.whole ? "add" : "remove"](getSel(ElementClass.MATCH_WHOLE));
-	classList[mode.diacritics ? "add" : "remove"](getSel(ElementClass.MATCH_DIACRITICS));
+	classList.toggle(getSel(ElementClass.MATCH_REGEX), mode.regex);
+	classList.toggle(getSel(ElementClass.MATCH_CASE), mode.case);
+	classList.toggle(getSel(ElementClass.MATCH_STEM), mode.stem);
+	classList.toggle(getSel(ElementClass.MATCH_WHOLE), mode.whole);
+	classList.toggle(getSel(ElementClass.MATCH_DIACRITICS), mode.diacritics);
 };
 
 /**
@@ -1262,7 +1268,7 @@ const controlVisibilityUpdate = (controlName: ControlButtonName, controlsInfo: C
 		const shown = controlName === "replaceTerms"
 			? (value && !controlsInfo.termsOnHold.every(termOnHold => terms.find(term => term.phrase === termOnHold.phrase)))
 			: value;
-		control.classList[shown ? "remove" : "add"](getSel(ElementClass.DISABLED));
+		control.classList.toggle(getSel(ElementClass.DISABLED), !shown);
 	}
 };
 
@@ -1291,10 +1297,12 @@ const controlsInsert = (() => {
 		 */
 		const controlInsertWithInfo = (controlName: ControlButtonName, info: ControlButtonInfo,
 			hideWhenInactive: boolean) => {
-			const container = document.createElement("span");
-			container.classList.add(getSel(ElementClass.CONTROL));
-			container.classList.add(controlGetClass(controlName));
-			container.tabIndex = -1;
+			const control = document.createElement("span");
+			control.classList.add(getSel(ElementClass.CONTROL), controlGetClass(controlName));
+			(info.controlClasses ?? []).forEach(elementClass =>
+				control.classList.add(getSel(elementClass))
+			);
+			control.tabIndex = -1;
 			const pad = document.createElement("span");
 			pad.classList.add(getSel(ElementClass.CONTROL_PAD));
 			pad.tabIndex = -1;
@@ -1316,22 +1324,35 @@ const controlsInsert = (() => {
 				button.appendChild(text);
 			}
 			pad.appendChild(button);
-			container.appendChild(pad);
+			control.appendChild(pad);
 			if (hideWhenInactive) {
-				container.classList.add(getSel(ElementClass.DISABLED));
+				control.classList.add(getSel(ElementClass.DISABLED));
 			}
 			if (info.onClick) {
 				button.addEventListener("click", info.onClick);
 			}
 			if (info.setUp) {
-				info.setUp(container);
+				info.setUp(control);
 			}
-			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(container);
+			(document.getElementById(getSel(info.containerId)) as HTMLElement).appendChild(control);
 		};
 
 		return (terms: MatchTerms, controlName: ControlButtonName, hideWhenInactive: boolean,
 			controlsInfo: ControlsInfo) => {
 			controlInsertWithInfo(controlName, ({
+				toggleBarCollapsed: {
+					controlClasses: [ ElementClass.UNCOLLAPSIBLE ],
+					path: "/icons/arrow.svg",
+					containerId: ElementID.BAR_LEFT,
+					onClick: () => {
+						controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
+						messageSendBackground({
+							toggleBarCollapsedOn: controlsInfo.barCollapsed,
+						});
+						const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
+						bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
+					},
+				},
 				disableTabResearch: {
 					path: "/icons/close.svg",
 					containerId: ElementID.BAR_LEFT,	
@@ -2135,8 +2156,10 @@ const getTermsFromSelection = () => {
 		const controlsInfo: ControlsInfo = { // These values are irrelevant. They should be overridden by highlight messages.
 			pageModifyEnabled: false,
 			highlightsShown: false,
+			barCollapsed: false,
 			termsOnHold: [],
 			barControlsShown: {
+				toggleBarCollapsed: false,
 				disableTabResearch: false,
 				performSearch: false,
 				toggleHighlights: false,
@@ -2203,6 +2226,9 @@ const getTermsFromSelection = () => {
 			if (message.toggleHighlightsOn !== undefined) {
 				controlsInfo.highlightsShown = message.toggleHighlightsOn;
 			}
+			if (message.toggleBarCollapsedOn !== undefined) {
+				controlsInfo.barCollapsed = message.toggleBarCollapsedOn;
+			}
 			if (message.termsOnHold) {
 				controlsInfo.termsOnHold = message.termsOnHold;
 			}
@@ -2235,7 +2261,8 @@ const getTermsFromSelection = () => {
 			}
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
-				bar.classList[controlsInfo.highlightsShown ? "add" : "remove"](getSel(ElementClass.HIGHLIGHTS_SHOWN));
+				bar.classList.toggle(getSel(ElementClass.HIGHLIGHTS_SHOWN), controlsInfo.highlightsShown);
+				bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
 			}
 			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
 		});
