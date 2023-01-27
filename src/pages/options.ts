@@ -2,7 +2,8 @@ type OptionsInfo = Array<{
 	label: string
 	options: Partial<Record<keyof StorageSyncValues, {
 		label: string
-		preferences?: Partial<Record<keyof StorageSyncValues["barControlsShown"]
+		preferences?: Partial<Record<keyof StorageSyncValues["barCollapse"]
+			| keyof StorageSyncValues["barControlsShown"]
 			| keyof StorageSyncValues["barLook"]
 			| keyof StorageSyncValues["highlightMethod"]
 			| keyof StorageSyncValues["showHighlights"]
@@ -94,7 +95,7 @@ label[for]:hover
 	 * @param optionsInfo Details of the options to present.
 	 */
 	const loadTab = async (tabIdx: number, tabContainer: HTMLElement, optionsInfo: OptionsInfo) => {
-		const sync = await getStorageSync();
+		const sync = await storageGet("sync");
 		const tabInfo = optionsInfo[tabIdx];
 		const tabButton = document.createElement("button");
 		tabButton.textContent = tabInfo.label;
@@ -138,7 +139,7 @@ label[for]:hover
 						.forEach((preferenceLabel: HTMLElement) => preferenceLabel.classList.remove(OptionClass.MODIFIED));
 				});
 			});
-			setStorageSync(sync);
+			storageSet("sync", sync);
 		});
 		Object.keys(tabInfo.options).forEach(optionKey => {
 			valuesCurrent[optionKey] = {};
@@ -187,7 +188,7 @@ label[for]:hover
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW);
 				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
-				const valueDefault = defaultOptions[optionKey][preferenceKey];
+				const valueDefault = optionsDefault[optionKey][preferenceKey];
 				const value = sync[optionKey][preferenceKey];
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
@@ -197,9 +198,11 @@ label[for]:hover
 					inputDefault[propertyKey as string] = valueDefault;
 					input[propertyKey as string] = value;
 					valuesCurrent[optionKey][preferenceKey] = input[propertyKey];
-					input.oninput = () =>
-						preferenceLabel.classList[input[propertyKey] === valuesCurrent[optionKey][preferenceKey]
-							? "remove" : "add"](OptionClass.MODIFIED);
+					input.addEventListener("input", () =>
+						preferenceLabel.classList[
+							input[propertyKey] === valuesCurrent[optionKey][preferenceKey] ? "remove" : "add"
+						](OptionClass.MODIFIED)
+					);
 				}
 			});
 		});
@@ -238,6 +241,10 @@ label[for]:hover
 						},
 						appendTerm: {
 							label: "Append a new term to the toolbar",
+							type: PreferenceType.BOOLEAN,
+						},
+						replaceTerms: {
+							label: "Replace keywords with detected search keywords",
 							type: PreferenceType.BOOLEAN,
 						},
 					},
@@ -311,6 +318,19 @@ PAINT
 						},
 						overrideSearchPages: {
 							label: "Highlights are always visible on search pages",
+							type: PreferenceType.BOOLEAN,
+						},
+					},
+				},
+				barCollapse: {
+					label: "When to collapse the toolbar immediately",
+					preferences: {
+						fromSearch: {
+							label: "When started from a search",
+							type: PreferenceType.BOOLEAN,
+						},
+						fromTermListAuto: {
+							label: "When started from a keyword list automatically",
 							type: PreferenceType.BOOLEAN,
 						},
 					},

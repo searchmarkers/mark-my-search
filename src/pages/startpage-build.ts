@@ -40,11 +40,11 @@ const loadStartpage = (() => {
 											text: messageText,
 										}, onSuccess);
 									} else {
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											toggleHighlightsOn: true,
 											makeUnique: true,
 											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
-										} as BackgroundMessage);
+										});
 										onSuccess();
 									}
 								},

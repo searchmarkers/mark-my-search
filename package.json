@@ -2,10 +2,12 @@
 	"name": "mark-my-search",
 	"displayName": "Mark My Search",
 	"scripts": {
-		"compile": "tsc -p ./tsconfig.json",
-		"build-firefox": "ln -fs manifest-firefox.json manifest.json && zip mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
-		"build-chromium": "ln -fs manifest-chromium.json manifest.json && zip mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id",
-		"build-opera": "ln -fs manifest-opera.json manifest.json && zip mark_my_search-opera.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/email.min.js manifest.json .web-extension-id"
+		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
+		"scripts-build": "tsc -p tsconfig.json",
+		"prepare-firefox": "ln -fs manifest/firefox.json manifest.json",
+		"prepare-chromium": "ln -fs manifest/chromium.json manifest.json",
+		"pack-firefox": "npm run prepare-firefox; mkdir -p pack; zip pack/mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json",
+		"pack-chromium": "npm run prepare-chromium; mkdir -p pack; zip pack/mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json"
 	},
 	"repository": {
 		"type": "git",
@@ -21,20 +23,15 @@
 		"url": "https://github.com/searchmarkers/mark-my-search/issues"
 	},
 	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
-	"dependencies": {
-		"@types/chrome": "^0.0.193",
-		"@types/download": "^8.0.1",
-		"@types/eslint": "^8.4.5",
+	"devDependencies": {
+		"@types/chrome": "^0.0.204",
 		"@types/firefox-webext-browser": "^94.0.1",
-		"@typescript-eslint/eslint-plugin": "^5.31.0",
-		"@typescript-eslint/parser": "^5.31.0",
-		"body-parser": "1.20.0",
-		"download": "^8.0.0",
-		"eslint": "^8.20.0",
-		"express": "4.18.1",
-		"safe-compare": "^1.1.4",
-		"typescript": "^4.7.4",
-		"uuid": "8.3.2",
-		"web-ext": "^7.1.1"
+		"@typescript-eslint/eslint-plugin": "^5.46.1",
+		"@typescript-eslint/parser": "^5.46.1",
+		"eslint": "^8.30.0",
+		"inkscape": "^3.1.1",
+		"jq": "^1.7.2",
+		"typescript": "^4.9.4",
+		"winston": "^3.8.2"
 	}
 }

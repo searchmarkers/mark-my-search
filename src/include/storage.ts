@@ -22,18 +22,22 @@ type StorageSyncValues = {
 		searchParams: Array<string>
 	}
 	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
-	[StorageSync.LINK_RESEARCH_TABS]: boolean
 	[StorageSync.SHOW_HIGHLIGHTS]: {
 		default: boolean
 		overrideSearchPages: boolean
 		overrideResearchPages: boolean
 	}
+	[StorageSync.BAR_COLLAPSE]: {
+		fromSearch: boolean
+		fromTermListAuto: boolean
+	}
 	[StorageSync.BAR_CONTROLS_SHOWN]: {
+		toggleBarCollapsed: boolean
 		disableTabResearch: boolean
 		performSearch: boolean
 		toggleHighlights: boolean
 		appendTerm: boolean
-		pinTerms: boolean
+		replaceTerms: boolean
 	}
 	[StorageSync.BAR_LOOK]: {
 		showEditIcon: boolean
@@ -63,6 +67,20 @@ type TermList = {
 	urlFilter: URLFilter
 }
 
+type StorageAreaName = "session" | "local" | "sync"
+
+type StorageArea<Area extends StorageAreaName> =
+	Area extends "session" ? StorageSession :
+	Area extends "local" ? StorageLocal :
+	Area extends "sync" ? StorageSync :
+never;
+
+type StorageAreaValues<Area extends StorageAreaName> =
+	Area extends "session" ? StorageSessionValues :
+	Area extends "local" ? StorageLocalValues :
+	Area extends "sync" ? StorageSyncValues :
+never;
+
 enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
 	RESEARCH_INSTANCES = "researchInstances",
 	ENGINES = "engines",
@@ -77,8 +95,8 @@ enum StorageLocal {
 enum StorageSync {
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	MATCH_MODE_DEFAULTS = "matchModeDefaults",
-	LINK_RESEARCH_TABS = "linkResearchTabs",
 	SHOW_HIGHLIGHTS = "showHighlights",
+	BAR_COLLAPSE = "barCollapse",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
 	HIGHLIGHT_METHOD = "highlightMethod",
@@ -89,22 +107,21 @@ enum StorageSync {
 interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
-	autoOverwritable: boolean
+	barCollapsed: boolean
 	enabled: boolean
 }
 
-const defaultOptions: StorageSyncValues = {
+const optionsDefault: StorageSyncValues = {
 	autoFindOptions: {
-		searchParams: [ // Order of specificity as only the first found will be used.
-			"searchTerms",
-			"searchTerm",
+		searchParams: [ // Order of specificity, as only the first match will be used.
+			"search_terms", "search_term", "searchTerms", "searchTerm",
+			"search_query", "searchQuery",
 			"search",
 			"query",
 			"phrase",
-			"keywords",
-			"keyword",
-			"terms",
-			"term",
+			"keywords", "keyword",
+			"terms", "term",
+			// Short forms:
 			"s", "q", "p", "k",
 			// Special cases:
 			"_nkw", // eBay
@@ -112,7 +129,7 @@ const defaultOptions: StorageSyncValues = {
 		stoplist: [
 			"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
 			"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's",
+			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
 		],
 	},
 	matchModeDefaults: {
@@ -122,18 +139,22 @@ const defaultOptions: StorageSyncValues = {
 		whole: false,
 		diacritics: false,
 	},
-	linkResearchTabs: false,
 	showHighlights: {
 		default: true,
 		overrideSearchPages: true,
 		overrideResearchPages: false,
 	},
+	barCollapse: {
+		fromSearch: false,
+		fromTermListAuto: false,
+	},
 	barControlsShown: {
+		toggleBarCollapsed: true,
 		disableTabResearch: true,
 		performSearch: false,
 		toggleHighlights: true,
 		appendTerm: true,
-		pinTerms: true,
+		replaceTerms: true,
 	},
 	barLook: {
 		showEditIcon: true,
@@ -154,83 +175,58 @@ const defaultOptions: StorageSyncValues = {
 	termLists: [],
 };
 
-/**
- * Stores items to browser session storage.
- * @param items An object of items to create or update.
- */
-const setStorageSession = (items: StorageSessionValues) => {
-	return chrome.storage.session.set(items);
+const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> | Record<never, never>> = {
+	session: {},
+	local: {},
+	sync: {},
 };
 
-/**
- * Retrieves items from browser session storage.
- * @param keys An array of storage keys for which to retrieve the items.
- * @returns A promise that resolves with an object containing the requested items.
- */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getStorageSession = async (keys?: Array<StorageSession>): Promise<StorageSessionValues> => {
-	const session = await chrome.storage.session.get(keys) as StorageSessionValues;
-	if (session.engines) {
-		const engines = session.engines as Engines;
+const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
+	Promise<StorageAreaValues<Area>> =>
+{
+	if (keys && keys.every(key => storageCache[area][key as string] !== undefined)) {
+		return { ...storageCache[area] } as StorageAreaValues<Area>;
+	}
+	const store = await chrome.storage[area].get(keys) as StorageAreaValues<Area>;
+	const storeAsSession = store as StorageAreaValues<"session">;
+	if (storeAsSession.engines) {
+		const engines = storeAsSession.engines as Engines;
 		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
 	}
-	return session;
+	Object.entries(store).forEach(([ key, value ]) => {
+		storageCache[area][key] = value;
+	});
+	return { ...store };
 };
 
-/**
- * Stores items to browser local storage.
- * @param items An object of items to create or update.
- */
-const setStorageLocal = (items: StorageLocalValues) => {
-	return chrome.storage.local.set(items);
-};
-
-/**
- * Retrieves items from browser local storage.
- * @param keys An array of storage keys for which to retrieve the items.
- * @returns A promise that resolves with an object containing the requested items.
- */
-const getStorageLocal = async (keys?: Array<StorageLocal>): Promise<StorageLocalValues> => {
-	return chrome.storage.local.get(keys) as Promise<StorageLocalValues>;
-};
-
-/**
- * Stores items to browser sync storage.
- * @param items An object of items to create or update.
- */
-const setStorageSync = (items: StorageSyncValues) => {
-	return chrome.storage.sync.set(items);
-};
-
-/**
- * Retrieves items from browser synced storage.
- * @param keys An array of storage keys for which to retrieve the items.
- * @returns A promise that resolves with an object containing the requested items.
- */
-const getStorageSync = async (keys?: Array<StorageSync>): Promise<StorageSyncValues> => {
-	return chrome.storage.sync.get(keys) as Promise<StorageSyncValues>;
+const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
+	Object.entries(store).forEach(([ key, value ]) => {
+		storageCache[area][key] = value;
+	});
+	await chrome.storage[area].set(store);
 };
 
 /**
  * Sets internal storage to its default working values.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const initializeStorage = async () => {
-	const local = await getStorageLocal();
+const storageInitialize = async () => {
+	const local = await storageGet("local");
 	const localOld = { ...local };
 	const toRemove: Array<string> = [];
-	if (fixObjectWithDefaults(local, {
+	if (objectFixWithDefaults(local, {
 		enabled: true,
 		followLinks: true,
 		persistResearchInstances: true,
 	} as StorageLocalValues, toRemove)) {
 		console.warn("Storage 'local' cleanup rectified issues. Results:", localOld, local); // Use standard logging system?
 	}
-	await setStorageLocal(local);
+	await storageSet("local", local);
 	if (chrome.storage["session"]) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
 		await chrome.storage.local.remove(toRemove);
 	}
-	await setStorageSession({
+	await storageSet("session", {
 		researchInstances: {},
 		engines: {},
 	});
@@ -245,7 +241,7 @@ const initializeStorage = async () => {
  * @param atTopLevel Indicates whether or not the function is currently at the top level of the object.
  * @returns Whether or not any fixes were applied.
  */
-const fixObjectWithDefaults = (
+const objectFixWithDefaults = (
 	object: Record<string, unknown>,
 	defaults: Record<string, unknown>,
 	toRemove: Array<string>,
@@ -260,7 +256,7 @@ const fixObjectWithDefaults = (
 			}
 			hasModified = true;
 		} else if (typeof(object[objectKey]) === "object" && !Array.isArray(object[objectKey])) {
-			if (fixObjectWithDefaults(
+			if (objectFixWithDefaults(
 				object[objectKey] as Record<string, unknown>,
 				defaults[objectKey] as Record<string, unknown>,
 				toRemove,
@@ -284,13 +280,22 @@ const fixObjectWithDefaults = (
  * Checks persistent options storage for unwanted or misconfigured values, then restores it to a normal state.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const repairOptions = async () => {
-	const sync = await getStorageSync();
+const optionsRepair = async () => {
+	const sync = await storageGet("sync");
 	const syncOld = { ...sync };
 	const toRemove = [];
-	if (fixObjectWithDefaults(sync, defaultOptions, toRemove)) {
+	if (objectFixWithDefaults(sync, optionsDefault, toRemove)) {
 		console.warn("Storage 'sync' cleanup rectified issues. Results:", syncOld, sync); // Use standard logging system?
 	}
-	await setStorageSync(sync);
+	storageSet("sync", sync);
 	await chrome.storage.sync.remove(toRemove);
 };
+
+chrome.storage.onChanged.addListener((changes, area) => {
+	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
+		area = "session";
+	}
+	Object.entries(changes).forEach(([ key, value ]) => {
+		storageCache[area][key] = value.newValue;
+	});
+});

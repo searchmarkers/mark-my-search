@@ -1,3 +1,7 @@
+// FIXME this source file is bloated and included in too many places.
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type HTMLElementTagName = keyof HTMLElementTagNameMap
 type MatchTerms = Array<MatchTerm>
 
 /**
@@ -54,7 +58,7 @@ const assert = (condition: unknown, problem: string, reason: string, metadata: R
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 enum WindowFlag {
-	EXECUTION_UNNECESSARY = "executionUnnecessary",
+	SCRIPTS_LOADED = "scriptsAreLoaded",
 }
 
 interface MatchMode {
@@ -131,11 +135,11 @@ class MatchTerm {
 		}${
 			getDiacriticsMatchingPatternStringSafe(getHyphenatedPatternString(sanitize(patternStringPrefix.slice(0, -1))))
 		}${
-			getDiacriticsMatchingPatternStringSafe(sanitize(patternStringPrefix.at(-1) as string))
+			getDiacriticsMatchingPatternStringSafe(sanitize(patternStringPrefix[patternStringPrefix.length - 1]))
 		}(?:${
 			patternStringSuffix ? optionalHyphenStandin + getDiacriticsMatchingPatternStringSafe(patternStringSuffix) : ""
 		})?${
-			getBoundaryTest(patternStringPrefix.at(-1) as string)
+			getBoundaryTest(patternStringPrefix[patternStringPrefix.length - 1])
 		}`.replace(new RegExp(optionalHyphenStandin, "g"), optionalHyphen);
 		this.pattern = new RegExp(patternString, flags);
 	}
@@ -161,7 +165,8 @@ class Engine {
 			this.pathname = [ parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined) ];
 		} else {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			const [ param, arg ] = Array.from(urlDynamic.searchParams).find(param => param[1].includes("%s")) ?? [ "", "" ];
+			const [ param, arg ] = (Array.from(urlDynamic.searchParams as unknown as ArrayLike<string>))
+				.find(param => param[1].includes("%s")) ?? [ "", "" ];
 			this.param = param;
 		}
 	}
@@ -218,11 +223,12 @@ interface HighlightMessage {
 	terms?: MatchTerms
 	termUpdate?: MatchTerm
 	termToUpdateIdx?: number
+	termsOnHold?: MatchTerms
 	deactivate?: boolean
 	useClassicHighlighting?: boolean
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
-	autoOverwritable?: boolean
+	toggleBarCollapsedOn?: boolean
 	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
 	highlightMethod?: StorageSyncValues[StorageSync.HIGHLIGHT_METHOD]
@@ -240,7 +246,7 @@ interface BackgroundMessage {
 	tabId?: number
 	highlightMessage?: HighlightMessage
 	highlightCommand?: CommandInfo
-	executeInTab?: boolean
+	executeInTabNoPilot?: boolean
 	terms?: MatchTerms
 	termChanged?: MatchTerm
 	termChangedIdx?: number
@@ -248,7 +254,7 @@ interface BackgroundMessage {
 	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean
-	toggleAutoOverwritable?: boolean
+	toggleBarCollapsedOn?: boolean
 	performSearch?: boolean
 }
 
@@ -261,8 +267,10 @@ enum CommandType {
 	TOGGLE_BAR,
 	TOGGLE_HIGHLIGHTS,
 	TOGGLE_SELECT,
+	REPLACE_TERMS,
 	ADVANCE_GLOBAL,
 	SELECT_TERM,
+	STEP_GLOBAL,
 	FOCUS_TERM_INPUT,
 }
 
@@ -271,6 +279,18 @@ interface CommandInfo {
 	termIdx?: number
 	reversed?: boolean
 }
+
+// TODO document
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise<HighlightDetails> =>
+	chrome.tabs.sendMessage(tabId, message)
+;
+
+// TODO document
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const messageSendBackground = (message: BackgroundMessage): Promise<never> =>
+	chrome.runtime.sendMessage(message)
+;
 
 /**
  * Sanitizes a string for regex use by escaping all potential regex control characters.
@@ -339,6 +359,18 @@ const parseCommand = (commandString: string): CommandInfo => {
 			return { type: CommandType.TOGGLE_HIGHLIGHTS };
 		} case "select": {
 			return { type: CommandType.TOGGLE_SELECT };
+		}}
+		break;
+	} case "terms": {
+		switch (parts[1]) {
+		case "replace": {
+			return { type: CommandType.REPLACE_TERMS };
+		}}
+		break;
+	} case "step": {
+		switch (parts[1]) {
+		case "global": {
+			return { type: CommandType.STEP_GLOBAL, reversed: parts[2] === "reverse" };
 		}}
 		break;
 	} case "advance": {

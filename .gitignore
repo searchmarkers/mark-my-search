@@ -1,8 +1,10 @@
 /.vscode
-/dist
-/node_modules
+/.pnpm-debug.log
 /web-ext-artifacts
 /.web-extension-id
-/mark_my_search-*.zip
-/.pnpm-debug.log
+/dist
+/icons/dist
+/promo/dist
+/pack
+/node_modules
 /manifest.json

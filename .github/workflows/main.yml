@@ -23,20 +23,21 @@ jobs:
       - name: npm install, compile, build
         run: |
           npm install
-          npm run compile
-          npm run build-firefox
-          npm run build-chromium
-          npm run build-opera
+          sudo apt-get install inkscape
+          npm run icons-convert
+          npm run scripts-build
+          npm run pack-firefox
+          npm run pack-chromium
       - name: Tag overwrite
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git clone https://user:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY
           cd ${{ env.REPO_NAME }}
-          version=$( cat manifest-firefox.json | jq --raw-output '.version' )
+          version=$( cat manifest/firefox.json | jq --raw-output '.version' )
           tag_name=v$version
           git config user.name "searchmarkers"
-          git config user.email "dev@example.com"
+          git config user.email "bot@searchmarkers.github.io"
           if [ $( git tag -l $tag_name ) ]; then
             git tag -d $tag_name
           fi
@@ -50,9 +51,9 @@ jobs:
         with:
           tag: ${{ env.TAG_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "mark_my_search-*.zip"
+          artifacts: "pack/**"
           replacesArtifacts: true
-          name: "Auto-Release Version ${{ env.VERSION }}"
+          draft: true
           generateReleaseNotes: true
           allowUpdates: true
       - name: Repository Pages dispatch

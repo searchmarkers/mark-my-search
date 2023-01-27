@@ -161,7 +161,7 @@ const sendEmail: (
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-	const session = await getStorageSession([ StorageSession.RESEARCH_INSTANCES ]);
+	const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 	const phrases = session.researchInstances[tab.id as number]
 		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
@@ -242,7 +242,7 @@ textarea
 	{ background: hsl(300 30% 22%); }
 .container-panel
 	{ flex: 1 1 auto; border-top: 2px ridge hsl(300 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
-	outline: none; background: hsl(300 26% 18%); }
+	outline: none; background: hsl(300 16% 12%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
 .container-panel > .panel
@@ -577,9 +577,9 @@ textarea
 				checkboxInfo.onLoad(checked => checkbox.checked = checked, getObjectIndex(), containerIndex);
 			}
 			if (checkboxInfo.onToggle) {
-				checkbox.onchange = () =>
+				checkbox.addEventListener("change", () =>
 					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, getObjectIndex(), containerIndex) : undefined
-				;
+				);
 			}
 			return checkbox;
 		};
@@ -708,7 +708,7 @@ textarea
 				}
 				const inputMain = objectElement.querySelector("input") as HTMLInputElement;
 				let newElementQueued = false;
-				inputMain.oninput = () => {
+				inputMain.addEventListener("input", () => {
 					if (inputMain.value && ((container.lastElementChild as HTMLInputElement).querySelector("input") as HTMLInputElement).value && !newElementQueued) {
 						newElementQueued = true;
 						getArray().then(async array => {
@@ -723,7 +723,7 @@ textarea
 							newElementQueued = false;
 						});
 					}
-				};
+				});
 				const onChangeInternal = (commitIfEmpty = false) => {
 					if (!inputMain.value && commitIfEmpty) {
 						getArray().then(array => {
@@ -803,7 +803,7 @@ textarea
 			button.textContent = submitterInfo.text;
 			container.appendChild(button);
 			let getMessageText = () => "";
-			button.onclick = () => {
+			button.addEventListener("click", () => {
 				button.disabled = true;
 				clearAlerts(container, [ PageAlertType.PENDING, PageAlertType.FAILURE ]);
 				submitterInfo.onClick(
@@ -843,7 +843,7 @@ textarea
 					submitterInfo.alerts, //
 					button, //
 				);
-			};
+			});
 			if (submitterInfo.message) {
 				const messageInfo = submitterInfo.message;
 				const messageBox = (messageInfo.singleline
@@ -1032,6 +1032,40 @@ textarea
 			tab.classList.add(panelInfo.className);
 			tab.textContent = panelInfo.name.text;
 			tabContainer.appendChild(tab);
+		});
+		// TODO handle multiple tabs correctly
+		// TODO visual indication of letter
+		const lettersTaken: Set<string> = new Set;
+		const info: Array<{ letter: string, checkboxInfo?: PageInteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
+			sectionInfo.interactions
+				.map(interactionInfo => {
+					if (interactionInfo.checkbox && interactionInfo.label) {
+						const letter = Array.from(interactionInfo.label.text).find(letter => !lettersTaken.has(letter));
+						if (letter) {
+							lettersTaken.add(letter);
+							return { letter, checkboxInfo: interactionInfo.checkbox };
+						}
+					}
+					return { letter: "" };
+				})
+				.filter(info => info.letter !== "")
+		));
+		addEventListener("keydown", event => {
+			if (!event.altKey || !event.shiftKey) {
+				return;
+			}
+			info.some(info => {
+				if (info.letter !== event.key) {
+					return false;
+				}
+				if (info.checkboxInfo && info.checkboxInfo.autoId) {
+					const checkbox = document.getElementById(info.checkboxInfo.autoId) as HTMLInputElement;
+					checkbox.focus();
+					checkbox.click();
+					event.preventDefault();
+				}
+				return true;
+			});
 		});
 		handleTabs(shiftModifierIsRequired);
 		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
