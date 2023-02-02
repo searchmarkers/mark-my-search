@@ -2887,7 +2887,7 @@ const getTermsFromSelection = () => {
 	return () => {
 		window[WindowFlag.SCRIPTS_LOADED] = true;
 		if (!usePaintFallback) {
-			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/paint.js"));
+			(CSS["paintWorklet"] as PaintWorkletType).addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
