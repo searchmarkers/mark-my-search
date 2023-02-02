@@ -252,7 +252,8 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /* || Term Pulldown */
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:is(:focus, :active),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}.${getSel(ElementClass.OVERRIDE_VISIBILITY)},
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover) + .${getSel(ElementClass.OPTION_LIST)}
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
++ .${getSel(ElementClass.OPTION_LIST)}
 	{ display: flex; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus .${getSel(ElementClass.OPTION)}::first-letter
 	{ text-decoration: underline; }
@@ -321,7 +322,8 @@ ${
 #${getSel(ElementID.DRAW_CONTAINER)} > *
 	{ position: fixed; width: 100%; height: 100%; }`
 			: `/* || Term Highlight */
-#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] [markmysearch-h_beneath]
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
+~ body [markmysearch-h_id] [markmysearch-h_beneath]
 	{ background-color: transparent; }
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id]
 	{ background-image: paint(markmysearch-highlights) !important; --markmysearch-styles: ${JSON.stringify((() => {
@@ -334,7 +336,8 @@ ${
 		});
 		return styles;
 	})())}; }
-#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id] > :not([markmysearch-h_id])
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
+~ body [markmysearch-h_id] > :not([markmysearch-h_id])
 	{ --markmysearch-styles: unset; --markmysearch-boxes: unset; }
 /**/`
 }
@@ -412,6 +415,16 @@ ${controlsInfo.classicReplacesPaint
 };
 
 /**
+ * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
+ * @param element An element.
+ * @returns `true` if visible, `false` otherwise.
+ */
+const isVisible = (element: HTMLElement) => // TODO improve correctness
+	(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
+	&& getComputedStyle(element).visibility !== "hidden"
+;
+
+/**
  * Gets a selector string for the container block of an element.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @returns The container block selector corresponding to the highlight tags supplied.
@@ -420,9 +433,18 @@ const getContainerBlockSelector = (highlightTags: HighlightTags) =>
 	`:not(${Array.from(highlightTags.flow).join(", ")})`
 ;
 
+/**
+ * Gets the node at the end of an element, in layout terms; aka. the last item of a pre-order depth-first search traversal.
+ * @param node A container node.
+ * @returns The final node of the container.
+ */
+const getNodeFinal = (node: Node): Node =>
+	node.lastChild ? getNodeFinal(node.lastChild) : node
+;
+
 /*
-SCROLL JUMPING
-Methods for or used in jumping to term occurrences in the document, or for cleaning up resulting changes.
+TERM FOCUSING
+Methods for or used in jumping or stepping to term occurrences in the document, or for cleaning up resulting changes.
 */
 
 /**
@@ -456,124 +478,14 @@ const elementsRemakeUnfocusable = (root = document.body) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const jumpToScrollMarkerPaint = (term: MatchTerm | undefined, container: HTMLElement) => {
+const focusOnScrollMarkerPaint = (term: MatchTerm | undefined, container: HTMLElement) => {
 	// Depends on scroll markers refreshed Paint implementation (TODO)
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const jumpToScrollMarker = (term: MatchTerm | undefined, container: HTMLElement, controlsInfo: ControlsInfo) =>
-	jumpToScrollMarkerClassic(term, container)
+const focusOnScrollMarker = (term: MatchTerm | undefined, container: HTMLElement, controlsInfo: ControlsInfo) =>
+	focusOnScrollMarkerClassic(term, container)
 ;
-
-// TODO document
-const stepToTerm = (() => {
-	// FIXME borrowed from simplified PAINT version, make global definition
-	const getNodeFinal = (node: Node): Node =>
-		node.lastChild ? getNodeFinal(node.lastChild) : node
-	;
-
-	const getSiblingHighlightFinal = (highlight: HTMLElement, node: Node,
-		nextSiblingMethod: "nextSibling" | "previousSibling"): HTMLElement =>
-		node[nextSiblingMethod]
-			? (node[nextSiblingMethod] as Node).nodeType === Node.ELEMENT_NODE
-				? (node[nextSiblingMethod] as HTMLElement).tagName === "MMS-H"
-					? getSiblingHighlightFinal(node[nextSiblingMethod] as HTMLElement, node[nextSiblingMethod] as HTMLElement,
-						nextSiblingMethod)
-					: highlight
-				: (node[nextSiblingMethod] as Node).nodeType === Node.TEXT_NODE
-					? (node[nextSiblingMethod] as Text).textContent === ""
-						? getSiblingHighlightFinal(highlight, node[nextSiblingMethod] as Text, nextSiblingMethod)
-						: highlight
-					: highlight
-			: highlight
-	;
-
-	const getTopLevelHighlight = (element: HTMLElement) =>
-		(element.parentElement as HTMLElement).closest("mms-h")
-			? getTopLevelHighlight((element.parentElement as HTMLElement).closest("mms-h") as HTMLElement)
-			: element
-	;
-
-	/** FIXME needs global definition
-	 * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
-	 * @param element An element.
-	 * @returns `true` if visible, `false` otherwise.
-	 */
-	const isVisible = (element: HTMLElement) => // TODO improve
-		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
-		&& getComputedStyle(element).visibility !== "hidden"
-	;
-
-	// FIXME needs global definition
-	// TODO document
-	const jumpToScrollMarkerDuplicate = (term: MatchTerm | undefined, container: HTMLElement) => {
-		const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
-		purgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
-		// eslint-disable-next-line no-constant-condition
-		[6, 5, 4, 3, 2].some(precisionFactor => {
-			const precision = 10**precisionFactor;
-			const scrollMarker = scrollMarkerGutter.querySelector(
-				`${term ? `.${getSel(ElementClass.TERM, term.selector)}` : ""}[top^="${
-					Math.trunc(getElementYRelative(container) * precision) / precision
-				}"]`
-			) as HTMLElement | null;
-			if (scrollMarker) {
-				scrollMarker.classList.add(getSel(ElementClass.FOCUS));
-				return true;
-			}
-			return false;
-		});
-	};
-
-	const stepToElement = (element: HTMLElement, highlightTags: HighlightTags) => {
-		element = getTopLevelHighlight(element);
-		const elementFirst = getSiblingHighlightFinal(element, element, "previousSibling");
-		const elementLast = getSiblingHighlightFinal(element, element, "nextSibling");
-		(getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
-		element.scrollIntoView({ block: "center" });
-		jumpToScrollMarkerDuplicate(undefined, getContainerBlock(element, highlightTags));
-	};
-
-	return (highlightTags: HighlightTags, reversed: boolean, nodeStart?: Node) => {
-		purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
-		purgeClass(getSel(ElementClass.FOCUS));
-		const selection = getSelection();
-		const bar = document.getElementById(getSel(ElementID.BAR));
-		if (!selection || !bar) {
-			return;
-		}
-		if (document.activeElement && bar.contains(document.activeElement)) {
-			(document.activeElement as HTMLElement).blur();
-		}
-		const nodeBegin = reversed ? getNodeFinal(document.body) : document.body;
-		const nodeSelected = reversed ? selection.anchorNode : selection.focusNode;
-		const nodeFocused = document.activeElement
-			? (document.activeElement === document.body || bar.contains(document.activeElement))
-				? null
-				: document.activeElement as HTMLElement
-			: null;
-		const nodeCurrent = nodeStart ?? (nodeSelected
-			? nodeSelected
-			: nodeFocused ?? nodeBegin);
-		if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
-		}
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element.parentElement as Element).closest("mms-h")
-				? NodeFilter.FILTER_REJECT
-				: (element.tagName === "MMS-H" && isVisible(element)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
-		);
-		walker.currentNode = nodeCurrent;
-		const element = walker[reversed ? "previousNode" : "nextNode"]() as HTMLElement | null;
-		if (!element) {
-			if (!nodeStart) {
-				stepToTerm(highlightTags, reversed, nodeBegin);
-			}
-			return;
-		}
-		stepToElement(element, highlightTags);
-	};
-})();
 
 /**
  * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
@@ -581,21 +493,7 @@ const stepToTerm = (() => {
  * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
  * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
  */
-const jumpToTermPaint = (() => {
-	const getNodeFinal = (node: Node): Node =>
-		node.lastChild ? getNodeFinal(node.lastChild) : node
-	;
-
-	/**
-	 * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
-	 * @param element An element.
-	 * @returns `true` if visible, `false` otherwise.
-	 */
-	const isVisible = (element: HTMLElement) => // TODO improve
-		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
-		&& getComputedStyle(element).visibility !== "hidden"
-	;
-
+const focusOnTermPaint = (() => {
 	const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
 		element.focus({ preventScroll: true });
 		if (document.activeElement !== element) {
@@ -607,12 +505,9 @@ const jumpToTermPaint = (() => {
 		}
 	};
 
-	return (controlsInfo: ControlsInfo, reverse: boolean, term?: MatchTerm, nodeStart?: Node) => {
-		purgeClass(getSel(ElementClass.FOCUS_CONTAINER));
-		const selection = document.getSelection();
-		if (!selection) {
-			return;
-		}
+	return (stepNotJump: boolean, controlsInfo: ControlsInfo, reverse: boolean, term?: MatchTerm, nodeStart?: Node) => {
+		elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER));
+		const selection = document.getSelection() as Selection;
 		const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
 		const nodeSelected = selection ? selection.anchorNode : null;
@@ -621,12 +516,13 @@ const jumpToTermPaint = (() => {
 				? null
 				: document.activeElement as HTMLElement
 			: null;
-		const nodeCurrent = nodeStart ?? (nodeFocused
-			? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
-			: nodeSelected ?? nodeBegin);
+		const nodeCurrent = nodeStart
+			?? (nodeFocused
+				? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
+				: nodeSelected ?? nodeBegin
+			);
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element[ElementProperty.INFO]
-			&& (element[ElementProperty.INFO] as ElementInfo).flows.some(flow =>
+			(element[ElementProperty.INFO] as ElementInfo | undefined)?.flows.some(flow =>
 				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.selector === term.selector) : flow.boxesInfo.length
 			) && isVisible(element)
 				? NodeFilter.FILTER_ACCEPT
@@ -640,25 +536,33 @@ const jumpToTermPaint = (() => {
 		const element = walker[nextNodeMethod]() as HTMLElement | null;
 		if (!element) {
 			if (!nodeStart) {
-				jumpToTermPaint(controlsInfo, reverse, term, nodeBegin);
+				focusOnTermPaint(stepNotJump, controlsInfo, reverse, term, nodeBegin);
 			}
 			return;
 		}
-		element.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
+		if (!stepNotJump) {
+			element.classList.add(getSel(ElementClass.FOCUS_CONTAINER));
+		}
 		focusClosest(element, element =>
 			element[ElementProperty.INFO] && !!(element[ElementProperty.INFO] as ElementInfo).flows
 		);
 		selection.setBaseAndExtent(element, 0, element, 0);
-		element.scrollIntoView({ behavior: "smooth", block: "center" });
-		jumpToScrollMarker(term, element, controlsInfo);
+		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });
+		focusOnScrollMarker(term, element, controlsInfo);
 	};
 })();
 
-const jumpToTerm = (highlightTags: HighlightTags, reverse: boolean, term: MatchTerm | undefined,
-	controlsInfo: ControlsInfo) =>
+const focusOnTermJump = (controlsInfo: ControlsInfo, highlightTags: HighlightTags, reverse: boolean,
+	term: MatchTerm | undefined) =>
 	controlsInfo.classicReplacesPaint
-		? jumpToTermClassic(controlsInfo, highlightTags, reverse, term)
-		: jumpToTermPaint(controlsInfo, reverse, term)
+		? focusOnTermJumpClassic(controlsInfo, highlightTags, reverse, term)
+		: focusOnTermPaint(false, controlsInfo, reverse, term)
+;
+
+const focusOnTermStep = (controlsInfo: ControlsInfo, highlightTags: HighlightTags, reverse: boolean) =>
+	controlsInfo.classicReplacesPaint
+		? focusOnTermStepClassic(controlsInfo, highlightTags, reverse)
+		: focusOnTermPaint(true, controlsInfo, reverse)
 ;
 
 /*
@@ -1040,7 +944,8 @@ const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: Highlig
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
-	controlContent.onclick = () => jumpToTerm(highlightTags, false, term, controlsInfo); // Overrides previous event handler in case of new term.
+	controlContent.onclick = () => // Overrides previous event handler in case of new term.
+		focusOnTermJump(controlsInfo, highlightTags, false, term);
 	controlContent.textContent = term.phrase;
 	// TODO make function
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
@@ -1222,7 +1127,8 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
-	controlContent.onclick = () => jumpToTerm(highlightTags, false, term, controlsInfo); // Hack: archaic event handler property for overriding.
+	controlContent.onclick = () => // Hack: archaic event handler property for overriding.
+		focusOnTermJump(controlsInfo, highlightTags, false, term);
 	controlPad.appendChild(controlContent);
 	const controlEdit = document.createElement("button");
 	controlEdit.type = "button";
@@ -1905,7 +1811,9 @@ const getStyleRules = (() => {
 				const textRects = range.getClientRects();
 				for (let i = 0; i < textRects.length; i++) {
 					const textRect = textRects.item(i) as DOMRect;
-					if (i !== 0 && textRect.x === (textRects.item(i - 1) as DOMRect).x && textRect.y === (textRects.item(i - 1) as DOMRect).y) {
+					if (i !== 0
+						&& textRect.x === (textRects.item(i - 1) as DOMRect).x
+						&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
 						continue;
 					}
 					let x = 0;
@@ -2182,8 +2090,8 @@ const generateTermHighlightsUnderNode = (() => {
 		// TODO support for <iframe>?
 		do {
 			switch (node.nodeType) {
-			case (1): // Node.ELEMENT_NODE
-			case (11): { // Node.DOCUMENT_FRAGMENT_NODE
+			case Node.ELEMENT_NODE:
+			case Node.DOCUMENT_FRAGMENT_NODE: {
 				if (!highlightTags.reject.has((node as Element).tagName)) {
 					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
 					if (breaksFlow && nodeItems.first) {
@@ -2199,7 +2107,7 @@ const generateTermHighlightsUnderNode = (() => {
 					}
 				}
 				break;
-			} case (3): { // Node.TEXT_NODE
+			} case Node.TEXT_NODE: {
 				nodeItems.push(node as Text);
 				break;
 			}}
@@ -2221,21 +2129,6 @@ const generateTermHighlightsUnderNode = (() => {
 })();
 
 /**
- * Remove all uses of a class name in elements under a root node in the DOM tree.
- * @param className A class name to purge.
- * @param root A root node under which to purge the class (non-inclusive).
- * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
- * @param predicate A function called for each element, the condition of which must be met in order to purge from that element.
- */
-const purgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "",
-	predicate?: (classList: DOMTokenList) => boolean) =>
-	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(predicate
-		? element => predicate(element.classList) ? element.classList.remove(className) : undefined
-		: element => element.classList.remove(className) // Predicate not called when not supplied, for efficiency (bulk purges)
-	)
-;
-
-/**
  * Revert all direct DOM tree changes under a root node introduced by the extension.
  * Circumstantial and non-direct alterations may remain.
  * @param classNames Class names of the highlights to remove. If left empty, all highlights are removed.
@@ -2253,8 +2146,8 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
 			return;
 		}
 	}
-	purgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
-	purgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
+	elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
+	elementsPurgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
 	elementsRemakeUnfocusable(root as HTMLElement);
 };
 
@@ -2320,7 +2213,7 @@ const insertScrollMarkersClassic = (() => {
 })();
 
 // TODO document
-const jumpToScrollMarkerClassic = (term: MatchTerm | undefined, container: HTMLElement) => {
+const focusOnScrollMarkerClassic = (term: MatchTerm | undefined, container: HTMLElement) => {
 	const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 	elementsPurgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
 	// eslint-disable-next-line no-constant-condition
@@ -2345,17 +2238,7 @@ const jumpToScrollMarkerClassic = (term: MatchTerm | undefined, container: HTMLE
  * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
  * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
  */
-const jumpToTermClassic = (() => {
-	/**
-	 * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
-	 * @param element An element.
-	 * @returns `true` if visible, `false` otherwise.
-	 */
-	const isVisible = (element: HTMLElement) => // TODO improve
-		(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
-		&& getComputedStyle(element).visibility !== "hidden"
-	;
-
+const focusOnTermJumpClassic = (() => {
 	/**
 	 * Focuses an element, preventing immediate scroll-into-view and forcing visible focus where supported.
 	 * @param element An element.
@@ -2469,7 +2352,80 @@ const jumpToTermClassic = (() => {
 		document.body.querySelectorAll(`.${getSel(ElementClass.REMOVE)}`).forEach((element: HTMLElement) => {
 			element.remove();
 		});
-		jumpToScrollMarker(term, container, controlsInfo);
+		focusOnScrollMarker(term, container, controlsInfo);
+	};
+})();
+
+const focusOnTermStepClassic = (() => {
+	const getSiblingHighlightFinal = (highlight: HTMLElement, node: Node,
+		nextSiblingMethod: "nextSibling" | "previousSibling"): HTMLElement =>
+		node[nextSiblingMethod]
+			? (node[nextSiblingMethod] as Node).nodeType === Node.ELEMENT_NODE
+				? (node[nextSiblingMethod] as HTMLElement).tagName === "MMS-H"
+					? getSiblingHighlightFinal(node[nextSiblingMethod] as HTMLElement, node[nextSiblingMethod] as HTMLElement,
+						nextSiblingMethod)
+					: highlight
+				: (node[nextSiblingMethod] as Node).nodeType === Node.TEXT_NODE
+					? (node[nextSiblingMethod] as Text).textContent === ""
+						? getSiblingHighlightFinal(highlight, node[nextSiblingMethod] as Text, nextSiblingMethod)
+						: highlight
+					: highlight
+			: highlight
+	;
+
+	const getTopLevelHighlight = (element: HTMLElement) =>
+		(element.parentElement as HTMLElement).closest("mms-h")
+			? getTopLevelHighlight((element.parentElement as HTMLElement).closest("mms-h") as HTMLElement)
+			: element
+	;
+
+	const stepToElement = (controlsInfo: ControlsInfo, highlightTags: HighlightTags, element: HTMLElement) => {
+		element = getTopLevelHighlight(element);
+		const elementFirst = getSiblingHighlightFinal(element, element, "previousSibling");
+		const elementLast = getSiblingHighlightFinal(element, element, "nextSibling");
+		(getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
+		element.scrollIntoView({ block: "center" });
+		focusOnScrollMarker(undefined, getContainerBlock(element, highlightTags), controlsInfo);
+	};
+
+	return (controlsInfo: ControlsInfo, highlightTags: HighlightTags, reversed: boolean, nodeStart?: Node) => {
+		elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER));
+		elementsPurgeClass(getSel(ElementClass.FOCUS));
+		const selection = getSelection();
+		const bar = document.getElementById(getSel(ElementID.BAR));
+		if (!selection || !bar) {
+			return;
+		}
+		if (document.activeElement && bar.contains(document.activeElement)) {
+			(document.activeElement as HTMLElement).blur();
+		}
+		const nodeBegin = reversed ? getNodeFinal(document.body) : document.body;
+		const nodeSelected = reversed ? selection.anchorNode : selection.focusNode;
+		const nodeFocused = document.activeElement
+			? (document.activeElement === document.body || bar.contains(document.activeElement))
+				? null
+				: document.activeElement as HTMLElement
+			: null;
+		const nodeCurrent = nodeStart ?? (nodeSelected
+			? nodeSelected
+			: nodeFocused ?? nodeBegin);
+		if (document.activeElement) {
+			(document.activeElement as HTMLElement).blur();
+		}
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
+			(element.parentElement as Element).closest("mms-h")
+				? NodeFilter.FILTER_REJECT
+				: (element.tagName === "MMS-H" && isVisible(element)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+		);
+		walker.currentNode = nodeCurrent;
+		const element = walker[reversed ? "previousNode" : "nextNode"]() as HTMLElement | null;
+		if (!element) {
+			if (!nodeStart) {
+				focusOnTermStepClassic(controlsInfo, highlightTags, reversed, nodeBegin);
+			}
+			return;
+		}
+		stepToElement(controlsInfo, highlightTags, element);
 	};
 })();
 
@@ -2848,12 +2804,12 @@ const getTermsFromSelection = () => {
 				if (focusReturnToDocument()) {
 					break;
 				}
-				stepToTerm(highlightTags, commandInfo.reversed ?? false);
+				focusOnTermStep(controlsInfo, highlightTags, commandInfo.reversed ?? false);
 				break;
 			} case CommandType.ADVANCE_GLOBAL: {
 				focusReturnToDocument();
-				jumpToTerm(highlightTags, commandInfo.reversed ?? false, selectModeFocus ? terms[focusedIdx] : undefined,
-					controlsInfo);
+				focusOnTermJump(controlsInfo, highlightTags, commandInfo.reversed ?? false,
+					selectModeFocus ? terms[focusedIdx] : undefined);
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
 				const control = getControl(undefined, commandInfo.termIdx);
@@ -2904,7 +2860,8 @@ const getTermsFromSelection = () => {
 				focusedIdx = getFocusedIdx(commandInfo.termIdx as number);
 				barTerms.classList.add(getSel(ElementClass.CONTROL_PAD, focusedIdx));
 				if (!selectModeFocus) {
-					jumpToTerm(highlightTags, commandInfo.reversed as boolean, terms[focusedIdx], controlsInfo);
+					focusOnTermJump(controlsInfo, highlightTags, commandInfo.reversed as boolean,
+						terms[focusedIdx]);
 				}
 				break;
 			}}

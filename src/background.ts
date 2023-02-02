@@ -581,11 +581,11 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	if (isTabResearchPage(session.researchInstances, tabId)) {
 		const researchInstance = session.researchInstances[tabId];
 		researchInstance.highlightsShown = toggleHighlightsOn
-		?? !await messageSendHighlight(tabId, { getDetails: { highlightsShown: true } }).then(response =>
-			response.highlightsShown
-		).catch(() =>
-			researchInstance.highlightsShown
-		);
+			?? !await messageSendHighlight(tabId, { getDetails: { highlightsShown: true } }).then(response =>
+				response.highlightsShown
+			).catch(() =>
+				researchInstance.highlightsShown
+			);
 		messageSendHighlight(tabId, {
 			toggleHighlightsOn: researchInstance.highlightsShown,
 			barControlsShown: sync.barControlsShown,

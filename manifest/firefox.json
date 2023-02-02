@@ -51,7 +51,7 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
-				"/dist/draw-highlights.js",
+				"/dist/paint.js",
 				"/icons/arrow.svg",
 				"/icons/close.svg",
 				"/icons/search.svg",
