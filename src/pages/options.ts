@@ -281,7 +281,7 @@ label[for]:hover
 				highlightMethod: {
 					label: "Keyword highlighting method and style",
 					preferences: {
-						classicReplacesPaint: {
+						paintReplaceByClassic: {
 							label: "Use CLASSIC highlighting (hover for details)",
 							tooltip:
 `Mark My Search has two highlighting methods. \
@@ -300,6 +300,21 @@ PAINT
 	• Large numbers of highlights are handled well.
 • Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
+							,
+							type: PreferenceType.BOOLEAN,
+						},
+						paintUseExperimental: {
+							label: "Use experimental browser APIs (unstable)",
+							tooltip:
+`Mark My Search can highlight using experimental APIs. The behaviour of this flag will change over time.
+Current behaviour:
+
+CLASSIC
+None.
+
+PAINT
+• Firefox: The CSS element() function is used instead of SVG rendering.
+• Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
 							,
 							type: PreferenceType.BOOLEAN,
 						},

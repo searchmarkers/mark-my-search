@@ -48,7 +48,8 @@ type StorageSyncValues = {
 		borderRadius: string
 	}
 	[StorageSync.HIGHLIGHT_METHOD]: {
-		classicReplacesPaint: boolean
+		paintReplaceByClassic: boolean
+		paintUseExperimental: boolean
 		hues: Array<number>
 	}
 	[StorageSync.URL_FILTERS]: {
@@ -165,7 +166,8 @@ const optionsDefault: StorageSyncValues = {
 		borderRadius: "4px",
 	},
 	highlightMethod: {
-		classicReplacesPaint: true,
+		paintReplaceByClassic: true,
+		paintUseExperimental: false,
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 	urlFilters: {

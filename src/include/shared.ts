@@ -57,8 +57,9 @@ const assert = (condition: unknown, problem: string, reason: string, metadata: R
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-enum WindowFlag {
+enum WindowVariable {
 	SCRIPTS_LOADED = "scriptsAreLoaded",
+	CONFIG_HARD = "configHard",
 }
 
 interface MatchMode {

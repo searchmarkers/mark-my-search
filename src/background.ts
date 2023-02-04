@@ -412,7 +412,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				barLook: sync.barLook,
 				highlightMethod: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
-				useClassicHighlighting: sync.highlightMethod.classicReplacesPaint,
+				useClassicHighlighting: sync.highlightMethod.paintReplaceByClassic,
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
 			session.researchInstances[tabId] = researchInstance;
@@ -480,18 +480,22 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 	const logMetadata = { tabId: targetTabId };
 	log("pilot function injection start", "", logMetadata);
 	await chrome.scripting.executeScript({
-		func: (flag: string, tabId: number, highlightMessage: HighlightMessage) => {
+		func: (flagLoaded: string, tabId: number, highlightMessage: HighlightMessage,
+			windowObjects: Record<string, Record<string, unknown>>) => {
+			Object.entries(windowObjects).forEach(([ key, config ]) => {
+				window[key] = config;
+			});
 			chrome.runtime.sendMessage({
-				executeInTabNoPilot: !window[flag],
+				executeInTabNoPilot: !window[flagLoaded],
 				tabId,
 				highlightMessage,
 			} as BackgroundMessage);
-			window[flag] = true;
+			window[flagLoaded] = true; // FIXME why is this activated at both ends?
 		},
-		args: [ WindowFlag.SCRIPTS_LOADED, targetTabId, Object.assign(
+		args: [ WindowVariable.SCRIPTS_LOADED, targetTabId, Object.assign(
 			{ extensionCommands: await chrome.commands.getAll() },
 			highlightMessageToReceive,
-		) ],
+		), { [WindowVariable.CONFIG_HARD]: { paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental } } ],
 		target: { tabId: targetTabId },
 	}).then(value => {
 		log("pilot function injection finish", "", logMetadata);
@@ -719,7 +723,7 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 				barLook: sync.barLook,
 				highlightMethod: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
-				useClassicHighlighting: sync.highlightMethod.classicReplacesPaint,
+				useClassicHighlighting: sync.highlightMethod.paintReplaceByClassic,
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
 				command: message.highlightCommand,
 			});
