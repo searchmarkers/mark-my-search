@@ -129,9 +129,10 @@ interface TermStyle {
 }
 
 /**
- * Whether the preferred `paint()` CSS function (Painting API) should be used over the experimental `element()`.
+ * Whether the experimental `element()` CSS function should be used over the preferred `paint()` function (Painting API).
  * Painting is faster and simpler to implement, but is not supported by Firefox or Safari as of 2022-12-01.
- * This affects the __Paint__ algorithm only, with no effect when __Classic__ is in use.
+ * Element backgrounds can be expensive but are hugely versatile for relatively low cost, and are supported only by Firefox.
+ * This applies to the PAINT algorithm only, with no bearing on CLASSIC.
  */
 const usePaintFallback = this.browser;
 
@@ -153,6 +154,7 @@ const getSel = (identifier: ElementID | ElementClass | AtRuleID, argument?: stri
  */
 const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: ControlsInfo) => {
 	const style = document.getElementById(getSel(ElementID.STYLE)) as HTMLStyleElement;
+	const zIndexMin = -(2**31);
 	const zIndexMax = 2**31 - 1;
 	const makeImportant = (styleText: string): string =>
 		styleText.replace(/;/g, " !important;"); // Prevent websites from overriding rules with !important;
@@ -318,7 +320,7 @@ ${
 		: usePaintFallback
 			? `
 #${getSel(ElementID.DRAW_CONTAINER)}
-	{ position: fixed; width: 100%; height: 100%; z-index: -99999; }
+	{ position: fixed; width: 100%; height: 100%; z-index: ${zIndexMin}; }
 #${getSel(ElementID.DRAW_CONTAINER)} > *
 	{ position: fixed; width: 100%; height: 100%; }`
 			: `/* || Term Highlight */
@@ -377,7 +379,12 @@ ${controlsInfo.classicReplacesPaint
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`)};
 	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
-		: ""
+		: usePaintFallback
+			? `
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
+~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
+	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`)}; }`
+			: ""
 }
 /**/
 
@@ -833,13 +840,18 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 	input.setSelectionRange(0, input.value.length)
 ;
 
-const getHighlightFlows = (element: Element): Array<HighlightFlow> =>
-	(element[ElementProperty.INFO] as ElementInfo).flows.concat(Array.from(element.children)
-		.filter(child => child[ElementProperty.INFO])
-		.map(child => getHighlightFlows(child))
-		.reduce((flowPrevious, flow) => flowPrevious.concat(flow), [])
-	)
-;
+const getHighlightFlows = (element: Element): Array<HighlightFlow> => {
+	const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT, element => element[ElementProperty.INFO] ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
+	const flows: Array<HighlightFlow> = [];
+	let elementCurrent: Element | null = element;
+	while (elementCurrent) {
+		for (const flow of (elementCurrent[ElementProperty.INFO] as ElementInfo).flows) {
+			flows.push(flow);
+		}
+		elementCurrent = walker.nextNode() as Element | null;
+	}
+	return flows;
+};
 
 /**
  * Gets the number of matches for a term in the document.
@@ -1472,19 +1484,22 @@ const getElementYRelative = (element: HTMLElement) =>
 ;
 
 // TODO document
-const getAncestorHighlightable = (node: Node) => {
-	let ancestor = node.parentElement as HTMLElement;
-	// eslint-disable-next-line no-constant-condition
-	while (true) {
-		const ancestorUnhighlightable = (ancestor as HTMLElement).closest("a");
-		if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
-			ancestor = ancestorUnhighlightable.parentElement;
-		} else {
-			break;
+const getAncestorHighlightable: (node: Node) => HTMLElement = usePaintFallback
+	? node => node.parentElement as HTMLElement
+	: node => {
+		let ancestor = node.parentElement as HTMLElement;
+		// eslint-disable-next-line no-constant-condition
+		while (true) {
+			const ancestorUnhighlightable = (ancestor as HTMLElement).closest("a");
+			if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+				ancestor = ancestorUnhighlightable.parentElement;
+			} else {
+				break;
+			}
 		}
+		return ancestor;
 	}
-	return ancestor;
-};
+;
 
 /**
  * Remove all uses of a class name in elements under a root node in the DOM tree.
@@ -1567,12 +1582,15 @@ const highlightingAttributesCleanup = (root: Element) => {
 	});
 };
 
-const markElementsUpToHighlightable = (element: Element) => {
-	if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
-		element.setAttribute("markmysearch-h_beneath", "");
-		markElementsUpToHighlightable(element.parentElement as Element);
+const markElementsUpToHighlightable: (element: Element) => void = usePaintFallback
+	? () => undefined
+	: element => {
+		if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
+			element.setAttribute("markmysearch-h_beneath", "");
+			markElementsUpToHighlightable(element.parentElement as Element);
+		}
 	}
-};
+;
 
 /** TODO update documentation
  * Highlights occurrences of terms in text nodes under a node in the DOM tree.
@@ -1880,6 +1898,10 @@ const getStyleRules = (() => {
 				element.classList.add(getSel(ElementClass.TERM, box.selector));
 				container.appendChild(element);
 			});
+			const boxRightmost = boxes.reduce((box, boxCurrent) => box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent);
+			const boxDownmost = boxes.reduce((box, boxCurrent) => box && (box.y + box.height > boxCurrent.y + boxCurrent.height) ? box : boxCurrent);
+			container.style.width = (boxRightmost.x + boxRightmost.width).toString() + "px";
+			container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
 			containers.push(container);
 		}
 		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
@@ -2500,7 +2522,6 @@ const getObserverNodeHighlighter = (() => {
 						}
 					}
 				}
-				terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
 			} else {
 				for (const mutation of mutations) {
 					for (const node of Array.from(mutation.addedNodes)) {
@@ -2524,7 +2545,6 @@ const getObserverNodeHighlighter = (() => {
 						}
 					}
 				}
-				terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
 			}
 		});
 	};
@@ -2753,7 +2773,10 @@ const getTermsFromSelection = () => {
 				}
 				requestCount = 0;
 				getInsertScrollMarkersFn()(terms, highlightTags, hues);
-				terms.forEach(term => updateTermTooltip(term, controlsInfo));
+				terms.forEach(term => {
+					updateTermTooltip(term, controlsInfo);
+					updateTermOccurringStatus(term, controlsInfo);
+				});
 			}, getRequestWaitDuration() + 50); // Arbitrary small amount added to account for lag (preventing lost updates).
 		while (true) {
 			requestCount++;
@@ -2946,6 +2969,9 @@ const getTermsFromSelection = () => {
 							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false));
 						}
 					} else {
+						if (usePaintFallback && entry.target[ElementProperty.INFO]) {
+							//(document.getElementById(getSel(ElementID.DRAW_ELEMENT, (entry.target[ElementProperty.INFO] as ElementInfo).id)) as HTMLElement).remove();
+						}
 						elementsVisible.delete(entry.target);
 						shiftObserver.unobserve(entry.target);
 					}
