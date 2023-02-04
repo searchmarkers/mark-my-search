@@ -165,7 +165,7 @@ const optionsDefault: StorageSyncValues = {
 		borderRadius: "4px",
 	},
 	highlightMethod: {
-		classicReplacesPaint: false,
+		classicReplacesPaint: true,
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 	urlFilters: {

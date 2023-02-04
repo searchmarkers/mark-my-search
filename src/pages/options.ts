@@ -286,7 +286,7 @@ label[for]:hover
 							tooltip:
 `Mark My Search has two highlighting methods. \
 CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
-PAINT is an alternative model invented for Mark My Search.
+PAINT is an alternate model invented for Mark My Search.
 
 CLASSIC
 • Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.

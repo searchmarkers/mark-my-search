@@ -840,18 +840,17 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 	input.setSelectionRange(0, input.value.length)
 ;
 
-const getHighlightFlows = (element: Element): Array<HighlightFlow> => {
-	const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT, element => element[ElementProperty.INFO] ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
-	const flows: Array<HighlightFlow> = [];
-	let elementCurrent: Element | null = element;
-	while (elementCurrent) {
-		for (const flow of (elementCurrent[ElementProperty.INFO] as ElementInfo).flows) {
-			flows.push(flow);
+const getHighlightFlows = (element: Element): Array<HighlightFlow> =>
+	(element[ElementProperty.INFO] as ElementInfo).flows.concat((() => {
+		let flows: Array<HighlightFlow> = [];
+		for (let i = 0; i < element.children.length; i++) {
+			if ((element.children.item(i) as Element)[ElementProperty.INFO]) {
+				flows = flows.concat(getHighlightFlows((element.children.item(i) as Element)).flat());
+			}
 		}
-		elementCurrent = walker.nextNode() as Element | null;
-	}
-	return flows;
-};
+		return flows;
+	})())
+;
 
 /**
  * Gets the number of matches for a term in the document.
