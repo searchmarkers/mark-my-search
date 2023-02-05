@@ -376,9 +376,11 @@ const updateActionIcon = (enabled?: boolean) =>
 			// Apply terms from term lists.
 			researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
 			if (isResearchPage) {
-				await activateHighlightingInTab(tabId, {
-					termsOnHold: researchInstance.terms,
-				});
+				await executeScriptsInTabUnsafe(tabId).then(() =>
+					messageSendHighlight(tabId, {
+						termsOnHold: researchInstance.terms,
+					})
+				);
 			} else {
 				session.researchInstances[tabId] = researchInstance;
 				log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
@@ -488,7 +490,6 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 				tabId,
 				highlightMessage,
 			} as BackgroundMessage);
-			window[flagLoaded] = true; // FIXME why is this activated at both ends?
 		},
 		args: [ WindowVariable.SCRIPTS_LOADED, targetTabId, Object.assign(
 			{ extensionCommands: await chrome.commands.getAll() },
@@ -546,6 +547,9 @@ const activateResearchInTab = async (tabId: number) => {
 	session.researchInstances[tabId] = researchInstance;
 	storageSet("session", session);
 	await messageHandleBackground({
+		terms: researchInstance.terms,
+		makeUnique: true,
+		makeUniqueNoCreate: true,
 		toggleHighlightsOn: true,
 		highlightCommand: { type: CommandType.FOCUS_TERM_INPUT },
 	} as BackgroundMessage, tabId);
@@ -606,7 +610,18 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 const executeScriptsInTabUnsafe = async (tabId: number) => {
 	const logMetadata = { tabId };
 	log("script injection start", "", logMetadata);
-	return chrome.scripting.executeScript({
+	await chrome.scripting.executeScript({
+		func: (tabId: number, windowObjects: Record<string, Record<string, unknown>>) => {
+			Object.entries(windowObjects).forEach(([ key, options ]) => {
+				window[key] = options;
+			});
+		},
+		args: [ tabId, { [WindowVariable.CONFIG_HARD]: {
+			paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental,
+		} } ],
+		target: { tabId },
+	});
+	await chrome.scripting.executeScript({
 		files: [
 			ScriptInclude.STEMMING,
 			ScriptInclude.DIACRITICS,
@@ -702,7 +717,7 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 		});
 	} else {
 		const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
-		if (message.makeUnique || !isTabResearchPage(session.researchInstances, senderTabId)) {
+		if ((message.makeUnique && !message.makeUniqueNoCreate) || !isTabResearchPage(session.researchInstances, senderTabId)) {
 			const researchInstance = await createResearchInstance({ terms: message.terms });
 			session.researchInstances[senderTabId] = researchInstance;
 		}

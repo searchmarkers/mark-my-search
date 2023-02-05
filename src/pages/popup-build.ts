@@ -116,6 +116,7 @@ const loadPopup = (() => {
 											messageSendBackground({
 												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
 												makeUnique: true,
+												makeUniqueNoCreate: true,
 												toggleHighlightsOn: true,
 											});
 										});

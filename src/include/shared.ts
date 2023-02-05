@@ -252,6 +252,7 @@ interface BackgroundMessage {
 	termChanged?: MatchTerm
 	termChangedIdx?: number
 	makeUnique?: boolean
+	makeUniqueNoCreate?: boolean
 	disableTabResearch?: boolean
 	toggleResearchOn?: boolean
 	toggleHighlightsOn?: boolean

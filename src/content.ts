@@ -348,6 +348,14 @@ ${
 	{ --markmysearch-styles: unset; --markmysearch-boxes: unset; }
 /**/`
 }
+${
+	(!controlsInfo.paintReplaceByClassic && paintUseExperimental && paintUsePaintingFallback)
+		? `
+#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
+~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM)}
+	{ outline: 2px solid hsl(0 0% 0% / 0.1); outline-offset: -2px; border-radius: 2px; }`
+		: ""
+}
 
 /* || Transitions */
 @keyframes ${getSel(AtRuleID.MARKER_ON)}
@@ -384,7 +392,7 @@ ${controlsInfo.paintReplaceByClassic
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`)};
 	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
-		: paintUsePaintingFallback
+		: paintUseExperimental && paintUsePaintingFallback
 			? `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
 ~ #${getSel(ElementID.DRAW_CONTAINER)} .${getSel(ElementClass.TERM, term.selector)}
@@ -1566,7 +1574,7 @@ const cacheExtend = (element: Element, highlightTags: HighlightTags, cacheModify
 		element[ElementProperty.INFO] = {
 			id: "",
 			styleRuleIdx: -1,
-			isPaintable: !element.closest("a"),
+			isPaintable: paintUseExperimental && !paintUsePaintingFallback ? !element.closest("a") : true,
 			flows: [],
 		} as ElementInfo;
 	}
@@ -1807,7 +1815,7 @@ const boxesInfoRemoveForTerms = (terms: MatchTerms = [], root: HTMLElement | Doc
 const constructHighlightStyleRule: (highlightId: string, boxes: Array<HighlightBox>, terms: MatchTerms) => string = paintUseExperimental
 	? paintUsePaintingFallback
 		? highlightId =>
-			`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
+			`body [markmysearch-h_id="${highlightId}"] { background: -moz-element(#${
 				getSel(ElementID.DRAW_ELEMENT, highlightId)
 			}) no-repeat !important; }`
 		: (highlightId, boxes) =>
@@ -1908,7 +1916,7 @@ const getStyleRules: (root: Element, recurse: boolean, terms: MatchTerms) => Arr
 				element.style.top = box.y.toString() + "px";
 				element.style.width = box.width.toString() + "px";
 				element.style.height = box.height.toString() + "px";
-				element.classList.add(getSel(ElementClass.TERM, box.selector));
+				element.classList.add(getSel(ElementClass.TERM), getSel(ElementClass.TERM, box.selector));
 				container.appendChild(element);
 			});
 			const boxRightmost = boxes.reduce((box, boxCurrent) => box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent);
@@ -2967,36 +2975,28 @@ const getTermsFromSelection = () => {
 		};
 		const elementsVisible: Set<Element> = new Set;
 		const { keepStyleUpdated, stopObserving }: { keepStyleUpdated: KeepStyleUpdated, stopObserving: () => void } = (() => {
-			const shiftObserver = new ResizeObserver(paintUseExperimental
-				? entries => entries.forEach(entry => {
-					if (entry.target[ElementProperty.INFO]) {
-						styleUpdate(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false, terms));
-					}
-				})
-				: entries => {
-					let styleRules: Array<HighlightStyleRuleInfo> = [];
-					entries.forEach(entry => {
-						if (entry.target[ElementProperty.INFO]) {
-							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false, terms));
-						}
-					});
-					if (styleRules.length) {
-						styleUpdate(styleRules);
-					}
+			const shiftObserver = new ResizeObserver(entries => {
+				const styleRules: Array<HighlightStyleRuleInfo> = entries.flatMap(entry =>
+					getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), true, terms)
+				);
+				if (styleRules.length) {
+					styleUpdate(styleRules);
 				}
-			);
+			});
 			const visibilityObserver = new IntersectionObserver(entries => {
 				let styleRules: Array<HighlightStyleRuleInfo> = [];
 				entries.forEach(entry => {
 					if (entry.isIntersecting) {
+						console.log(entry.target, "intersecting");
 						if (entry.target[ElementProperty.INFO]) {
 							elementsVisible.add(entry.target);
 							shiftObserver.observe(entry.target);
 							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false, terms));
 						}
 					} else {
+						console.log(entry.target, "not intersecting");
 						if (paintUsePaintingFallback && entry.target[ElementProperty.INFO]) {
-							//(document.getElementById(getSel(ElementID.DRAW_ELEMENT, (entry.target[ElementProperty.INFO] as ElementInfo).id)) as HTMLElement).remove();
+							document.getElementById(getSel(ElementID.DRAW_ELEMENT, (entry.target[ElementProperty.INFO] as ElementInfo).id))?.remove();
 						}
 						elementsVisible.delete(entry.target);
 						shiftObserver.unobserve(entry.target);
