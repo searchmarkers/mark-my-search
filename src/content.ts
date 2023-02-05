@@ -1807,7 +1807,7 @@ const boxesInfoRemoveForTerms = (terms: MatchTerms = [], root: HTMLElement | Doc
 const constructHighlightStyleRule: (highlightId: string, boxes: Array<HighlightBox>, terms: MatchTerms) => string = paintUseExperimental
 	? paintUsePaintingFallback
 		? highlightId =>
-			`body [markmysearch-h_id="${highlightId}"] { background: -moz-element(#${
+			`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
 				getSel(ElementID.DRAW_ELEMENT, highlightId)
 			}) no-repeat !important; }`
 		: (highlightId, boxes) =>
@@ -1815,8 +1815,12 @@ const constructHighlightStyleRule: (highlightId: string, boxes: Array<HighlightB
 				JSON.stringify(boxes)
 			}; }`
 	: (highlightId, boxes, terms) =>
-		`body [markmysearch-h_id="${highlightId}"] { background-image: url(     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
-			boxes.map(box => `%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(terms.find(term => term.selector === box.selector) as MatchTerm).hue} 100% 50% / 0.4)'/%3E`).join("")
+		`#${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)} ~ body [markmysearch-h_id="${highlightId}"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
+			boxes.map(box =>
+				`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(
+					terms.find(term => term.selector === box.selector) as MatchTerm).hue
+				} 100% 50% / 0.4)'/%3E`
+			).join("")
 		}%3C/svg%3E") !important; }`
 ;
 

@@ -683,7 +683,7 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 	} else if (message.toggleResearchOn !== undefined) {
 		storageSet("local", { enabled: message.toggleResearchOn } as StorageLocalValues);
 		updateActionIcon(message.toggleResearchOn);
-	} else if (message.toggleHighlightsOn && !message.makeUnique) {
+	} else if (message.toggleHighlightsOn !== undefined && !message.makeUnique) {
 		toggleHighlightsInTab(senderTabId, message.toggleHighlightsOn);
 	} else if (message.toggleBarCollapsedOn !== undefined) {
 		const session = await storageGet("session");
