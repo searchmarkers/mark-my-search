@@ -1899,9 +1899,7 @@ const getStyleRules: (root: Element, recurse: boolean, terms: MatchTerms) => Arr
 		const elementInfo = element[ElementProperty.INFO] as ElementInfo;
 		const boxes: Array<HighlightBox> = getBoxesOwned(element, element, range);
 		if (boxes.length) {
-			const container = paintUseExperimental
-				? document.createElement("div")
-				: document.createElementNS("http://www.w3.org/2000/svg", "svg");
+			const container = document.createElement("div");
 			container.id = getSel(ElementID.DRAW_ELEMENT, elementInfo.id);
 			boxes.forEach(box => {
 				const element = document.createElement("div");
