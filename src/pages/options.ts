@@ -304,13 +304,13 @@ PAINT
 							type: PreferenceType.BOOLEAN,
 						},
 						paintUseExperimental: {
-							label: "Use experimental browser APIs (unstable)",
+							label: "Use experimental browser APIs (hover for details)",
 							tooltip:
-`Mark My Search can highlight using experimental APIs. The behaviour of this flag will change over time.
-Current behaviour:
+`Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
+Current effects:
 
 CLASSIC
-None.
+• None.
 
 PAINT
 • Firefox: The CSS element() function is used instead of SVG rendering.

@@ -142,7 +142,7 @@ const optionsDefault: StorageSyncValues = {
 	},
 	showHighlights: {
 		default: true,
-		overrideSearchPages: true,
+		overrideSearchPages: false,
 		overrideResearchPages: false,
 	},
 	barCollapse: {

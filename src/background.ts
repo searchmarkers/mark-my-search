@@ -376,11 +376,9 @@ const updateActionIcon = (enabled?: boolean) =>
 			// Apply terms from term lists.
 			researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
 			if (isResearchPage) {
-				await executeScriptsInTabUnsafe(tabId).then(() =>
-					messageSendHighlight(tabId, {
-						termsOnHold: researchInstance.terms,
-					})
-				);
+				await activateHighlightingInTab(tabId, {
+					termsOnHold: researchInstance.terms,
+				});
 			} else {
 				session.researchInstances[tabId] = researchInstance;
 				log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
@@ -482,8 +480,8 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 	await chrome.scripting.executeScript({
 		func: (flagLoaded: string, tabId: number, highlightMessage: HighlightMessage,
 			windowObjects: Record<string, Record<string, unknown>>) => {
-			Object.entries(windowObjects).forEach(([ key, config ]) => {
-				window[key] = config;
+			Object.entries(windowObjects).forEach(([ key, options ]) => {
+				window[key] = options;
 			});
 			chrome.runtime.sendMessage({
 				executeInTabNoPilot: !window[flagLoaded],
@@ -495,7 +493,9 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 		args: [ WindowVariable.SCRIPTS_LOADED, targetTabId, Object.assign(
 			{ extensionCommands: await chrome.commands.getAll() },
 			highlightMessageToReceive,
-		), { [WindowVariable.CONFIG_HARD]: { paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental } } ],
+		), { [WindowVariable.CONFIG_HARD]: {
+			paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental,
+		} } ],
 		target: { tabId: targetTabId },
 	}).then(value => {
 		log("pilot function injection finish", "", logMetadata);
@@ -683,6 +683,8 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 	} else if (message.toggleResearchOn !== undefined) {
 		storageSet("local", { enabled: message.toggleResearchOn } as StorageLocalValues);
 		updateActionIcon(message.toggleResearchOn);
+	} else if (message.toggleHighlightsOn && !message.makeUnique) {
+		toggleHighlightsInTab(senderTabId, message.toggleHighlightsOn);
 	} else if (message.toggleBarCollapsedOn !== undefined) {
 		const session = await storageGet("session");
 		if (!isTabResearchPage(session.researchInstances, senderTabId)) {
@@ -704,7 +706,7 @@ const messageHandleBackground = async (message: BackgroundMessage, senderTabId: 
 			const researchInstance = await createResearchInstance({ terms: message.terms });
 			session.researchInstances[senderTabId] = researchInstance;
 		}
-		if (message.makeUnique || message.toggleHighlightsOn !== undefined) {
+		if (message.makeUnique) {
 			const researchInstance = session.researchInstances[senderTabId]; // From previous `if` statement.
 			const sync = await storageGet("sync", [
 				StorageSync.BAR_CONTROLS_SHOWN,
