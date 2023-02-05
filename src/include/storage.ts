@@ -27,12 +27,17 @@ type StorageSyncValues = {
 		overrideSearchPages: boolean
 		overrideResearchPages: boolean
 	}
+	[StorageSync.BAR_COLLAPSE]: {
+		fromSearch: boolean
+		fromTermListAuto: boolean
+	}
 	[StorageSync.BAR_CONTROLS_SHOWN]: {
+		toggleBarCollapsed: boolean
 		disableTabResearch: boolean
 		performSearch: boolean
 		toggleHighlights: boolean
 		appendTerm: boolean
-		pinTerms: boolean
+		replaceTerms: boolean
 	}
 	[StorageSync.BAR_LOOK]: {
 		showEditIcon: boolean
@@ -42,7 +47,9 @@ type StorageSyncValues = {
 		opacityTerm: number
 		borderRadius: string
 	}
-	[StorageSync.HIGHLIGHT_LOOK]: {
+	[StorageSync.HIGHLIGHT_METHOD]: {
+		paintReplaceByClassic: boolean
+		paintUseExperimental: boolean
 		hues: Array<number>
 	}
 	[StorageSync.URL_FILTERS]: {
@@ -90,9 +97,10 @@ enum StorageSync {
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	MATCH_MODE_DEFAULTS = "matchModeDefaults",
 	SHOW_HIGHLIGHTS = "showHighlights",
+	BAR_COLLAPSE = "barCollapse",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
-	HIGHLIGHT_LOOK = "highlightLook",
+	HIGHLIGHT_METHOD = "highlightMethod",
 	URL_FILTERS = "urlFilters",
 	TERM_LISTS = "termLists",
 }
@@ -100,7 +108,7 @@ enum StorageSync {
 interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
-	autoOverwritable: boolean
+	barCollapsed: boolean
 	enabled: boolean
 }
 
@@ -122,7 +130,7 @@ const optionsDefault: StorageSyncValues = {
 		stoplist: [
 			"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
 			"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's",
+			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
 		],
 	},
 	matchModeDefaults: {
@@ -134,15 +142,20 @@ const optionsDefault: StorageSyncValues = {
 	},
 	showHighlights: {
 		default: true,
-		overrideSearchPages: true,
+		overrideSearchPages: false,
 		overrideResearchPages: false,
 	},
+	barCollapse: {
+		fromSearch: false,
+		fromTermListAuto: false,
+	},
 	barControlsShown: {
+		toggleBarCollapsed: true,
 		disableTabResearch: true,
 		performSearch: false,
 		toggleHighlights: true,
 		appendTerm: true,
-		pinTerms: true,
+		replaceTerms: true,
 	},
 	barLook: {
 		showEditIcon: true,
@@ -152,7 +165,9 @@ const optionsDefault: StorageSyncValues = {
 		opacityTerm: 0.86,
 		borderRadius: "4px",
 	},
-	highlightLook: {
+	highlightMethod: {
+		paintReplaceByClassic: true,
+		paintUseExperimental: false,
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},
 	urlFilters: {
