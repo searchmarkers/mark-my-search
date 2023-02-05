@@ -485,11 +485,11 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 			Object.entries(windowObjects).forEach(([ key, options ]) => {
 				window[key] = options;
 			});
-			chrome.runtime.sendMessage({
+			messageSendBackground({
 				executeInTabNoPilot: !window[flagLoaded],
 				tabId,
 				highlightMessage,
-			} as BackgroundMessage);
+			});
 		},
 		args: [ WindowVariable.SCRIPTS_LOADED, targetTabId, Object.assign(
 			{ extensionCommands: await chrome.commands.getAll() },

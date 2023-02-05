@@ -26,6 +26,8 @@ type PageInteractionSubmitterInfo = {
 	}
 	alerts?: Record<PageAlertType, PageAlertInfo>
 }
+type PageInteractionCheckboxLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
+type PageInteractionCheckboxToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
 type PageInteractionInfo = {
 	className: string
 	list?: {
@@ -74,8 +76,8 @@ type PageInteractionInfo = {
 	submitters?: Array<PageInteractionSubmitterInfo>
 	checkbox?: {
 		autoId?: string
-		onLoad?: (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
-		onToggle?: (checked: boolean, objectIndex: number, containerIndex: number) => void
+		onLoad?: PageInteractionCheckboxLoad
+		onToggle?: PageInteractionCheckboxToggle
 	}
 	note?: {
 		text: string
@@ -197,6 +199,12 @@ const pageFocusScrollContainer = () =>
 	(document.querySelector(".container-panel") as HTMLElement).focus()
 ;
 
+/**
+ * 
+ * @param panelsInfo 
+ * @param additionalStyleText 
+ * @param shiftModifierIsRequired 
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const loadPage = (() => {
 	/**
@@ -486,8 +494,7 @@ textarea
 		}
 		const timeout = alertsInfo[alertType].timeout ?? timeoutDefault;
 		const alert = document.createElement("label");
-		alert.classList.add("alert");
-		alert.classList.add(alertType);
+		alert.classList.add("alert", alertType);
 		alert.textContent = formatText(alertsInfo[alertType].text);
 		alert.title = tooltip;
 		previousSibling.insertAdjacentElement("afterend", alert);
@@ -643,9 +650,7 @@ textarea
 			};
 			if (textboxInfo.list) {
 				const list = document.createElement("div");
-				list.classList.add("organizer");
-				list.classList.add("list");
-				list.classList.add("column");
+				list.classList.add("organizer", "list", "column");
 				textboxInfo.list.getArray(getObjectIndex()).then(array => {
 					array.concat("").forEach(value => {
 						insertTextboxElement(list, value);
@@ -745,10 +750,7 @@ textarea
 				});
 			};
 			const list = document.createElement("div");
-			list.classList.add("organizer");
-			list.classList.add("list");
-			list.classList.add("column");
-			list.classList.add("container-terms");
+			list.classList.add("organizer", "list", "column", "container-terms");
 			getArray().then(array => {
 				array.forEach(() => {
 					insertObjectElement(list);
@@ -778,9 +780,7 @@ textarea
 			let getFormFields = (): Array<FormField> => [];
 			if (submitterInfo.formFields) {
 				const list = document.createElement("div");
-				list.classList.add("organizer");
-				list.classList.add("list");
-				list.classList.add("column");
+				list.classList.add("organizer", "list", "column");
 				submitterInfo.formFields.forEach(interactionInfo => {
 					insertInteraction(list, interactionInfo);
 				});
@@ -877,9 +877,7 @@ textarea
 				return;
 			}
 			const list = document.createElement("div");
-			list.classList.add("organizer");
-			list.classList.add("list");
-			list.classList.add(submittersInfo.length > 1 ? "row" : "column");
+			list.classList.add("organizer", "list", submittersInfo.length > 1 ? "row" : "column");
 			submittersInfo.forEach(submitterInfo => insertSubmitter(list, submitterInfo, getObjectIndex));
 			container.appendChild(list);
 		};
@@ -897,8 +895,7 @@ textarea
 		const insertInteraction = (container: HTMLElement, interactionInfo: PageInteractionInfo) => {
 			let index = container.childElementCount;
 			const interaction = document.createElement("div");
-			interaction.classList.add("interaction");
-			interaction.classList.add(interactionInfo.className);
+			interaction.classList.add("interaction", interactionInfo.className);
 			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
 			const insertBody = () => {
 				insertObjectList(interaction, interactionInfo.object, index);
@@ -1020,16 +1017,14 @@ textarea
 		const tabContainer = document.querySelector(".container-tab") as HTMLElement;
 		panelsInfo.forEach(panelInfo => {
 			const panel = document.createElement("div");
-			panel.classList.add("panel");
-			panel.classList.add(panelInfo.className);
+			panel.classList.add("panel", panelInfo.className);
 			panelInfo.sections.forEach(sectionInfo => {
 				panel.appendChild(createSection(sectionInfo));
 			});
 			panelContainer.appendChild(panel);
 			const tab = document.createElement("button");
 			tab.type = "button";
-			tab.classList.add("tab");
-			tab.classList.add(panelInfo.className);
+			tab.classList.add("tab", panelInfo.className);
 			tab.textContent = panelInfo.name.text;
 			tabContainer.appendChild(tab);
 		});

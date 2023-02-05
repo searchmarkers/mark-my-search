@@ -1,4 +1,20 @@
 const loadPopup = (() => {
+	const onMatchModeCheckboxLoad = (mode: keyof MatchMode): PageInteractionCheckboxLoad =>
+		async (setChecked, objectIndex, containerIndex) => {
+			const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
+			setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
+		}
+	;
+
+	const onMatchModeCheckboxToggle = (mode: keyof MatchMode): PageInteractionCheckboxToggle =>
+		(checked, objectIndex, containerIndex) => {
+			storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+				sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
+				storageSet("sync", sync);
+			});
+		}
+	;
+
 	const panelsInfo: Array<PagePanelInfo> = [
 		{
 			className: "panel-general",
@@ -408,16 +424,8 @@ const loadPopup = (() => {
 													text: "Match Whole Words",
 												},
 												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.whole);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.whole = checked;
-															storageSet("sync", sync);
-														});
-													},
+													onLoad: onMatchModeCheckboxLoad("whole"),
+													onToggle: onMatchModeCheckboxToggle("whole"),
 												},
 											},
 											{
@@ -427,16 +435,8 @@ const loadPopup = (() => {
 													text: "Match Stems",
 												},
 												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.stem);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.stem = checked;
-															storageSet("sync", sync);
-														});
-													},
+													onLoad: onMatchModeCheckboxLoad("stem"),
+													onToggle: onMatchModeCheckboxToggle("stem"),
 												},
 											},
 											{
@@ -446,16 +446,8 @@ const loadPopup = (() => {
 													text: "Match Case",
 												},
 												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.case);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.case = checked;
-															storageSet("sync", sync);
-														});
-													},
+													onLoad: onMatchModeCheckboxLoad("case"),
+													onToggle: onMatchModeCheckboxToggle("case"),
 												},
 											},
 											{
@@ -465,16 +457,8 @@ const loadPopup = (() => {
 													text: "Match Diacritics",
 												},
 												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics = checked;
-															storageSet("sync", sync);
-														});
-													},
+													onLoad: onMatchModeCheckboxLoad("diacritics"),
+													onToggle: onMatchModeCheckboxToggle("diacritics"),
 												},
 											},
 											{
@@ -484,16 +468,8 @@ const loadPopup = (() => {
 													text: "Regular Expression",
 												},
 												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.regex);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.regex = checked;
-															storageSet("sync", sync);
-														});
-													},
+													onLoad: onMatchModeCheckboxLoad("regex"),
+													onToggle: onMatchModeCheckboxToggle("regex"),
 												},
 											},
 										],

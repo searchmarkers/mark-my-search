@@ -54,7 +54,7 @@ enum ElementClass {
 	REMOVE = "remove",
 	DISABLED = "disabled",
 	COLLAPSED = "collapsed",
-	UNCOLLAPSIBLE = "uncollapsible",
+	UNCOLLAPSIBLE = "collapsed-impossible",
 	MATCH_REGEX = "match-regex",
 	MATCH_CASE = "match-case",
 	MATCH_STEM = "match-stem",
