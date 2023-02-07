@@ -28,6 +28,11 @@ type PageInteractionSubmitterInfo = {
 }
 type PageInteractionCheckboxLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
 type PageInteractionCheckboxToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
+type PageInteractionCheckboxInfo = {
+	autoId?: string
+	onLoad?: PageInteractionCheckboxLoad
+	onToggle?: PageInteractionCheckboxToggle
+}
 type PageInteractionInfo = {
 	className: string
 	list?: {
@@ -74,11 +79,7 @@ type PageInteractionInfo = {
 		text: string
 	}
 	submitters?: Array<PageInteractionSubmitterInfo>
-	checkbox?: {
-		autoId?: string
-		onLoad?: PageInteractionCheckboxLoad
-		onToggle?: PageInteractionCheckboxToggle
-	}
+	checkbox?: PageInteractionCheckboxInfo
 	note?: {
 		text: string
 	}

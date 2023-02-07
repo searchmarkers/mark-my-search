@@ -42,6 +42,7 @@ enum PreferenceType {
 
 /**
  * Loads the options content into the page.
+ * This presents the user with advanced options for customizing the extension.
  * @param optionsInfo Details of the options to present.
  */
 const loadOptions = (() => {
@@ -110,6 +111,7 @@ label[for]:hover
 		save.textContent = "Save Changes";
 		form.appendChild(save);
 		const valuesCurrent = {};
+		// Collect all values from inputs and commit them to storage on user form submission.
 		form.addEventListener("submit", event => {
 			event.preventDefault();
 			// TODO remove code duplication using function
@@ -141,6 +143,7 @@ label[for]:hover
 			});
 			storageSet("sync", sync);
 		});
+		// Construct and insert option elements from the option details.
 		Object.keys(tabInfo.options).forEach(optionKey => {
 			valuesCurrent[optionKey] = {};
 			const optionInfo = tabInfo.options[optionKey];
