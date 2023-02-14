@@ -1,4 +1,11 @@
+/**
+ * Loads the startpage content into the page.
+ * This presents the user with expandable onboarding information and functions, for use when the user has installed the extension.
+ */
 const loadStartpage = (() => {
+	/**
+	 * Details of the page's panels and their various components.
+	 */
 	const panelsInfo: Array<PagePanelInfo> = [
 		{
 			className: "panel-general",
@@ -33,6 +40,8 @@ const loadStartpage = (() => {
 							className: "action",
 							submitters: [ {
 								text: "Try it out",
+								// Allow the user to try out the extension by searching for the query string, if any, they entered into the input.
+								// Prefer highlighting within the startpage, fallback to searching with their default search provider.
 								onClick: (messageText, formFields, onSuccess) => {
 									if (chrome.runtime.getURL("/").startsWith("chrome-extension://")) {
 										chrome.search["query"]({
@@ -40,11 +49,11 @@ const loadStartpage = (() => {
 											text: messageText,
 										}, onSuccess);
 									} else {
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											toggleHighlightsOn: true,
 											makeUnique: true,
 											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
-										} as BackgroundMessage);
+										});
 										onSuccess();
 									}
 								},

@@ -2,13 +2,15 @@ type OptionsInfo = Array<{
 	label: string
 	options: Partial<Record<keyof StorageSyncValues, {
 		label: string
-		preferences?: Partial<Record<keyof StorageSyncValues["barControlsShown"]
+		preferences?: Partial<Record<keyof StorageSyncValues["barCollapse"]
+			| keyof StorageSyncValues["barControlsShown"]
 			| keyof StorageSyncValues["barLook"]
-			| keyof StorageSyncValues["highlightLook"]
+			| keyof StorageSyncValues["highlightMethod"]
 			| keyof StorageSyncValues["showHighlights"]
 			| keyof StorageSyncValues["autoFindOptions"]
 			| keyof StorageSyncValues["matchModeDefaults"], {
 			label: string
+			tooltip?: string
 			type: PreferenceType
 		}>>
 		type?: PreferenceType
@@ -35,10 +37,12 @@ enum PreferenceType {
 	FLOAT,
 	TEXT,
 	ARRAY,
+	ARRAY_NUMBER,
 }
 
 /**
  * Loads the options content into the page.
+ * This presents the user with advanced options for customizing the extension.
  * @param optionsInfo Details of the options to present.
  */
 const loadOptions = (() => {
@@ -107,6 +111,7 @@ label[for]:hover
 		save.textContent = "Save Changes";
 		form.appendChild(save);
 		const valuesCurrent = {};
+		// Collect all values from inputs and commit them to storage on user form submission.
 		form.addEventListener("submit", event => {
 			event.preventDefault();
 			// TODO remove code duplication using function
@@ -124,8 +129,8 @@ label[for]:hover
 					const valueEnteredBool = input["checked"] as boolean;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
 					sync[optionKey][preferenceKey] = ((type: PreferenceType) => { // Convert value for storage.
-						if (type === PreferenceType.ARRAY) {
-							return valueEnteredString.split(",");
+						if (type === PreferenceType.ARRAY || type === PreferenceType.ARRAY_NUMBER) {
+							return valueEnteredString.split(",").map(item => type === PreferenceType.ARRAY_NUMBER ? Number(item) : item);
 						} else if (type === PreferenceType.INTEGER || type === PreferenceType.FLOAT) {
 							return Number(valueEnteredString);
 						}
@@ -138,6 +143,7 @@ label[for]:hover
 			});
 			storageSet("sync", sync);
 		});
+		// Construct and insert option elements from the option details.
 		Object.keys(tabInfo.options).forEach(optionKey => {
 			valuesCurrent[optionKey] = {};
 			const optionInfo = tabInfo.options[optionKey];
@@ -171,6 +177,7 @@ label[for]:hover
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
 				preferenceLabel.textContent = preferenceInfo.label;
+				preferenceLabel.title = preferenceInfo.tooltip ?? "";
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
 				inputDefault.disabled = true;
@@ -239,6 +246,10 @@ label[for]:hover
 							label: "Append a new term to the toolbar",
 							type: PreferenceType.BOOLEAN,
 						},
+						replaceTerms: {
+							label: "Replace keywords with detected search keywords",
+							type: PreferenceType.BOOLEAN,
+						},
 					},
 				},
 				barLook: {
@@ -270,12 +281,49 @@ label[for]:hover
 						},
 					},
 				},
-				highlightLook: {
-					label: "Keyword highlighting style",
+				highlightMethod: {
+					label: "Keyword highlighting method and style",
 					preferences: {
+						paintReplaceByClassic: {
+							label: "Use CLASSIC highlighting (hover for details)",
+							tooltip:
+`Mark My Search has two highlighting methods. \
+CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
+PAINT is an alternate model invented for Mark My Search.
+
+CLASSIC
+• Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.
+	• Rendering is expensive, and makes the page sluggish when there are many highlights.
+• Not efficient at matching time. The page can freeze for several seconds if many highlights are inserted.
+• Causes parts of webpages to look different or break.
+
+PAINT
+• Not efficient at idle time. Highlight positions need to be recalculated on scrolling or layout changing.
+	• Smooth but CPU heavy.
+	• Large numbers of highlights are handled well.
+• Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
+• Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
+							,
+							type: PreferenceType.BOOLEAN,
+						},
+						paintUseExperimental: {
+							label: "Use experimental browser APIs (hover for details)",
+							tooltip:
+`Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
+Current effects:
+
+CLASSIC
+• None.
+
+PAINT
+• Firefox: The CSS element() function is used instead of SVG rendering.
+• Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
+							,
+							type: PreferenceType.BOOLEAN,
+						},
 						hues: {
 							label: "Highlight color hue cycle",
-							type: PreferenceType.ARRAY,
+							type: PreferenceType.ARRAY_NUMBER,
 						},
 					},
 				},
@@ -288,6 +336,19 @@ label[for]:hover
 						},
 						overrideSearchPages: {
 							label: "Highlights are always visible on search pages",
+							type: PreferenceType.BOOLEAN,
+						},
+					},
+				},
+				barCollapse: {
+					label: "When to collapse the toolbar immediately",
+					preferences: {
+						fromSearch: {
+							label: "When started from a search",
+							type: PreferenceType.BOOLEAN,
+						},
+						fromTermListAuto: {
+							label: "When started from a keyword list automatically",
 							type: PreferenceType.BOOLEAN,
 						},
 					},

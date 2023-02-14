@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.11.2",
+	"version": "1.12.2",
 
 	"browser_specific_settings": { "gecko": { "id": "{3c87dcad-dbbd-4be1-b07b-b6d0739b0aec}" } },
 
@@ -46,10 +46,12 @@
 	},
 
 	"web_accessible_resources": [
+		"/dist/paint.js",
+		"/icons/arrow.svg",
 		"/icons/close.svg",
 		"/icons/search.svg",
 		"/icons/show.svg",
-		"/icons/pin.svg",
+		"/icons/refresh.svg",
 		"/icons/create.svg",
 		"/icons/delete.svg",
 		"/icons/edit.svg",
@@ -83,7 +85,10 @@
 		},
 		"focus-term-append": {
 			"suggested_key": { "default": "Alt+Period" },
-			"description": "Focus input for appending a term"
+			"description": "Focus input for appending a keyword"
+		},
+		"terms-replace": {
+			"description": "Replace keywords with detected search keywords"
 		},
 		"step-global": {
 			"suggested_key": { "default": "F2" },

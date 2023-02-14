@@ -1,4 +1,55 @@
+/**
+ * Loads the popup content into the page.
+ * This presents the user with common options and actions (usually those needed while navigating), to be placed in a popup.
+ */
 const loadPopup = (() => {
+	/**
+	 * Creates info for a checkbox assigned to a particular match mode.
+	 * @param mode The key of the match mode.
+	 * @param labelText Text to display in the checkbox label.
+	 * @returns The resulting info object.
+	 */
+	const getMatchModeInteractionInfo = (mode: keyof MatchMode, labelText: string): PageInteractionObjectRowInfo => ({
+		className: "type",
+		key: `matchMode.${mode}`,
+		label: {
+			text: labelText,
+		},
+		checkbox: {
+			onLoad: async (setChecked, objectIndex, containerIndex) => {
+				const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
+				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
+			},
+			onToggle: (checked, objectIndex, containerIndex) => {
+				storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
+					storageSet("sync", sync);
+				});
+			},
+		},
+	});
+
+	/**
+	 * Creates info for a checkbox handling a basic storage field.
+	 * @param storageArea The name of the storage area to use.
+	 * @param storageKey The key for the field within the storage area.
+	 * @returns The resulting info object.
+	 */
+	const getStorageFieldCheckboxInfo = (storageArea: StorageAreaName, storageKey: StorageArea<typeof storageArea>): PageInteractionCheckboxInfo => ({
+		onLoad: async setChecked => {
+			const store = await storageGet(storageArea, [ storageKey ]);
+			setChecked(store[storageKey]);
+		},
+		onToggle: checked => {
+			storageSet(storageArea, {
+				[storageKey]: checked
+			} as StorageLocalValues);
+		},
+	});
+
+	/**
+	 * Details of the page's panels and their various components.
+	 */
 	const panelsInfo: Array<PagePanelInfo> = [
 		{
 			className: "panel-general",
@@ -22,9 +73,9 @@ const loadPopup = (() => {
 									setChecked(local.enabled);
 								},
 								onToggle: checked => {
-									chrome.runtime.sendMessage({
+									messageSendBackground({
 										toggleResearchOn: checked,
-									} as BackgroundMessage);
+									});
 								},
 							},
 						},
@@ -33,34 +84,14 @@ const loadPopup = (() => {
 							label: {
 								text: "Follow links",
 							},
-							checkbox: {
-								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.FOLLOW_LINKS ]);
-									setChecked(local.followLinks);
-								},
-								onToggle: checked => {
-									storageSet("local", {
-										followLinks: checked
-									} as StorageLocalValues);
-								},
-							},
+							checkbox: getStorageFieldCheckboxInfo("local", StorageLocal.FOLLOW_LINKS),
 						},
 						{
 							className: "option",
 							label: {
 								text: "Restore keywords in tabs",
 							},
-							checkbox: {
-								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
-									setChecked(local.persistResearchInstances);
-								},
-								onToggle: checked => {
-									storageSet("local", {
-										persistResearchInstances: checked
-									} as StorageLocalValues);
-								},
-							},
+							checkbox: getStorageFieldCheckboxInfo("local", StorageLocal.PERSIST_RESEARCH_INSTANCES),
 						},
 						{
 							className: "action",
@@ -113,16 +144,17 @@ const loadPopup = (() => {
 											if (researchInstance && local.persistResearchInstances) {
 												researchInstance.enabled = true;
 											}
-											chrome.runtime.sendMessage({
+											messageSendBackground({
 												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
 												makeUnique: true,
+												makeUniqueNoCreate: true,
 												toggleHighlightsOn: true,
-											} as BackgroundMessage);
+											});
 										});
 									} else {
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											disableTabResearch: true,
-										} as BackgroundMessage);
+										});
 									}
 								}
 							},
@@ -146,18 +178,18 @@ const loadPopup = (() => {
 									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 									if (checked) {
 										session.researchInstances[tab.id] = {
-											enabled: false,
-											autoOverwritable: false,
-											highlightsShown: true,
 											terms: [],
+											highlightsShown: true,
+											barCollapsed: false,
+											enabled: false,
 										};
 										await storageSet("session", session);
 									} else {
 										delete session.researchInstances[tab.id];
 										await storageSet("session", session);
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											disableTabResearch: true,
-										} as BackgroundMessage);
+										});
 									}
 								},
 							},
@@ -307,7 +339,7 @@ const loadPopup = (() => {
 					},
 					interactions: [
 						{
-							className: "TODOreplace",
+							className: "",
 							list: {
 								getLength: () =>
 									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
@@ -374,10 +406,10 @@ const loadPopup = (() => {
 								},
 								columns: [
 									{
-										className: "TODOreplace",
+										className: "",
 										rows: [
 											{
-												className: "TODOreplace",
+												className: "",
 												key: "phrase",
 												textbox: {
 													className: "phrase-input",
@@ -400,107 +432,17 @@ const loadPopup = (() => {
 									{
 										className: "matching",
 										rows: [
-											{
-												className: "type",
-												key: "matchMode.whole",
-												label: {
-													text: "Match Whole Words",
-												},
-												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.whole);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.whole = checked;
-															storageSet("sync", sync);
-														});
-													},
-												},
-											},
-											{
-												className: "type",
-												key: "matchMode.stem",
-												label: {
-													text: "Match Stems",
-												},
-												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.stem);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.stem = checked;
-															storageSet("sync", sync);
-														});
-													},
-												},
-											},
-											{
-												className: "type",
-												key: "matchMode.case",
-												label: {
-													text: "Match Case",
-												},
-												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.case);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.case = checked;
-															storageSet("sync", sync);
-														});
-													},
-												},
-											},
-											{
-												className: "type",
-												key: "matchMode.diacritics",
-												label: {
-													text: "Match Diacritics",
-												},
-												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.diacritics = checked;
-															storageSet("sync", sync);
-														});
-													},
-												},
-											},
-											{
-												className: "type",
-												key: "matchMode.regex",
-												label: {
-													text: "Regular Expression",
-												},
-												checkbox: {
-													onLoad: async (setChecked, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode.regex);
-													},
-													onToggle: (checked, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].matchMode.regex = checked;
-															storageSet("sync", sync);
-														});
-													},
-												},
-											},
+											getMatchModeInteractionInfo("whole", "Stemming"),
+											getMatchModeInteractionInfo("stem", "Whole Words"),
+											getMatchModeInteractionInfo("case", "Case Sensitive"),
+											getMatchModeInteractionInfo("diacritics", "Diacritics Insensitive"),
+											getMatchModeInteractionInfo("regex", "Regular Expression"),
 										],
 									},
 								],
 							},
 							textbox: {
-								className: "TODOreplace",
+								className: "",
 								list: {
 									getArray: index =>
 										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => //
@@ -534,12 +476,11 @@ const loadPopup = (() => {
 										const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
 										const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 										const researchInstance = session.researchInstances[tab.id];
-										if (researchInstance && (!researchInstance.enabled || !researchInstance.autoOverwritable)) {
+										if (researchInstance) {
 											researchInstance.enabled = true;
-											researchInstance.autoOverwritable = false;
-											storageSet("session", session);
+											await storageSet("session", session);
 										}
-										chrome.runtime.sendMessage({
+										messageSendBackground({
 											terms: researchInstance
 												? researchInstance.terms.concat(
 													sync.termLists[index].terms.filter(termFromList =>
@@ -549,8 +490,7 @@ const loadPopup = (() => {
 												: sync.termLists[index].terms,
 											makeUnique: true,
 											toggleHighlightsOn: true,
-											toggleAutoOverwritableOn: false,
-										} as BackgroundMessage);
+										});
 										onSuccess();
 									},
 								},

@@ -1,4 +1,11 @@
+/**
+ * Loads the sendoff page content into the page.
+ * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.
+ */
 const loadSendoff = (() => {
+	/**
+	 * Details of the page's panels and their various components.
+	 */
 	const panelsInfo: Array<PagePanelInfo> = [
 		{
 			className: "panel-general",
