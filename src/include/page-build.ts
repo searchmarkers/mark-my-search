@@ -251,7 +251,7 @@ textarea
 	{ background: hsl(300 30% 22%); }
 .container-panel
 	{ flex: 1 1 auto; border-top: 2px ridge hsl(300 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
-	outline: none; background: hsl(300 16% 12%); }
+	outline: none; background: hsl(300 16% 30%); }
 @supports (overflow-y: overlay)
 	{ .container-panel { overflow-y: overlay; }; }
 .container-panel > .panel

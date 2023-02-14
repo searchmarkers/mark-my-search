@@ -2,14 +2,14 @@
  * Gets prefix and suffix regex strings for any word.
  * Only yields meaningful results for English words which fit standard word form patterns.
  * @param word A word.
- * @returns A tuple of the prefix and suffix determined to best fit the word and its forms.
+ * @returns A 2-element array containing the prefix and suffix determined to best fit the word and its forms.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getWordPatternStrings = (() => { // TODO maybe rename as inflection finder?
 	/**
 	 * Reverses the characters in a string.
 	 * @param chars A string.
-	 * @returns The reverse of the string given.
+	 * @returns The reverse of the given string.
 	 */
 	const reverse = (chars: string) => {
 		for (let i = 0; i < chars.length; i += 2) {

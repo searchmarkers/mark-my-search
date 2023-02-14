@@ -1539,7 +1539,7 @@ Methods for handling scrollbar highlight-flow position markers.
  * @param highlightTags Element tags to reject from highlighting or form blocks of consecutive text nodes.
  * @param hues Color hues for term styles to cycle through.
  */
-const insertScrollMarkersPaint = (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) => {
+const insertScrollMarkersPaint = (terms: MatchTerms, hues: TermHues) => {
 	if (terms.length === 0) {
 		return; // Efficient escape in case of no possible markers to be inserted.
 	}
@@ -1680,11 +1680,11 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 			const highlightStart = match.index as number;
 			const highlightEnd = highlightStart + match[0].length;
 			while (textEnd <= highlightStart) {
-				i++;
-				node = textFlow[i];
+				node = textFlow[++i];
 				textStart = textEnd;
 				textEnd += node.length;
 			}
+			(node.parentElement as Element).setAttribute("markmysearch-h_beneath", ""); // TODO optimise?
 			// eslint-disable-next-line no-constant-condition
 			while (true) {
 				flow.boxesInfo.push({
@@ -1697,8 +1697,7 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 				if (highlightEnd <= textEnd) {
 					break;
 				}
-				i++;
-				node = textFlow[i];
+				node = textFlow[++i];
 				textStart = textEnd;
 				textEnd += node.length;
 			}
@@ -2961,7 +2960,7 @@ const getTermsFromSelection = () => {
 		const requestRefreshIndicators = requestCallFn(
 			controlsInfo.paintReplaceByClassic
 				? () => insertScrollMarkersClassic(terms, highlightTags, hues)
-				: () => insertScrollMarkersPaint(terms, highlightTags, hues),
+				: () => insertScrollMarkersPaint(terms, hues),
 			controlsInfo.paintReplaceByClassic ? 1000 : 150, controlsInfo.paintReplaceByClassic ? 5000 : 2000);
 		const requestRefreshTermControls = requestCallFn(() => {
 			terms.forEach(term => {

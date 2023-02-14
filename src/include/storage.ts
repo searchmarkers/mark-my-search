@@ -112,6 +112,10 @@ interface ResearchInstance {
 	enabled: boolean
 }
 
+/**
+ * The default options to be used for items missing from storage, or to which items may be reset.
+ * Set to sensible options for a generic first-time user of the extension.
+ */
 const optionsDefault: StorageSyncValues = {
 	autoFindOptions: {
 		searchParams: [ // Order of specificity, as only the first match will be used.
@@ -177,12 +181,22 @@ const optionsDefault: StorageSyncValues = {
 	termLists: [],
 };
 
+/**
+ * The working cache of items retrieved from storage since the last background startup.
+ */
 const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> | Record<never, never>> = {
 	session: {},
 	local: {},
 	sync: {},
 };
 
+/**
+ * Gets an object of key-value pairs corresponding to a set of keys in the given area of storage.
+ * Storage may be fetched asynchronously or immediately retrieved from a cache.
+ * @param area The name of the storage area from which to retrieve values.
+ * @param keys The keys corresponding to the entries to retrieve.
+ * @returns A promise resolving to an object of storage entries.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
 	Promise<StorageAreaValues<Area>> =>
@@ -202,6 +216,11 @@ const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array
 	return { ...store };
 };
 
+/**
+ * 
+ * @param area 
+ * @param store 
+ */
 const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
 	Object.entries(store).forEach(([ key, value ]) => {
 		storageCache[area][key] = value;
