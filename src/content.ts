@@ -3094,11 +3094,11 @@ const getTermsFromSelection = () => {
 					keepStyleUpdated, elementsVisible, //
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
-				controlVisibilityUpdate("replaceTerms", controlsInfo, terms);
 			}
 			if (message.command) {
 				produceEffectOnCommand.next(message.command);
 			}
+			controlVisibilityUpdate("replaceTerms", controlsInfo, terms);
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
 				bar.classList.toggle(getSel(ElementClass.HIGHLIGHTS_SHOWN), controlsInfo.highlightsShown);
