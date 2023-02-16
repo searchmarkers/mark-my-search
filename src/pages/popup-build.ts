@@ -339,7 +339,7 @@ const loadPopup = (() => {
 					},
 					interactions: [
 						{
-							className: "",
+							className: "temp-class",
 							list: {
 								getLength: () =>
 									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
@@ -406,10 +406,10 @@ const loadPopup = (() => {
 								},
 								columns: [
 									{
-										className: "",
+										className: "temp-class",
 										rows: [
 											{
-												className: "",
+												className: "temp-class",
 												key: "phrase",
 												textbox: {
 													className: "phrase-input",
@@ -442,7 +442,7 @@ const loadPopup = (() => {
 								],
 							},
 							textbox: {
-								className: "",
+								className: "temp-class",
 								list: {
 									getArray: index =>
 										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => //
