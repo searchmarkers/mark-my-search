@@ -423,9 +423,8 @@ const updateActionIcon = (enabled?: boolean) =>
 	};
 
 	chrome.tabs.onCreated.addListener(async tab => {
-		const local = await storageGet("local", [ StorageLocal.FOLLOW_LINKS ]);
 		let openerTabId: number | undefined = tab.openerTabId;
-		if (!local.followLinks || tab.id === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
+		if (tab.id === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
 			return;
 		}
 		if (openerTabId === undefined) {
@@ -560,11 +559,15 @@ const activateResearchInTab = async (tabId: number) => {
  * Disables the highlighting information about a tab.
  * @param tabId The ID of a tab to be disconnected.
  */
-const disableResearchInstanceInTab = async (tabId: number) => {
+const disableResearchInTab = async (tabId: number) => {
 	const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 	const researchInstance = session.researchInstances[tabId];
 	if (researchInstance) {
-		researchInstance.enabled = false;
+		if (researchInstance.terms.length) {
+			researchInstance.enabled = false;
+		} else {
+			delete session.researchInstances[tabId];
+		}
 		storageSet("session", session);
 	}
 };
@@ -574,7 +577,7 @@ const disableResearchInstanceInTab = async (tabId: number) => {
  * @param tabId The ID of a tab to be forgotten and within which to deactivate highlighting.
  */
 const deactivateResearchInTab = (tabId: number) => {
-	disableResearchInstanceInTab(tabId);
+	disableResearchInTab(tabId);
 	messageSendHighlight(tabId, { deactivate: true });
 };
 

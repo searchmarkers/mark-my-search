@@ -873,8 +873,9 @@ const getHighlightFlows = (element: Element): Array<HighlightFlow> =>
 const getTermOccurrenceCount = (term: MatchTerm, controlsInfo: ControlsInfo): number => controlsInfo.paintReplaceByClassic
 	? (() => { // Increasingly inaccurate as highlights elements are more often split.
 		const occurrences = Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)));
-		const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
-		return matches ? matches.length : 0;
+		//const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
+		//return matches ? matches.length : 0; // Works poorly in situations such as matching whole words.
+		return occurrences.length; // Poor and changeable heuristic, but so far the most reliable efficient method.
 	})()
 	: getHighlightFlows(document.body)
 		.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
