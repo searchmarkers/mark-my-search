@@ -13,7 +13,6 @@ type StorageSessionValues = {
 }
 type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
-	[StorageLocal.FOLLOW_LINKS]: boolean
 	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
 }
 type StorageSyncValues = {
@@ -89,7 +88,6 @@ enum StorageSession { // Keys assumed to be unique across all storage areas (exc
 
 enum StorageLocal {
 	ENABLED = "enabled",
-	FOLLOW_LINKS = "followLinks",
 	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
 }
 

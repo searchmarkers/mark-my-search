@@ -9,8 +9,11 @@ type PageInteractionObjectColumnInfo = {
 	className: string
 	rows: Array<PageInteractionObjectRowInfo>
 }
+type PageInteractionSubmitterLoad = (setEnabled: (enabled: boolean) => void) => void
 type PageInteractionSubmitterInfo = {
 	text: string
+	id?: string
+	onLoad?: PageInteractionSubmitterLoad
 	onClick: (
 		messageText: string,
 		formFields: Array<FormField>,
@@ -23,6 +26,7 @@ type PageInteractionSubmitterInfo = {
 		singleline?: boolean
 		rows: number
 		placeholder: string
+		required?: boolean
 	}
 	alerts?: Record<PageAlertType, PageAlertInfo>
 }
@@ -87,6 +91,7 @@ type PageInteractionInfo = {
 type PageSectionInfo = {
 	title?: {
 		text: string
+		expands?: boolean
 	}
 	interactions: Array<PageInteractionInfo>
 }
@@ -176,7 +181,7 @@ const sendProblemReport = async (userMessage = "", formFields: Array<FormField>)
 	};
 	(formFields ?? []).forEach((formField, i) => {
 		message[`item_${i}_question`] = formField.question;
-		message[`item_${i}_response`] = formField.response;
+		message[`item_${i}_response`] = formField.response === "true" ? "yes" : "";
 	});
 	return sendEmail(
 		"service_mms_ux",
@@ -277,8 +282,10 @@ textarea
 
 .panel .section
 	{ display: flex; flex-direction: column; width: 100%; background: hsl(300 100% 7%); }
-.panel .section > .title
+.panel .section > .title, .panel .section > .title-row, .panel .section > .title-row > .title
 	{ border: none; background: none; text-align: center; font-size: 15px; color: hsl(300 20% 60%); }
+.panel .section > .title-row > .title
+	{ flex: 1; }
 .panel.panel .section > .container
 	{ display: flex; flex-direction: column; height: auto; overflow-y: auto; }
 @supports (overflow-y: overlay)
@@ -294,7 +301,7 @@ textarea
 .panel .list.row
 	{ flex-direction: row; gap: 8px; }
 .panel .list.row > *
-	{ flex: 1 1 auto; }
+	{ flex: 1; }
 .panel .interaction.option
 	{ flex-direction: row; padding-block: 0; user-select: none; }
 .panel .interaction > *, .panel .organizer > *, .panel .term
@@ -347,7 +354,7 @@ textarea
 	{ background: hsl(60 50% 24%); }
 /**/
 
-.panel .section > .title
+.panel .section > .title, .panel .section > .title-row > .title
 	{ margin: 4px; }
 .panel.panel-term_lists .section > .container
 	{ padding: 4px; }
@@ -372,16 +379,21 @@ textarea
 
 #frame .panel .collapse-toggle
 	{ display: none; }
-#frame .panel .collapse-toggle + label::before
+#frame .panel .collapse-toggle + label[tabindex]::before, #frame .panel .collapse-toggle + * > label[tabindex]::before
 	{ display: inline-block; vertical-align: middle; translate: 0.3em; content: " ";
 	border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 5px solid currentColor;
 	rotate: 90deg; transition: rotate .2s ease-out; }
-#frame .panel .collapse-toggle:not(:checked) + label::before
+#frame .panel .collapse-toggle:not(:checked) + label[tabindex]::before, #frame .panel .collapse-toggle:not(:checked) + * > label[tabindex]::before
 	{ rotate: 0deg; }
-#frame .panel .collapse-toggle + label
+#frame .panel .collapse-toggle + label[tabindex], #frame .panel .collapse-toggle + * > label[tabindex]
 	{ display: block; align-self: start; background: transparent; color: white; cursor: pointer; width: 1.2em; height: 1.2em; }
-#frame .panel .collapse-toggle:not(:checked) + label + *
+#frame .panel .collapse-toggle:not(:checked) + label ~ *
 	{ display: none; }
+
+#frame .panel .section > .title-row
+	{ display: flex; flex-direction: row; }
+#frame .panel .section > .title-row label
+	{ position: absolute; align-self: center; }
 /**/
 		` + additionalStyleText;
 		document.head.appendChild(style);
@@ -473,16 +485,18 @@ textarea
 		panelsInfo.forEach(panelInfo => {
 			panelInfo.sections.forEach(sectionInfo => {
 				sectionInfo.interactions.forEach(interactionInfo => {
-					if (!interactionInfo.checkbox) {
-						return;
+					if (interactionInfo.checkbox && interactionInfo.checkbox.autoId) {
+						const checkbox = document.getElementById(interactionInfo.checkbox.autoId) as HTMLInputElement;
+						if (interactionInfo.checkbox.onLoad) {
+							interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
+						}
 					}
-					if (!interactionInfo.checkbox.autoId) {
-						return;
-					}
-					const checkbox = document.getElementById(interactionInfo.checkbox.autoId) as HTMLInputElement;
-					if (interactionInfo.checkbox.onLoad) {
-						interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
-					}
+					(interactionInfo.submitters ?? []).forEach(submitterInfo => {
+						if (submitterInfo.onLoad) {
+							const submitter = document.getElementById(submitterInfo.id ?? "") as HTMLButtonElement;
+							submitterInfo.onLoad(enabled => submitter.disabled = !enabled);
+						}
+					});
 				});
 			});
 		});
@@ -800,12 +814,19 @@ textarea
 			}
 			const button = document.createElement("button");
 			button.type = "button";
+			button.id = submitterInfo.id ?? "";
 			button.classList.add("submitter");
 			button.textContent = submitterInfo.text;
+			if (submitterInfo.onLoad) {
+				submitterInfo.onLoad(enabled => button.disabled = !enabled);
+			}
 			container.appendChild(button);
 			let getMessageText = () => "";
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
+			let allowInputs = (allowed = true) => {};
 			button.addEventListener("click", () => {
 				button.disabled = true;
+				allowInputs(false);
 				clearAlerts(container, [ PageAlertType.PENDING, PageAlertType.FAILURE ]);
 				submitterInfo.onClick(
 					getMessageText(),
@@ -821,6 +842,7 @@ textarea
 							);
 						}
 						button.disabled = false;
+						allowInputs(true);
 					},
 					error => {
 						if (submitterInfo.alerts) {
@@ -836,6 +858,7 @@ textarea
 							);
 						}
 						button.disabled = false;
+						allowInputs(true);
 					},
 					getObjectIndex(),
 				);
@@ -856,6 +879,15 @@ textarea
 					: () => {
 						const box = document.createElement("textarea");
 						box.rows = messageInfo.rows;
+						if (messageInfo.required) {
+							allowInputs = (allowed = true) => {
+								box.disabled = !allowed;
+							};
+							button.disabled = true;
+							box.addEventListener("input", () => {
+								button.disabled = box.value === "";
+							});
+						}
 						return box;
 					}
 				)();
@@ -959,7 +991,31 @@ textarea
 				const title = document.createElement("div");
 				title.classList.add("title");
 				title.textContent = sectionInfo.title.text;
-				section.appendChild(title);
+				if (sectionInfo.title.expands) {
+					// TODO make function
+					const titleRow = document.createElement("label");
+					titleRow.classList.add("title-row");
+					const checkboxId = getIdSequential.next().value;
+					titleRow.htmlFor = checkboxId;
+					const toggleCheckbox = document.createElement("input");
+					toggleCheckbox.type = "checkbox";
+					toggleCheckbox.id = checkboxId;
+					toggleCheckbox.classList.add("collapse-toggle");
+					const toggleButton = document.createElement("label");
+					toggleButton.htmlFor = checkboxId;
+					toggleButton.tabIndex = 0;
+					toggleButton.addEventListener("keydown", event => {
+						if (event.key === "Enter") {
+							toggleCheckbox.checked = !toggleCheckbox.checked;
+						}
+					});
+					section.appendChild(toggleCheckbox);
+					titleRow.appendChild(toggleButton);
+					titleRow.appendChild(title);
+					section.appendChild(titleRow);
+				} else {
+					section.appendChild(title);
+				}
 			}
 			const container = document.createElement("div");
 			container.classList.add("container");

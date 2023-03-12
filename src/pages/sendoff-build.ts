@@ -21,19 +21,11 @@ const loadSendoff = (() => {
 						{
 							className: "action",
 							label: {
-								text: "We're sorry to see you go. Please consider filling out this form so we can improve for the future!",
-							},
-							note: {
-								text:
-`If you do not wish to submit feedback, simply close this tab and carry on.
-However, Mark My Search will only improve if we know what needs fixing.`,
+								text: "We're sorry to see you go. Please consider submitting this form so we can improve!",
 							},
 						},
 						{
 							className: "action",
-							label: {
-								text: "Information is sent privately with no personal details, and is viewable only by the developer of Mark My Search.",
-							},
 							submitters: [ {
 								text: "Submit",
 								onClick: (messageText, formFields, onSuccess, onError) => {
@@ -59,14 +51,7 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 									{
 										className: "option",
 										label: {
-											text: "Slows down my browser",
-										},
-										checkbox: {},
-									},
-									{
-										className: "option",
-										label: {
-											text: "Too confusing",
+											text: "Breaks or slows down pages",
 										},
 										checkbox: {},
 									},
@@ -80,13 +65,6 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 									{
 										className: "option",
 										label: {
-											text: "Highlighting breaks pages",
-										},
-										checkbox: {},
-									},
-									{
-										className: "option",
-										label: {
 											text: "Highlighting is sometimes incomplete",
 										},
 										checkbox: {},
@@ -94,17 +72,7 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 									{
 										className: "option",
 										label: {
-											text: "Highlighting is ugly or hard to read",
-										},
-										checkbox: {},
-									},
-									{
-										className: "option",
-										label: {
-											text: "Highlighting is overwhelming",
-										},
-										note: {
-											text: "Turn off 'Highlights begin visible' in the options",
+											text: "Highlighting is ugly or overwhelming",
 										},
 										checkbox: {},
 									},
@@ -114,14 +82,14 @@ However, Mark My Search will only improve if we know what needs fixing.`,
 											text: "I don't want all my searches highlighted",
 										},
 										note: {
-											text: "Turn off 'Highlight web searches' in the popup",
+											text: "Turn off \"Detect search engines\" in the popup",
 										},
 										checkbox: {},
 									},
 								],
 								message: {
 									rows: 6,
-									placeholder: "Optional details or support to help us out",
+									placeholder: "Details or support to help us out",
 								},
 								alerts: {
 									[PageAlertType.SUCCESS]: {
