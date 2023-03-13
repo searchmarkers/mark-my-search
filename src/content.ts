@@ -325,7 +325,7 @@ ${
 		: paintUsePaintingFallback
 			? `
 #${getSel(ElementID.DRAW_CONTAINER)}
-	{ position: fixed; width: 100%; height: 100%; z-index: ${zIndexMin}; }
+	{ position: fixed; width: 100%; height: 100%; top: 100%; z-index: ${zIndexMin}; }
 #${getSel(ElementID.DRAW_CONTAINER)} > *
 	{ position: fixed; width: 100%; height: 100%; }`
 			: `/* || Term Highlight */

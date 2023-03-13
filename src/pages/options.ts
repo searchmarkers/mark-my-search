@@ -344,11 +344,11 @@ PAINT
 					label: "When to collapse the toolbar immediately",
 					preferences: {
 						fromSearch: {
-							label: "When started from a search",
+							label: "Started from a search",
 							type: PreferenceType.BOOLEAN,
 						},
 						fromTermListAuto: {
-							label: "When started from a keyword list automatically",
+							label: "Started from a keyword list automatically",
 							type: PreferenceType.BOOLEAN,
 						},
 					},
