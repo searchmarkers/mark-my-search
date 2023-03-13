@@ -405,7 +405,6 @@ const updateActionIcon = (enabled?: boolean) =>
 			researchInstance.enabled = true;
 			highlightActivation = activateHighlightingInTab(tabId, {
 				terms: researchInstance.terms,
-				termsOnHold: searchDetails.isSearch ? undefined : [],
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
 				toggleBarCollapsedOn: researchInstance.barCollapsed,
 				barControlsShown: sync.barControlsShown,

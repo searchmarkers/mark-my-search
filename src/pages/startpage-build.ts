@@ -74,7 +74,7 @@ const loadStartpage = (() => {
 						{
 							className: "action",
 							label: {
-								text: "Activate or deactivate with Alt+Shift+M",
+								text: "Activate or deactivate with Alt+M",
 							},
 						},
 						{
