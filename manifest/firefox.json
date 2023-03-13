@@ -74,7 +74,7 @@
 			"description": "Open the options page"
 		},
 		"toggle-research-tab": {
-			"suggested_key": { "default": "Alt+Shift+M" },
+			"suggested_key": { "default": "Alt+M" },
 			"description": "Find in current tab"
 		},
 		"toggle-research-global": {
@@ -89,7 +89,7 @@
 			"description": "Show/hide highlighting"
 		},
 		"toggle-select": {
-			"description": "Enable/disable sticky term jumping mode"
+			"description": "Enable/disable sticky keyword jumping mode"
 		},
 		"focus-term-append": {
 			"suggested_key": { "default": "Alt+Period" },
