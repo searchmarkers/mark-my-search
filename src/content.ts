@@ -1213,7 +1213,10 @@ const controlVisibilityUpdate = (controlName: ControlButtonName, controlsInfo: C
 	if (control) {
 		const value = controlsInfo.barControlsShown[controlName];
 		const shown = controlName === "replaceTerms"
-			? (value && !controlsInfo.termsOnHold.every(termOnHold => terms.find(term => term.phrase === termOnHold.phrase)))
+			? (value && controlsInfo.termsOnHold.length > 0 && (
+				controlsInfo.termsOnHold.length !== terms.length
+				|| !controlsInfo.termsOnHold.every(termOnHold => terms.find(term => term.phrase === termOnHold.phrase))
+			))
 			: value;
 		control.classList.toggle(getSel(ElementClass.DISABLED), !shown);
 	}
@@ -1575,7 +1578,7 @@ const cacheExtend = (element: Element, highlightTags: HighlightTags, cacheModify
 		element[ElementProperty.INFO] = {
 			id: "",
 			styleRuleIdx: -1,
-			isPaintable: paintUseExperimental && !paintUsePaintingFallback ? !element.closest("a") : true,
+			isPaintable: (paintUseExperimental && !paintUsePaintingFallback) ? !element.closest("a") : true,
 			flows: [],
 		} as ElementInfo;
 	}
@@ -1670,7 +1673,14 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 	const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 		ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
 	const ancestor = getAncestorCommon(flow.nodeStart.parentElement as Element, flow.nodeEnd);
-	(ancestor[ElementProperty.INFO] as ElementInfo).flows.push(flow);
+	if (ancestor[ElementProperty.INFO]) {
+		(ancestor[ElementProperty.INFO] as ElementInfo).flows.push(flow);
+	} else {
+		// This condition should be impossible, but since in rare cases (typically when running before "document_idle")
+		// mutation observers may not always fire, it must be accounted for.
+		console.warn("Aborting highlight box-info caching: Element has no cache", ancestor);
+		return;
+	}
 	for (const term of terms) {
 		let i = 0;
 		let node = textFlow[0];
@@ -2546,11 +2556,11 @@ const getObserverNodeHighlighter = (() => {
 			} else {
 				for (const mutation of mutations) {
 					for (const node of Array.from(mutation.addedNodes)) {
-						if (node.nodeType === Node.ELEMENT_NODE) {
+						if (node.nodeType === Node.ELEMENT_NODE && canHighlightElement(rejectSelector, node as Element)) {
 							cacheExtend(node as Element, highlightTags);
 						}
 					}
-					if (mutation.target.parentElement && mutation.type === "characterData") {
+					if (mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement as Element) && mutation.type === "characterData") {
 						boxesInfoCalculateForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
 							termCountCheck, getHighlightingId, keepStyleUpdated);
 					}
@@ -2560,7 +2570,8 @@ const getObserverNodeHighlighter = (() => {
 								boxesInfoCalculateForFlowOwnersFromContent(terms, node as Element, highlightTags,
 									termCountCheck, getHighlightingId, keepStyleUpdated);
 							}
-						} else if (node.nodeType === Node.TEXT_NODE) {
+						} else if (node.nodeType === Node.TEXT_NODE
+							&& canHighlightElement(rejectSelector, node.parentElement as Element)) {
 							boxesInfoCalculateForFlowOwners(terms, node, highlightTags,
 								termCountCheck, getHighlightingId, keepStyleUpdated);
 						}
@@ -2958,11 +2969,10 @@ const getTermsFromSelection = () => {
 				"mms-h" as keyof HTMLElementTagNameMap ]),
 			// break: any other class of element
 		};
-		const requestRefreshIndicators = requestCallFn(
-			controlsInfo.paintReplaceByClassic
-				? () => insertScrollMarkersClassic(terms, highlightTags, hues)
-				: () => insertScrollMarkersPaint(terms, hues),
-			controlsInfo.paintReplaceByClassic ? 1000 : 150, controlsInfo.paintReplaceByClassic ? 5000 : 2000);
+		const requestRefreshIndicators = requestCallFn(() => controlsInfo.paintReplaceByClassic
+			? insertScrollMarkersClassic(terms, highlightTags, hues)
+			: insertScrollMarkersPaint(terms, hues),
+		controlsInfo.paintReplaceByClassic ? 1000 : 150, controlsInfo.paintReplaceByClassic ? 5000 : 2000);
 		const requestRefreshTermControls = requestCallFn(() => {
 			terms.forEach(term => {
 				updateTermTooltip(term, controlsInfo);
@@ -2987,14 +2997,14 @@ const getTermsFromSelection = () => {
 				let styleRules: Array<HighlightStyleRuleInfo> = [];
 				entries.forEach(entry => {
 					if (entry.isIntersecting) {
-						console.log(entry.target, "intersecting");
+						//console.log(entry.target, "intersecting");
 						if (entry.target[ElementProperty.INFO]) {
 							elementsVisible.add(entry.target);
 							shiftObserver.observe(entry.target);
 							styleRules = styleRules.concat(getStyleRules(getAncestorHighlightable(entry.target.firstChild as Node), false, terms));
 						}
 					} else {
-						console.log(entry.target, "not intersecting");
+						//console.log(entry.target, "not intersecting");
 						if (paintUsePaintingFallback && entry.target[ElementProperty.INFO]) {
 							document.getElementById(getSel(ElementID.DRAW_ELEMENT, (entry.target[ElementProperty.INFO] as ElementInfo).id))?.remove();
 						}

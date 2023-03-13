@@ -497,6 +497,7 @@ const activateHighlightingInTab = async (targetTabId: number, highlightMessageTo
 			paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental,
 		} } ],
 		target: { tabId: targetTabId },
+		injectImmediately: true,
 	}).then(value => {
 		log("pilot function injection finish", "", logMetadata);
 		return value;
@@ -623,6 +624,7 @@ const executeScriptsInTabUnsafe = async (tabId: number) => {
 			paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental,
 		} } ],
 		target: { tabId },
+		injectImmediately: true,
 	});
 	await chrome.scripting.executeScript({
 		files: [
