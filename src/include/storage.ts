@@ -310,11 +310,39 @@ const optionsRepair = async () => {
 	await chrome.storage.sync.remove(toRemove);
 };
 
-chrome.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged.addListener((changes, areaName) => {
+	if (areaName === "managed") {
+		return;
+	}
 	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
-		area = "session";
+		areaName = "session";
 	}
 	Object.entries(changes).forEach(([ key, value ]) => {
-		storageCache[area][key] = value.newValue;
+		storageCache[areaName][key] = value.newValue;
 	});
 });
+
+/*const updateCache = (changes: Record<string, chrome.storage.StorageChange>, areaName: StorageAreaName | "managed") => {
+	if (areaName === "managed") {
+		return;
+	}
+	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
+		areaName = "session";
+	}
+	Object.entries(changes).forEach(([ key, value ]) => {
+		storageCache[areaName][key] = value.newValue;
+	});
+};
+
+chrome.storage.onChanged.addListener(updateCache);
+
+(() => {
+	Object.keys(storageCache).forEach(async (areaName: StorageAreaName) => {
+		const area = await chrome.storage[areaName].get();
+		const areaChange: Record<string, chrome.storage.StorageChange> = {};
+		Object.keys(area).forEach(key => {
+			areaChange[key] = { oldValue: area[key], newValue: area[key] };
+		});
+		updateCache(areaChange, areaName);
+	});
+})();*/
