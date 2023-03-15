@@ -7,55 +7,70 @@ chrome.storage.session ??= chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
 type Engines = Record<string, Engine>
-type StorageSessionValues = {
-	[StorageSession.RESEARCH_INSTANCES]: ResearchInstances
-	[StorageSession.ENGINES]: Engines
+type BankValues = {
+	[BankKey.RESEARCH_INSTANCES]: ResearchInstances
+	[BankKey.ENGINES]: Engines
 }
-type StorageLocalValues = {
-	[StorageLocal.ENABLED]: boolean
-	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
+type StorageValueWrapped<T, Wrapped = true> = Wrapped extends true ? {
+	wValue: T
+	wSync: boolean
+} : T
+type StorageDefaultWrapped<T, Wrapped = true> = StorageValueWrapped<T, Wrapped> & (Wrapped extends true ? {
+	wUseDefault: boolean
+} : T)
+type StorageArrayWrapped<T, Wrapped = true> = StorageValueWrapped<T, Wrapped> & (Wrapped extends true ? {
+	wInlist: T
+	wOutlist: T
+} : T)
+type ConfigBarControlsShown<Wrapped = false> = {
+	toggleBarCollapsed: StorageValueWrapped<boolean, Wrapped>
+	disableTabResearch: StorageValueWrapped<boolean, Wrapped>
+	performSearch: StorageValueWrapped<boolean, Wrapped>
+	toggleHighlights: StorageValueWrapped<boolean, Wrapped>
+	appendTerm: StorageValueWrapped<boolean, Wrapped>
+	replaceTerms: StorageValueWrapped<boolean, Wrapped>
 }
-type StorageSyncValues = {
-	[StorageSync.AUTO_FIND_OPTIONS]: {
-		stoplist: Array<string>
-		searchParams: Array<string>
+type ConfigBarLook<Wrapped = false> = {
+	showEditIcon: StorageValueWrapped<boolean, Wrapped>
+	showRevealIcon: StorageValueWrapped<boolean, Wrapped>
+	fontSize: StorageDefaultWrapped<string, Wrapped>
+	opacityControl: StorageDefaultWrapped<number, Wrapped>
+	opacityTerm: StorageDefaultWrapped<number, Wrapped>
+	borderRadius: StorageDefaultWrapped<string, Wrapped>
+}
+type ConfigHighlightMethod<Wrapped = false> = {
+	paintReplaceByClassic: StorageValueWrapped<boolean, Wrapped>
+	paintUseExperimental: StorageDefaultWrapped<boolean, Wrapped>
+	hues: StorageDefaultWrapped<Array<number>, Wrapped>
+}
+type ConfigURLFilters<Wrapped = false> = {
+	noPageModify: StorageArrayWrapped<URLFilter, Wrapped>
+	nonSearch: StorageArrayWrapped<URLFilter, Wrapped>
+}
+type ConfigValues<Wrapped = false> = {
+	[ConfigKey.RESEARCH_INSTANCE_OPTIONS]: {
+		restoreLastInTab: StorageValueWrapped<boolean, Wrapped>
 	}
-	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
-	[StorageSync.SHOW_HIGHLIGHTS]: {
-		default: boolean
-		overrideSearchPages: boolean
-		overrideResearchPages: boolean
+	[ConfigKey.AUTO_FIND_OPTIONS]: {
+		enabled: StorageValueWrapped<boolean, Wrapped>
+		stoplist: StorageArrayWrapped<Array<string>, Wrapped>
+		searchParams: StorageArrayWrapped<Array<string>, Wrapped>
 	}
-	[StorageSync.BAR_COLLAPSE]: {
-		fromSearch: boolean
-		fromTermListAuto: boolean
+	[ConfigKey.MATCH_MODE_DEFAULTS]: StorageDefaultWrapped<MatchMode, Wrapped>
+	[ConfigKey.SHOW_HIGHLIGHTS]: {
+		default: StorageValueWrapped<boolean, Wrapped>
+		overrideSearchPages: StorageValueWrapped<boolean, Wrapped>
+		overrideResearchPages: StorageValueWrapped<boolean, Wrapped>
 	}
-	[StorageSync.BAR_CONTROLS_SHOWN]: {
-		toggleBarCollapsed: boolean
-		disableTabResearch: boolean
-		performSearch: boolean
-		toggleHighlights: boolean
-		appendTerm: boolean
-		replaceTerms: boolean
+	[ConfigKey.BAR_COLLAPSE]: {
+		fromSearch: StorageValueWrapped<boolean, Wrapped>
+		fromTermListAuto: StorageValueWrapped<boolean, Wrapped>
 	}
-	[StorageSync.BAR_LOOK]: {
-		showEditIcon: boolean
-		showRevealIcon: boolean
-		fontSize: string
-		opacityControl: number
-		opacityTerm: number
-		borderRadius: string
-	}
-	[StorageSync.HIGHLIGHT_METHOD]: {
-		paintReplaceByClassic: boolean
-		paintUseExperimental: boolean
-		hues: Array<number>
-	}
-	[StorageSync.URL_FILTERS]: {
-		noPageModify: URLFilter
-		nonSearch: URLFilter
-	}
-	[StorageSync.TERM_LISTS]: Array<TermList>
+	[ConfigKey.BAR_CONTROLS_SHOWN]: ConfigBarControlsShown<Wrapped>
+	[ConfigKey.BAR_LOOK]: ConfigBarLook<Wrapped>
+	[ConfigKey.HIGHLIGHT_METHOD]: ConfigHighlightMethod<Wrapped>
+	[ConfigKey.URL_FILTERS]: ConfigURLFilters<Wrapped>
+	[ConfigKey.TERM_LISTS]: StorageValueWrapped<Array<TermList>, Wrapped>
 }
 type URLFilter = Array<{
 	hostname: string,
@@ -67,31 +82,28 @@ type TermList = {
 	urlFilter: URLFilter
 }
 
-type StorageAreaName = "session" | "local" | "sync"
+//type StorageAreaName = "session" | "local" | "sync"
 
-type StorageArea<Area extends StorageAreaName> =
-	Area extends "session" ? StorageSession :
-	Area extends "local" ? StorageLocal :
-	Area extends "sync" ? StorageSync :
-never;
+//type StorageArea<Area extends StorageAreaName> =
+//	Area extends "session" ? StorageVolatile :
+//	Area extends "local" ? StorageLocal :
+//	Area extends "sync" ? Storage :
+//never;
 
-type StorageAreaValues<Area extends StorageAreaName> =
-	Area extends "session" ? StorageSessionValues :
-	Area extends "local" ? StorageLocalValues :
-	Area extends "sync" ? StorageSyncValues :
-never;
+//type StorageAreaValues<Area extends StorageAreaName> =
+//	Area extends "session" ? StorageSessionValues :
+//	Area extends "local" ? StorageLocalValues :
+//	Area extends "sync" ? StorageSyncValues :
+//never;
 
-enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
+enum BankKey { // Keys assumed to be unique across all storage areas (excluding 'managed')
 	RESEARCH_INSTANCES = "researchInstances",
 	ENGINES = "engines",
 }
 
-enum StorageLocal {
-	ENABLED = "enabled",
-	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
-}
-
-enum StorageSync {
+enum ConfigKey {
+	OPTIONS = "options",
+	RESEARCH_INSTANCE_OPTIONS = "researchInstanceOptions",
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	MATCH_MODE_DEFAULTS = "matchModeDefaults",
 	SHOW_HIGHLIGHTS = "showHighlights",
@@ -114,81 +126,185 @@ interface ResearchInstance {
  * The default options to be used for items missing from storage, or to which items may be reset.
  * Set to sensible options for a generic first-time user of the extension.
  */
-const optionsDefault: StorageSyncValues = {
+const configWrappers: ConfigValues<true> = {
+	researchInstanceOptions: {
+		restoreLastInTab: {
+			wValue: true,
+			wSync: false,
+		},
+	},
 	autoFindOptions: {
-		searchParams: [ // Order of specificity, as only the first match will be used.
-			"search_terms", "search_term", "searchTerms", "searchTerm",
-			"search_query", "searchQuery",
-			"search",
-			"query",
-			"phrase",
-			"keywords", "keyword",
-			"terms", "term",
-			"text",
-			// Short forms:
-			"s", "q", "p", "k",
-			// Special cases:
-			"_nkw", // eBay
-			"wd", // Baidu
-		],
-		stoplist: [
-			"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
-			"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
-		],
+		enabled: {
+			wValue: true,
+			wSync: false,
+		},
+		searchParams: {
+			wValue: [ // Order of specificity, as only the first match will be used.
+				"search_terms", "search_term", "searchTerms", "searchTerm",
+				"search_query", "searchQuery",
+				"search",
+				"query",
+				"phrase",
+				"keywords", "keyword",
+				"terms", "term",
+				"text",
+				// Short forms:
+				"s", "q", "p", "k",
+				// Special cases:
+				"_nkw", // eBay
+				"wd", // Baidu
+			],
+			wInlist: [],
+			wOutlist: [],
+			wSync: true,
+		},
+		stoplist: {
+			wValue: [
+				"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
+				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
+				"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
+			],
+			wInlist: [],
+			wOutlist: [],
+			wSync: true,
+		},
 	},
 	matchModeDefaults: {
-		regex: false,
-		case: false,
-		stem: true,
-		whole: false,
-		diacritics: false,
+		wValue: {
+			regex: false,
+			case: false,
+			stem: true,
+			whole: false,
+			diacritics: false,
+		},
+		wUseDefault: true,
+		wSync: false,
 	},
 	showHighlights: {
-		default: true,
-		overrideSearchPages: false,
-		overrideResearchPages: false,
+		default: {
+			wValue: true,
+			wSync: true,
+		},
+		overrideSearchPages: {
+			wValue: false,
+			wSync: true,
+		},
+		overrideResearchPages: {
+			wValue: false,
+			wSync: true,
+		},
 	},
 	barCollapse: {
-		fromSearch: false,
-		fromTermListAuto: false,
+		fromSearch: {
+			wValue: false,
+			wSync: true,
+		},
+		fromTermListAuto: {
+			wValue: false,
+			wSync: true,
+		},
 	},
 	barControlsShown: {
-		toggleBarCollapsed: true,
-		disableTabResearch: true,
-		performSearch: false,
-		toggleHighlights: true,
-		appendTerm: true,
-		replaceTerms: true,
+		toggleBarCollapsed: {
+			wValue: true,
+			wSync: true,
+		},
+		disableTabResearch: {
+			wValue: true,
+			wSync: true,
+		},
+		performSearch: {
+			wValue: false,
+			wSync: true,
+		},
+		toggleHighlights: {
+			wValue: true,
+			wSync: true,
+		},
+		appendTerm: {
+			wValue: true,
+			wSync: true,
+		},
+		replaceTerms: {
+			wValue: true,
+			wSync: true,
+		},
 	},
 	barLook: {
-		showEditIcon: true,
-		showRevealIcon: true,
-		fontSize: "14.6px",
-		opacityControl: 0.8,
-		opacityTerm: 0.86,
-		borderRadius: "4px",
+		showEditIcon: {
+			wValue: true,
+			wSync: true,
+		},
+		showRevealIcon: {
+			wValue: true,
+			wSync: true,
+		},
+		fontSize: {
+			wValue: "14.6px",
+			wUseDefault: true,
+			wSync: true,
+		},
+		opacityControl: {
+			wValue: 0.8,
+			wUseDefault: true,
+			wSync: true,
+		},
+		opacityTerm: {
+			wValue: 0.86,
+			wUseDefault: true,
+			wSync: true,
+		},
+		borderRadius: {
+			wValue: "4px",
+			wUseDefault: true,
+			wSync: true,
+		},
 	},
 	highlightMethod: {
-		paintReplaceByClassic: true,
-		paintUseExperimental: false,
-		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
+		paintReplaceByClassic: {
+			wValue: true,
+			wSync: false,
+		},
+		paintUseExperimental: {
+			wValue: false,
+			wUseDefault: true,
+			wSync: false,
+		},
+		hues: {
+			wValue: [ 300, 60, 110, 220, 30, 190, 0 ],
+			wUseDefault: true,
+			wSync: true,
+		},
 	},
 	urlFilters: {
-		noPageModify: [],
-		nonSearch: [],
+		noPageModify: {
+			wValue: [],
+			wInlist: [],
+			wOutlist: [],
+			wSync: true
+		},
+		nonSearch: {
+			wValue: [],
+			wInlist: [],
+			wOutlist: [],
+			wSync: true,
+		},
 	},
-	termLists: [],
+	termLists: {
+		wValue: [],
+		wSync: true,
+	},
 };
 
 /**
- * The working cache of items retrieved from storage since the last background startup.
+ * The working cache of items retrieved from the volatile bank since the last background startup.
  */
-const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> | Record<never, never>> = {
-	session: {},
-	local: {},
-	sync: {},
-};
+const bankCache: Partial<BankValues> = {};
+
+/**
+ * The working cache of items retrieved from the persistent config since the last background startup.
+ */
+const configCache: Partial<ConfigValues> = {};
 
 /**
  * Gets an object of key-value pairs corresponding to a set of keys in the given area of storage.
@@ -198,29 +314,69 @@ const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> |
  * @returns A promise resolving to an object of storage entries.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
-	Promise<StorageAreaValues<Area>> =>
-{
-	if (keys && keys.every(key => storageCache[area][key as string] !== undefined)) {
-		return { ...storageCache[area] } as StorageAreaValues<Area>;
-	}
-	const store = await chrome.storage[area].get(keys) as StorageAreaValues<Area>;
-	const storeAsSession = store as StorageAreaValues<"session">;
-	if (storeAsSession.engines) {
-		const engines = storeAsSession.engines as Engines;
-		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
-	}
-	Object.entries(store).forEach(([ key, value ]) => {
-		storageCache[area][key] = value;
+//const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
+//	Promise<StorageAreaValues<Area>> =>
+//{
+//	if (keys && keys.every(key => storageCache[area][key as string] !== undefined)) {
+//		return { ...storageCache[area] } as StorageAreaValues<Area>;
+//	}
+//	const store = await chrome.storage[area].get(keys) as StorageAreaValues<Area>;
+//	const storeAsSession = store as StorageAreaValues<"session">;
+//	if (storeAsSession.engines) {
+//		const engines = storeAsSession.engines as Engines;
+//		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
+//	}
+//	Object.entries(store).forEach(([ key, value ]) => {
+//		storageCache[area][key] = value;
+//	});
+//	return { ...store };
+//};
+
+const bankSet = async(bank: Partial<BankValues>) => {
+	Object.entries(bank).forEach(([ key, value ]) => {
+		bankCache[key] = value;
 	});
-	return { ...store };
+	await chrome.storage.session.set(bank);
 };
 
-/**
- * 
- * @param area 
- * @param store 
- */
+const bankGet = async (keys: Array<BankKey>): Promise<BankValues> => {
+	return {} as BankValues;
+};
+
+const configSet = async(config: Partial<ConfigValues>) => {
+	//
+};
+
+const configGet = async (keys: Array<ConfigKey>): Promise<ConfigValues> => {
+	if (keys && keys.every(key => configCache[key] !== undefined)) {
+		return { ...configCache } as ConfigValues;
+	}
+	const getLocal = chrome.storage.local.get(keys) as Promise<Partial<ConfigValues>>;
+	const getSync = chrome.storage.sync.get(keys) as Promise<Partial<ConfigValues>>;
+	const configLocal = await getLocal;
+	const configSync = await getSync;
+	const config: Partial<ConfigValues> = {};
+	keys.forEach(key1 => {
+		const config1Wrapper = configWrappers[key1];
+		const config1Local = configLocal[key1];
+		const config1Sync = configSync[key1];
+		if (config1Wrapper.wValue) {
+			const setupW = config1Wrapper as StorageValueWrapped<any>;
+			config[key1] = setupW.wSync ? config1Sync : config1Local;
+		} else {
+			config[key1] = {};
+			Object.keys(config1Wrapper).forEach(key2 => {
+				const config2Wrapper = config1Wrapper[key2] as StorageValueWrapped<any>;
+				config[key1][key2] = config2Wrapper.wSync ? config1Sync[key2] : config1Local[key2];
+			});
+		}
+	});
+	Object.keys(config).forEach(key => {
+		configCache[key] = config[key];
+	});
+	return { ...config } as ConfigValues;
+};
+
 const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
 	Object.entries(store).forEach(([ key, value ]) => {
 		storageCache[area][key] = value;
@@ -233,24 +389,23 @@ const storageSet = async <Area extends StorageAreaName>(area: Area, store: Stora
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const storageInitialize = async () => {
-	const local = await storageGet("local");
-	const localOld = { ...local };
-	const toRemove: Array<string> = [];
-	if (objectFixWithDefaults(local, {
-		enabled: true,
-		followLinks: true,
-		persistResearchInstances: true,
-	} as StorageLocalValues, toRemove)) {
-		console.warn("Storage 'local' cleanup rectified issues. Results:", localOld, local); // Use standard logging system?
-	}
-	await storageSet("local", local);
-	if (chrome.storage["session"]) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
-		await chrome.storage.local.remove(toRemove);
-	}
-	await storageSet("session", {
-		researchInstances: {},
-		engines: {},
-	});
+	//const local = await storageGet("local");
+	//const localOld = { ...local };
+	//const toRemove: Array<string> = [];
+	//if (objectFixWithDefaults(local, {
+	//	enabled: true,
+	//	persistResearchInstances: true,
+	//} as ConfigValues, toRemove)) {
+	//	console.warn("Storage 'local' cleanup rectified issues. Results:", localOld, local); // Use standard logging system?
+	//}
+	//await configSet(local);
+	//if (chrome.storage["session"]) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
+	//	await chrome.storage.local.remove(toRemove);
+	//}
+	//await bankSet({
+	//	researchInstances: {},
+	//	engines: {},
+	//});
 };
 
 /**
@@ -302,26 +457,34 @@ const objectFixWithDefaults = (
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const optionsRepair = async () => {
-	const sync = await storageGet("sync");
-	const syncOld = { ...sync };
-	const toRemove = [];
-	if (objectFixWithDefaults(sync, optionsDefault, toRemove)) {
-		console.warn("Storage 'sync' cleanup rectified issues. Results:", syncOld, sync); // Use standard logging system?
-	}
-	storageSet("sync", sync);
-	await chrome.storage.sync.remove(toRemove);
+	//const sync = await storageGet("sync");
+	//const syncOld = { ...sync };
+	//const toRemove = [];
+	//if (objectFixWithDefaults(sync, configValues, toRemove)) {
+	//	console.warn("Storage 'sync' cleanup rectified issues. Results:", syncOld, sync); // Use standard logging system?
+	//}
+	//configSet(sync);
+	//await chrome.storage.sync.remove(toRemove);
 };
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-	if (areaName === "managed") {
-		return;
-	}
-	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
-		areaName = "session";
-	}
-	Object.entries(changes).forEach(([ key, value ]) => {
-		storageCache[areaName][key] = value.newValue;
-	});
+	// TODO check that the change was not initiated from the same script
+	//if ([ "researchInstances", "engines" ].some(key => changes[key])) {
+	//	areaName = "session";
+	//}
+	switch (areaName) {
+	case "session": {
+		Object.entries(changes).forEach(([ key, value ]) => {
+			bankCache[areaName][key] = value.newValue;
+		});
+		break;
+	} case "local":
+	case "sync": {
+		Object.entries(changes).forEach(([ key, value ]) => {
+			configCache[areaName][key] = value.newValue;
+		});
+		break;
+	}}
 });
 
 /*const updateCache = (changes: Record<string, chrome.storage.StorageChange>, areaName: StorageAreaName | "managed") => {

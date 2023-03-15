@@ -1,14 +1,14 @@
 type OptionsInfo = Array<{
 	label: string
-	options: Partial<Record<keyof StorageSyncValues, {
+	options: Partial<Record<keyof ConfigValues, {
 		label: string
-		preferences?: Partial<Record<keyof StorageSyncValues["barCollapse"]
-			| keyof StorageSyncValues["barControlsShown"]
-			| keyof StorageSyncValues["barLook"]
-			| keyof StorageSyncValues["highlightMethod"]
-			| keyof StorageSyncValues["showHighlights"]
-			| keyof StorageSyncValues["autoFindOptions"]
-			| keyof StorageSyncValues["matchModeDefaults"], {
+		preferences?: Partial<Record<keyof ConfigValues["barCollapse"]
+			| keyof ConfigValues["barControlsShown"]
+			| keyof ConfigValues["barLook"]
+			| keyof ConfigValues["highlightMethod"]
+			| keyof ConfigValues["showHighlights"]
+			| keyof ConfigValues["autoFindOptions"]
+			| keyof ConfigValues["matchModeDefaults"], {
 			label: string
 			tooltip?: string
 			type: PreferenceType
@@ -141,7 +141,7 @@ label[for]:hover
 						.forEach((preferenceLabel: HTMLElement) => preferenceLabel.classList.remove(OptionClass.MODIFIED));
 				});
 			});
-			storageSet("sync", sync);
+			configSet(sync);
 		});
 		// Construct and insert option elements from the option details.
 		Object.keys(tabInfo.options).forEach(optionKey => {
@@ -191,7 +191,7 @@ label[for]:hover
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW);
 				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
-				const valueDefault = optionsDefault[optionKey][preferenceKey];
+				const valueDefault = configWrappers[optionKey][preferenceKey];
 				const value = sync[optionKey][preferenceKey];
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);

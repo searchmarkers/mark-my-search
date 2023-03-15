@@ -17,33 +17,15 @@ const loadPopup = (() => {
 		},
 		checkbox: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
-				const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
+				const sync = await configGet([ ConfigKey.TERM_LISTS ]);
 				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
 			onToggle: (checked, objectIndex, containerIndex) => {
-				storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+				configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
-					storageSet("sync", sync);
+					configSet(sync);
 				});
 			},
-		},
-	});
-
-	/**
-	 * Creates info for a checkbox handling a basic storage field.
-	 * @param storageArea The name of the storage area to use.
-	 * @param storageKey The key for the field within the storage area.
-	 * @returns The resulting info object.
-	 */
-	const getStorageFieldCheckboxInfo = (storageArea: StorageAreaName, storageKey: StorageArea<typeof storageArea>): PageInteractionCheckboxInfo => ({
-		onLoad: async setChecked => {
-			const store = await storageGet(storageArea, [ storageKey ]);
-			setChecked(store[storageKey]);
-		},
-		onToggle: checked => {
-			storageSet(storageArea, {
-				[storageKey]: checked
-			} as StorageLocalValues);
 		},
 	});
 
@@ -92,8 +74,8 @@ const loadPopup = (() => {
 							},
 							checkbox: {
 								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
-									setChecked(local.enabled);
+									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									setChecked(local.autoFindOptions.enabled);
 								},
 								onToggle: checked => {
 									messageSendBackground({
@@ -107,7 +89,17 @@ const loadPopup = (() => {
 							label: {
 								text: "Restore keywords on reactivation",
 							},
-							checkbox: getStorageFieldCheckboxInfo("local", StorageLocal.PERSIST_RESEARCH_INSTANCES),
+							checkbox: {
+								onLoad: async setChecked => {
+									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									setChecked(local.autoFindOptions.enabled);
+								},
+								onToggle: async checked => {
+									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									local.autoFindOptions.enabled = checked;
+									await configSet(local);
+								},
+							},
 						},
 					],
 				},
@@ -124,21 +116,21 @@ const loadPopup = (() => {
 							checkbox: {
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 									setChecked(tab.id === undefined ? false :
 										isTabResearchPage(
 											session.researchInstances, tab.id));
 								},
 								onToggle: checked => {
 									if (checked) {
-										storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
+										bankGet([ BankKey.RESEARCH_INSTANCES ]).then(async session => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 											if (tab.id === undefined) {
 												return;
 											}
-											const local = await storageGet("local", [ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
+											const local = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
 											const researchInstance = session.researchInstances[tab.id];
-											if (researchInstance && local.persistResearchInstances) {
+											if (researchInstance && local.researchInstanceOptions.restoreLastInTab) {
 												researchInstance.enabled = true;
 											}
 											messageSendBackground({
@@ -164,16 +156,16 @@ const loadPopup = (() => {
 								onLoad: async setEnabled => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									setEnabled(tab.id === undefined ? false :
-										!!(await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ])).researchInstances[tab.id]);
+										!!(await bankGet([ BankKey.RESEARCH_INSTANCES ])).researchInstances[tab.id]);
 								},
 								onClick: async () => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									if (tab.id === undefined) {
 										return;
 									}
-									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 									delete session.researchInstances[tab.id];
-									await storageSet("session", session);
+									await bankSet(session);
 									messageSendBackground({
 										disableTabResearch: true,
 									});
@@ -253,12 +245,12 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => //
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
 											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => {
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
 											sync.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -266,7 +258,7 @@ const loadPopup = (() => {
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 								},
@@ -287,12 +279,12 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => //
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
 											sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => {
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
 											sync.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -300,7 +292,7 @@ const loadPopup = (() => {
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 								},
@@ -327,38 +319,38 @@ const loadPopup = (() => {
 							className: "temp-class",
 							list: {
 								getLength: () =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
+									configGet([ ConfigKey.TERM_LISTS ]).then(sync =>
 										sync.termLists.length
 									)
 								,
 								pushWithName: name =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+									configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 										sync.termLists.push({
 											name,
 											terms: [],
 											urlFilter: [],
 										});
-										storageSet("sync", sync);
+										configSet(sync);
 									})
 								,
 								removeAt: index =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+									configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 										sync.termLists.splice(index, 1);
-										storageSet("sync", sync);
+										configSet(sync);
 									})
 								,
 							},
 							label: {
 								text: "",
 								getText: index =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
+									configGet([ ConfigKey.TERM_LISTS ]).then(sync =>
 										sync.termLists[index] ? sync.termLists[index].name : ""
 									)
 								,
 								setText: (text, index) =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+									configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 										sync.termLists[index].name = text;
-										storageSet("sync", sync);
+										configSet(sync);
 									})
 								,
 								textbox: {
@@ -369,14 +361,14 @@ const loadPopup = (() => {
 								className: "term",
 								list: {
 									getArray: index =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
+										configGet([ ConfigKey.TERM_LISTS ]).then(sync =>
 											sync.termLists[index].terms as unknown as Array<Record<string, unknown>>
 										)
 									,
 									setArray: (array, index) =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+										configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 											sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 									getNew: text =>
@@ -401,13 +393,13 @@ const loadPopup = (() => {
 													placeholder: "keyword",
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
+														const sync = await configGet([ ConfigKey.TERM_LISTS ]);
 														setText(sync.termLists[containerIndex].terms[objectIndex] ? sync.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+														configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 															sync.termLists[containerIndex].terms[objectIndex].phrase = text;
-															storageSet("sync", sync);
+															configSet(sync);
 														});
 													},
 												},
@@ -430,12 +422,12 @@ const loadPopup = (() => {
 								className: "temp-class",
 								list: {
 									getArray: index =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => //
+										configGet([ ConfigKey.TERM_LISTS ]).then(sync => //
 											sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: (array, index) =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+										configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 											sync.termLists[index].urlFilter = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -443,7 +435,7 @@ const loadPopup = (() => {
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 								},
@@ -458,12 +450,12 @@ const loadPopup = (() => {
 										if (tab.id === undefined) {
 											return;
 										}
-										const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-										const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+										const sync = await configGet([ ConfigKey.TERM_LISTS ]);
+										const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 										const researchInstance = session.researchInstances[tab.id];
 										if (researchInstance) {
 											researchInstance.enabled = true;
-											await storageSet("session", session);
+											await bankSet(session);
 										}
 										messageSendBackground({
 											terms: researchInstance

@@ -230,10 +230,10 @@ interface HighlightMessage {
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	toggleBarCollapsedOn?: boolean
-	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
-	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
-	highlightMethod?: StorageSyncValues[StorageSync.HIGHLIGHT_METHOD]
-	matchMode?: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
+	barControlsShown?: ConfigBarControlsShown
+	barLook?: ConfigBarLook
+	highlightMethod?: ConfigHighlightMethod
+	matchMode?: MatchMode
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

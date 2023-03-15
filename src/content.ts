@@ -4,7 +4,7 @@ type HighlightTags = {
 	flow: ReadonlySet<string>,
 }
 type TermHues = Array<number>
-type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
+type ControlButtonName = keyof ConfigValues[ConfigKey.BAR_CONTROLS_SHOWN]
 type ControlButtonInfo = {
 	controlClasses?: Array<ElementClass>
 	buttonClass?: ElementClass
@@ -90,8 +90,8 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: MatchTerms
-	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
-	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
+	[ConfigKey.BAR_CONTROLS_SHOWN]: ConfigBarControlsShown
+	[ConfigKey.BAR_LOOK]: ConfigBarLook
 	matchMode: MatchMode
 }
 
