@@ -4,10 +4,10 @@
 	"scripts": {
 		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
 		"scripts-build": "tsc -p tsconfig.json",
-		"prepare-firefox": "ln -fs manifest/firefox.json manifest.json",
-		"prepare-chromium": "ln -fs manifest/chromium.json manifest.json",
-		"pack-firefox": "npm run prepare-firefox; mkdir -p pack; zip pack/mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json",
-		"pack-chromium": "npm run prepare-chromium; mkdir -p pack; zip pack/mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json"
+		"prepare-firefox": "ln --force --symbolic manifest/firefox.json manifest.json",
+		"prepare-chromium": "ln --force --symbolic manifest/chromium.json manifest.json",
+		"pack-firefox": "npm run prepare-firefox; mkdir --parents pack; rm --force pack/mark_my_search-firefox.zip; zip pack/mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json",
+		"pack-chromium": "npm run prepare-chromium; mkdir --parents pack; rm --force pack/mark_my_search-chromium.zip; zip pack/mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json"
 	},
 	"repository": {
 		"type": "git",
