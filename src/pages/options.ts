@@ -191,7 +191,7 @@ label[for]:hover
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW);
 				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
-				const valueDefault = configWrappers[optionKey][preferenceKey];
+				const valueDefault = configDefault[optionKey][preferenceKey];
 				const value = sync[optionKey][preferenceKey];
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
