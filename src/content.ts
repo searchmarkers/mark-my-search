@@ -1392,14 +1392,26 @@ const controlsInsert = (() => {
 				}
 			});
 		};
+		const documentEventProperties: Record<string, ((e: KeyboardEvent) => unknown) | undefined> = {
+			onkeydown: undefined,
+			onkeyup: undefined,
+			onkeypress: undefined,
+		};
 		bar.addEventListener("focusin", () => {
 			inputsSetFocusable(true);
+			Object.keys(documentEventProperties).forEach(property => {
+				documentEventProperties[property] = document[property];
+				document[property] = (e: KeyboardEvent) => e.cancelBubble = true;
+			});
 		});
 		bar.addEventListener("focusout", event => {
 			// Only if focus is not moving (and has not already moved) somewhere else within the bar.
 			if (!bar.contains(event.relatedTarget as Node) && !bar.contains(document.activeElement)) {
 				inputsSetFocusable(false);
 			}
+			Object.keys(documentEventProperties).forEach(property => {
+				document[property] = documentEventProperties[property];
+			});
 		});
 		window.addEventListener("keydown", event => {
 			if (event.key === "Tab") {
