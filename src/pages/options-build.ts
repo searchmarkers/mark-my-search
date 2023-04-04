@@ -2,7 +2,7 @@
  * Loads the sendoff page content into the page.
  * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.
  */
-const loadSendoff = (() => {
+const loadOptions = (() => {
 	/**
 	 * Details of the page's panels and their various components.
 	 */
@@ -10,7 +10,7 @@ const loadSendoff = (() => {
 		{
 			className: "panel-general",
 			name: {
-				text: "Sendoff",
+				text: "Options",
 			},
 			sections: [
 				{
@@ -105,20 +105,6 @@ const loadSendoff = (() => {
 								},
 							} ],
 						},
-						{
-							className: "link",
-							anchor: {
-								url: "https://github.com/searchmarkers/mark-my-search/issues/new",
-								text: "Have a problem or idea? Open an issue",
-							},
-						},
-						{
-							className: "link",
-							anchor: {
-								url: "https://github.com/searchmarkers/mark-my-search",
-								text: "Mark My Search is developed here",
-							},
-						},
 					],
 				},
 			],
@@ -126,12 +112,9 @@ const loadSendoff = (() => {
 	];
 
 	return () => {
-		const title = document.createElement("title");
-		title.text = `${getName()} - Uninstalled`;
-		document.head.appendChild(title);
 		loadPage(panelsInfo, `
 body
-	{ border: unset; }
+	{ height: 680px; border-radius: 0; }
 .container.tab .tab
 	{ flex: unset; }
 		`);
@@ -140,6 +123,6 @@ body
 
 (() => {
 	return () => {
-		loadSendoff();
+		loadOptions();
 	};
 })()();

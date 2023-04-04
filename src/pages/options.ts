@@ -45,7 +45,7 @@ enum PreferenceType {
  * This presents the user with advanced options for customizing the extension.
  * @param optionsInfo Details of the options to present.
  */
-const loadOptions = (() => {
+const loadOptionsOld = (() => {
 	/**
 	 * Fills and inserts a CSS stylesheet element to style all options and surrounding page structure.
 	 */
@@ -96,7 +96,7 @@ label[for]:hover
 	 * @param optionsInfo Details of the options to present.
 	 */
 	const loadTab = async (tabIdx: number, tabContainer: HTMLElement, optionsInfo: OptionsInfo) => {
-		const sync = await storageGet("sync");
+		const sync = {}; //await storageGet("sync");
 		const tabInfo = optionsInfo[tabIdx];
 		const tabButton = document.createElement("button");
 		tabButton.textContent = tabInfo.label;
@@ -397,6 +397,6 @@ PAINT
 
 	return () => {
 		// TODO use storage.onChanged to refresh rather than manually updating page
-		loadOptions(getOptionsInfo());
+		loadOptionsOld(getOptionsInfo());
 	};
 })()();

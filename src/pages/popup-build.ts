@@ -482,16 +482,16 @@ const loadPopup = (() => {
 	return () => {
 		loadPage(panelsInfo, `
 body
-	{ width: 300px; height: 500px; user-select: none; }
-.container-panel > .panel, .brand
+	{ width: 300px; height: 520px; user-select: none; }
+.container.panel > .panel, .brand
 	{ margin-inline: 0; }
 		`, false);
 		pageInsertWarning(
-			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
+			document.querySelector(".container.panel .panel-sites_search_research") ?? document.body,
 			"List entries are saved as you type them. This will be more clear in future.",
 		);
 		pageInsertWarning(
-			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
+			document.querySelector(".container.panel .panel-term_lists") ?? document.body,
 			"Keyword lists are highly experimental. Please report any issues.",
 		);
 	};

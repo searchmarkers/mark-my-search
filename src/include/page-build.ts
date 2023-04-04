@@ -202,7 +202,7 @@ const pageInsertWarning = (container: HTMLElement, text: string) => {
 };
 
 const pageFocusScrollContainer = () =>
-	(document.querySelector(".container-panel") as HTMLElement).focus()
+	(document.querySelector(".container.panel") as HTMLElement).focus()
 ;
 
 /**
@@ -220,7 +220,7 @@ const loadPage = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ height: 100vh; margin: 0; border: 2px solid hsl(300 100% 14%); border-radius: 8px; overflow: hidden;
+	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid hsl(300 100% 14%); border-radius: 8px; overflow: hidden;
 	font-family: ubuntu, sans-serif; background: hsl(300 100% 6%); }
 *
 	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
@@ -246,37 +246,37 @@ textarea
 	{ align-self: center; font-size: 14px; color: hsl(0 0% 80% / 0.5); }
 .brand .logo
 	{ width: 32px; height: 32px; }
-.container-tab
+.container.tab
 	{ display: flex; justify-content: center;
 	border-top: 2px solid hsl(300 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
-.container-tab > .tab
-	{ flex: 1 1 auto; font-size: 14px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
+.container.tab .tab
+	{ flex: 1 1 auto; font-size: 14px; padding-inline: 10px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
 	background: transparent; color: hsl(300 20% 90%); }
-.container-tab > .tab:hover
+.container.tab .tab:hover
 	{ background: hsl(300 30% 22%); }
-.container-panel
+.container.panel
 	{ flex: 1 1 auto; border-top: 2px ridge hsl(300 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
-	outline: none; background: hsl(300 16% 30%); }
+	outline: none; background: hsl(300 30% 14%); }
 @supports (overflow-y: overlay)
-	{ .container-panel { overflow-y: overlay; }; }
-.container-panel > .panel
+	{ .container.panel { overflow-y: overlay; }; }
+.container.panel > .panel
 	{ display: none; flex-direction: column; gap: 1px;
-	border-radius: inherit; background: hsl(0 0% 100% / 0.26); box-shadow: 0 0 10px; }
-.container-panel > .panel, .brand
+	border-radius: inherit; background: hsl(300 28% 20%); box-shadow: 0 0 10px; }
+.container.panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
 	{ padding: 4px; border-radius: 2px; background: hsl(60 39% 71%); color: hsl(0 0% 8%); white-space: break-spaces; }
 /**/
 
-.panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
-.panel-term_lists .container-tab > .tab.panel-term_lists,
-.panel-features .container-tab > .tab.panel-features,
-.panel-general .container-tab > .tab.panel-general
+.panel-sites_search_research .container.tab .tab.panel-sites_search_research,
+.panel-term_lists .container.tab .tab.panel-term_lists,
+.panel-features .container.tab .tab.panel-features,
+.panel-general .container.tab .tab.panel-general
 	{ border-bottom: 2px solid hsl(300 100% 50%); background: hsl(300 30% 32%); }
-.panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
-.panel-term_lists .container-panel > .panel.panel-term_lists,
-.panel-features .container-panel > .panel.panel-features,
-.panel-general .container-panel > .panel.panel-general
+.panel-sites_search_research .container.panel > .panel.panel-sites_search_research,
+.panel-term_lists .container.panel > .panel.panel-term_lists,
+.panel-features .container.panel > .panel.panel-features,
+.panel-general .container.panel > .panel.panel-general
 	{ display: flex; }
 /**/
 
@@ -422,7 +422,7 @@ textarea
 	};
 
 	const getTabs = () =>
-		document.querySelectorAll(".container-tab .tab")
+		document.querySelectorAll(".container.tab .tab")
 	;
 
 	const shiftTabFromTab = (tabCurrent: HTMLButtonElement, toRight: boolean, cycle: boolean) => {
@@ -466,7 +466,7 @@ textarea
 			}
 			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
-					.querySelector(`.container-tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
+					.querySelector(`.container.tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
 				shiftTabFromTab(currentTab, toRight, cycle);
 				focusActivePanel();
 			};
@@ -1043,7 +1043,7 @@ textarea
 		name.classList.add("name");
 		name.textContent = getName();
 		version.classList.add("version");
-		version.textContent = `v${chrome.runtime.getManifest().version}`;
+		version.textContent = chrome.runtime.getManifest().version;
 		logo.classList.add("logo");
 		logo.src = "/icons/mms.svg";
 		brand.classList.add("brand");
@@ -1059,19 +1059,19 @@ textarea
 		document.body.appendChild(frame);
 		frame.appendChild(createBrand());
 		const panelContainer = document.createElement("div");
-		panelContainer.classList.add("container-panel");
+		panelContainer.classList.add("container", "panel");
 		panelContainer.tabIndex = -1;
 		frame.appendChild(panelContainer);
 		const tabContainer = document.createElement("div");
-		tabContainer.classList.add("container-tab");
+		tabContainer.classList.add("container", "tab");
 		frame.appendChild(tabContainer);
 		return frame;
 	};
 
 	const insertAndManageContent = (panelsInfo: Array<PagePanelInfo>, shiftModifierIsRequired = true) => {
 		document.body.appendChild(createFrameStructure());
-		const panelContainer = document.querySelector(".container-panel") as HTMLElement;
-		const tabContainer = document.querySelector(".container-tab") as HTMLElement;
+		const panelContainer = document.querySelector(".container.panel") as HTMLElement;
+		const tabContainer = document.querySelector(".container.tab") as HTMLElement;
 		panelsInfo.forEach(panelInfo => {
 			const panel = document.createElement("div");
 			panel.classList.add("panel", panelInfo.className);

@@ -258,8 +258,8 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 		loadPage(panelsInfo, `
 body
 	{ border: unset; }
-.container-tab > .tab
-	{ flex: unset; padding-inline: 10px; }
+.container.tab .tab
+	{ flex: unset; }
 		`);
 	};
 })();

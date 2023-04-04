@@ -318,7 +318,7 @@ const configCacheKeysSync: Set<string> = new Set;
  */
 //
 
-const bankSet = async(bank: Partial<BankValues>) => {
+const bankSet = async (bank: Partial<BankValues>) => {
 	Object.entries(bank).forEach(([ key, value ]) => {
 		bankCache[key] = value;
 	});
@@ -328,11 +328,11 @@ const bankSet = async(bank: Partial<BankValues>) => {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const bankGet = async (keys: Array<BankKey>): Promise<BankValues> => {
 	// TODO investigate flattening storage of research instances (one level)
-	return {} as BankValues;
+	return await (chrome.storage.session ? chrome.storage.session.get(keys) : chrome.storage.local.get(keys)) as BankValues;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const configSet = async(config: Partial<ConfigValues>) => {
+const configSet = async (config: Partial<ConfigValues>) => {
 	const configWrappedLocal: Partial<ConfigValues<true>> = {};
 	const configWrappedSync: Partial<ConfigValues<true>> = {};
 	configCachePopulate(Object.keys(config) as Array<ConfigKey>);
@@ -514,10 +514,16 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 	//if ([ "researchInstances", "engines" ].some(key => changes[key])) {
 	//	areaName = "session";
 	//}
+	[ BankKey.RESEARCH_INSTANCES, BankKey.ENGINES ].forEach(key => {
+		if (changes[key] !== undefined) {
+			bankCache[key] = changes[key].newValue;
+			delete changes[key];
+		}
+	});
 	switch (areaName) {
 	case "session": {
 		Object.entries(changes).forEach(([ key, value ]) => {
-			bankCache[areaName][key] = value.newValue;
+			bankCache[key] = value.newValue;
 		});
 		break;
 	} case "local":
@@ -525,7 +531,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 		const keyCacheThis = areaName === "local" ? configCacheKeysLocal : configCacheKeysSync;
 		const keyCacheOther = areaName === "local" ? configCacheKeysSync : configCacheKeysLocal;
 		Object.entries(changes).forEach(([ key1, value ]) => {
-			configCache[areaName][key1] = value.newValue;
+			configCache[key1] = value.newValue;
 			if (value.newValue.wValue) {
 				keyCacheThis.add(key1);
 				keyCacheOther.delete(key1);
