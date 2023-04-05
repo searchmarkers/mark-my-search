@@ -257,7 +257,7 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 		document.head.appendChild(title);
 		loadPage(panelsInfo, `
 body
-	{ border: unset; }
+	{ border: none; }
 .container.tab .tab
 	{ flex: unset; }
 		`);

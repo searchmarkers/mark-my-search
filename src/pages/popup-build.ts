@@ -15,7 +15,7 @@ const loadPopup = (() => {
 		label: {
 			text: labelText,
 		},
-		checkbox: {
+		input: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
 				const sync = await configGet([ ConfigKey.TERM_LISTS ]);
 				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
@@ -72,7 +72,7 @@ const loadPopup = (() => {
 							label: {
 								text: "Detect search engines",//"Highlight web searches",
 							},
-							checkbox: {
+							input: {
 								onLoad: async setChecked => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
@@ -89,7 +89,7 @@ const loadPopup = (() => {
 							label: {
 								text: "Restore keywords on reactivation",
 							},
-							checkbox: {
+							input: {
 								onLoad: async setChecked => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
@@ -113,7 +113,7 @@ const loadPopup = (() => {
 							label: {
 								text: "Active",
 							},
-							checkbox: {
+							input: {
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);

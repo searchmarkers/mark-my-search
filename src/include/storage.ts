@@ -304,7 +304,7 @@ const bankCache: Partial<BankValues> = {};
 /**
  * The working cache of items retrieved from the persistent config since the last background startup.
  */
-const configCache: Partial<ConfigValues> = {};
+const configCache: Partial<ConfigValues<true>> = {};
 
 const configCacheKeysLocal: Set<string> = new Set;
 const configCacheKeysSync: Set<string> = new Set;
@@ -353,13 +353,18 @@ const configSet = async (config: Partial<ConfigValues>) => {
 				configCache[key1][key2].wValue = config[key1][key2];
 				const key2Full = `${key1}_${key2}`;
 				if (configCacheKeysLocal.has(key2Full)) {
-					configWrappedLocal[key1] = configCache[key1][key2];
+					configWrappedLocal[key1][key2] = configCache[key1][key2];
 				} else if (configCacheKeysSync.has(key2Full)) {
-					configWrappedSync[key1] = configCache[key1][key2];
+					configWrappedSync[key1][key2] = configCache[key1][key2];
 				}
 			});
 		}
 	});
+	const setLocal = chrome.storage.local.set(configWrappedLocal);
+	console.log(configWrappedSync);
+	const setSync = chrome.storage.sync.set(configWrappedSync);
+	await setLocal;
+	await setSync;
 };
 
 const configCachePopulate = async (keys: Array<ConfigKey>) => {
@@ -372,6 +377,7 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 		const configWrapped1 = configDefault[key1] as StorageValue<unknown, true, true> | Record<string, StorageValue<unknown, true, true>>;
 		const configWrapped1Local = configWrappedLocal[key1] as StorageValue<unknown> | Record<string, StorageValue<unknown>> | undefined;
 		const configWrapped1Sync = configWrappedSync[key1] as StorageValue<unknown> | Record<string, StorageValue<unknown>> | undefined;
+		console.log(configWrapped1Local, configWrapped1Sync);
 		if (configWrapped1.wValue !== undefined) {
 			configCache[key1] = (configWrapped1Local ?? configWrapped1Sync) ?? configWrapped1;
 			if (configWrapped1Local) {

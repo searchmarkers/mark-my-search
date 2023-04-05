@@ -3,7 +3,7 @@ type PageInteractionObjectRowInfo = {
 	key: string
 	label?: PageInteractionInfo["label"]
 	textbox?: PageInteractionInfo["textbox"]
-	checkbox?: PageInteractionInfo["checkbox"]
+	input?: PageInteractionInputInfo
 }
 type PageInteractionObjectColumnInfo = {
 	className: string
@@ -30,12 +30,14 @@ type PageInteractionSubmitterInfo = {
 	}
 	alerts?: Record<PageAlertType, PageAlertInfo>
 }
-type PageInteractionCheckboxLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
-type PageInteractionCheckboxToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
-type PageInteractionCheckboxInfo = {
+type PageInteractionInputFetch = () => InputType
+type PageInteractionInputLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
+type PageInteractionInputToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
+type PageInteractionInputInfo = {
 	autoId?: string
-	onLoad?: PageInteractionCheckboxLoad
-	onToggle?: PageInteractionCheckboxToggle
+	getType?: PageInteractionInputFetch
+	onLoad?: PageInteractionInputLoad
+	onToggle?: PageInteractionInputToggle
 }
 type PageInteractionInfo = {
 	className: string
@@ -83,9 +85,11 @@ type PageInteractionInfo = {
 		text: string
 	}
 	submitters?: Array<PageInteractionSubmitterInfo>
-	checkbox?: PageInteractionCheckboxInfo
+	input?: PageInteractionInputInfo
 	note?: {
-		text: string
+		text?: string
+		getText?: () => Promise<string | undefined>
+		forInput?: (input: HTMLInputElement, getText: (() => Promise<string | undefined>) | undefined) => void
 	}
 }
 type PageSectionInfo = {
@@ -109,6 +113,11 @@ type PageAlertInfo = {
 type FormField = {
 	question: string
 	response: string
+}
+
+enum InputType {
+	CHECKBOX = "checkbox",
+	TEXT = "text",
 }
 
 enum PageAlertType {
@@ -220,8 +229,10 @@ const loadPage = (() => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid hsl(300 100% 14%); border-radius: 8px; overflow: hidden;
+	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid hsl(300 100% 14%); overflow: hidden;
 	font-family: ubuntu, sans-serif; background: hsl(300 100% 6%); }
+body, .container.tab .tab
+	{ border-radius: 8px; }
 *
 	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -235,7 +246,8 @@ body
 textarea
 	{ resize: none; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit; background: inherit; }
+	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit;
+	background: inherit; }
 .brand
 	{ display: flex; }
 .brand > *
@@ -250,8 +262,8 @@ textarea
 	{ display: flex; justify-content: center;
 	border-top: 2px solid hsl(300 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container.tab .tab
-	{ flex: 1 1 auto; font-size: 14px; padding-inline: 10px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
-	background: transparent; color: hsl(300 20% 90%); }
+	{ flex: 1 1 auto; font-size: 14px; padding-inline: 10px; border: none; border-bottom: 2px solid transparent;
+	border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; color: hsl(300 20% 90%); }
 .container.tab .tab:hover
 	{ background: hsl(300 30% 22%); }
 .container.panel
@@ -331,6 +343,12 @@ textarea
 	{ background: hsl(300 60% 14%); }
 .panel .interaction .note
 	{ font-size: 14px; color: hsl(300 6% 54%); white-space: break-spaces; }
+.panel .interaction input.note
+	{ width: 140px; text-align: right; border: none; background: none; }
+.panel .interaction input.note:invalid
+	{ outline: 1px solid red; }
+.panel .interaction.option .note
+	{ align-self: center; }
 .panel .interaction.option .label
 	{ flex: 1; }
 .panel .interaction.link a
@@ -485,10 +503,16 @@ textarea
 		panelsInfo.forEach(panelInfo => {
 			panelInfo.sections.forEach(sectionInfo => {
 				sectionInfo.interactions.forEach(interactionInfo => {
-					if (interactionInfo.checkbox && interactionInfo.checkbox.autoId) {
-						const checkbox = document.getElementById(interactionInfo.checkbox.autoId) as HTMLInputElement;
-						if (interactionInfo.checkbox.onLoad) {
-							interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
+					if (interactionInfo.input && interactionInfo.input.autoId) {
+						const input = document.getElementById(interactionInfo.input.autoId) as HTMLInputElement;
+						if (interactionInfo.input.onLoad) {
+							interactionInfo.input.onLoad(value => {
+								if (typeof value === "boolean") {
+									input.checked = value;
+								} else {
+									input.value = value;
+								}
+							}, 0, 0);
 						}
 					}
 					(interactionInfo.submitters ?? []).forEach(submitterInfo => {
@@ -550,7 +574,7 @@ textarea
 			if (!labelInfo) {
 				return;
 			}
-			const [ label, checkboxId ] = (() => {
+			const [ label, inputId ] = (() => {
 				if (labelInfo.textbox) {
 					const label = document.createElement("input");
 					label.type = "text";
@@ -566,9 +590,9 @@ textarea
 					if (labelInfo.getText) {
 						labelInfo.getText(containerIndex).then(text => label.textContent = text);
 					}
-					const checkboxId = getIdSequential.next().value;
-					label.htmlFor = checkboxId;
-					return [ label, checkboxId ];
+					const inputId = getIdSequential.next().value;
+					label.htmlFor = inputId;
+					return [ label, inputId ];
 				}
 			})();
 			label.classList.add("label");
@@ -581,29 +605,36 @@ textarea
 				labelTextbox.addEventListener("blur", () => onChangeInternal());
 			}
 			container.appendChild(label);
-			return checkboxId;
+			return inputId;
 		};
 
-		const insertCheckbox = (container: HTMLElement, checkboxInfo: PageInteractionInfo["checkbox"], id = "",
+		const insertInput = (container: HTMLElement, inputInfo: PageInteractionInputInfo | undefined, id = "",
 			getObjectIndex: () => number, containerIndex: number) => {
-			if (!checkboxInfo) {
+			if (!inputInfo) {
 				return;
 			}
-			checkboxInfo.autoId = id;
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.id = id;
-			checkbox.classList.add("checkbox");
-			container.appendChild(checkbox);
-			if (checkboxInfo.onLoad) {
-				checkboxInfo.onLoad(checked => checkbox.checked = checked, getObjectIndex(), containerIndex);
+			inputInfo.autoId = id;
+			const input = document.createElement("input");
+			input.id = id;
+			switch (inputInfo.getType ? inputInfo.getType() : undefined) {
+			case InputType.CHECKBOX: {
+				input.type = "checkbox";
+				input.classList.add("checkbox");
+				break;
+			} case InputType.TEXT: {
+				input.type = "text";
+				break;
+			}}
+			container.appendChild(input);
+			if (inputInfo.onLoad) {
+				inputInfo.onLoad(checked => input.checked = checked, getObjectIndex(), containerIndex);
 			}
-			if (checkboxInfo.onToggle) {
-				checkbox.addEventListener("change", () =>
-					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, getObjectIndex(), containerIndex) : undefined
+			if (inputInfo.onToggle) {
+				input.addEventListener("change", () =>
+					inputInfo.onToggle ? inputInfo.onToggle(input.checked, getObjectIndex(), containerIndex) : undefined
 				);
 			}
-			return checkbox;
+			return input;
 		};
 
 		const insertTextbox = (container: HTMLElement, textboxInfo: PageInteractionInfo["textbox"],
@@ -692,13 +723,13 @@ textarea
 				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
 				const insertColumn = (columnInfo: PageInteractionObjectColumnInfo) => {
 					if (columnInfo.rows.length > 1) {
-						const checkboxId = getIdSequential.next().value;
+						const inputId = getIdSequential.next().value;
 						const toggleCheckbox = document.createElement("input");
 						toggleCheckbox.type = "checkbox";
-						toggleCheckbox.id = checkboxId;
+						toggleCheckbox.id = inputId;
 						toggleCheckbox.classList.add("collapse-toggle");
 						const toggleButton = document.createElement("label");
-						toggleButton.htmlFor = checkboxId;
+						toggleButton.htmlFor = inputId;
 						toggleButton.tabIndex = 0;
 						toggleButton.addEventListener("keydown", event => {
 							if (event.key === "Enter") {
@@ -714,8 +745,8 @@ textarea
 						const row = document.createElement("div");
 						row.classList.add(rowInfo.className);
 						insertTextbox(row, rowInfo.textbox, getObjectIndex, containerIndex, container);
-						const checkboxId = insertLabel(row, rowInfo.label, containerIndex);
-						insertCheckbox(row, rowInfo.checkbox, checkboxId, getObjectIndex, containerIndex);
+						const inputId = insertLabel(row, rowInfo.label, containerIndex);
+						insertInput(row, rowInfo.input, inputId, getObjectIndex, containerIndex);
 						column.appendChild(row);
 					};
 					columnInfo.rows.forEach(rowInfo => insertRow(rowInfo));
@@ -915,28 +946,37 @@ textarea
 			container.appendChild(list);
 		};
 
-		const insertNote = (container: HTMLElement, noteInfo: PageInteractionInfo["note"]) => {
+		const insertNote = async (container: HTMLElement, noteInfo: PageInteractionInfo["note"]) => {
 			if (!noteInfo) {
 				return;
 			}
-			const note = document.createElement("div");
+			const isInput = !!noteInfo.forInput;
+			const note = document.createElement(isInput ? "input" : "div");
+			if (noteInfo.forInput) {
+				noteInfo.forInput(note as HTMLInputElement, noteInfo.getText);
+			}
 			note.classList.add("note");
-			note.textContent = noteInfo.text;
 			container.appendChild(note);
+			const text = (noteInfo.getText ? await noteInfo.getText() : undefined) ?? noteInfo.text;
+			if (text !== undefined) {
+				note[isInput ? "value" : "textContent"] = text;
+			} else {
+				note.remove();
+			}
 		};
 
 		const insertInteraction = (container: HTMLElement, interactionInfo: PageInteractionInfo) => {
 			let index = container.childElementCount;
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction", interactionInfo.className);
-			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
+			const inputId = insertLabel(interaction, interactionInfo.label, index);
 			const insertBody = () => {
 				insertObjectList(interaction, interactionInfo.object, index);
 				insertAnchor(interaction, interactionInfo.anchor);
 				insertSubmitters(interaction, interactionInfo.submitters, () => index);
 				insertTextbox(interaction, interactionInfo.textbox, () => index, 0);
 				insertNote(interaction, interactionInfo.note);
-				insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, () => index, 0);
+				insertInput(interaction, interactionInfo.input, inputId, () => index, 0);
 			};
 			const labelTextbox = interaction.querySelector("input") as HTMLInputElement;
 			if (interactionInfo.list) {
@@ -1088,14 +1128,14 @@ textarea
 		// TODO handle multiple tabs correctly
 		// TODO visual indication of letter
 		const lettersTaken: Set<string> = new Set;
-		const info: Array<{ letter: string, checkboxInfo?: PageInteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
+		const info: Array<{ letter: string, inputInfo?: PageInteractionInputInfo }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
 			sectionInfo.interactions
 				.map(interactionInfo => {
-					if (interactionInfo.checkbox && interactionInfo.label) {
+					if (interactionInfo.input && interactionInfo.label) {
 						const letter = Array.from(interactionInfo.label.text).find(letter => !lettersTaken.has(letter));
 						if (letter) {
 							lettersTaken.add(letter);
-							return { letter, checkboxInfo: interactionInfo.checkbox };
+							return { letter, inputInfo: interactionInfo.input };
 						}
 					}
 					return { letter: "" };
@@ -1110,10 +1150,12 @@ textarea
 				if (info.letter !== event.key) {
 					return false;
 				}
-				if (info.checkboxInfo && info.checkboxInfo.autoId) {
-					const checkbox = document.getElementById(info.checkboxInfo.autoId) as HTMLInputElement;
-					checkbox.focus();
-					checkbox.click();
+				if (info.inputInfo && info.inputInfo.autoId) {
+					const input = document.getElementById(info.inputInfo.autoId) as HTMLInputElement;
+					input.focus();
+					if (input.type === "checkbox") {
+						input.click();
+					}
 					event.preventDefault();
 				}
 				return true;

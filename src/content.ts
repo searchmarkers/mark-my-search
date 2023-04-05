@@ -797,6 +797,7 @@ const insertTermInput = (() => {
 				if (!event.shiftKey) {
 					return;
 				}
+				// Documented in the options page.
 				event.preventDefault();
 				openTermOptionMenu(term);
 				return;
