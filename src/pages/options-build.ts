@@ -1,8 +1,9 @@
-const getControlOptionTemp = (labelText: string, configKey: ConfigKey, key: string,
+const getControlOptionTemp = (labelInfo: { text: string, tooltip?: string }, configKey: ConfigKey, key: string,
 	command?: { name?: string, shortcut?: string }): PageInteractionInfo => ({
 	className: "option",
 	label: {
-		text: labelText,
+		text: labelInfo.text,
+		tooltip: labelInfo.tooltip,
 	},
 	note: {
 		text: command?.shortcut,
@@ -43,39 +44,85 @@ const loadOptions = (() => {
 		{
 			className: "panel-general",
 			name: {
+				text: "General",
+			},
+			sections: ([] as Array<PageSectionInfo>).concat(isWindowInFrame() ? [
+				{
+					interactions: [
+						{
+							className: "link",
+							anchor: {
+								text: "Open in new tab",
+								url: chrome.runtime.getURL("/pages/options.html"),
+							},
+						},
+					],
+				},
+			] : []),
+		},
+		{
+			className: "panel-toolbar",
+			name: {
 				text: "Toolbar",
 			},
 			sections: [
+				{
+					title: {
+						text: "Style",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Font size" },
+							ConfigKey.BAR_LOOK,
+							"fontSize",
+						),
+						getControlOptionTemp(
+							{ text: "Opacity of keyword buttons" },
+							ConfigKey.BAR_LOOK,
+							"opacityTerm",
+						),
+						getControlOptionTemp(
+							{ text: "Opacity of control buttons" },
+							ConfigKey.BAR_LOOK,
+							"opacityControl",
+						),
+						getControlOptionTemp(
+							{ text: "Radius of rounded corners" },
+							ConfigKey.BAR_LOOK,
+							"borderRadius",
+						),
+					],
+				},
 				{
 					title: {
 						text: "Controls to Show",
 					},
 					interactions: [
 						getControlOptionTemp(
-							"Deactivate in the current tab",
+							{ text: "Deactivate in the current tab" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"disableTabResearch",
 							{ name: "toggle-research-tab" },
 						),
 						getControlOptionTemp(
-							"Perform a search using the current keywords",
+							{ text: "Perform a search using the current keywords" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"performSearch",
 						),
 						getControlOptionTemp(
-							"Toggle display of highlighting",
+							{ text: "Toggle display of highlighting" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"toggleHighlights",
 							{ name: "toggle-highlights" },
 						),
 						getControlOptionTemp(
-							"Append a new keyword to the toolbar",
+							{ text: "Append a new keyword to the toolbar" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"appendTerm",
 							{ name: "focus-term-append" },
 						),
 						getControlOptionTemp(
-							"Apply detected search keywords",
+							{ text: "Apply detected search keywords" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"replaceTerms",
 							{ name: "terms-replace" },
@@ -88,12 +135,12 @@ const loadOptions = (() => {
 					},
 					interactions: [
 						getControlOptionTemp(
-							"Edit keyword",
+							{ text: "Edit keyword" },
 							ConfigKey.BAR_LOOK,
 							"showEditIcon",
 						),
 						getControlOptionTemp(
-							"Select matching options",
+							{ text: "Select matching options" },
 							ConfigKey.BAR_LOOK,
 							"showRevealIcon",
 							{ shortcut: "Shift+Space" }, // Hardcoded in the content script.
@@ -102,28 +149,74 @@ const loadOptions = (() => {
 				},
 				{
 					title: {
-						text: "Style",
+						text: "Collapse On Activation",
 					},
 					interactions: [
 						getControlOptionTemp(
-							"Font size",
-							ConfigKey.BAR_LOOK,
-							"fontSize",
+							{ text: "When a search is detected" },
+							ConfigKey.BAR_COLLAPSE,
+							"fromSearch",
 						),
 						getControlOptionTemp(
-							"Opacity of keyword buttons",
-							ConfigKey.BAR_LOOK,
-							"opacityTerm",
+							{ text: "When a keyword list applies to the page" },
+							ConfigKey.BAR_COLLAPSE,
+							"fromTermListAuto",
+						),
+					],
+				},
+			],
+		},
+		{
+			className: "panel-advanced",
+			name: {
+				text: "Advanced",
+			},
+			sections: [
+				{
+					title: {
+						text: "Highlighting Engine",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{
+								text: "Use CLASSIC highlighting",
+								tooltip:
+`${getName()} has two highlighting methods. \
+CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
+PAINT is an alternate model invented for the Mark My Search browser extension.
+
+CLASSIC
+• Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.
+	• Rendering is expensive, and makes the page sluggish when there are many highlights.
+• Not efficient at matching time. The page can freeze for several seconds if many highlights are inserted.
+• Causes parts of webpages to look different or break.
+
+PAINT
+• Not efficient at idle time. Highlight positions need to be recalculated on scrolling or layout changing.
+	• Smooth but CPU heavy.
+	• Large numbers of highlights are handled well.
+• Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
+• Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
+							},
+							ConfigKey.HIGHLIGHT_METHOD,
+							"paintReplaceByClassic",
 						),
 						getControlOptionTemp(
-							"Opacity of control buttons",
-							ConfigKey.BAR_LOOK,
-							"opacityControl",
-						),
-						getControlOptionTemp(
-							"Radius of rounded corners",
-							ConfigKey.BAR_LOOK,
-							"borderRadius",
+							{
+								text: "Use experimental browser APIs",
+								tooltip:
+`${getName()} can highlight using experimental APIs. The behavior of this flag will change over time.
+Current effects:
+
+CLASSIC
+• None.
+
+PAINT
+• Firefox: The CSS element() function is used instead of SVG rendering.
+• Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
+							},
+							ConfigKey.HIGHLIGHT_METHOD,
+							"paintUseExperimental",
 						),
 					],
 				},
@@ -132,13 +225,16 @@ const loadOptions = (() => {
 	];
 
 	return () => {
-		loadPage(panelsInfo, `
+		loadPage(panelsInfo, (isWindowInFrame() ? `
 body
-	{ height: 570px; border: none; border-radius: 0; }
+	{ height: 570px; border-radius: 0; }
 .brand
 	{ display: none; }
 .container.panel
 	{ border-top: none; }
+` : "") + `
+body
+	{ border: none; }
 .container.tab .tab
 	{ flex: unset; }
 		`);

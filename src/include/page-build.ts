@@ -53,6 +53,7 @@ type PageInteractionInfo = {
 		textbox?: {
 			placeholder: string
 		}
+		tooltip?: string
 	}
 	object?: {
 		className: string
@@ -130,10 +131,10 @@ enum PageAlertType {
 	PENDING = "pending",
 }
 
-//enum PageButtonClass {
-//	TOGGLE = "toggle",
-//	ENABLED = "enabled",
-//}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const isWindowInFrame = () =>
+	new URL(location.href).searchParams.get("frame") !== null
+;
 
 /**
  * An EmailJS library function which sends an email using the EmailJS service.
@@ -485,11 +486,15 @@ textarea
 .panel-sites_search_research .container.tab .tab.panel-sites_search_research,
 .panel-term_lists .container.tab .tab.panel-term_lists,
 .panel-features .container.tab .tab.panel-features,
+.panel-toolbar .container.tab .tab.panel-toolbar,
+.panel-advanced .container.tab .tab.panel-advanced,
 .panel-general .container.tab .tab.panel-general
 	{ border-bottom: 2px solid hsl(300 100% 50%); background: hsl(300 30% 32%); }
 .panel-sites_search_research .container.panel > .panel.panel-sites_search_research,
 .panel-term_lists .container.panel > .panel.panel-term_lists,
 .panel-features .container.panel > .panel.panel-features,
+.panel-toolbar .container.panel > .panel.panel-toolbar,
+.panel-advanced .container.panel > .panel.panel-advanced,
 .panel-general .container.panel > .panel.panel-general
 	{ display: flex; }
 /**/
@@ -530,6 +535,8 @@ textarea
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
 	{ color: hsl(300 0% 72%); }
+.panel .interaction.option .label[title]::after
+	{ content: "(hover for details)"; margin-left: 0.5em; color: hsl(300 0% 72% / 0.8); }
 .panel .interaction.option label.label[for]:hover
 	{ color: hsl(300 0% 66%); }
 .panel .interaction .submitter
@@ -803,6 +810,9 @@ textarea
 					return [ label, inputId ];
 				}
 			})();
+			if (labelInfo.tooltip) {
+				label.title = labelInfo.tooltip;
+			}
 			label.classList.add("label");
 			const onChangeInternal = () => {
 				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
