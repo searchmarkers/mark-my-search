@@ -459,6 +459,11 @@ const getIdSequential = (function* () {
 	}
 })();
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const getVersion = (): string =>
+	chrome.runtime.getManifest().version
+;
+
 const getNameFull = (): string =>
 	chrome.runtime.getManifest().name
 ;

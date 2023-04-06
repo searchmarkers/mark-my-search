@@ -287,9 +287,9 @@ label[for]:hover
 						paintReplaceByClassic: {
 							label: "Use CLASSIC highlighting (hover for details)",
 							tooltip:
-`Mark My Search has two highlighting methods. \
+`${getName()} has two highlighting methods. \
 CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
-PAINT is an alternate model invented for Mark My Search.
+PAINT is an alternate model invented for the Mark My Search browser extension.
 
 CLASSIC
 • Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.
@@ -309,7 +309,7 @@ PAINT
 						paintUseExperimental: {
 							label: "Use experimental browser APIs (hover for details)",
 							tooltip:
-`Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
+`${getName()} can highlight using experimental APIs. The behavior of this flag will change over time.
 Current effects:
 
 CLASSIC
