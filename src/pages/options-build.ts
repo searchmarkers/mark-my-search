@@ -1,83 +1,148 @@
-const forInput = (input: HTMLInputElement, getText: (() => Promise<string | undefined>) | undefined, commandKey: string) => {
+const getOrderedShortcut = (keys: Array<string>): Array<string> => {
+	keys = keys.slice();
+	keys.sort((a, b) => (
+		(!b.endsWith("Ctrl") && b !== "Alt" && b !== "Command" && b !== "Shift") ||
+		a.endsWith("Ctrl") || (a === "Alt" && !b.endsWith("Ctrl")) || (a === "Command" && b === "Shift")
+	) ? -1 : 1);
+	return keys;
+};
+
+const forInput = (input: HTMLInputElement, getText: (() => Promise<string | undefined>) | undefined,
+	setFloatingText: (text: string) => void, commandName: string) => {
+	input.classList.add("hidden-caret");
 	input.type = "text";
 	input.placeholder = "Type a shortcut";
 	input.addEventListener("focus", () => {
 		input.value = "";
 	});
+	const useMacKeys = navigator["userAgentData"]
+		? navigator["userAgentData"].platform === "macOS"
+		: navigator.platform.toLowerCase().includes("mac");
+	const getKeyName = (keyLetter: string) => (Object.entries({
+		" ": "Space",
+		".": "Period",
+		",": "Comma",
+		ArrowUp: "Up",
+		ArrowDown: "Down",
+		ArrowLeft: "Left",
+		ArrowRight: "Right",
+	}).find(([ letter ]) => keyLetter === letter) ?? [ keyLetter, keyLetter.length === 1 ? keyLetter.toUpperCase() : keyLetter ])[1];
+	const getModifierName = (modifier: string) => ({
+		ctrl: useMacKeys ? "MacCtrl" : "Ctrl",
+		alt: "Alt",
+		meta: useMacKeys ? "Command" : "",
+		shift: "Shift",
+	})[modifier];
+	const commandKeySequences: Record<string, Array<string>> = {};
+	const reservedShortcutPattern = new RegExp(`^(${
+		[
+			[ "F([3679]|1[12])" ],
+			[ "Shift", "F([3579]|12)" ],
+			[ "Alt", "[1-9]|D|F7|Left|Right|Home" ],
+			[ "Ctrl", "0|[ABCDFGHIJKLMNOPQRSTUVWXZ]|F[457]|PageUp|PageDown" ],
+			[ "Ctrl", "Shift", "[ABCDEGHIJKMNOPRSTWXYZ]|Delete|PageUp|PageDown" ],
+			[ "Ctrl", "Alt", "R" ],
+		].map(patternSequence => `(${patternSequence.map(pattern => `(${pattern})`).join("\\+")})`).join("|")
+	})$`);
+	const modifierEventKeys = new Set([
+		"Alt", "AltGraph", "CapsLock", "Control", "Fn", "FnLock", "Hyper", "Meta",
+		"NumLock", "ScrollLock", "Shift", "Super", "Symbol", "SymbolLock", "OS",
+	]);
+	// Per Firefox spec for WebExtension key combinations at
+	// https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/commands
+	const primaryMods = [ "Ctrl", "Alt", "Command", "MacCtrl" ];
+	const keyNamePatterns = {
+		regular: "[A-Z0-9]|Comma|Period|Home|End|PageUp|PageDown|Space|Insert|Delete|Up|Down|Left|Right",
+		function: "F[1-9]|F[1-9][0-9]",
+		media: "Media(NextTrack|PlayPause|PrevTrack|Stop)",
+	};
+	let key = "";
 	const modifiers = {
 		ctrl: false,
 		alt: false,
 		meta: false,
 		shift: false,
 	};
-	const modifierEventKeys = new Set([
-		"Alt", "AltGraph", "CapsLock", "Control", "Fn", "FnLock", "Hyper", "Meta",
-		"NumLock", "ScrollLock", "Shift", "Super", "Symbol", "SymbolLock", "OS",
-	]);
-	const useMacKeys = navigator["userAgentData"]
-		? navigator["userAgentData"].platform === "macOS"
-		: navigator.platform.toLowerCase().includes("mac");
-	let key = "";
-	const inputUpdate = (event: KeyboardEvent) => {
+	const modifiersUpdate = (event: KeyboardEvent) => {
 		Object.keys(modifiers).forEach(mod => {
 			modifiers[mod] = event[`${mod}Key`];
 		});
-		const modifierNames = {
-			ctrl: useMacKeys ? "MacCtrl" : "Ctrl",
-			alt: "Alt",
-			meta: useMacKeys ? "Command" : "",
-			shift: "Shift",
-		};
-		const keyName = (Object.entries({
-			" ": "Space",
-			".": "Period",
-			",": "Comma",
-			ArrowUp: "Up",
-			ArrowDown: "Down",
-			ArrowLeft: "Left",
-			ArrowRight: "Right",
-		}).find(([ character ]) => event.key === character) ?? [ key, key.length === 1 ? key.toUpperCase() : key ])[1];
-		input.value = [
-			Object.keys(modifiers).filter(mod => modifiers[mod]).map(mod => modifierNames[mod]).join("+"),
-			keyName,
-		].filter(part => part).join("+");
-		if (input.value === "+") {
-			input.value = "";
-		}
-		if (input.value && input.validity.valid) {
-			inputCommit();
+	};
+	const inputUpdate = () => {
+		const modifierPart = Object.keys(modifiers).filter(mod => modifiers[mod])
+			.map(mod => getModifierName(mod)).join("+");
+		const keyPart = getKeyName(key);
+		input.value = modifierPart + (modifierPart ? "+" : "") + keyPart;
+		if (input.value) {
+			if (input.validity.valid) {
+				if (reservedShortcutPattern.test(input.value)) {
+					setFloatingText("Can't override a Firefox shortcut");
+					return;
+				}
+				const duplicates = Object.entries(commandKeySequences)
+					.filter(([ key, shortcut ]) => key !== commandName && shortcut.join("+") === input.value);
+				if (duplicates.length) {
+					setFloatingText("This shortcut is already in use by Mark\u00A0My\u00A0Search");
+					return;
+				}
+				setFloatingText("");
+				inputCommit();
+			} else {
+				const keyNameRegex = new RegExp(
+					`^(${Object.values(keyNamePatterns).map(pattern => `(${pattern})`).join("|")})$`
+				);
+				if (keyPart && !keyNameRegex.test(keyPart)) {
+					setFloatingText("Invalid letter");
+				} else if (input.value.startsWith("Shift+") || !modifierPart && keyPart) {
+					setFloatingText("Include Ctrl or Alt");
+				} else if (Object.keys(modifiers).filter(mod => modifiers[mod]).length > 2) {
+					setFloatingText("No more than 2 modifiers");
+				} else if (input.value.endsWith("+")) {
+					setFloatingText("Type a letter");
+				} else {
+					setFloatingText("Invalid combination");
+				}
+			}
+		} else {
+			setFloatingText("");
 		}
 	};
 	const inputCommit = async () => {
-		key = "";
-		Object.keys(modifiers).forEach(mod => {
-			modifiers[mod] = false;
-		});
-		await browser.commands.update({
-			name: commandKey,
+		const updating = browser.commands.update({
+			name: commandName,
 			shortcut: input.value,
 		});
-		input.blur();
-	};
-	const inputReset = async () => {
-		if (getText) {
-			input.value = await getText() ?? "";
+		if (input.value) {
+			const container = input.parentElement?.parentElement?.parentElement as HTMLElement; // Hack
+			const warning = container.querySelector(".warning");
+			const text = "If a shortcut doesn't work, it might already be used by another add-on.";
+			if (!warning || warning.textContent !== text) {
+				pageInsertWarning(container, text);
+			}
 		}
+		input.blur();
+		await updating;
 	};
-	// Per Firefox spec for WebExtension key combinations at
-	// https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/commands
-	const primaryMods = [ "Ctrl", "Alt", "Command", "MacCtrl" ];
 	input.pattern = `^(${[
 		// Does not protect against repeated modifiers.
 		`(${
 			primaryMods.join("|")
 		})\\+((Shift|${
 			primaryMods.join("|")
-		})\\+)?([A-Z0-9]|F[1-9]|F1[0-2]|Comma|Period|Home|End|PageUp|PageDown|Space|Insert|Delete|Up|Down|Left|Right)`,
-		"Media(NextTrack|PlayPause|PrevTrack|Stop)",
+		})\\+)?(${keyNamePatterns.regular})`,
+		`((${
+			primaryMods.join("|")
+		})\\+)?((Shift|${
+			primaryMods.join("|")
+		})\\+)?(${keyNamePatterns.function})`,
+		keyNamePatterns.media,
 	].map(pattern => `(${pattern})`).join("|")})$|^\\s*$`;
 	input.addEventListener("keydown", event => {
 		if (event.key === "Tab") {
+			return;
+		}
+		if (event.key === "Escape") {
+			input.blur();
 			return;
 		}
 		event.preventDefault();
@@ -90,37 +155,60 @@ const forInput = (input: HTMLInputElement, getText: (() => Promise<string | unde
 		if (!modifierEventKeys.has(event.key)) {
 			key = event.key;
 		}
-		inputUpdate(event);
+		modifiersUpdate(event);
+		inputUpdate();
 	});
 	input.addEventListener("keyup", event => {
-		if (event.key === "Tab") {
-			return;
-		}
 		event.preventDefault();
 		event.cancelBubble = true;
-		if (event.key === key) {
+		const keyChanged = event.key === key;
+		if (keyChanged) {
 			key = "";
 		}
-		inputUpdate(event);
+		const getModifiersActive = () => Object.entries(modifiers).filter(({ 1: value }) => value).join(",");
+		const modsActive = getModifiersActive();
+		modifiersUpdate(event);
+		if (keyChanged || getModifiersActive() !== modsActive) {
+			inputUpdate();
+		}
 	});
-	input.addEventListener("focusout", () => {
-		inputReset();
+	input.addEventListener("focusin", () => {
+		chrome.commands.getAll().then(commands => {
+			commands.forEach(command => {
+				if (!command.name) {
+					return;
+				}
+				commandKeySequences[command.name] = getOrderedShortcut(command.shortcut?.split("+") ?? []);
+			});
+		});
+	});
+	input.addEventListener("focusout", async () => {
+		key = "";
+		Object.keys(modifiers).forEach(mod => {
+			modifiers[mod] = false;
+		});
+		if (getText) {
+			input.value = await getText() ?? "";
+		}
 	});
 };
 
 const getControlOptionTemp = (labelText: string, configKey: ConfigKey, key: string,
-	commandInfo?: { key?: string, shortcut?: string }): PageInteractionInfo => ({
+	command?: { name?: string, shortcut?: string }): PageInteractionInfo => ({
 	className: "option",
 	label: {
 		text: labelText,
 	},
 	note: {
-		text: commandInfo?.shortcut,
-		getText: commandInfo?.key
-			? async () =>
-				(await chrome.commands.getAll()).find(command => command.name === commandInfo.key)?.shortcut ?? ""
+		text: command?.shortcut,
+		getText: command?.name
+			? async () => getOrderedShortcut(
+				(await chrome.commands.getAll())
+					.find(commandOther => commandOther.name === command.name)?.shortcut?.split("+") ?? []
+			).join("+") : undefined,
+		forInput: command?.name
+			? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, command.name as string)
 			: undefined,
-		forInput: commandInfo?.key ? (input, getText) => forInput(input, getText, commandInfo.key as string) : undefined,
 	},
 	input: {
 		getType: () => {
@@ -162,7 +250,7 @@ const loadOptions = (() => {
 							"Deactivate in the current tab",
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"disableTabResearch",
-							{ key: "toggle-research-tab" },
+							{ name: "toggle-research-tab" },
 						),
 						getControlOptionTemp(
 							"Perform a search using the current keywords",
@@ -173,19 +261,19 @@ const loadOptions = (() => {
 							"Toggle display of highlighting",
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"toggleHighlights",
-							{ key: "toggle-highlights" },
+							{ name: "toggle-highlights" },
 						),
 						getControlOptionTemp(
 							"Append a new keyword to the toolbar",
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"appendTerm",
-							{ key: "focus-term-append" },
+							{ name: "focus-term-append" },
 						),
 						getControlOptionTemp(
 							"Apply detected search keywords",
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"replaceTerms",
-							{ key: "terms-replace" },
+							{ name: "terms-replace" },
 						),
 					],
 				},

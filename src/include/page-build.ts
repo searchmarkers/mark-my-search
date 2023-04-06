@@ -89,7 +89,11 @@ type PageInteractionInfo = {
 	note?: {
 		text?: string
 		getText?: () => Promise<string | undefined>
-		forInput?: (input: HTMLInputElement, getText: (() => Promise<string | undefined>) | undefined) => void
+		forInput?: (
+			input: HTMLInputElement,
+			getText: (() => Promise<string | undefined>) | undefined,
+			setFloatingText: (text: string) => void,
+		) => void
 	}
 }
 type PageSectionInfo = {
@@ -245,6 +249,8 @@ body, .container.tab .tab
 	{ background: hsl(300 50% 80% / 0.5); }
 textarea
 	{ resize: none; }
+.hidden-caret
+	{ caret-color: transparent; }
 #frame
 	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit;
 	background: inherit; }
@@ -346,9 +352,15 @@ textarea
 .panel .interaction input.note
 	{ width: 140px; text-align: right; border: none; background: none; }
 .panel .interaction input.note:invalid
-	{ outline: 1px solid red; }
+	{ background: hsl(0 50% 50% / 0.5); }
 .panel .interaction.option .note
 	{ align-self: center; }
+.panel .interaction.option .note-container
+	{ display: flex; flex-direction: row-reverse; } /* Make sure any contained floating label is aligned to the right. */
+.panel .interaction .note-container .floating-frame
+	{ position: absolute; padding: 4px; border-radius: 8px; translate: 0 1.4em; background: hsl(60 90% 70%); }
+.panel .interaction .note-container .floating-frame:empty
+	{ display: none; }
 .panel .interaction.option .label
 	{ flex: 1; }
 .panel .interaction.link a
@@ -951,12 +963,28 @@ textarea
 				return;
 			}
 			const isInput = !!noteInfo.forInput;
+			const noteContainer = document.createElement("div");
+			noteContainer.classList.add("note-container");
 			const note = document.createElement(isInput ? "input" : "div");
-			if (noteInfo.forInput) {
-				noteInfo.forInput(note as HTMLInputElement, noteInfo.getText);
-			}
+			noteContainer.appendChild(note);
 			note.classList.add("note");
-			container.appendChild(note);
+			if (noteInfo.forInput) {
+				const input = note as HTMLInputElement;
+				input.type = "text";
+				const floatingPanel = document.createElement("div");
+				floatingPanel.classList.add("floating-frame");
+				noteContainer.appendChild(floatingPanel);
+				noteInfo.forInput(input, noteInfo.getText, text => {
+					floatingPanel.textContent = text;
+					if (!text) {
+						floatingPanel.replaceChildren();
+					}
+				});
+				input.addEventListener("focusout", () => {
+					floatingPanel.replaceChildren();
+				});
+			}
+			container.appendChild(noteContainer);
 			const text = (noteInfo.getText ? await noteInfo.getText() : undefined) ?? noteInfo.text;
 			if (text !== undefined) {
 				note[isInput ? "value" : "textContent"] = text;
