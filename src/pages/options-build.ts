@@ -18,7 +18,7 @@ const getControlOptionTemp = (labelInfo: { text: string, tooltip?: string }, con
 	},
 	input: {
 		getType: () => {
-			return (typeof configDefault[configKey][key].wValue === "boolean") ? InputType.CHECKBOX : InputType.TEXT;
+			return (typeof (configDefault[configKey].wValue ? configDefault[configKey].wValue[key] : configDefault[configKey][key].wValue) === "boolean") ? InputType.CHECKBOX : InputType.TEXT;
 		},
 		onLoad: async setChecked => {
 			const config = await configGet([ configKey ]);
@@ -44,10 +44,128 @@ const loadOptions = (() => {
 		{
 			className: "panel-general",
 			name: {
-				text: "General",
+				text: "Highlighting",
 			},
-			sections: ([] as Array<PageSectionInfo>).concat(isWindowInFrame() ? [
+			sections: [
 				{
+					title: {
+						text: "Highlight Style",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Color hues to cycle through" },
+							ConfigKey.HIGHLIGHT_METHOD,
+							"hues",
+						),
+						{
+							className: "option",
+							label: {
+								text: "Accessibility options",
+								tooltip: `${getName()} lacks visibility and screen reader options.\nI have a few plans, but need ideas!`,
+							},
+						},
+					],
+				},
+				{
+					title: {
+						text: "Suggest Usability Improvements",
+						expands: true,
+					},
+					interactions: [
+						{
+							className: "action",
+							submitters: [ {
+								text: "Send suggestions",
+								onClick: (messageText, formFields, onSuccess, onError) => {
+									sendProblemReport(messageText, formFields)
+										.then(onSuccess)
+										.catch(onError);
+								},
+								message: {
+									rows: 2,
+									placeholder: `How can I make ${getName()} more usable for you?`,
+									required: true,
+								},
+								alerts: {
+									[PageAlertType.SUCCESS]: {
+										text: "Success",
+									},
+									[PageAlertType.FAILURE]: {
+										text: "Status {status}: {text}",
+									},
+									[PageAlertType.PENDING]: {
+										text: "Pending, do not close popup",
+									},
+								},
+							} ],
+						},
+					],
+				},
+				{
+					title: {
+						text: "Highlight Display",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{
+								text: "Show on activation",
+								tooltip:
+`This relates to automatic activation:
+• when a search is detected
+• when a Keyword List applies to the page`
+								,
+							},
+							ConfigKey.SHOW_HIGHLIGHTS,
+							"default",
+						),
+						getControlOptionTemp(
+							{ text: "Always show on search pages" },
+							ConfigKey.SHOW_HIGHLIGHTS,
+							"overrideSearchPages",
+						),
+						getControlOptionTemp(
+							{ text: "Always show on other pages" },
+							ConfigKey.SHOW_HIGHLIGHTS,
+							"overrideResearchPages",
+						),
+					],
+				},
+				{
+					title: {
+						text: "URL Blocklist",
+					},
+					interactions: [
+						{
+							className: "url",
+							textbox: {
+								className: "url-input",
+								list: {
+									getArray: () =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
+										)
+									,
+									setArray: array =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+											sync.urlFilters.noPageModify = array.map(value => {
+												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+												return {
+													hostname: value.slice(0, pathnameStart),
+													pathname: value.slice(pathnameStart),
+												};
+											});
+											configSet(sync);
+										})
+									,
+								},
+								placeholder: "example.com/optional-path",
+								spellcheck: false,
+							},
+						},
+					],
+				},
+				{
+					className: isWindowInFrame() ? undefined : "hidden",
 					interactions: [
 						{
 							className: "link",
@@ -58,7 +176,7 @@ const loadOptions = (() => {
 						},
 					],
 				},
-			] : []),
+			],
 		},
 		{
 			className: "panel-toolbar",
@@ -87,7 +205,7 @@ const loadOptions = (() => {
 							"opacityControl",
 						),
 						getControlOptionTemp(
-							{ text: "Radius of rounded corners" },
+							{ text: "Rounded corners" },
 							ConfigKey.BAR_LOOK,
 							"borderRadius",
 						),
@@ -95,34 +213,34 @@ const loadOptions = (() => {
 				},
 				{
 					title: {
-						text: "Controls to Show",
+						text: "Buttons",
 					},
 					interactions: [
 						getControlOptionTemp(
-							{ text: "Deactivate in the current tab" },
+							{ text: "\"Deactivate in the current tab\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"disableTabResearch",
 							{ name: "toggle-research-tab" },
 						),
 						getControlOptionTemp(
-							{ text: "Perform a search using the current keywords" },
+							{ text: "\"Web Search with these keywords\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"performSearch",
 						),
 						getControlOptionTemp(
-							{ text: "Toggle display of highlighting" },
+							{ text: "\"Show/hide highlights\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"toggleHighlights",
 							{ name: "toggle-highlights" },
 						),
 						getControlOptionTemp(
-							{ text: "Append a new keyword to the toolbar" },
+							{ text: "\"Add a new keyword\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"appendTerm",
 							{ name: "focus-term-append" },
 						),
 						getControlOptionTemp(
-							{ text: "Apply detected search keywords" },
+							{ text: "\"Replace keywords with detected search\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"replaceTerms",
 							{ name: "terms-replace" },
@@ -131,16 +249,16 @@ const loadOptions = (() => {
 				},
 				{
 					title: {
-						text: "Keyword Edit Buttons",
+						text: "Keyword Buttons",
 					},
 					interactions: [
 						getControlOptionTemp(
-							{ text: "Edit keyword" },
+							{ text: "Show edit pen" },
 							ConfigKey.BAR_LOOK,
 							"showEditIcon",
 						),
 						getControlOptionTemp(
-							{ text: "Select matching options" },
+							{ text: "Show options button" },
 							ConfigKey.BAR_LOOK,
 							"showRevealIcon",
 							{ shortcut: "Shift+Space" }, // Hardcoded in the content script.
@@ -153,15 +271,102 @@ const loadOptions = (() => {
 					},
 					interactions: [
 						getControlOptionTemp(
-							{ text: "When a search is detected" },
+							{ text: "Collapse when a search is detected" },
 							ConfigKey.BAR_COLLAPSE,
 							"fromSearch",
 						),
 						getControlOptionTemp(
-							{ text: "When a keyword list applies to the page" },
+							{ text: "Collapse when a Keyword List applies to the page" },
 							ConfigKey.BAR_COLLAPSE,
 							"fromTermListAuto",
 						),
+					],
+				},
+			],
+		},
+		{
+			className: "panel-search",
+			name: {
+				text: "Search",
+			},
+			sections: [
+				{
+					title: {
+						text: "Keywords",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "URL parameters containing keywords" },
+							ConfigKey.AUTO_FIND_OPTIONS,
+							"searchParams",
+						),
+						getControlOptionTemp(
+							{ text: "Keywords to exclude" },
+							ConfigKey.AUTO_FIND_OPTIONS,
+							"stoplist",
+						),
+					],
+				},
+				{
+					title: {
+						text: "Search Engine Blocklist",
+					},
+					interactions: [
+						{
+							className: "url",
+							textbox: {
+								className: "url-input",
+								list: {
+									getArray: () =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+											sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
+										)
+									,
+									setArray: array =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+											sync.urlFilters.nonSearch = array.map(value => {
+												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+												return {
+													hostname: value.slice(0, pathnameStart),
+													pathname: value.slice(pathnameStart),
+												};
+											});
+											configSet(sync);
+										})
+									,
+								},
+								placeholder: "example.com/optional-path",
+								spellcheck: false,
+							},
+						},
+					],
+				},
+			],
+		},
+		{
+			className: "panel-term_lists",
+			name: {
+				text: "Keyword Lists",
+			},
+			sections: [
+				{
+					title: {
+						text: "Keyword Lists",
+					},
+					interactions: [
+						{
+							className: "link",
+							label: {
+								text:
+`Keyword Lists are available in the popup, but are glitchy and difficult to use.
+Once fixed, they will be accessible here too.`
+								,
+							},
+							anchor: {
+								text: "Roadmap",
+								url: "https://github.com/searchmarkers/mark-my-search/discussions/108",
+							},
+						},
 					],
 				},
 			],
@@ -197,6 +402,7 @@ PAINT
 	• Large numbers of highlights are handled well.
 • Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
+								,
 							},
 							ConfigKey.HIGHLIGHT_METHOD,
 							"paintReplaceByClassic",
@@ -214,9 +420,42 @@ CLASSIC
 PAINT
 • Firefox: The CSS element() function is used instead of SVG rendering.
 • Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
+								,
 							},
 							ConfigKey.HIGHLIGHT_METHOD,
 							"paintUseExperimental",
+						),
+					],
+				},
+				{
+					title: {
+						text: "Matching Options for New Keywords",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Case sensitivity" },
+							ConfigKey.MATCH_MODE_DEFAULTS,
+							"case",
+						),
+						getControlOptionTemp(
+							{ text: "Word stemming" },
+							ConfigKey.MATCH_MODE_DEFAULTS,
+							"stem",
+						),
+						getControlOptionTemp(
+							{ text: "Whole word matching" },
+							ConfigKey.MATCH_MODE_DEFAULTS,
+							"whole",
+						),
+						getControlOptionTemp(
+							{ text: "Diacritics sensitivity" },
+							ConfigKey.MATCH_MODE_DEFAULTS,
+							"diacritics",
+						),
+						getControlOptionTemp(
+							{ text: "Custom regular expression (regex)" },
+							ConfigKey.MATCH_MODE_DEFAULTS,
+							"regex",
 						),
 					],
 				},

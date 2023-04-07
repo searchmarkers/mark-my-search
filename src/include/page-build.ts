@@ -98,6 +98,7 @@ type PageInteractionInfo = {
 	}
 }
 type PageSectionInfo = {
+	className?: string
 	title?: {
 		text: string
 		expands?: boolean
@@ -446,6 +447,8 @@ body, .container.tab .tab
 	{ background: hsl(300 50% 80% / 0.5); }
 textarea
 	{ resize: none; }
+#frame .hidden
+	{ display: none; }
 .hidden-caret
 	{ caret-color: transparent; }
 #frame
@@ -486,6 +489,7 @@ textarea
 .panel-sites_search_research .container.tab .tab.panel-sites_search_research,
 .panel-term_lists .container.tab .tab.panel-term_lists,
 .panel-features .container.tab .tab.panel-features,
+.panel-search .container.tab .tab.panel-search,
 .panel-toolbar .container.tab .tab.panel-toolbar,
 .panel-advanced .container.tab .tab.panel-advanced,
 .panel-general .container.tab .tab.panel-general
@@ -493,6 +497,7 @@ textarea
 .panel-sites_search_research .container.panel > .panel.panel-sites_search_research,
 .panel-term_lists .container.panel > .panel.panel-term_lists,
 .panel-features .container.panel > .panel.panel-features,
+.panel-search .container.panel > .panel.panel-search,
 .panel-toolbar .container.panel > .panel.panel-toolbar,
 .panel-advanced .container.panel > .panel.panel-advanced,
 .panel-general .container.panel > .panel.panel-general
@@ -534,15 +539,15 @@ textarea
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
-	{ color: hsl(300 0% 72%); }
-.panel .interaction.option .label[title]::after
-	{ content: "(hover for details)"; margin-left: 0.5em; color: hsl(300 0% 72% / 0.8); }
+	{ white-space: pre-line; color: hsl(300 0% 72%); }
+.panel .interaction.option .label[title]:hover::after
+	{ content: "(hover for details)"; margin-left: 0.5em; color: hsl(300 0% 72% / 0.6); }
 .panel .interaction.option label.label[for]:hover
 	{ color: hsl(300 0% 66%); }
 .panel .interaction .submitter
 	{ padding-block: 3px; }
 .panel .interaction .submitter:disabled
-	{ pointer-events: none; color: hsl(0 0% 60%); }
+	{ pointer-events: none; color: hsl(0 0% 100% / 0.6); }
 .panel .interaction .alert,
 .panel .interaction .submitter
 	{ padding-inline: 2px; }
@@ -1261,6 +1266,9 @@ textarea
 		return (sectionInfo: PageSectionInfo) => {
 			const section = document.createElement("div");
 			section.classList.add("section");
+			if (sectionInfo.className) {
+				section.classList.add(sectionInfo.className);
+			}
 			if (sectionInfo.title) {
 				const title = document.createElement("div");
 				title.classList.add("title");
