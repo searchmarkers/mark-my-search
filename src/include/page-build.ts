@@ -429,22 +429,66 @@ const loadPage = (() => {
 	 */
 	const fillAndInsertStylesheet = (additionalStyleText = "") => {
 		const style = document.createElement("style");
+		const getColor = (colorDark: string, colorLight?: string) => colorDark;
+		const color = {
+			border: {
+				frame: getColor("hsl(var(--hue) 100% 14%)"),
+			},
+			bg: {
+				frame: getColor("hsl(var(--hue) 100% 6%)"),
+				panelContainer: getColor("hsl(var(--hue) 30% 14%)", "hsl(var(--hue) 20% 38%)"),
+				sectionGap: getColor("hsl(var(--hue) 28% 20%)"),
+				section: getColor("hsl(var(--hue) 100% 7%)", "hsl(var(--hue) 20% 50%)"),
+				alert: {
+					success: getColor("hsl(120 50% 24%)"),
+					pending: getColor("hsl(0 50% 24%)"),
+					failure: getColor("hsl(60 50% 24%)"),
+				},
+				input: {
+					any: getColor("hsl(var(--hue) 60% 16%)", "hsl(var(--hue) 20% 46%)"),
+					hover: getColor("hsl(var(--hue) 60% 20%)", "hsl(var(--hue) 20% 48%)"),
+					active: getColor("hsl(var(--hue) 60% 14%)", "hsl(var(--hue) 20% 40%)"),
+				},
+			},
+			text: {
+				title: getColor("hsl(var(--hue) 20% 60%)", "hsl(var(--hue) 20% 7%)"),
+				label: {
+					any: getColor("hsl(var(--hue) 0% 72%)", "hsl(var(--hue) 0% 6%)"),
+					hover: getColor("hsl(var(--hue) 0% 66%)", "hsl(var(--hue) 0% 12%)"),
+				},
+				note: getColor("hsl(var(--hue) 6% 54%)", "hsl(var(--hue) 6% 20%)"),
+				anchor: {
+					any: getColor("hsl(200 100% 80%)", "revert"),
+					visited: getColor("hsl(260 100% 80%)", "revert"),
+					active: getColor("hsl(0 100% 60%)", "revert"),
+				},
+				input: {
+					any: getColor("hsl(0 0% 90%)", "hsl(0 0% 0%)"),
+					disabled: getColor("hsl(0 0% 100% / 0.6)", "hsl(0 0% 0% / 0.6)"),
+				},
+			},
+			widget: {
+				collapse: getColor("white", "black"),
+			},
+		};
 		style.textContent = `
 body
-	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid hsl(300 100% 14%); overflow: hidden;
-	font-family: ubuntu, sans-serif; background: hsl(300 100% 6%); }
+	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
+	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; --hue: 300; }
 body, .container.tab .tab
 	{ border-radius: 8px; }
+.container.tab .tab
+	{ text-align: center; }
 *
-	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
+	{ font-size: 16px; scrollbar-color: hsl(var(--hue) 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
 	{ width: 5px; }
 ::-webkit-scrollbar-thumb
-	{ background: hsl(300 50% 40% / 0.5); }
+	{ background: hsl(var(--hue) 50% 40% / 0.5); }
 ::-webkit-scrollbar-thumb:hover
-	{ background: hsl(300 50% 60% / 0.5); }
+	{ background: hsl(var(--hue) 50% 60% / 0.5); }
 ::-webkit-scrollbar-thumb:active
-	{ background: hsl(300 50% 80% / 0.5); }
+	{ background: hsl(var(--hue) 50% 80% / 0.5); }
 textarea
 	{ resize: none; }
 #frame .hidden
@@ -466,20 +510,20 @@ textarea
 	{ width: 32px; height: 32px; }
 .container.tab
 	{ display: flex; justify-content: center;
-	border-top: 2px solid hsl(300 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+	border-top: 2px solid hsl(var(--hue) 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container.tab .tab
 	{ flex: 1 1 auto; font-size: 14px; padding-inline: 10px; border: none; border-bottom: 2px solid transparent;
-	border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; color: hsl(300 20% 90%); }
+	border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; color: hsl(var(--hue) 20% 90%); }
 .container.tab .tab:hover
-	{ background: hsl(300 30% 22%); }
+	{ background: hsl(var(--hue) 30% 22%); }
 .container.panel
-	{ flex: 1 1 auto; border-top: 2px ridge hsl(300 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
-	outline: none; background: hsl(300 30% 14%); }
+	{ flex: 1 1 auto; border-top: 2px ridge hsl(var(--hue) 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
+	outline: none; background: ${color.bg.panelContainer}; }
 @supports (overflow-y: overlay)
 	{ .container.panel { overflow-y: overlay; }; }
 .container.panel > .panel
-	{ display: none; flex-direction: column; gap: 1px;
-	border-radius: inherit; background: hsl(300 28% 20%); box-shadow: 0 0 10px; }
+	{ display: none; position: relative; flex-direction: column; gap: 1px;
+	border-radius: inherit; background: ${color.bg.sectionGap}; box-shadow: 0 0 10px; }
 .container.panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
@@ -493,7 +537,7 @@ textarea
 .panel-toolbar .container.tab .tab.panel-toolbar,
 .panel-advanced .container.tab .tab.panel-advanced,
 .panel-general .container.tab .tab.panel-general
-	{ border-bottom: 2px solid hsl(300 100% 50%); background: hsl(300 30% 32%); }
+	{ border-bottom: 2px solid hsl(var(--hue) 100% 50%); background: hsl(var(--hue) 30% 32%); }
 .panel-sites_search_research .container.panel > .panel.panel-sites_search_research,
 .panel-term_lists .container.panel > .panel.panel-term_lists,
 .panel-features .container.panel > .panel.panel-features,
@@ -505,9 +549,9 @@ textarea
 /**/
 
 .panel .section
-	{ display: flex; flex-direction: column; width: 100%; background: hsl(300 100% 7%); }
+	{ display: flex; flex-direction: column; width: 100%; background: ${color.bg.section}; }
 .panel .section > .title, .panel .section > .title-row, .panel .section > .title-row > .title
-	{ border: none; background: none; text-align: center; font-size: 15px; color: hsl(300 20% 60%); }
+	{ border: none; background: none; text-align: center; font-size: 15px; color: ${color.text.title}; }
 .panel .section > .title-row > .title
 	{ flex: 1; }
 .panel.panel .section > .container
@@ -533,30 +577,32 @@ textarea
 .panel .interaction input[type="text"],
 .panel .interaction textarea,
 .panel .interaction .submitter
-	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); font-family: inherit; }
+	{ border: none; background: ${color.bg.input.any}; color: ${color.text.input.any}; font-family: inherit; }
 .panel .interaction input[type="checkbox"]
 	{ align-self: center; }
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
-	{ white-space: pre-line; color: hsl(300 0% 72%); }
+	{ white-space: pre-line; color: ${color.text.label.any}; }
+.panel .interaction.option .label[title]
+	{ cursor: help; }
 .panel .interaction.option .label[title]:hover::after
-	{ content: "(hover for details)"; margin-left: 0.5em; color: hsl(300 0% 72% / 0.6); }
+	{ /* content: "(hover for details)"; margin-left: 0.5em; color: hsl(var(--hue) 0% 72% / 0.6); */ }
 .panel .interaction.option label.label[for]:hover
-	{ color: hsl(300 0% 66%); }
+	{ color: ${color.text.label.hover}; }
 .panel .interaction .submitter
 	{ padding-block: 3px; }
 .panel .interaction .submitter:disabled
-	{ pointer-events: none; color: hsl(0 0% 100% / 0.6); }
+	{ pointer-events: none; color: ${color.text.input.disabled}; }
 .panel .interaction .alert,
 .panel .interaction .submitter
 	{ padding-inline: 2px; }
 .panel .interaction .submitter:hover
-	{ background: hsl(300 60% 20%); }
+	{ background: ${color.bg.input.hover}; }
 .panel .interaction .submitter:active
-	{ background: hsl(300 60% 14%); }
+	{ background: ${color.bg.input.active}; }
 .panel .interaction .note
-	{ font-size: 14px; color: hsl(300 6% 54%); white-space: break-spaces; }
+	{ font-size: 14px; color: ${color.text.note}; white-space: break-spaces; }
 .panel .interaction input.note
 	{ width: 140px; text-align: right; border: none; background: none; }
 .panel .interaction input.note:invalid
@@ -566,17 +612,17 @@ textarea
 .panel .interaction.option .note-container
 	{ display: flex; flex-direction: row-reverse; } /* Make sure any contained floating label is aligned to the right. */
 .panel .interaction .note-container .floating-frame
-	{ position: absolute; padding: 4px; border-radius: 8px; translate: 0 1.4em; background: hsl(60 90% 70%); }
+	{ position: absolute; padding: 4px; border-radius: 2px; margin-top: 1.5em; background: hsl(60 90% 70%); }
 .panel .interaction .note-container .floating-frame:empty
 	{ display: none; }
 .panel .interaction.option .label
 	{ flex: 1; }
 .panel .interaction.link a
-	{ color: hsl(200 100% 80%); }
+	{ color: ${color.text.anchor.any}; }
 .panel .interaction.link a:visited
-	{ color: hsl(260 100% 80%); }
+	{ color: ${color.text.anchor.visited}; }
 .panel .interaction.link a:active
-	{ color: hsl(0 100% 60%); }
+	{ color: ${color.text.anchor.active}; }
 /**/
 
 #frame .alert
@@ -585,11 +631,11 @@ textarea
 #frame .alert:not(.shown)
 	{ height: 0; margin-block: 0; }
 .alert.success
-	{ background: hsl(120 50% 24%); }
+	{ background: ${color.bg.alert.success}; }
 .alert.failure
-	{ background: hsl(0 50% 24%); }
+	{ background: ${color.bg.alert.pending}; }
 .alert.pending
-	{ background: hsl(60 50% 24%); }
+	{ background: ${color.bg.alert.failure}; }
 /**/
 
 .panel .section > .title, .panel .section > .title-row > .title
@@ -597,7 +643,7 @@ textarea
 .panel.panel-term_lists .section > .container
 	{ padding: 4px; }
 .panel.panel-term_lists .container-terms .term
-	{ display: flex; background: hsl(300 30% 15%); }
+	{ display: flex; background: hsl(var(--hue) 30% 15%); }
 .panel.panel-term_lists .container-terms .term .phrase-input
 	{ width: 120px; background: none; }
 .panel.panel-term_lists .container-terms .term .phrase-input:not(:focus, :hover, :placeholder-shown)
@@ -624,7 +670,7 @@ textarea
 #frame .panel .collapse-toggle:not(:checked) + label[tabindex]::before, #frame .panel .collapse-toggle:not(:checked) + * > label[tabindex]::before
 	{ rotate: 0deg; }
 #frame .panel .collapse-toggle + label[tabindex], #frame .panel .collapse-toggle + * > label[tabindex]
-	{ display: block; align-self: start; background: transparent; color: white; cursor: pointer; width: 1.2em; height: 1.2em; }
+	{ display: block; align-self: start; background: transparent; color: ${color.widget.collapse}; cursor: pointer; width: 1.2em; height: 1.2em; }
 #frame .panel .collapse-toggle:not(:checked) + label ~ *
 	{ display: none; }
 

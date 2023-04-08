@@ -73,6 +73,7 @@ const loadPopup = (() => {
 								text: "Detect search engines",//"Highlight web searches",
 							},
 							input: {
+								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
@@ -90,6 +91,7 @@ const loadPopup = (() => {
 								text: "Restore keywords on reactivation",
 							},
 							input: {
+								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
@@ -114,6 +116,7 @@ const loadPopup = (() => {
 								text: "Active",
 							},
 							input: {
+								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);

@@ -466,7 +466,7 @@ PAINT
 	return () => {
 		loadPage(panelsInfo, (isWindowInFrame() ? `
 body
-	{ height: 570px; border-radius: 0; }
+	{ min-height: 570px; overflow-y: auto; border-radius: 0; }
 .brand
 	{ display: none; }
 .container.panel
