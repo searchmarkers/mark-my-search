@@ -348,6 +348,8 @@ const configSet = async (config: Partial<ConfigValues>) => {
 			}
 		} else {
 			configCache[key1] ??= {};
+			configWrappedLocal[key1] ??= {};
+			configWrappedSync[key1] ??= {};
 			Object.keys(config1Wrapped).forEach(key2 => {
 				configCache[key1][key2] ??= configDefault[key1][key2];
 				configCache[key1][key2].wValue = config[key1][key2];
@@ -361,8 +363,8 @@ const configSet = async (config: Partial<ConfigValues>) => {
 		}
 	});
 	const setLocal = chrome.storage.local.set(configWrappedLocal);
-	console.log(configWrappedSync);
 	const setSync = chrome.storage.sync.set(configWrappedSync);
+	console.log("setting", configWrappedLocal, configWrappedSync);
 	await setLocal;
 	await setSync;
 };
@@ -373,11 +375,13 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 	const getSync = chrome.storage.sync.get(keys) as Promise<Partial<ConfigValues<true>>>;
 	const configWrappedLocal = await getLocal;
 	const configWrappedSync = await getSync;
+	const configWrappedLocalAdd: Partial<ConfigValues<true>> = {};
+	const configWrappedSyncAdd: Partial<ConfigValues<true>> = {};
+	console.log("getting", configWrappedLocal, configWrappedSync, keys);
 	keys.forEach(key1 => {
 		const configWrapped1 = configDefault[key1] as StorageValue<unknown, true, true> | Record<string, StorageValue<unknown, true, true>>;
 		const configWrapped1Local = configWrappedLocal[key1] as StorageValue<unknown> | Record<string, StorageValue<unknown>> | undefined;
 		const configWrapped1Sync = configWrappedSync[key1] as StorageValue<unknown> | Record<string, StorageValue<unknown>> | undefined;
-		console.log(configWrapped1Local, configWrapped1Sync);
 		if (configWrapped1.wValue !== undefined) {
 			configCache[key1] = (configWrapped1Local ?? configWrapped1Sync) ?? configWrapped1;
 			if (configWrapped1Local) {
@@ -386,9 +390,21 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			} else if (configWrapped1Sync) {
 				configCacheKeysSync.add(key1);
 				configCacheKeysLocal.delete(key1);
+			} else {
+				if (configWrapped1.sync) {
+					configWrappedSyncAdd[key1] = configWrapped1;
+					configCacheKeysSync.add(key1);
+				} else {
+					configWrappedLocalAdd[key1] = configWrapped1;
+					configCacheKeysLocal.add(key1);
+				}
 			}
 		} else {
 			configCache[key1] ??= {};
+			configWrappedLocalAdd[key1] = {};
+			configWrappedSyncAdd[key1] = {};
+			let addLocal = false;
+			let addSync = false;
 			Object.keys(configWrapped1).forEach(key2 => {
 				const configWrapped2 = configWrapped1[key2] as StorageValue<unknown, true, true>;
 				const configWrapped2Local = configWrapped1Local ? configWrapped1Local[key2] as StorageValue<unknown> : undefined;
@@ -396,16 +412,41 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 				configCache[key1][key2] = (configWrapped2Local ?? configWrapped2Sync) ?? configWrapped2;
 				const key2Full = `${key1}_${key2}`;
 				if (configWrapped2Local) {
+					configWrappedLocalAdd[key1][key2] = configWrapped2Local;
 					configCacheKeysLocal.add(key2Full);
 					configCacheKeysSync.delete(key2Full);
 				} else if (configWrapped2Sync) {
+					configWrappedSyncAdd[key1][key2] = configWrapped2Sync;
 					configCacheKeysSync.add(key2Full);
 					configCacheKeysLocal.delete(key2Full);
+				} else {
+					if (configWrapped2.sync) {
+						addSync = true;
+						configWrappedSyncAdd[key1][key2] = configWrapped2;
+						configCacheKeysSync.add(key2Full);
+					} else {
+						addLocal = true;
+						configWrappedLocalAdd[key1][key2] = configWrapped2;
+						configCacheKeysLocal.add(key2Full);
+					}
 				}
 			});
+			if (!addLocal) {
+				delete configWrappedLocalAdd[key1];
+			}
+			if (!addSync) {
+				delete configWrappedSyncAdd[key1];
+			}
 		}
 	});
-	console.log(JSON.stringify(configCache, undefined, 1));
+	console.log("adding", configWrappedLocalAdd, configWrappedSyncAdd);
+	if (Object.keys(configWrappedLocalAdd).length) {
+		chrome.storage.local.set(configWrappedLocalAdd);
+	}
+	if (Object.keys(configWrappedSyncAdd).length) {
+		chrome.storage.sync.set(configWrappedSyncAdd);
+	}
+	//console.log(JSON.stringify(configCache, undefined, 1));
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
