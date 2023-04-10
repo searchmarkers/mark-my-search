@@ -1,19 +1,27 @@
-const getControlOptionTemp = (labelInfo: { text: string, tooltip?: string }, configKey: ConfigKey, key: string,
-	inputType: InputType, command?: { name?: string, shortcut?: string }): PageInteractionInfo => ({
+const getControlOptionTemp = (
+	labelInfo: { text: string, tooltip?: string },
+	configKey: ConfigKey,
+	key: string,
+	inputType: InputType,
+	details?: {
+		onChange?: () => unknown
+		command?: { name?: string, shortcut?: string }
+	}
+): PageInteractionInfo => ({
 	className: "option",
 	label: {
 		text: labelInfo.text,
 		tooltip: labelInfo.tooltip,
 	},
 	note: {
-		text: command?.shortcut,
-		getText: command?.name
+		text: details?.command?.shortcut,
+		getText: details?.command?.name
 			? async () => getOrderedShortcut(
 				(await chrome.commands.getAll())
-					.find(commandOther => commandOther.name === command.name)?.shortcut?.split("+") ?? []
+					.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
 			).join("+") : undefined,
-		forInput: command?.name
-			? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, command.name as string)
+		forInput: details?.command?.name
+			? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
 			: undefined,
 	},
 	input: {
@@ -22,12 +30,17 @@ const getControlOptionTemp = (labelInfo: { text: string, tooltip?: string }, con
 			const config = await configGet([ configKey ]);
 			setValue(config[configKey][key]);
 		},
-		onChange: async value => {
-			const config = await configGet([ configKey ]);
-			config[configKey][key] = (inputType === InputType.TEXT_ARRAY) ? (value as unknown as string).split(",") : value;
-			await configSet(config);
+		onChange: async (value, objectIndex, containerIndex, store) => {
+			if (store) {
+				const config = await configGet([ configKey ]);
+				config[configKey][key] = (inputType === InputType.TEXT_ARRAY) ? (value as unknown as string).split(",") : value;
+				await configSet(config);
+			}
+			if (details?.onChange) {
+				details.onChange();
+			}
 		},
-	}
+	},
 });
 
 /**
@@ -181,6 +194,84 @@ const loadOptions = (() => {
 			],
 		},
 		{
+			className: "panel-theme",
+			name: {
+				text: "Theme",
+			},
+			sections: [
+				{
+					title: {
+						text: "Type",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Edition" },
+							ConfigKey.THEME,
+							"edition",
+							InputType.TEXT,
+							{ onChange: pageReload },
+						),
+						getControlOptionTemp(
+							{ text: "Variant" },
+							ConfigKey.THEME,
+							"variant",
+							InputType.TEXT,
+							{ onChange: pageReload },
+						),
+					],
+				},
+				{
+					title: {
+						text: "Style",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Hue" },
+							ConfigKey.THEME,
+							"hue",
+							InputType.TEXT,
+							{ onChange: pageThemeUpdate },
+						),
+						getControlOptionTemp(
+							{ text: "Contrast" },
+							ConfigKey.THEME,
+							"contrast",
+							InputType.TEXT,
+							{ onChange: pageThemeUpdate },
+						),
+						getControlOptionTemp(
+							{ text: "Lightness" },
+							ConfigKey.THEME,
+							"lightness",
+							InputType.TEXT,
+							{ onChange: pageThemeUpdate },
+						),
+						getControlOptionTemp(
+							{ text: "Saturation" },
+							ConfigKey.THEME,
+							"saturation",
+							InputType.TEXT,
+							{ onChange: pageThemeUpdate },
+						),
+					],
+				},
+				{
+					title: {
+						text: "Font",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Font scale" },
+							ConfigKey.THEME,
+							"fontScale",
+							InputType.TEXT,
+							{ onChange: pageThemeUpdate },
+						),
+					],
+				},
+			],
+		},
+		{
 			className: "panel-toolbar",
 			name: {
 				text: "Toolbar",
@@ -227,7 +318,7 @@ const loadOptions = (() => {
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"disableTabResearch",
 							InputType.CHECKBOX,
-							{ name: "toggle-research-tab" },
+							{ command: { name: "toggle-research-tab" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Web Search with these keywords\"" },
@@ -240,21 +331,21 @@ const loadOptions = (() => {
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"toggleHighlights",
 							InputType.CHECKBOX,
-							{ name: "toggle-highlights" },
+							{ command: { name: "toggle-highlights" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Add a new keyword\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"appendTerm",
 							InputType.CHECKBOX,
-							{ name: "focus-term-append" },
+							{ command: { name: "focus-term-append" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Replace keywords with detected search\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"replaceTerms",
 							InputType.CHECKBOX,
-							{ name: "terms-replace" },
+							{ command: { name: "terms-replace" } },
 						),
 					],
 				},
@@ -274,7 +365,7 @@ const loadOptions = (() => {
 							ConfigKey.BAR_LOOK,
 							"showRevealIcon",
 							InputType.CHECKBOX,
-							{ shortcut: "Shift+Space" }, // Hardcoded in the content script.
+							{ command: { shortcut: "Shift+Space" } }, // Hardcoded in the content script.
 						),
 					],
 				},

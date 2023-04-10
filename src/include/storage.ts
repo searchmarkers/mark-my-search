@@ -48,6 +48,15 @@ type ConfigURLFilters<Wrapped = false, Meta = false> = {
 	nonSearch: StorageArray<URLFilter, Wrapped, Meta>
 }
 type ConfigValues<Wrapped = false, Meta = false> = {
+	[ConfigKey.THEME]: {
+		edition: StorageValueWithDefault<ThemeEdition, Wrapped, Meta>
+		variant: StorageValueWithDefault<ThemeVariant, Wrapped, Meta>
+		hue: StorageValueWithDefault<number, Wrapped, Meta>
+		contrast: StorageValue<number, Wrapped, Meta>
+		lightness: StorageValue<number, Wrapped, Meta>
+		saturation: StorageValue<number, Wrapped, Meta>
+		fontScale: StorageValue<number, Wrapped, Meta>
+	}
 	[ConfigKey.RESEARCH_INSTANCE_OPTIONS]: {
 		restoreLastInTab: StorageValue<boolean, Wrapped, Meta>
 	}
@@ -102,6 +111,7 @@ enum BankKey { // Keys assumed to be unique across all storage areas (excluding 
 }
 
 enum ConfigKey {
+	THEME = "theme",
 	OPTIONS = "options",
 	RESEARCH_INSTANCE_OPTIONS = "researchInstanceOptions",
 	AUTO_FIND_OPTIONS = "autoFindOptions",
@@ -113,6 +123,16 @@ enum ConfigKey {
 	HIGHLIGHT_METHOD = "highlightMethod",
 	URL_FILTERS = "urlFilters",
 	TERM_LISTS = "termLists",
+}
+
+enum ThemeEdition {
+	CLASSIC = "classic",
+}
+
+enum ThemeVariant {
+	DARK = "dark",
+	LIGHT = "light",
+	AUTO = "auto",
 }
 
 interface ResearchInstance {
@@ -127,6 +147,39 @@ interface ResearchInstance {
  * Set to sensible options for a generic first-time user of the extension.
  */
 const configDefault: ConfigValues<true, true> = {
+	theme: {
+		edition: {
+			wValue: ThemeEdition.CLASSIC,
+			wUseDefault: false,
+			sync: false,
+		},
+		variant: {
+			wValue: ThemeVariant.DARK,
+			wUseDefault: true,
+			sync: false,
+		},
+		hue: {
+			wValue: 284,
+			wUseDefault: true,
+			sync: true,
+		},
+		contrast: {
+			wValue: 1,
+			sync: true,
+		},
+		lightness: {
+			wValue: 1,
+			sync: true,
+		},
+		saturation: {
+			wValue: 1,
+			sync: true,
+		},
+		fontScale: {
+			wValue: 1,
+			sync: false,
+		},
+	},
 	researchInstanceOptions: {
 		restoreLastInTab: {
 			wValue: true,

@@ -32,7 +32,7 @@ type PageInteractionSubmitterInfo = {
 }
 type PageInteractionInputFetch = () => InputType
 type PageInteractionInputLoad = (setValue: (value: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
-type PageInteractionInputToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
+type PageInteractionInputToggle = (checked: boolean, objectIndex: number, containerIndex: number, store: boolean) => void
 type PageInteractionInputInfo = {
 	autoId?: string
 	getType?: PageInteractionInputFetch
@@ -417,6 +417,25 @@ const pageFocusScrollContainer = () =>
 	(document.querySelector(".container.panel") as HTMLElement).focus()
 ;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const pageReload = () => {
+	location.reload();
+};
+
+const pageThemeUpdate = async () => {
+	const config = await configGet([ ConfigKey.THEME ]);
+	const styleTheme = document.getElementById("style-theme") as HTMLStyleElement;
+	styleTheme.textContent =
+`:root {
+	--hue: ${config.theme.hue};
+	--contrast: ${config.theme.contrast};
+	--lightness: ${config.theme.lightness};
+	--saturation: ${config.theme.saturation};
+	--font-scale: ${config.theme.fontScale};
+}`
+	;
+};
+
 /**
  * 
  * @param panelsInfo 
@@ -430,58 +449,69 @@ const loadPage = (() => {
 	 */
 	const fillAndInsertStylesheet = (additionalStyleText = "") => {
 		const style = document.createElement("style");
+		style.id = "style";
+		const getHsl = (hue: number, saturation: number, lightness: number, alpha?: number) =>
+			`hsl(${hue === -1 ? "var(--hue)" : hue} calc(${saturation}% * var(--saturation)) calc((((${lightness}% - 50%) * var(--contrast)) + 50%) * var(--lightness))${
+				alpha === undefined ? "" : ` / ${alpha}`
+			})`;
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const getColor = (colorDark: string, colorLight?: string) => colorDark;
 		const color = {
 			border: {
-				frame: getColor("hsl(var(--hue) 100% 14%)"),
+				frame: getColor(getHsl(-1, 100, 14)),
 			},
 			bg: {
-				frame: getColor("hsl(var(--hue) 100% 6%)"),
-				panelContainer: getColor("hsl(var(--hue) 30% 14%)", "hsl(var(--hue) 20% 38%)"),
-				sectionGap: getColor("hsl(var(--hue) 28% 20%)"),
-				section: getColor("hsl(var(--hue) 100% 7%)", "hsl(var(--hue) 20% 50%)"),
+				frame: getColor(getHsl(-1, 100, 6)),
+				panelContainer: getColor(getHsl(-1, 30, 14), getHsl(-1, 20, 38)),
+				sectionGap: getColor(getHsl(-1, 28, 20)),
+				section: getColor(getHsl(-1, 100, 7), getHsl(-1, 20, 50)),
 				alert: {
-					success: getColor("hsl(120 50% 24%)"),
-					pending: getColor("hsl(0 50% 24%)"),
-					failure: getColor("hsl(60 50% 24%)"),
+					success: getColor(getHsl(120, 50, 24)),
+					pending: getColor(getHsl(0, 50, 24)),
+					failure: getColor(getHsl(60, 50, 24)),
 				},
 				input: {
-					any: getColor("hsl(var(--hue) 60% 16%)", "hsl(var(--hue) 20% 46%)"),
-					hover: getColor("hsl(var(--hue) 60% 20%)", "hsl(var(--hue) 20% 48%)"),
-					active: getColor("hsl(var(--hue) 60% 14%)", "hsl(var(--hue) 20% 40%)"),
+					any: getColor(getHsl(-1, 60, 16), getHsl(-1, 20, 46)),
+					hover: getColor(getHsl(-1, 60, 20), getHsl(-1, 20, 48)),
+					active: getColor(getHsl(-1, 60, 14), getHsl(-1, 20, 40)),
 				},
 			},
 			text: {
-				title: getColor("hsl(var(--hue) 20% 60%)", "hsl(var(--hue) 20% 7%)"),
+				title: getColor(getHsl(-1, 20, 60), getHsl(-1, 20, 7)),
 				label: {
-					any: getColor("hsl(var(--hue) 0% 72%)", "hsl(var(--hue) 0% 6%)"),
-					hover: getColor("hsl(var(--hue) 0% 66%)", "hsl(var(--hue) 0% 12%)"),
+					any: getColor(getHsl(-1, 0, 72), getHsl(-1, 0, 6)),
+					hover: getColor(getHsl(-1, 0, 66), getHsl(-1, 0, 12)),
 				},
-				note: getColor("hsl(var(--hue) 6% 54%)", "hsl(var(--hue) 6% 20%)"),
+				note: getColor(getHsl(-1, 6, 54), getHsl(-1, 6, 20)),
 				anchor: {
-					any: getColor("hsl(200 100% 80%)", "revert"),
-					visited: getColor("hsl(260 100% 80%)", "revert"),
-					active: getColor("hsl(0 100% 60%)", "revert"),
+					any: getColor(getHsl(200, 100, 80), "revert"),
+					visited: getColor(getHsl(260, 100, 80), "revert"),
+					active: getColor(getHsl(0, 100, 60), "revert"),
 				},
 				input: {
-					any: getColor("hsl(0 0% 90%)", "hsl(0 0% 0%)"),
-					disabled: getColor("hsl(0 0% 100% / 0.6)", "hsl(0 0% 0% / 0.6)"),
+					any: getColor(getHsl(0, 0, 90), getHsl(0, 0, 0)),
+					disabled: getColor(getHsl(0, 0, 100, 0.6), getHsl(0, 0, 0, 0.6)),
 				},
 			},
 			widget: {
 				collapse: getColor("white", "black"),
 			},
 		};
-		style.textContent = `
-:root
-	{ --hue: 284; }
+		style.textContent =
+`:root {
+	--hue: ${configDefault.theme.hue.wValue};
+	--contrast: ${configDefault.theme.contrast.wValue};
+	--lightness: ${configDefault.theme.lightness.wValue};
+	--saturation: ${configDefault.theme.saturation.wValue};
+	--font-scale: ${configDefault.theme.fontScale.wValue};
+}
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
 	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; }
 body, .container.tab .tab
 	{ border-radius: 8px; }
 .container.tab .tab
-	{ text-align: center; }
+	{ padding-block: 1px; text-align: center; text-decoration: none; }
 *
 	{ font-size: 16px; scrollbar-color: hsl(var(--hue) 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
@@ -537,6 +567,7 @@ textarea
 .panel-term_lists .container.tab .tab.panel-term_lists,
 .panel-features .container.tab .tab.panel-features,
 .panel-search .container.tab .tab.panel-search,
+.panel-theme .container.tab .tab.panel-theme,
 .panel-toolbar .container.tab .tab.panel-toolbar,
 .panel-advanced .container.tab .tab.panel-advanced,
 .panel-general .container.tab .tab.panel-general
@@ -545,6 +576,7 @@ textarea
 .panel-term_lists .container.panel > .panel.panel-term_lists,
 .panel-features .container.panel > .panel.panel-features,
 .panel-search .container.panel > .panel.panel-search,
+.panel-theme .container.panel > .panel.panel-theme,
 .panel-toolbar .container.panel > .panel.panel-toolbar,
 .panel-advanced .container.panel > .panel.panel-advanced,
 .panel-general .container.panel > .panel.panel-general
@@ -681,9 +713,13 @@ textarea
 	{ display: flex; flex-direction: row; }
 #frame .panel .section > .title-row label
 	{ position: absolute; align-self: center; }
-/**/
-		` + additionalStyleText;
+/**/`
+		+ additionalStyleText;
+		pageThemeUpdate();
+		const styleTheme = document.createElement("style");
+		styleTheme.id = "style-theme";
 		document.head.appendChild(style);
+		document.head.appendChild(styleTheme);
 	};
 
 	const classNameIsPanel = (className: string) =>
@@ -694,8 +730,9 @@ textarea
 		classArray.find(className => classNameIsPanel(className)) ?? ""
 	;
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const focusActivePanel = () => {
-		const frame = document.querySelector("#frame") as HTMLElement;
+		const frame = document.getElementById("frame") as HTMLElement;
 		const className = getPanelClassName(Array.from(frame.classList));
 		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
 		if (inputFirst) {
@@ -721,41 +758,17 @@ textarea
 				)
 		) as HTMLButtonElement | null;
 		if (tabNext) {
-			tabNext.focus();
-			tabNext.dispatchEvent(new MouseEvent("mousedown"));
+			tabNext.click();
 		}
 	};
 
-	const handleTabs = (shiftModifierIsRequired = true) => {
-		const frame = document.querySelector("#frame") as HTMLElement;
-		getTabs().forEach((tab: HTMLButtonElement) => {
-			const onClick = () => {
-				frame.classList.forEach(className => {
-					if (classNameIsPanel(className)) {
-						frame.classList.remove(className);
-					}
-				});
-				frame.classList.add(getPanelClassName(Array.from(tab.classList)));
-			};
-			tab.addEventListener("click", onClick);
-			tab.addEventListener("mousedown", onClick);
-			tab.addEventListener("keydown", event => {
-				if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-					shiftTabFromTab(tab, true, true);
-				} else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-					shiftTabFromTab(tab, false, true);
-				}
-			});
-		});
+	const handleTabs = () => {
+		const frame = document.getElementById("frame") as HTMLElement;
 		document.addEventListener("keydown", event => {
-			if (shiftModifierIsRequired && !event.shiftKey) {
-				return;
-			}
 			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
 					.querySelector(`.container.tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
 				shiftTabFromTab(currentTab, toRight, cycle);
-				focusActivePanel();
 			};
 			if (event.key === "PageDown") {
 				shiftTab(true, true);
@@ -765,7 +778,6 @@ textarea
 				event.preventDefault();
 			}
 		});
-		(getTabs()[0] as HTMLButtonElement).click();
 	};
 
 	const reload = (panelsInfo: Array<PagePanelInfo>) => {
@@ -776,10 +788,12 @@ textarea
 						const input = document.getElementById(interactionInfo.input.autoId) as HTMLInputElement;
 						if (interactionInfo.input.onLoad) {
 							interactionInfo.input.onLoad(value => {
-								if (typeof value === "boolean") {
-									input.checked = value;
-								} else {
-									input.value = value;
+								const attribute = typeof value === "boolean" ? "checked" : "value";
+								if (input[attribute] !== value) {
+									input[attribute] = value as never;
+									if (interactionInfo.input?.onChange) {
+										interactionInfo.input?.onChange(value, -1, -1, false);
+									}
 								}
 							}, 0, 0); // Make function.
 						}
@@ -910,7 +924,7 @@ textarea
 			}
 			if (inputInfo.onChange) {
 				input.addEventListener("change", async () =>
-					inputInfo.onChange ? inputInfo.onChange((!inputInfo.getType || (await inputInfo.getType()) === InputType.CHECKBOX) ? input.checked : (input.value as unknown as boolean), getObjectIndex(), containerIndex) : undefined
+					inputInfo.onChange ? inputInfo.onChange((!inputInfo.getType || (await inputInfo.getType()) === InputType.CHECKBOX) ? input.checked : (input.value as unknown as boolean), getObjectIndex(), containerIndex, true) : undefined
 				);
 			}
 			return input;
@@ -1402,11 +1416,12 @@ textarea
 		frame.appendChild(panelContainer);
 		const tabContainer = document.createElement("div");
 		tabContainer.classList.add("container", "tab");
+		tabContainer.title = "Switch tabs with PageDown and PageUp";
 		frame.appendChild(tabContainer);
 		return frame;
 	};
 
-	const insertAndManageContent = (panelsInfo: Array<PagePanelInfo>, shiftModifierIsRequired = true) => {
+	const insertAndManageContent = (panelsInfo: Array<PagePanelInfo>) => {
 		document.body.appendChild(createFrameStructure());
 		const panelContainer = document.querySelector(".container.panel") as HTMLElement;
 		const tabContainer = document.querySelector(".container.tab") as HTMLElement;
@@ -1417,11 +1432,18 @@ textarea
 				panel.appendChild(createSection(sectionInfo));
 			});
 			panelContainer.appendChild(panel);
-			const tab = document.createElement("button");
-			tab.type = "button";
-			tab.classList.add("tab", panelInfo.className);
-			tab.textContent = panelInfo.name.text;
-			tabContainer.appendChild(tab);
+			const tabButton = document.createElement("a");
+			tabButton.id = panelInfo.className;
+			tabButton.classList.add("tab", panelInfo.className);
+			tabButton.href = `#${panelInfo.className}`;
+			tabButton.tabIndex = -1;
+			tabButton.addEventListener("focusin", event => {
+				event.preventDefault();
+				tabButton.blur();
+				pageFocusScrollContainer();
+			});
+			tabButton.textContent = panelInfo.name.text;
+			tabContainer.appendChild(tabButton);
 		});
 		// TODO handle multiple tabs correctly
 		// TODO visual indication of letter
@@ -1451,25 +1473,37 @@ textarea
 				if (info.inputInfo && info.inputInfo.autoId) {
 					const input = document.getElementById(info.inputInfo.autoId) as HTMLInputElement;
 					input.focus();
-					if (input.type === "checkbox") {
-						input.click();
-					}
 					event.preventDefault();
 				}
 				return true;
 			});
 		});
-		handleTabs(shiftModifierIsRequired);
+		handleTabs();
 		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
 		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
-	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
+	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "") => {
 		chrome.tabs.query = useChromeAPI()
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
 		fillAndInsertStylesheet(additionalStyleText);
-		insertAndManageContent(panelsInfo, shiftModifierIsRequired);
+		insertAndManageContent(panelsInfo);
 		pageFocusScrollContainer();
+		const chooseTab = () => {
+			const hash = (new URL(location.href)).hash;
+			const tabButton = hash.length ? document.getElementById(hash.slice(1)) : getTabs()[0];
+			if (tabButton) {
+				const frame = document.getElementById("frame") as HTMLElement;
+				frame.classList.forEach(className => {
+					if (classNameIsPanel(className)) {
+						frame.classList.remove(className);
+					}
+				});
+				frame.classList.add(tabButton.id);
+			}
+		};
+		chooseTab();
+		addEventListener("hashchange", () => chooseTab());
 	};
 })();
