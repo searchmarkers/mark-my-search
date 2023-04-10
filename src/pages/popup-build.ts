@@ -20,7 +20,7 @@ const loadPopup = (() => {
 				const sync = await configGet([ ConfigKey.TERM_LISTS ]);
 				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
-			onToggle: (checked, objectIndex, containerIndex) => {
+			onChange: (checked, objectIndex, containerIndex) => {
 				configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
 					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
 					configSet(sync);
@@ -78,7 +78,7 @@ const loadPopup = (() => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
 								},
-								onToggle: checked => {
+								onChange: checked => {
 									messageSendBackground({
 										toggleResearchOn: checked,
 									});
@@ -96,7 +96,7 @@ const loadPopup = (() => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
 								},
-								onToggle: async checked => {
+								onChange: async checked => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									local.autoFindOptions.enabled = checked;
 									await configSet(local);
@@ -124,7 +124,7 @@ const loadPopup = (() => {
 										isTabResearchPage(
 											session.researchInstances, tab.id));
 								},
-								onToggle: checked => {
+								onChange: checked => {
 									if (checked) {
 										bankGet([ BankKey.RESEARCH_INSTANCES ]).then(async session => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });

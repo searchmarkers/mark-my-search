@@ -31,13 +31,13 @@ type PageInteractionSubmitterInfo = {
 	alerts?: Record<PageAlertType, PageAlertInfo>
 }
 type PageInteractionInputFetch = () => InputType
-type PageInteractionInputLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
+type PageInteractionInputLoad = (setValue: (value: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
 type PageInteractionInputToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
 type PageInteractionInputInfo = {
 	autoId?: string
 	getType?: PageInteractionInputFetch
 	onLoad?: PageInteractionInputLoad
-	onToggle?: PageInteractionInputToggle
+	onChange?: PageInteractionInputToggle
 }
 type PageInteractionInfo = {
 	className: string
@@ -124,6 +124,7 @@ type FormField = {
 enum InputType {
 	CHECKBOX = "checkbox",
 	TEXT = "text",
+	TEXT_ARRAY = "textArray",
 }
 
 enum PageAlertType {
@@ -472,9 +473,11 @@ const loadPage = (() => {
 			},
 		};
 		style.textContent = `
+:root
+	{ --hue: 284; }
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
-	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; --hue: 300; }
+	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; }
 body, .container.tab .tab
 	{ border-radius: 8px; }
 .container.tab .tab
@@ -778,7 +781,7 @@ textarea
 								} else {
 									input.value = value;
 								}
-							}, 0, 0);
+							}, 0, 0); // Make function.
 						}
 					}
 					(interactionInfo.submitters ?? []).forEach(submitterInfo => {
@@ -890,17 +893,24 @@ textarea
 				input.type = "checkbox";
 				input.classList.add("checkbox");
 				break;
-			} case InputType.TEXT: {
+			} case InputType.TEXT_ARRAY:
+			case InputType.TEXT: {
 				input.type = "text";
 				break;
 			}}
 			container.appendChild(input);
 			if (inputInfo.onLoad) {
-				inputInfo.onLoad(checked => input.checked = checked, getObjectIndex(), containerIndex);
+				inputInfo.onLoad(value => {
+					if (typeof value === "boolean") {
+						input.checked = value;
+					} else {
+						input.value = value;
+					}
+				}, getObjectIndex(), containerIndex);
 			}
-			if (inputInfo.onToggle) {
-				input.addEventListener("change", () =>
-					inputInfo.onToggle ? inputInfo.onToggle(input.checked, getObjectIndex(), containerIndex) : undefined
+			if (inputInfo.onChange) {
+				input.addEventListener("change", async () =>
+					inputInfo.onChange ? inputInfo.onChange((!inputInfo.getType || (await inputInfo.getType()) === InputType.CHECKBOX) ? input.checked : (input.value as unknown as boolean), getObjectIndex(), containerIndex) : undefined
 				);
 			}
 			return input;

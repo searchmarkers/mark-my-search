@@ -1,5 +1,5 @@
 const getControlOptionTemp = (labelInfo: { text: string, tooltip?: string }, configKey: ConfigKey, key: string,
-	command?: { name?: string, shortcut?: string }): PageInteractionInfo => ({
+	inputType: InputType, command?: { name?: string, shortcut?: string }): PageInteractionInfo => ({
 	className: "option",
 	label: {
 		text: labelInfo.text,
@@ -17,16 +17,14 @@ const getControlOptionTemp = (labelInfo: { text: string, tooltip?: string }, con
 			: undefined,
 	},
 	input: {
-		getType: () => {
-			return (typeof (configDefault[configKey].wValue ? configDefault[configKey].wValue[key] : configDefault[configKey][key].wValue) === "boolean") ? InputType.CHECKBOX : InputType.TEXT;
-		},
-		onLoad: async setChecked => {
+		getType: () => inputType,
+		onLoad: async setValue => {
 			const config = await configGet([ configKey ]);
-			setChecked(config[configKey][key]);
+			setValue(config[configKey][key]);
 		},
-		onToggle: async checked => {
+		onChange: async value => {
 			const config = await configGet([ configKey ]);
-			config[configKey][key] = checked;
+			config[configKey][key] = (inputType === InputType.TEXT_ARRAY) ? (value as unknown as string).split(",") : value;
 			await configSet(config);
 		},
 	}
@@ -56,6 +54,7 @@ const loadOptions = (() => {
 							{ text: "Color hues to cycle through" },
 							ConfigKey.HIGHLIGHT_METHOD,
 							"hues",
+							InputType.TEXT_ARRAY,
 						),
 						{
 							className: "option",
@@ -117,16 +116,19 @@ const loadOptions = (() => {
 							},
 							ConfigKey.SHOW_HIGHLIGHTS,
 							"default",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Always show on search pages" },
 							ConfigKey.SHOW_HIGHLIGHTS,
 							"overrideSearchPages",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Always show on other pages" },
 							ConfigKey.SHOW_HIGHLIGHTS,
 							"overrideResearchPages",
+							InputType.CHECKBOX,
 						),
 					],
 				},
@@ -193,21 +195,25 @@ const loadOptions = (() => {
 							{ text: "Font size" },
 							ConfigKey.BAR_LOOK,
 							"fontSize",
+							InputType.TEXT,
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of keyword buttons" },
 							ConfigKey.BAR_LOOK,
 							"opacityTerm",
+							InputType.TEXT,
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of control buttons" },
 							ConfigKey.BAR_LOOK,
 							"opacityControl",
+							InputType.TEXT,
 						),
 						getControlOptionTemp(
 							{ text: "Rounded corners" },
 							ConfigKey.BAR_LOOK,
 							"borderRadius",
+							InputType.TEXT,
 						),
 					],
 				},
@@ -220,29 +226,34 @@ const loadOptions = (() => {
 							{ text: "\"Deactivate in the current tab\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"disableTabResearch",
+							InputType.CHECKBOX,
 							{ name: "toggle-research-tab" },
 						),
 						getControlOptionTemp(
 							{ text: "\"Web Search with these keywords\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"performSearch",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "\"Show/hide highlights\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"toggleHighlights",
+							InputType.CHECKBOX,
 							{ name: "toggle-highlights" },
 						),
 						getControlOptionTemp(
 							{ text: "\"Add a new keyword\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"appendTerm",
+							InputType.CHECKBOX,
 							{ name: "focus-term-append" },
 						),
 						getControlOptionTemp(
 							{ text: "\"Replace keywords with detected search\"" },
 							ConfigKey.BAR_CONTROLS_SHOWN,
 							"replaceTerms",
+							InputType.CHECKBOX,
 							{ name: "terms-replace" },
 						),
 					],
@@ -256,11 +267,13 @@ const loadOptions = (() => {
 							{ text: "Show edit pen" },
 							ConfigKey.BAR_LOOK,
 							"showEditIcon",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Show options button" },
 							ConfigKey.BAR_LOOK,
 							"showRevealIcon",
+							InputType.CHECKBOX,
 							{ shortcut: "Shift+Space" }, // Hardcoded in the content script.
 						),
 					],
@@ -274,11 +287,13 @@ const loadOptions = (() => {
 							{ text: "Collapse when a search is detected" },
 							ConfigKey.BAR_COLLAPSE,
 							"fromSearch",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Collapse when a Keyword List applies to the page" },
 							ConfigKey.BAR_COLLAPSE,
 							"fromTermListAuto",
+							InputType.CHECKBOX,
 						),
 					],
 				},
@@ -299,11 +314,13 @@ const loadOptions = (() => {
 							{ text: "URL parameters containing keywords" },
 							ConfigKey.AUTO_FIND_OPTIONS,
 							"searchParams",
+							InputType.TEXT_ARRAY,
 						),
 						getControlOptionTemp(
 							{ text: "Keywords to exclude" },
 							ConfigKey.AUTO_FIND_OPTIONS,
 							"stoplist",
+							InputType.TEXT_ARRAY,
 						),
 					],
 				},
@@ -406,6 +423,7 @@ PAINT
 							},
 							ConfigKey.HIGHLIGHT_METHOD,
 							"paintReplaceByClassic",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{
@@ -424,6 +442,7 @@ PAINT
 							},
 							ConfigKey.HIGHLIGHT_METHOD,
 							"paintUseExperimental",
+							InputType.CHECKBOX,
 						),
 					],
 				},
@@ -436,26 +455,31 @@ PAINT
 							{ text: "Case sensitivity" },
 							ConfigKey.MATCH_MODE_DEFAULTS,
 							"case",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Word stemming" },
 							ConfigKey.MATCH_MODE_DEFAULTS,
 							"stem",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Whole word matching" },
 							ConfigKey.MATCH_MODE_DEFAULTS,
 							"whole",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Diacritics sensitivity" },
 							ConfigKey.MATCH_MODE_DEFAULTS,
 							"diacritics",
+							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Custom regular expression (regex)" },
 							ConfigKey.MATCH_MODE_DEFAULTS,
 							"regex",
+							InputType.CHECKBOX,
 						),
 					],
 				},

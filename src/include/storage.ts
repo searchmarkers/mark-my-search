@@ -12,14 +12,14 @@ type BankValues = {
 	[BankKey.ENGINES]: Engines
 }
 type StorageValue<T, Wrapped = true, Meta = false> = Wrapped extends true ? {
-	wValue: T
+	wValue: T // TODO replace "w" members with another wrapper object (light enough?)
 	sync: Meta extends true ? boolean : undefined
 } : T
 type StorageValueWithDefault<T, Wrapped = true, Meta = false> = (Wrapped extends true ? {
 	wUseDefault: boolean
 } : T) & StorageValue<T, Wrapped, Meta>
 type StorageArray<T, Wrapped = true, Meta = false> = (Wrapped extends true ? {
-	wInlist: T
+	list: T
 	wOutlist: T
 } : T) & StorageValue<T, Wrapped, Meta>
 type ConfigBarControlsShown<Wrapped = false, Meta = false> = {
@@ -139,7 +139,7 @@ const configDefault: ConfigValues<true, true> = {
 			sync: false,
 		},
 		searchParams: {
-			wValue: [ // Order of specificity, as only the first match will be used.
+			list: [ // Order of specificity, as only the first match will be used.
 				"search_terms", "search_term", "searchTerms", "searchTerm",
 				"search_query", "searchQuery",
 				"search",
@@ -154,17 +154,17 @@ const configDefault: ConfigValues<true, true> = {
 				"_nkw", // eBay
 				"wd", // Baidu
 			],
-			wInlist: [],
+			wValue: [],
 			wOutlist: [],
 			sync: true,
 		},
 		stoplist: {
-			wValue: [
+			list: [
 				"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
 				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
 				"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
 			],
-			wInlist: [],
+			wValue: [],
 			wOutlist: [],
 			sync: true,
 		},
@@ -278,14 +278,14 @@ const configDefault: ConfigValues<true, true> = {
 	},
 	urlFilters: {
 		noPageModify: {
+			list: [],
 			wValue: [],
-			wInlist: [],
 			wOutlist: [],
 			sync: true
 		},
 		nonSearch: {
+			list: [],
 			wValue: [],
-			wInlist: [],
 			wOutlist: [],
 			sync: true,
 		},
@@ -333,12 +333,15 @@ const bankGet = async (keys: Array<BankKey>): Promise<BankValues> => {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configSet = async (config: Partial<ConfigValues>) => {
+	await configCachePopulate(Object.keys(config) as Array<ConfigKey>);
 	const configWrappedLocal: Partial<ConfigValues<true>> = {};
 	const configWrappedSync: Partial<ConfigValues<true>> = {};
-	configCachePopulate(Object.keys(config) as Array<ConfigKey>);
+	//Object.keys(configCache).forEach(key1 => {
+	//	configCacheKeysLocal.
+	//});
 	Object.keys(config).forEach(key1 => {
-		const config1Wrapped = configDefault[key1] as StorageValue<true> | Record<string, StorageValue<true>>;
-		if (config1Wrapped.wValue !== undefined) {
+		const config1WrappedDefault = configDefault[key1] as StorageValue<true> | Record<string, StorageValue<true>>;
+		if (config1WrappedDefault.wValue !== undefined) {
 			configCache[key1] ??= configDefault[key1];
 			configCache[key1].wValue = config[key1];
 			if (configCacheKeysLocal.has(key1)) {
@@ -347,10 +350,9 @@ const configSet = async (config: Partial<ConfigValues>) => {
 				configWrappedSync[key1] = configCache[key1];
 			}
 		} else {
-			configCache[key1] ??= {};
 			configWrappedLocal[key1] ??= {};
 			configWrappedSync[key1] ??= {};
-			Object.keys(config1Wrapped).forEach(key2 => {
+			Object.keys(config1WrappedDefault).forEach(key2 => {
 				configCache[key1][key2] ??= configDefault[key1][key2];
 				configCache[key1][key2].wValue = config[key1][key2];
 				const key2Full = `${key1}_${key2}`;
@@ -364,38 +366,44 @@ const configSet = async (config: Partial<ConfigValues>) => {
 	});
 	const setLocal = chrome.storage.local.set(configWrappedLocal);
 	const setSync = chrome.storage.sync.set(configWrappedSync);
-	console.log("setting", configWrappedLocal, configWrappedSync);
+	//console.log("setting", configWrappedLocal, configWrappedSync);
 	await setLocal;
 	await setSync;
 };
 
 const configCachePopulate = async (keys: Array<ConfigKey>) => {
 	// TODO flatten storage AT LEAST one level, e.g. {key1}_{key2} where key1.key2 maps to a wrapped value
+	keys = keys.filter(key1 => configDefault[key1].wValue !== undefined
+		? (!configCacheKeysLocal.has(key1) && !configCacheKeysSync.has(key1))
+		: Object.keys(configDefault[key1]).every(key2 =>
+			!configCacheKeysLocal.has(`${key1}_${key2}`) && !configCacheKeysSync.has(`${key1}_${key2}`)
+		));
+	if (!keys.length) {
+		return;
+	}
 	const getLocal = chrome.storage.local.get(keys) as Promise<Partial<ConfigValues<true>>>;
 	const getSync = chrome.storage.sync.get(keys) as Promise<Partial<ConfigValues<true>>>;
 	const configWrappedLocal = await getLocal;
 	const configWrappedSync = await getSync;
 	const configWrappedLocalAdd: Partial<ConfigValues<true>> = {};
 	const configWrappedSyncAdd: Partial<ConfigValues<true>> = {};
-	console.log("getting", configWrappedLocal, configWrappedSync, keys);
+	//console.log("getting", configWrappedLocal, configWrappedSync, keys);
 	keys.forEach(key1 => {
-		const configWrapped1 = configDefault[key1] as StorageValue<unknown, true, true> | Record<string, StorageValue<unknown, true, true>>;
+		const configWrapped1Default = configDefault[key1] as StorageValue<unknown, true, true> | Record<string, StorageValue<unknown, true, true>>;
 		const configWrapped1Local = configWrappedLocal[key1] as StorageValue<unknown> | Record<string, StorageValue<unknown>> | undefined;
 		const configWrapped1Sync = configWrappedSync[key1] as StorageValue<unknown> | Record<string, StorageValue<unknown>> | undefined;
-		if (configWrapped1.wValue !== undefined) {
-			configCache[key1] = (configWrapped1Local ?? configWrapped1Sync) ?? configWrapped1;
+		if (configWrapped1Default.wValue !== undefined) {
+			configCache[key1] = (configWrapped1Local ?? configWrapped1Sync) ?? configWrapped1Default;
 			if (configWrapped1Local) {
 				configCacheKeysLocal.add(key1);
-				configCacheKeysSync.delete(key1);
 			} else if (configWrapped1Sync) {
 				configCacheKeysSync.add(key1);
-				configCacheKeysLocal.delete(key1);
 			} else {
-				if (configWrapped1.sync) {
-					configWrappedSyncAdd[key1] = configWrapped1;
+				if (configWrapped1Default.sync) {
+					configWrappedSyncAdd[key1] = configWrapped1Default;
 					configCacheKeysSync.add(key1);
 				} else {
-					configWrappedLocalAdd[key1] = configWrapped1;
+					configWrappedLocalAdd[key1] = configWrapped1Default;
 					configCacheKeysLocal.add(key1);
 				}
 			}
@@ -405,28 +413,26 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			configWrappedSyncAdd[key1] = {};
 			let addLocal = false;
 			let addSync = false;
-			Object.keys(configWrapped1).forEach(key2 => {
-				const configWrapped2 = configWrapped1[key2] as StorageValue<unknown, true, true>;
+			Object.keys(configWrapped1Default).forEach(key2 => {
+				const configWrapped2Default = configWrapped1Default[key2] as StorageValue<unknown, true, true>;
 				const configWrapped2Local = configWrapped1Local ? configWrapped1Local[key2] as StorageValue<unknown> : undefined;
 				const configWrapped2Sync = configWrapped1Sync ? configWrapped1Sync[key2] as StorageValue<unknown> : undefined;
-				configCache[key1][key2] = (configWrapped2Local ?? configWrapped2Sync) ?? configWrapped2;
+				configCache[key1][key2] = (configWrapped2Local ?? configWrapped2Sync) ?? configWrapped2Default;
 				const key2Full = `${key1}_${key2}`;
 				if (configWrapped2Local) {
 					configWrappedLocalAdd[key1][key2] = configWrapped2Local;
 					configCacheKeysLocal.add(key2Full);
-					configCacheKeysSync.delete(key2Full);
 				} else if (configWrapped2Sync) {
 					configWrappedSyncAdd[key1][key2] = configWrapped2Sync;
 					configCacheKeysSync.add(key2Full);
-					configCacheKeysLocal.delete(key2Full);
 				} else {
-					if (configWrapped2.sync) {
+					if (configWrapped2Default.sync) {
 						addSync = true;
-						configWrappedSyncAdd[key1][key2] = configWrapped2;
+						configWrappedSyncAdd[key1][key2] = configWrapped2Default;
 						configCacheKeysSync.add(key2Full);
 					} else {
 						addLocal = true;
-						configWrappedLocalAdd[key1][key2] = configWrapped2;
+						configWrappedLocalAdd[key1][key2] = configWrapped2Default;
 						configCacheKeysLocal.add(key2Full);
 					}
 				}
@@ -439,21 +445,19 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			}
 		}
 	});
-	console.log("adding", configWrappedLocalAdd, configWrappedSyncAdd);
-	if (Object.keys(configWrappedLocalAdd).length) {
-		chrome.storage.local.set(configWrappedLocalAdd);
+	if (Object.keys(configWrappedLocalAdd).length || Object.keys(configWrappedSyncAdd).length) {
+		//console.log("setting defaults", configWrappedLocalAdd, configWrappedSyncAdd);
 	}
-	if (Object.keys(configWrappedSyncAdd).length) {
-		chrome.storage.sync.set(configWrappedSyncAdd);
-	}
+	const setLocal = Object.keys(configWrappedLocalAdd).length ? chrome.storage.local.set(configWrappedLocalAdd) : undefined;
+	const setSync = Object.keys(configWrappedSyncAdd).length ? chrome.storage.sync.set(configWrappedSyncAdd) : undefined;
+	await setLocal;
+	await setSync;
 	//console.log(JSON.stringify(configCache, undefined, 1));
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configGet = async (keys: Array<ConfigKey>): Promise<ConfigValues> => {
-	if (keys.some(key => configCache[key] === undefined)) {
-		await configCachePopulate(keys.filter(key => configCache[key] === undefined));
-	}
+	await configCachePopulate(keys);
 	const config: Partial<ConfigValues> = {};
 	keys.forEach(key1 => {
 		if (configDefault[key1].wValue !== undefined) {
@@ -461,10 +465,12 @@ const configGet = async (keys: Array<ConfigKey>): Promise<ConfigValues> => {
 		} else {
 			config[key1] = {};
 			Object.keys(configDefault[key1]).forEach(key2 => {
+				//console.log("retrieve", key1, key2);
 				config[key1][key2] = configCache[key1][key2].wValue;
 			});
 		}
 	});
+	//console.log(JSON.stringify(config));
 	return config as ConfigValues;
 };
 
@@ -578,12 +584,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 		const keyCacheThis = areaName === "local" ? configCacheKeysLocal : configCacheKeysSync;
 		const keyCacheOther = areaName === "local" ? configCacheKeysSync : configCacheKeysLocal;
 		Object.entries(changes).forEach(([ key1, value ]) => {
-			configCache[key1] = value.newValue;
 			if (value.newValue.wValue) {
+				configCache[key1] = value.newValue;
 				keyCacheThis.add(key1);
 				keyCacheOther.delete(key1);
 			} else {
 				Object.keys(value.newValue).forEach(key2 => {
+					configCache[key1][key2] = value.newValue[key2];
 					const key2Full = `${key1}_${key2}`;
 					keyCacheThis.add(key2Full);
 					keyCacheOther.delete(key2Full);
