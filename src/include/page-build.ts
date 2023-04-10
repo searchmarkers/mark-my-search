@@ -458,14 +458,20 @@ const loadPage = (() => {
 			`hsl(${hue === -1 ? "var(--hue)" : hue} calc(${saturation}% * var(--saturation)) calc((((${lightness}% - 50%) * var(--contrast)) + 50%) * var(--lightness))${
 				alpha === undefined ? "" : ` / ${alpha}`
 			})`;
+		const getHslUnthemed = (hue: number, saturation: number, lightness: number, alpha?: number) =>
+			`hsl(${hue === -1 ? "var(--hue)" : hue} ${saturation}% ${lightness}%${
+				alpha === undefined ? "" : ` / ${alpha}`
+			})`;
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const getColor = (colorDark: string, colorLight?: string) => colorDark;
 		const color = {
 			border: {
 				frame: getColor(getHsl(-1, 100, 14)),
+				tab: getColor(getHslUnthemed(-1, 30, 32)),
+				tabBottom: getColor(getHslUnthemed(-1, 100, 50)),
 			},
 			bg: {
-				frame: getColor(getHsl(-1, 100, 6)),
+				frame: getColor(getHslUnthemed(-1, 100, 6)),
 				panelContainer: getColor(getHsl(-1, 30, 14), getHsl(-1, 20, 38)),
 				sectionGap: getColor(getHsl(-1, 28, 20)),
 				section: getColor(getHsl(-1, 100, 7), getHsl(-1, 20, 50)),
@@ -488,9 +494,9 @@ const loadPage = (() => {
 				},
 				note: getColor(getHsl(-1, 6, 54), getHsl(-1, 6, 20)),
 				anchor: {
-					any: getColor(getHsl(200, 100, 80), "revert"),
-					visited: getColor(getHsl(260, 100, 80), "revert"),
-					active: getColor(getHsl(0, 100, 60), "revert"),
+					any: getColor(getHslUnthemed(200, 100, 80), "revert"),
+					visited: getColor(getHslUnthemed(260, 100, 80), "revert"),
+					active: getColor(getHslUnthemed(0, 100, 60), "revert"),
 				},
 				input: {
 					any: getColor(getHsl(0, 0, 90), getHsl(0, 0, 0)),
@@ -547,7 +553,7 @@ textarea
 	{ width: 32px; height: 32px; }
 .container.tab
 	{ display: flex; justify-content: center;
-	border-top: 2px solid hsl(var(--hue) 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+	border-top: 2px solid ${color.border.tab}; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 .container.tab .tab
 	{ flex: 1 1 auto; font-size: 14px; padding-inline: 10px; border: none; border-bottom: 2px solid transparent;
 	border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; color: hsl(var(--hue) 20% 90%); }
@@ -575,7 +581,7 @@ textarea
 .panel-toolbar .container.tab .tab.panel-toolbar,
 .panel-advanced .container.tab .tab.panel-advanced,
 .panel-general .container.tab .tab.panel-general
-	{ border-bottom: 2px solid hsl(var(--hue) 100% 50%); background: hsl(var(--hue) 30% 32%); }
+	{ border-bottom: 2px solid ${color.border.tabBottom}; background: ${color.border.tab}; }
 .panel-sites_search_research .container.panel > .panel.panel-sites_search_research,
 .panel-term_lists .container.panel > .panel.panel-term_lists,
 .panel-features .container.panel > .panel.panel-features,
