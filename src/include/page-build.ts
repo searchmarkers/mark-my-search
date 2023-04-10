@@ -133,6 +133,10 @@ enum PageAlertType {
 	PENDING = "pending",
 }
 
+chrome.tabs.query = useChromeAPI()
+	? chrome.tabs.query
+	: browser.tabs.query as typeof chrome.tabs.query;
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const isWindowInFrame = () =>
 	new URL(location.href).searchParams.get("frame") !== null
@@ -507,7 +511,7 @@ const loadPage = (() => {
 }
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
-	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; }
+	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; user-select: none; }
 body, .container.tab .tab
 	{ border-radius: 8px; }
 .container.tab .tab
@@ -1484,24 +1488,27 @@ textarea
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, info: {
+		titleText: string
 		tabsFill: boolean
 		borderShow: boolean
 		brandShow: boolean
 		borderRadiusUse?: boolean
-		selectionAllow?: boolean
 		height?: number
 		width?: number
 	}) => {
-		chrome.tabs.query = useChromeAPI()
-			? chrome.tabs.query
-			: browser.tabs.query as typeof chrome.tabs.query;
+		const title = document.createElement("title");
+		title.text = `${info.titleText} - ${getName()}`;
+		document.head.appendChild(title);
+		const iconLink = document.createElement("link");
+		iconLink.rel = "icon";
+		iconLink.href = chrome.runtime.getURL("/icons/mms.svg");
+		document.head.appendChild(iconLink);
 		fillAndInsertStylesheet(`body {
 	overflow-y: auto;
 	min-height: ${info.height ? `${info.height}px` : "unset"};
 	width: ${info.width ? `${info.width}px` : "unset"};
 	${info.borderShow ? "" : "border: none;"}
 	${info.borderRadiusUse !== false ? "" : "border-radius: 0;"}
-	${info.selectionAllow === true ? "user-select: none;" : ""}
 }
 .container.tab .tab {
 	${info.tabsFill ? "" : "flex: unset;"}

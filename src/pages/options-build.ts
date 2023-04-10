@@ -580,11 +580,12 @@ PAINT
 
 	return () => {
 		loadPage(panelsInfo, {
+			titleText: "Options",
 			tabsFill: isWindowInFrame(),
 			borderShow: false,
 			brandShow: !isWindowInFrame(),
 			borderRadiusUse: !isWindowInFrame(),
-			height: 570,
+			height: isWindowInFrame() ? 570 : undefined,
 		});
 	};
 })();

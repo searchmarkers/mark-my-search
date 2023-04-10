@@ -126,10 +126,8 @@ const loadSendoff = (() => {
 	];
 
 	return () => {
-		const title = document.createElement("title");
-		title.text = `${getName()} - Uninstalled`;
-		document.head.appendChild(title);
 		loadPage(panelsInfo, {
+			titleText: "Uninstalled",
 			tabsFill: false,
 			borderShow: false,
 			brandShow: true,

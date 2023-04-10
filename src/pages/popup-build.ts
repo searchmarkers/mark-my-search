@@ -484,10 +484,10 @@ const loadPopup = (() => {
 
 	return () => {
 		loadPage(panelsInfo, {
+			titleText: "Control",
 			tabsFill: true,
 			borderShow: true,
 			brandShow: true,
-			selectionAllow: false,
 			height: 520,
 			width: 300,
 		});

@@ -252,10 +252,8 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 	];
 
 	return () => {
-		const title = document.createElement("title");
-		title.text = `${getName()} - Start`;
-		document.head.appendChild(title);
 		loadPage(panelsInfo, {
+			titleText: "Start",
 			tabsFill: false,
 			borderShow: false,
 			brandShow: true,
