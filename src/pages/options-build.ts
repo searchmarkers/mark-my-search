@@ -579,19 +579,13 @@ PAINT
 	];
 
 	return () => {
-		loadPage(panelsInfo, (isWindowInFrame() ? `
-body
-	{ min-height: 570px; overflow-y: auto; border-radius: 0; }
-.brand
-	{ display: none; }
-.container.panel
-	{ border-top: none; }
-` : "") + `
-body
-	{ border: none; }
-.container.tab .tab
-	{ flex: unset; }
-		`);
+		loadPage(panelsInfo, {
+			tabsFill: isWindowInFrame(),
+			borderShow: false,
+			brandShow: !isWindowInFrame(),
+			borderRadiusUse: !isWindowInFrame(),
+			height: 570,
+		});
 	};
 })();
 

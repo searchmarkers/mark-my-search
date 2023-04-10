@@ -129,12 +129,11 @@ const loadSendoff = (() => {
 		const title = document.createElement("title");
 		title.text = `${getName()} - Uninstalled`;
 		document.head.appendChild(title);
-		loadPage(panelsInfo, `
-body
-	{ border: none; }
-.container.tab .tab
-	{ flex: unset; }
-		`);
+		loadPage(panelsInfo, {
+			tabsFill: false,
+			borderShow: false,
+			brandShow: true,
+		});
 	};
 })();
 

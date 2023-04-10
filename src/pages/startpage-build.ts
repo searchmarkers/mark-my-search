@@ -255,12 +255,11 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 		const title = document.createElement("title");
 		title.text = `${getName()} - Start`;
 		document.head.appendChild(title);
-		loadPage(panelsInfo, `
-body
-	{ border: none; }
-.container.tab .tab
-	{ flex: unset; }
-		`);
+		loadPage(panelsInfo, {
+			tabsFill: false,
+			borderShow: false,
+			brandShow: true,
+		});
 	};
 })();
 

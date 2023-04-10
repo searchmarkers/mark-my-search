@@ -1483,11 +1483,35 @@ textarea
 		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
-	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "") => {
+	return (panelsInfo: Array<PagePanelInfo>, info: {
+		tabsFill: boolean
+		borderShow: boolean
+		brandShow: boolean
+		borderRadiusUse?: boolean
+		selectionAllow?: boolean
+		height?: number
+		width?: number
+	}) => {
 		chrome.tabs.query = useChromeAPI()
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
-		fillAndInsertStylesheet(additionalStyleText);
+		fillAndInsertStylesheet(`body {
+	overflow-y: auto;
+	min-height: ${info.height ? `${info.height}px` : "unset"};
+	width: ${info.width ? `${info.width}px` : "unset"};
+	${info.borderShow ? "" : "border: none;"}
+	${info.borderRadiusUse !== false ? "" : "border-radius: 0;"}
+	${info.selectionAllow === true ? "user-select: none;" : ""}
+}
+.container.tab .tab {
+	${info.tabsFill ? "" : "flex: unset;"}
+}` + (info.brandShow ? "" : `.brand {
+	display: none;
+}
+.container.panel {
+	border-top: none;
+}`)
+		);
 		insertAndManageContent(panelsInfo);
 		pageFocusScrollContainer();
 		const chooseTab = () => {
