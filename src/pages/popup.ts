@@ -415,7 +415,7 @@ const loadPopup = (() => {
 											getMatchModeInteractionInfo("whole", "Stemming"),
 											getMatchModeInteractionInfo("stem", "Whole Words"),
 											getMatchModeInteractionInfo("case", "Case Sensitive"),
-											getMatchModeInteractionInfo("diacritics", "Diacritics Insensitive"),
+											getMatchModeInteractionInfo("diacritics", "Accent Sensitive"),
 											getMatchModeInteractionInfo("regex", "Regular Expression"),
 										],
 									},

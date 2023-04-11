@@ -227,10 +227,10 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_WHOLE)}
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ padding-inline: 2px; border-inline: 2px solid hsl(0 0% 0% / 0.4); }
-#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+#${getSel(ElementID.BAR_TERMS)} .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_DIACRITICS)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ font-style: italic; }
-#${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}.${getSel(ElementClass.MATCH_DIACRITICS)}
+#${getSel(ElementID.BAR_RIGHT)} .${getSel(ElementClass.CONTROL)}:not(.${getSel(ElementClass.MATCH_DIACRITICS)})
 .${getSel(ElementClass.CONTROL_CONTENT)}
 	{ border-left: 3px dashed black; }
 /**/
@@ -1065,7 +1065,7 @@ const createTermOptionMenu = (
 	optionList.appendChild(createTermOption(term, "Case Sensitive", onActivated));
 	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
 	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
-	optionList.appendChild(createTermOption(term, "Diacritics", onActivated));
+	optionList.appendChild(createTermOption(term, "Diacritics Sensitive", onActivated));
 	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
 		event.preventDefault();

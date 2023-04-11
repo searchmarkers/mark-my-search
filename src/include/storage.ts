@@ -232,7 +232,7 @@ const configDefault: ConfigValues<true, true> = {
 			case: false,
 			stem: true,
 			whole: false,
-			diacritics: false,
+			diacritics: true,
 		},
 		wUseDefault: true,
 		sync: false,
