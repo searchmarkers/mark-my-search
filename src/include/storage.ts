@@ -461,9 +461,23 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			(configCache[key1] as StorageValue<unknown>) = {
 				wValue: configWrapped1Local?.wValue ?? configWrapped1Sync?.wValue ?? configWrapped1Default.wValue,
 			};
-			if (configWrapped1Local) {
+			if (configWrapped1Local?.wValue) {
+				if (typeof configWrapped1Local.wValue !== typeof configWrapped1Default.wValue) {
+					(configCache[key1] as StorageValue<unknown>).wValue = configWrapped1Default.wValue;
+					(configWrappedLocalAdd[key1] as StorageValue<unknown>) = {
+						wValue: configWrapped1Default.wValue,
+					};
+					configCacheKeysLocal.add(key1);
+				}
 				configCacheKeysLocal.add(key1);
-			} else if (configWrapped1Sync) {
+			} else if (configWrapped1Sync?.wValue) {
+				if (typeof configWrapped1Sync.wValue !== typeof configWrapped1Default.wValue) {
+					(configCache[key1] as StorageValue<unknown>).wValue = configWrapped1Default.wValue;
+					(configWrappedSyncAdd[key1] as StorageValue<unknown>) = {
+						wValue: configWrapped1Default.wValue,
+					};
+					configCacheKeysSync.add(key1);
+				}
 				configCacheKeysSync.add(key1);
 			} else {
 				if (configWrapped1Default.sync) {
@@ -487,7 +501,7 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			(configWrappedLocalAdd[key1] as typeof configWrapped1LocalAdd) = configWrapped1LocalAdd;
 			(configWrappedSyncAdd[key1] as typeof configWrapped1SyncAdd) = configWrapped1SyncAdd;
 			const configCache1 = (configCache[key1] ?? {}) as Record<string, StorageValue<unknown>>;
-			(configCache[key1] as typeof configCache1) ??= configCache1;
+			(configCache[key1] as typeof configCache1) = configCache1;
 			let addLocal = false;
 			let addSync = false;
 			Object.keys(configWrapped1Default).forEach(key2 => {
@@ -502,15 +516,23 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 					wValue: configWrapped2Local?.wValue ?? configWrapped2Sync?.wValue ?? configWrapped2Default.wValue,
 				};
 				const key2Full = `${key1}_${key2}`;
-				if (configWrapped2Local) {
-					//configWrapped1LocalAdd[key2] = {
-					//	wValue: configWrapped2Local.wValue,
-					//};
+				if (configWrapped2Local?.wValue) {
+					if (typeof configWrapped2Local.wValue !== typeof configWrapped2Default.wValue) { // TODO make function
+						addLocal = true;
+						configWrapped1LocalAdd[key2] = {
+							wValue: configWrapped2Default.wValue,
+						};
+						configCacheKeysLocal.add(key2Full);
+					}
 					configCacheKeysLocal.add(key2Full);
-				} else if (configWrapped2Sync) {
-					//configWrapped1SyncAdd[key2] = {
-					//	wValue: configWrapped2Sync.wValue,
-					//};
+				} else if (configWrapped2Sync?.wValue) {
+					if (typeof configWrapped2Sync.wValue !== typeof configWrapped2Default.wValue) { // TODO make function
+						addSync = true;
+						configWrapped1SyncAdd[key2] = {
+							wValue: configWrapped2Default.wValue,
+						};
+						configCacheKeysSync.add(key2Full);
+					}
 					configCacheKeysSync.add(key2Full);
 				} else {
 					if (configWrapped2Default.sync) {
