@@ -566,7 +566,8 @@ textarea
 	{ .container.panel { overflow-y: overlay; }; }
 .container.panel > .panel
 	{ display: none; position: relative; flex-direction: column; gap: 1px;
-	border-radius: inherit; background: ${color.bg.sectionGap}; box-shadow: 0 0 10px; }
+	border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
+	background: ${color.bg.sectionGap}; box-shadow: 0 0 10px; }
 .container.panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
@@ -775,6 +776,9 @@ textarea
 	const handleTabs = () => {
 		const frame = document.getElementById("frame") as HTMLElement;
 		document.addEventListener("keydown", event => {
+			if (event.ctrlKey || event.metaKey) {
+				return;
+			}
 			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
 					.querySelector(`.container.tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
@@ -1489,8 +1493,8 @@ textarea
 			});
 		});
 		handleTabs();
-		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
-		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
+		//chrome.storage.onChanged.addListener(() => reload(panelsInfo));
+		//chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, info: {
@@ -1509,7 +1513,8 @@ textarea
 		iconLink.rel = "icon";
 		iconLink.href = chrome.runtime.getURL("/icons/mms.svg");
 		document.head.appendChild(iconLink);
-		fillAndInsertStylesheet(`body {
+		fillAndInsertStylesheet(`
+body {
 	overflow-y: auto;
 	min-height: ${info.height ? `${info.height}px` : "unset"};
 	width: ${info.width ? `${info.width}px` : "unset"};
@@ -1518,13 +1523,15 @@ textarea
 }
 .container.tab .tab {
 	${info.tabsFill ? "" : "flex: unset;"}
-}` + (info.brandShow ? "" : `.brand {
+}
+` + (info.brandShow ? "" : `
+.brand {
 	display: none;
 }
 .container.panel {
 	border-top: none;
-}`)
-		);
+}
+		`));
 		insertAndManageContent(panelsInfo);
 		pageFocusScrollContainer();
 		const chooseTab = () => {

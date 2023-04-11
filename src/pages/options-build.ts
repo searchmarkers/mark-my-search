@@ -20,7 +20,7 @@ const getControlOptionTemp = (
 				(await chrome.commands.getAll())
 					.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
 			).join("+") : undefined,
-		forInput: details?.command?.name
+		forInput: details?.command?.name && (chrome.commands["update"] || (this["browser"] && browser.commands.update))
 			? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
 			: undefined,
 	},
@@ -586,6 +586,7 @@ PAINT
 			brandShow: !isWindowInFrame(),
 			borderRadiusUse: !isWindowInFrame(),
 			height: isWindowInFrame() ? 570 : undefined,
+			width: isWindowInFrame() ? 650 : undefined,
 		});
 	};
 })();

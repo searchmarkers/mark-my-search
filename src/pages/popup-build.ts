@@ -93,13 +93,13 @@ const loadPopup = (() => {
 							input: {
 								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
-									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
-									setChecked(local.autoFindOptions.enabled);
+									const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
+									setChecked(config.researchInstanceOptions.restoreLastInTab);
 								},
 								onChange: async checked => {
-									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
-									local.autoFindOptions.enabled = checked;
-									await configSet(local);
+									const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
+									config.researchInstanceOptions.restoreLastInTab = checked;
+									await configSet(config);
 								},
 							},
 						},
