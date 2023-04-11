@@ -1493,8 +1493,8 @@ textarea
 			});
 		});
 		handleTabs();
-		//chrome.storage.onChanged.addListener(() => reload(panelsInfo));
-		//chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
+		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
+		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, info: {
