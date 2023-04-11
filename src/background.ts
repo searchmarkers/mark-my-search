@@ -252,8 +252,8 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
  */
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
-		? configGet([ ConfigKey.AUTO_FIND_OPTIONS ]).then(local =>
-			updateActionIcon(local.autoFindOptions.enabled)
+		? configGet([ ConfigKey.AUTO_FIND_OPTIONS ]).then(config =>
+			updateActionIcon(config.autoFindOptions.enabled ?? false) // Prevent infinite recursion in case of storage failure.
 		) : chrome.action.setIcon({ path: useChromeAPI()
 			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
@@ -300,7 +300,6 @@ const updateActionIcon = (enabled?: boolean) =>
 		chrome.runtime.setUninstallURL("https://searchmarkers.github.io/pages/sendoff/");
 		manageEnginesCacheOnBookmarkUpdate();
 		createContextMenuItems();
-		storageInitialize();
 		updateActionIcon();
 	};
 
@@ -325,7 +324,6 @@ const updateActionIcon = (enabled?: boolean) =>
 	bankGet([ BankKey.RESEARCH_INSTANCES ]).then(session => { // TODO better workaround?
 		if (session.researchInstances === undefined) {
 			assert(false, "storage reinitialize", "storage read returned `undefined` when testing on wake");
-			storageInitialize();
 		}
 	});
 })();
@@ -352,19 +350,19 @@ const updateActionIcon = (enabled?: boolean) =>
 			ConfigKey.TERM_LISTS,
 		]);
 		const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
-		const session = await bankGet([
+		const bank = await bankGet([
 			BankKey.RESEARCH_INSTANCES,
 			BankKey.ENGINES,
 		]);
 		const searchDetails: { isSearch: boolean, engine?: Engine } = local.autoFindOptions.enabled
-			? await isTabSearchPage(session.engines, urlString)
+			? await isTabSearchPage(bank.engines, urlString)
 			: { isSearch: false };
 		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, sync.urlFilters);
 		const termsFromLists = sync.termLists.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 			.flatMap(termList => termList.terms);
 		const getTermsAdditionalDistinct = (terms: MatchTerms, termsExtra: MatchTerms) =>
 			termsExtra.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
-		const isResearchPage = isTabResearchPage(session.researchInstances, tabId);
+		const isResearchPage = isTabResearchPage(bank.researchInstances, tabId);
 		const overrideHighlightsShown = (searchDetails.isSearch && sync.showHighlights.overrideSearchPages)
 			|| (isResearchPage && sync.showHighlights.overrideResearchPages);
 		// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
@@ -383,24 +381,24 @@ const updateActionIcon = (enabled?: boolean) =>
 					})
 				);
 			} else {
-				session.researchInstances[tabId] = researchInstance;
+				bank.researchInstances[tabId] = researchInstance;
 				log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
 			}
 		}
 		let highlightActivation: Promise<void> = (async () => undefined)();
 		// If tab *now* has research OR has applicable term lists: activate highlighting in tab.
-		if (isTabResearchPage(session.researchInstances, tabId) || termsFromLists.length) {
+		if (isTabResearchPage(bank.researchInstances, tabId) || termsFromLists.length) {
 			const highlightActivationReason = termsFromLists.length
-				? isTabResearchPage(session.researchInstances, tabId)
+				? isTabResearchPage(bank.researchInstances, tabId)
 					? "tab is a research page which term lists apply to"
 					: "tab is a page which terms lists apply to"
 				: "tab is a research page";
 			log("tab-communicate highlight activation request", highlightActivationReason, logMetadata);
-			const researchInstance = session.researchInstances[tabId] ?? await createResearchInstance({});
+			const researchInstance = bank.researchInstances[tabId] ?? await createResearchInstance({});
 			researchInstance.terms = researchInstance.enabled
 				? researchInstance.terms.concat(getTermsAdditionalDistinct(researchInstance.terms, termsFromLists))
 				: termsFromLists;
-			if (!isTabResearchPage(session.researchInstances, tabId)) {
+			if (!isTabResearchPage(bank.researchInstances, tabId)) {
 				researchInstance.barCollapsed = sync.barCollapse.fromTermListAuto;
 			}
 			researchInstance.enabled = true;
@@ -415,9 +413,9 @@ const updateActionIcon = (enabled?: boolean) =>
 				useClassicHighlighting: sync.highlightMethod.paintReplaceByClassic,
 				enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 			});
-			session.researchInstances[tabId] = researchInstance;
+			bank.researchInstances[tabId] = researchInstance;
 		}
-		bankSet({ researchInstances: session.researchInstances } as BankValues);
+		bankSet({ researchInstances: bank.researchInstances });
 		await highlightActivation;
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
