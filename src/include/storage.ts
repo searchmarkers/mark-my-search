@@ -407,7 +407,7 @@ const configSet = async (config: Partial<ConfigValues>) => {
 			const config1WrappedDefault = configDefault[key1] as StorageValue<true>;
 			if (typeof config[key1] !== typeof config1WrappedDefault.wValue) {
 				config[key1] = config1WrappedDefault.wValue;
-				console.log("mismatched type", config, key1);
+				console.log("mismatched type", config[key1], key1);
 			}
 			configCache[key1].wValue = config[key1];
 			if (configCacheKeysLocal.has(key1)) {
@@ -416,13 +416,17 @@ const configSet = async (config: Partial<ConfigValues>) => {
 				configWrappedSync[key1] = configCache[key1];
 			}
 		} else {
+			if (typeof config[key1] !== "object") {
+				config[key1] = {};
+				console.log("mismatched type", config[key1], key1);
+			}
 			const config1WrappedDefault = configDefault[key1] as Record<string, StorageValue<unknown, true, true>>;
 			configWrappedLocal[key1] ??= {};
 			configWrappedSync[key1] ??= {};
 			Object.keys(config1WrappedDefault).forEach(key2 => {
 				if (typeof config[key1][key2] !== typeof config1WrappedDefault[key2].wValue) {
 					config[key1][key2] = config1WrappedDefault[key2].wValue;
-					console.log("mismatched type", config, key1, key2);
+					console.log("mismatched type", config[key1][key2], key1, key2);
 				}
 				configCache[key1][key2].wValue = config[key1][key2];
 				const key2Full = `${key1}_${key2}`;
