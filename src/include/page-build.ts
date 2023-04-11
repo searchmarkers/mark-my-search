@@ -125,6 +125,7 @@ enum InputType {
 	CHECKBOX = "checkbox",
 	TEXT = "text",
 	TEXT_ARRAY = "textArray",
+	TEXT_NUMBER = "textNumber",
 }
 
 enum PageAlertType {
@@ -466,7 +467,7 @@ const loadPage = (() => {
 		const getColor = (colorDark: string, colorLight?: string) => colorDark;
 		const color = {
 			border: {
-				frame: getColor(getHsl(-1, 100, 14)),
+				frame: getColor(getHslUnthemed(-1, 100, 14)),
 				tab: getColor(getHslUnthemed(-1, 30, 32)),
 				tabBottom: getColor(getHslUnthemed(-1, 100, 50)),
 			},
@@ -922,6 +923,7 @@ textarea
 				input.classList.add("checkbox");
 				break;
 			} case InputType.TEXT_ARRAY:
+			case InputType.TEXT_NUMBER:
 			case InputType.TEXT: {
 				input.type = "text";
 				break;
@@ -938,7 +940,7 @@ textarea
 			}
 			if (inputInfo.onChange) {
 				input.addEventListener("change", async () =>
-					inputInfo.onChange ? inputInfo.onChange((!inputInfo.getType || (await inputInfo.getType()) === InputType.CHECKBOX) ? input.checked : (input.value as unknown as boolean), getObjectIndex(), containerIndex, true) : undefined
+					inputInfo.onChange ? inputInfo.onChange((!inputInfo.getType || inputInfo.getType() === InputType.CHECKBOX) ? input.checked : (input.value as unknown as boolean), getObjectIndex(), containerIndex, true) : undefined
 				);
 			}
 			return input;

@@ -33,7 +33,11 @@ const getControlOptionTemp = (
 		onChange: async (value, objectIndex, containerIndex, store) => {
 			if (store) {
 				const config = await configGet([ configKey ]);
-				config[configKey][key] = (inputType === InputType.TEXT_ARRAY) ? (value as unknown as string).split(",") : value;
+				config[configKey][key] = (inputType === InputType.TEXT_ARRAY)
+					? (value as unknown as string).split(",")
+					: inputType === InputType.TEXT_NUMBER
+						? parseFloat(value as unknown as string)
+						: value;
 				await configSet(config);
 			}
 			if (details?.onChange) {
@@ -229,28 +233,28 @@ const loadOptions = (() => {
 							{ text: "Hue" },
 							ConfigKey.THEME,
 							"hue",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Contrast" },
 							ConfigKey.THEME,
 							"contrast",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Lightness" },
 							ConfigKey.THEME,
 							"lightness",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Saturation" },
 							ConfigKey.THEME,
 							"saturation",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 					],
@@ -264,7 +268,7 @@ const loadOptions = (() => {
 							{ text: "Font scale" },
 							ConfigKey.THEME,
 							"fontScale",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 					],
@@ -286,25 +290,25 @@ const loadOptions = (() => {
 							{ text: "Font size" },
 							ConfigKey.BAR_LOOK,
 							"fontSize",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of keyword buttons" },
 							ConfigKey.BAR_LOOK,
 							"opacityTerm",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of control buttons" },
 							ConfigKey.BAR_LOOK,
 							"opacityControl",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 						),
 						getControlOptionTemp(
 							{ text: "Rounded corners" },
 							ConfigKey.BAR_LOOK,
 							"borderRadius",
-							InputType.TEXT,
+							InputType.TEXT_NUMBER,
 						),
 					],
 				},

@@ -403,9 +403,12 @@ const configSet = async (config: Partial<ConfigValues>) => {
 	const configWrappedLocal: Partial<ConfigValues<true>> = {};
 	const configWrappedSync: Partial<ConfigValues<true>> = {};
 	Object.keys(config).forEach(key1 => {
-		const config1WrappedDefault = configDefault[key1] as StorageValue<true> | Record<string, StorageValue<true>>;
-		if (config1WrappedDefault.wValue !== undefined) {
-			configCache[key1] ??= configDefault[key1];
+		if ((configDefault[key1] as StorageValue<unknown, true, true>).wValue !== undefined) {
+			const config1WrappedDefault = configDefault[key1] as StorageValue<true>;
+			if (typeof config[key1] !== typeof config1WrappedDefault.wValue) {
+				config[key1] = config1WrappedDefault.wValue;
+				console.log("mismatched type", config, key1);
+			}
 			configCache[key1].wValue = config[key1];
 			if (configCacheKeysLocal.has(key1)) {
 				configWrappedLocal[key1] = configCache[key1];
@@ -413,10 +416,14 @@ const configSet = async (config: Partial<ConfigValues>) => {
 				configWrappedSync[key1] = configCache[key1];
 			}
 		} else {
+			const config1WrappedDefault = configDefault[key1] as Record<string, StorageValue<unknown, true, true>>;
 			configWrappedLocal[key1] ??= {};
 			configWrappedSync[key1] ??= {};
 			Object.keys(config1WrappedDefault).forEach(key2 => {
-				configCache[key1][key2] ??= configDefault[key1][key2];
+				if (typeof config[key1][key2] !== typeof config1WrappedDefault[key2].wValue) {
+					config[key1][key2] = config1WrappedDefault[key2].wValue;
+					console.log("mismatched type", config, key1, key2);
+				}
 				configCache[key1][key2].wValue = config[key1][key2];
 				const key2Full = `${key1}_${key2}`;
 				if (configCacheKeysLocal.has(key2Full)) {
@@ -505,12 +512,12 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			let addLocal = false;
 			let addSync = false;
 			Object.keys(configWrapped1Default).forEach(key2 => {
-				const configWrapped2Default = configWrapped1Default[key2] as StorageValue<unknown, true, true>;
-				const configWrapped2Local = (configWrapped1Local[key2] as StorageValue<unknown> | undefined)?.wValue
-					? (configWrapped1Local[key2] as StorageValue<unknown>)
+				const configWrapped2Default = configWrapped1Default[key2];
+				const configWrapped2Local = (configWrapped1Local[key2] as StorageValue<unknown> | undefined)?.wValue !== undefined
+					? configWrapped1Local[key2]
 					: undefined;
-				const configWrapped2Sync = (configWrapped1Sync[key2] as StorageValue<unknown> | undefined)?.wValue
-					? (configWrapped1Sync[key2] as StorageValue<unknown>)
+				const configWrapped2Sync = (configWrapped1Sync[key2] as StorageValue<unknown> | undefined)?.wValue !== undefined
+					? configWrapped1Sync[key2]
 					: undefined;
 				configCache1[key2] = {
 					wValue: configWrapped2Local?.wValue ?? configWrapped2Sync?.wValue ?? configWrapped2Default.wValue,
@@ -558,10 +565,10 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 			}
 		}
 	});
-	const setLocal = Object.keys(configWrappedLocalAdd).length ? chrome.storage.local.set(configWrappedLocalAdd) : undefined;
-	const setSync = Object.keys(configWrappedSyncAdd).length ? chrome.storage.sync.set(configWrappedSyncAdd) : undefined;
-	await setLocal;
-	await setSync;
+	//const setLocal = Object.keys(configWrappedLocalAdd).length ? chrome.storage.local.set(configWrappedLocalAdd) : undefined;
+	//const setSync = Object.keys(configWrappedSyncAdd).length ? chrome.storage.sync.set(configWrappedSyncAdd) : undefined;
+	//await setLocal;
+	//await setSync;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -663,21 +670,27 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 	case "sync": {
 		const keyCacheThis = areaName === "local" ? configCacheKeysLocal : configCacheKeysSync;
 		const keyCacheOther = areaName === "local" ? configCacheKeysSync : configCacheKeysLocal;
-		Object.entries(changes).forEach(([ key1, value ]) => {
-			if (!value.newValue) {
-				delete configCache[key1];
-				return;
-			}
-			if (value.newValue.wValue) {
-				configCache[key1] = value.newValue;
-				keyCacheThis.add(key1);
-				keyCacheOther.delete(key1);
+		console.log(changes);
+		Object.keys(changes).forEach(key1 => {
+			if (configDefault[key1].wValue) {
+				if (changes[key1].newValue?.wValue !== undefined) {
+					(configCache[key1] as StorageValue<unknown>) = {
+						wValue: changes[key1].newValue.wValue,
+					};
+					keyCacheThis.add(key1);
+					keyCacheOther.delete(key1);
+				}
 			} else {
-				Object.keys(value.newValue).forEach(key2 => {
-					configCache[key1][key2] = value.newValue[key2];
-					const key2Full = `${key1}_${key2}`;
-					keyCacheThis.add(key2Full);
-					keyCacheOther.delete(key2Full);
+				configCache[key1] ??= {};
+				Object.keys(changes[key1].newValue ?? {}).forEach(key2 => {
+					if (changes[key1].newValue[key2]?.wValue !== undefined) {
+						(configCache[key1][key2] as StorageValue<unknown>) = {
+							wValue: changes[key1].newValue[key2].wValue,
+						};
+						const key2Full = `${key1}_${key2}`;
+						keyCacheThis.add(key2Full);
+						keyCacheOther.delete(key2Full);
+					}
 				});
 			}
 		});
