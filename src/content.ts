@@ -1088,6 +1088,9 @@ const createTermOptionMenu = (
 	};
 	optionList.addEventListener("keydown", event => handleKeyEvent(event, false));
 	optionList.addEventListener("keyup", event => handleKeyEvent(event));
+	optionList.addEventListener("focusout", () => {
+		optionList.removeAttribute("tabindex");
+	});
 	const controlReveal = document.createElement("button");
 	controlReveal.type = "button";
 	controlReveal.classList.add(getSel(ElementClass.CONTROL_BUTTON));
