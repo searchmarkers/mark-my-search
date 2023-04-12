@@ -1088,6 +1088,9 @@ const createTermOptionMenu = (
 	};
 	optionList.addEventListener("keydown", event => handleKeyEvent(event, false));
 	optionList.addEventListener("keyup", event => handleKeyEvent(event));
+	optionList.addEventListener("focusout", () => {
+		optionList.removeAttribute("tabindex");
+	});
 	const controlReveal = document.createElement("button");
 	controlReveal.type = "button";
 	controlReveal.classList.add(getSel(ElementClass.CONTROL_BUTTON));
@@ -1604,6 +1607,7 @@ const cacheExtend = (element: Element, highlightTags: HighlightTags, cacheModify
 const highlightingAttributesCleanup = (root: Element) => {
 	root.querySelectorAll("[markmysearch-h_id]").forEach(element => {
 		element.removeAttribute("markmysearch-h_id");
+		delete element["markmysearch-h_id"];
 	});
 	root.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
 		element.removeAttribute("markmysearch-h_beneath");
@@ -1708,6 +1712,12 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 				textEnd += node.length;
 			}
 			(node.parentElement as Element).setAttribute("markmysearch-h_beneath", ""); // TODO optimise?
+			if ((node.parentElement as Element)["markmysearch-h_id"]
+				&& !(node.parentElement as Element).hasAttribute("markmysearch-h_id")
+			) {
+				(node.parentElement as Element).setAttribute("markmysearch-h_id",
+					(node.parentElement as Element)["markmysearch-h_id"]);
+			}
 			// eslint-disable-next-line no-constant-condition
 			while (true) {
 				flow.boxesInfo.push({
@@ -1733,6 +1743,7 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 			const highlighting = ancestorHighlightable[ElementProperty.INFO] as ElementInfo;
 			highlighting.id = getHighlightingId.next().value;
 			ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
+			ancestorHighlightable["markmysearch-h_id"] = highlighting.id;
 		}
 		markElementsUpToHighlightable(ancestor);
 	}
@@ -2077,7 +2088,6 @@ const generateTermHighlightsUnderNode = (() => {
 	 */
 	const highlightInsideNode = (term: MatchTerm, textEndNode: Node, start: number, end: number,
 		nodeItems: UnbrokenNodeList, nodeItemPrevious: UnbrokenNodeListItem | null): UnbrokenNodeListItem => {
-		// TODO add strategy for mitigating damage (caused by programmatic changes by the website)
 		const text = textEndNode.textContent as string;
 		const textStart = text.substring(0, start);
 		const highlight = document.createElement("mms-h");
@@ -2564,6 +2574,11 @@ const getObserverNodeHighlighter = (() => {
 							generateTermHighlightsUnderNode(terms, node, highlightTags, termCountCheck);
 						}
 					}
+					if (mutation.type === "characterData"
+						&& mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement)
+						&& !mutation.target.parentElement.querySelector("mms-h")) {
+						generateTermHighlightsUnderNode(terms, mutation.target.parentElement, highlightTags, termCountCheck);
+					}
 				}
 			} else {
 				for (const mutation of mutations) {
@@ -2572,7 +2587,8 @@ const getObserverNodeHighlighter = (() => {
 							cacheExtend(node as Element, highlightTags);
 						}
 					}
-					if (mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement as Element) && mutation.type === "characterData") {
+					if (mutation.type === "characterData"
+						&& mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement)) {
 						boxesInfoCalculateForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
 							termCountCheck, getHighlightingId, keepStyleUpdated);
 					}
