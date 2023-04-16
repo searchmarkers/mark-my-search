@@ -2100,11 +2100,11 @@ const generateTermHighlightsUnderNode = (() => {
 		if (textStart !== "") {
 			const textStartNode = document.createTextNode(textStart);
 			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
-			(highlight.parentNode as Node)["markmysearchKnown"] = true;
 			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
 			return ((nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem)
 				.next as UnbrokenNodeListItem;
 		}
+		(highlight.parentNode as Node)["markmysearchKnown"] = true;
 		return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem;
 	};
 
