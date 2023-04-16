@@ -2784,8 +2784,9 @@ const getTermsFromSelection = () => {
 						termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
 					)) {
 						removeTermControl(termRemovedPreviousIdx);
+						boxesInfoRemoveForTerms([ terms[termRemovedPreviousIdx] ]);
+						restoreNodes([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
 						terms.splice(termRemovedPreviousIdx, 1);
-						boxesInfoRemoveForTerms([ termUpdate ]);
 						fillStylesheetContent(terms, hues, controlsInfo);
 						termCountCheck();
 						return;
