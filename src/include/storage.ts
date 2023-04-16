@@ -576,9 +576,9 @@ const configCachePopulate = async (keys: Array<ConfigKey>) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const configGet = async (keys: Array<ConfigKey>): Promise<ConfigValues> => {
+const configGet = async <T extends ConfigKey>(keys: Array<T>): Promise<{ [P in T]: ConfigValues[P] }> => {
 	await configCachePopulate(keys);
-	const config: Partial<ConfigValues> = {};
+	const config = {} as { [P in T]: ConfigValues[P] };
 	keys.forEach(key1 => {
 		if ((configDefault[key1] as StorageValue<unknown, true, true>).wValue !== undefined) {
 			(config[key1] as StorageValue<unknown, false>) = (configCache[key1] as StorageValue<unknown>).wValue;
@@ -590,7 +590,7 @@ const configGet = async (keys: Array<ConfigKey>): Promise<ConfigValues> => {
 			});
 		}
 	});
-	return config as ConfigValues;
+	return config;
 };
 
 /**
