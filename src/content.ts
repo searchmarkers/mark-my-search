@@ -2100,6 +2100,7 @@ const generateTermHighlightsUnderNode = (() => {
 		if (textStart !== "") {
 			const textStartNode = document.createTextNode(textStart);
 			(highlight.parentNode as Node).insertBefore(textStartNode, highlight);
+			(highlight.parentNode as Node)["markmysearchKnown"] = true;
 			nodeItems.insertAfter(nodeItemPrevious, textStartNode);
 			return ((nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem)
 				.next as UnbrokenNodeListItem;
@@ -2590,15 +2591,26 @@ const mutationUpdatesGet = (() => {
 			? new MutationObserver(mutations => {
 				mutationUpdates.disconnect();
 				const elements: Set<HTMLElement> = new Set;
+				const elementsKnown: Set<HTMLElement> = new Set;
 				for (const mutation of mutations) {
 					const element = mutation.target.nodeType === Node.TEXT_NODE
 						? mutation.target.parentElement as HTMLElement
 						: mutation.target as HTMLElement;
-					if (element
-						&& (mutation.type === "childList" || !element.querySelector("mms-h"))
-						&& canHighlightElement(rejectSelector, element)) {
-						elements.add(element);
+					if (element) {
+						if (element["markmysearchKnown"]) {
+							elementsKnown.add(element);
+						} else if ((mutation.type === "childList" || !element.querySelector("mms-h"))
+							&& canHighlightElement(rejectSelector, element)) {
+							elements.add(element);
+						}
 					}
+				}
+				for (const element of elementsKnown) {
+					delete element["markmysearchKnown"];
+				}
+				if (elementsKnown.size) {
+					mutationUpdates.observe();
+					return;
 				}
 				for (const element of elements) {
 					for (const elementOther of elements) {
