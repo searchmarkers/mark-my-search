@@ -140,7 +140,7 @@ const paintUsePaintingFallback = !CSS["paintWorklet"]?.addModule;
  * Whether experimental browser technologies (namely paint/element) should be used over SVG rendering
  * when using the PAINT algorithm.
  */
-const paintUseExperimental = window[WindowVariable.CONFIG_HARD].paintUseExperimental;
+const paintUseExperimental = false;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
 
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
@@ -3093,9 +3093,33 @@ const getTermsFromSelection = () => {
 		const mutationUpdates = mutationUpdatesGet(termCountCheck, getHighlightingId,
 			styleUpdates, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-		styleElementsInsert();
-		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
-			sendResponse: (response: HighlightDetails) => void) => {
+		const obs = new MutationObserver(() => {
+			if (document.body && document.head) {
+				obs.disconnect();
+				messageSendBackground({ sendMessage: true });
+			}
+		});
+		obs.observe(document.documentElement, {
+			childList: true,
+		});
+		const messageHandleHighlight = (
+			message: HighlightMessage,
+			sender,
+			sendResponse: (response: HighlightDetails) => void,
+		) => {
+			obs.disconnect();
+			if (!document.head || !document.body) {
+				const obs = new MutationObserver(() => {
+					if (document.head && document.body) {
+						obs.disconnect();
+						messageHandleHighlight(message, sender, sendResponse);
+					}
+				});
+				obs.observe(document.documentElement, {
+					childList: true,
+				});
+			}
+			styleElementsInsert();
 			if (message.getDetails) {
 				const details: HighlightDetails = {};
 				if (message.getDetails.termsFromSelection) {
@@ -3184,6 +3208,7 @@ const getTermsFromSelection = () => {
 				bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
 			}
 			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
-		});
+		};
+		chrome.runtime.onMessage.addListener(messageHandleHighlight);
 	};
 })()();

@@ -247,7 +247,7 @@ interface BackgroundMessage {
 	tabId?: number
 	highlightMessage?: HighlightMessage
 	highlightCommand?: CommandInfo
-	executeInTabNoPilot?: boolean
+	sendMessage?: boolean
 	terms?: MatchTerms
 	termChanged?: MatchTerm
 	termChangedIdx?: number

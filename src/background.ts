@@ -5,6 +5,7 @@ enum ScriptInclude { // Include scripts, which perform no action but provide uti
 	COMMON = "/dist/include/shared.js",
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 enum Script { // Handler scripts.
 	BACKGROUND = "/dist/background.js",
 	CONTENT = "/dist/content.js",
@@ -12,9 +13,9 @@ enum Script { // Handler scripts.
 	OPTIONS = "/dist/pages/options.js",
 }
 
-if (/*isBrowserChromium()*/ !this.browser) {
-	// Firefox accepts a list of event page scripts, whereas Chromium only accepts service workers.
-	this["importScripts"](
+if (this.importScripts) {
+	// Required for service workers, whereas event pages use declarative imports.
+	this.importScripts(
 		ScriptInclude.STORAGE,
 		ScriptInclude.STEMMING,
 		ScriptInclude.DIACRITICS,
@@ -22,7 +23,6 @@ if (/*isBrowserChromium()*/ !this.browser) {
 	);
 }
 
-chrome.scripting = useChromeAPI() ? chrome.scripting : browser["scripting"];
 chrome.tabs.query = useChromeAPI() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
 chrome.tabs.sendMessage = useChromeAPI()
 	? chrome.tabs.sendMessage
@@ -376,11 +376,11 @@ const updateActionIcon = (enabled?: boolean) =>
 			// Apply terms from term lists.
 			researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
 			if (isResearchPage) {
-				await executeScriptsInTabUnsafe(tabId).then(() =>
-					messageSendHighlight(tabId, {
-						termsOnHold: researchInstance.terms,
-					})
-				);
+				//await executeScriptsInTabUnsafe(tabId).then(() =>
+				messageSendHighlight(tabId, {
+					termsOnHold: researchInstance.terms,
+				});
+				//);
 			} else {
 				session.researchInstances[tabId] = researchInstance;
 				log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
@@ -444,8 +444,14 @@ const updateActionIcon = (enabled?: boolean) =>
 		}
 	});
 
-	chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-		if (changeInfo.url) {
+	chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+		console.log(changeInfo);
+		if (useChromeAPI()) {
+			// Chromium emits no `tabs` event for tab reload.
+			if (changeInfo.status === "loading" || changeInfo.status === "complete") {
+				pageModifyRemote((await chrome.tabs.get(tabId)).url ?? "", tabId);
+			}
+		} else if (changeInfo.url) {
 			pageModifyRemote(changeInfo.url, tabId);
 		}
 	});
@@ -457,52 +463,16 @@ const updateActionIcon = (enabled?: boolean) =>
 			storageSet("session", session);
 		}
 	});
-
-	if (useChromeAPI()) {
-		// Chromium emits no `tabs` event for tab reload
-		chrome.webNavigation.onCommitted.addListener(details => {
-			if (details.url !== "" && details.transitionType === "reload") {
-				pageModifyRemote(details.url, details.tabId);
-			}
-		});
-	}
 })();
 
 /**
  * Activates highlighting within a tab.
- * @param targetTabId The ID of a tab to highlight within.
- * @param highlightMessageToReceive A message to be received by the tab's highlighting script.
+ * @param tabId The ID of a tab to highlight within.
+ * @param highlightMessage A message to be received by the tab's highlighting script.
  * This script will first be injected if not already present.
  */
-const activateHighlightingInTab = async (targetTabId: number, highlightMessageToReceive?: HighlightMessage) => {
-	const logMetadata = { tabId: targetTabId };
-	log("pilot function injection start", "", logMetadata);
-	await chrome.scripting.executeScript({
-		func: (flagLoaded: string, tabId: number, highlightMessage: HighlightMessage,
-			windowObjects: Record<string, Record<string, unknown>>) => {
-			Object.entries(windowObjects).forEach(([ key, options ]) => {
-				window[key] = options;
-			});
-			chrome.runtime.sendMessage({
-				executeInTabNoPilot: !window[flagLoaded],
-				tabId,
-				highlightMessage,
-			} as BackgroundMessage);
-		},
-		args: [ WindowVariable.SCRIPTS_LOADED, targetTabId, Object.assign(
-			{ extensionCommands: await chrome.commands.getAll() },
-			highlightMessageToReceive,
-		), { [WindowVariable.CONFIG_HARD]: {
-			paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental,
-		} } ],
-		target: { tabId: targetTabId },
-		injectImmediately: true,
-	}).then(value => {
-		log("pilot function injection finish", "", logMetadata);
-		return value;
-	}).catch(() => {
-		log("pilot function injection fail", "injection not permitted in this tab", logMetadata);
-	});
+const activateHighlightingInTab = async (tabId: number, highlightMessage: HighlightMessage) => {
+	messageSendHighlight(tabId, highlightMessage);
 };
 
 /**
@@ -521,7 +491,7 @@ const getTermsSelectedInTab = async (tabId: number, retriesRemaining = 0): Promi
 		if (!assert(retriesRemaining !== 0, "selection terms retrieval cancel", "no retries remain")) {
 			return undefined;
 		}
-		await executeScriptsInTabUnsafe(tabId);
+		//await executeScriptsInTabUnsafe(tabId);
 		return getTermsSelectedInTab(tabId, retriesRemaining - 1);
 	});
 };
@@ -605,42 +575,6 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	}
 };
 
-// TODO update documentation, check that each use is appropriate (unsafe since there is no pilot)
-/**
- * Injects a highlighting script, composed of the highlighting code preceded by its dependencies, into a tab.
- * @param tabId The ID of a tab to execute the script in.
- */
-const executeScriptsInTabUnsafe = async (tabId: number) => {
-	const logMetadata = { tabId };
-	log("script injection start", "", logMetadata);
-	await chrome.scripting.executeScript({
-		func: (tabId: number, windowObjects: Record<string, Record<string, unknown>>) => {
-			Object.entries(windowObjects).forEach(([ key, options ]) => {
-				window[key] = options;
-			});
-		},
-		args: [ tabId, { [WindowVariable.CONFIG_HARD]: {
-			paintUseExperimental: (await storageGet("sync", [ StorageSync.HIGHLIGHT_METHOD ])).highlightMethod.paintUseExperimental,
-		} } ],
-		target: { tabId },
-		injectImmediately: true,
-	});
-	await chrome.scripting.executeScript({
-		files: [
-			ScriptInclude.STEMMING,
-			ScriptInclude.DIACRITICS,
-			ScriptInclude.COMMON,
-			Script.CONTENT,
-		],
-		target: { tabId },
-	}).then(value => {
-		log("script injection finish (silent failure possible)", "", logMetadata);
-		return value;
-	}).catch(() => {
-		log("script injection fail", "injection not permitted in this tab", logMetadata);
-	});
-};
-
 chrome.commands.onCommand.addListener(async commandString => {
 	if (commandString === "open-popup") {
 		(chrome.action["openPopup"] ?? (() => undefined))();
@@ -693,10 +627,27 @@ chrome.commands.onCommand.addListener(async commandString => {
  * @param senderTabId The ID of a tab assumed to be the message sender.
  */
 const messageHandleBackground = async (message: BackgroundMessage, senderTabId: number) => {
-	if (message.highlightMessage !== undefined) {
-		if (message.executeInTabNoPilot) {
-			await executeScriptsInTabUnsafe(message.tabId as number);
-		}
+	if (message.sendMessage) {
+		//await executeScriptsInTabUnsafe(message.tabId as number);
+		const sync = (await storageGet("sync", [
+			StorageSync.BAR_CONTROLS_SHOWN,
+			StorageSync.BAR_LOOK,
+			StorageSync.HIGHLIGHT_METHOD,
+			StorageSync.MATCH_MODE_DEFAULTS,
+		]));
+		const researchInstance = (await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ])).researchInstances[senderTabId];
+		await activateHighlightingInTab(senderTabId, {
+			terms: researchInstance.terms,
+			toggleHighlightsOn: researchInstance.highlightsShown,
+			toggleBarCollapsedOn: researchInstance.barCollapsed,
+			barControlsShown: sync.barControlsShown,
+			barLook: sync.barLook,
+			highlightMethod: sync.highlightMethod,
+			matchMode: sync.matchModeDefaults,
+			useClassicHighlighting: sync.highlightMethod.paintReplaceByClassic,
+			enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(senderTabId)).url ?? "", sync.urlFilters),
+		});
+	} else if (message.highlightMessage !== undefined) {
 		// FIXME generates errors even when wrapped in try...catch
 		messageSendHighlight(message.tabId as number, message.highlightMessage);
 	} else if (message.toggleResearchOn !== undefined) {
@@ -774,11 +725,8 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 	sendResponse(); // Mitigates manifest V3 bug which otherwise logs an error message.
 });
 
-chrome.action.onClicked.addListener(() =>
-	chrome.permissions.request({ permissions: [ "bookmarks" ] })
-);
-
-chrome.permissions.onAdded.addListener(permissions =>
-	permissions && permissions.permissions && permissions.permissions.includes("bookmarks")
-		? manageEnginesCacheOnBookmarkUpdate() : undefined
-);
+chrome.permissions.onAdded.addListener(permissions => {
+	if (permissions?.permissions?.includes("bookmarks")) {
+		manageEnginesCacheOnBookmarkUpdate();
+	}
+});

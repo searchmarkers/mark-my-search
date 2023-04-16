@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.13.6",
+	"version": "1.14.0",
 
 	"browser_specific_settings": { "gecko": { "id": "mark-my-search@searchmarkers.github.io" } },
 
@@ -12,7 +12,6 @@
 	},
 
 	"permissions": [
-		"scripting",
 		"tabs",
 		"storage",
 		"search",
@@ -36,6 +35,19 @@
 			"/dist/background.js"
 		]
 	},
+
+	"content_scripts": [
+		{
+			"matches": [ "*://*/*" ],
+			"js": [
+				"/dist/include/pattern-stem.js",
+				"/dist/include/pattern-diacritic.js",
+				"/dist/include/shared.js",
+				"/dist/content.js"
+			],
+			"run_at": "document_start"
+		}
+	],
 
 	"options_ui": {
 		"page": "/pages/options.html",
