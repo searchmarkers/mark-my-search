@@ -118,7 +118,7 @@ class MatchTerm {
 			Object.values(this.matchMode).map((matchFlag: boolean) => Number(matchFlag)).join("")
 		}-${
 			(Date.now() + Math.random()).toString(36).replace(/\W/g, "_")
-		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour
+		}`; // Selector is most likely unique; a repeated selector results in undefined behaviour.
 		const flags = this.matchMode.case ? "gu" : "giu";
 		const [ patternStringPrefix, patternStringSuffix ] = (this.matchMode.stem && !this.matchMode.regex)
 			? getWordPatternStrings(this.phrase)
