@@ -97,7 +97,9 @@ const loadPopup = (() => {
 								},
 								onToggle: checked => {
 									messageSendBackground({
-										toggleResearchOn: checked,
+										toggle: {
+											researchOn: checked,
+										},
 									});
 								},
 							},

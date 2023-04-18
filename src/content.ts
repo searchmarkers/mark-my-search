@@ -1301,7 +1301,9 @@ const controlsInsert = (() => {
 					onClick: () => {
 						controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
 						messageSendBackground({
-							toggleBarCollapsedOn: controlsInfo.barCollapsed,
+							toggle: {
+								barCollapsedOn: controlsInfo.barCollapsed,
+							},
 						});
 						const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 						bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
@@ -1325,7 +1327,9 @@ const controlsInsert = (() => {
 					path: "/icons/show.svg",
 					containerId: ElementID.BAR_LEFT,
 					onClick: () => messageSendBackground({
-						toggleHighlightsOn: !controlsInfo.highlightsShown,
+						toggle: {
+							highlightsShownOn: !controlsInfo.highlightsShown,
+						},
 					}),
 				},
 				appendTerm: {

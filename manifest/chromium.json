@@ -30,9 +30,9 @@
 		{
 			"matches": [ "*://*/*" ],
 			"js": [
+				"/dist/include/utility.js",
 				"/dist/include/pattern-stem.js",
 				"/dist/include/pattern-diacritic.js",
-				"/dist/include/shared.js",
 				"/dist/content.js"
 			],
 			"run_at": "document_start"

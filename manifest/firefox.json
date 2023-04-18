@@ -28,10 +28,11 @@
 
 	"background": {
 		"scripts": [
-			"/dist/include/storage.js",
+			"/dist/include/utility.js",
 			"/dist/include/pattern-stem.js",
 			"/dist/include/pattern-diacritic.js",
-			"/dist/include/shared.js",
+			"/dist/include/priviliged.js",
+			"/dist/include/storage.js",
 			"/dist/background.js"
 		]
 	},
@@ -40,9 +41,9 @@
 		{
 			"matches": [ "*://*/*" ],
 			"js": [
+				"/dist/include/utility.js",
 				"/dist/include/pattern-stem.js",
 				"/dist/include/pattern-diacritic.js",
-				"/dist/include/shared.js",
 				"/dist/content.js"
 			],
 			"run_at": "document_start"
