@@ -767,6 +767,7 @@ const insertTermInput = (() => {
 			entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
 		)).observe(input);
 		input.addEventListener("keydown", event => {
+			event.stopPropagation();
 			switch (event.key) {
 			case "Enter": {
 				if (event.shiftKey) {
@@ -970,8 +971,8 @@ const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: Highlig
 	control.classList.add(getSel(ElementClass.TERM, term.selector));
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(getSel(ElementClass.CONTROL_CONTENT))[0] as HTMLElement;
-	controlContent.onclick = () => // Overrides previous event handler in case of new term.
-		focusOnTermJump(controlsInfo, highlightTags, false, term);
+	controlContent.onclick = event => // Overrides previous event handler in case of new term.
+		focusOnTermJump(controlsInfo, highlightTags, event.shiftKey, term);
 	controlContent.textContent = term.phrase;
 	// TODO make function
 	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
@@ -2124,6 +2125,7 @@ const generateTermHighlightsUnderNode = (() => {
 		highlight.textContent = text.substring(start, end);
 		textEndNode.textContent = text.substring(end);
 		(textEndNode.parentNode as Node).insertBefore(highlight, textEndNode);
+		(highlight.parentNode as Node)["markmysearchKnown"] = true;
 		nodeItems.insertAfter(nodeItemPrevious, highlight.firstChild as Text);
 		if (textStart !== "") {
 			const textStartNode = document.createTextNode(textStart);
@@ -2132,7 +2134,6 @@ const generateTermHighlightsUnderNode = (() => {
 			return ((nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem)
 				.next as UnbrokenNodeListItem;
 		}
-		(highlight.parentNode as Node)["markmysearchKnown"] = true;
 		return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as UnbrokenNodeListItem;
 	};
 
@@ -2641,10 +2642,10 @@ const mutationUpdatesGet = (() => {
 						}
 					}
 				}
-				for (const element of elementsKnown) {
-					delete element["markmysearchKnown"];
-				}
 				if (elementsKnown.size) {
+					for (const element of elementsKnown) {
+						delete element["markmysearchKnown"];
+					}
 					mutationUpdates.observe();
 					return;
 				}
