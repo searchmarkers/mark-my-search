@@ -50,8 +50,9 @@ const loadStartpage = (() => {
 										}, onSuccess);
 									} else {
 										messageSendBackground({
-											toggleHighlightsOn: true,
-											makeUnique: true,
+											toggle: {
+												highlightsShownOn: true,
+											},
 											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
 										});
 										onSuccess();

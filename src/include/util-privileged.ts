@@ -172,11 +172,11 @@ const parseCommand = (commandString: string): CommandInfo => {
 
 /**
  * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.
- * @param researchInstances An array of objects each representing an instance of highlighting.
  * @param tabId The ID of a tab.
  * @returns `true` if the tab is considered highlighted, `false` otherwise.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const isTabResearchPage = (researchInstances: ResearchInstances, tabId: number): boolean =>
-	(tabId in researchInstances) && researchInstances[tabId].enabled
-;
+const isTabResearchPage = async (tabId: number): Promise<boolean> => {
+	const { researchInstances } = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+	return (tabId in researchInstances) && researchInstances[tabId].enabled;
+};

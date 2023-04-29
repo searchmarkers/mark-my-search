@@ -31,7 +31,7 @@
 			"/dist/include/utility.js",
 			"/dist/include/pattern-stem.js",
 			"/dist/include/pattern-diacritic.js",
-			"/dist/include/priviliged.js",
+			"/dist/include/util-privileged.js",
 			"/dist/include/storage.js",
 			"/dist/background.js"
 		]

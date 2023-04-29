@@ -1,5 +1,10 @@
 type MatchTerms = Array<MatchTerm>
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const useChromeAPI = () =>
+	!this.browser
+;
+
 /**
  * Gets a JSON-stringified form of the given object for use in logging.
  * @param object An object.
@@ -142,12 +147,12 @@ class MatchTerm {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface HighlightMessage {
+type HighlightMessage = {
 	getDetails?: {
 		termsFromSelection?: true
 		highlightsShown?: true
 	}
-	command?: CommandInfo
+	commands?: Array<CommandInfo>
 	extensionCommands?: Array<chrome.commands.Command>
 	terms?: MatchTerms
 	termUpdate?: MatchTerm
@@ -165,29 +170,32 @@ interface HighlightMessage {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface HighlightDetails {
+type HighlightMessageResponse = {
 	terms?: MatchTerms
 	highlightsShown?: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface BackgroundMessage {
-	tabId?: number
-	highlightMessage?: HighlightMessage
-	highlightCommand?: CommandInfo
-	sendMessage?: boolean
+type BackgroundMessage<WithId = false> = {
+	highlightCommands?: Array<CommandInfo>
+	initializationGet?: boolean
 	terms?: MatchTerms
-	termChanged?: MatchTerm
-	termChangedIdx?: number
-	makeUnique?: boolean
-	makeUniqueNoCreate?: boolean
-	disableTabResearch?: boolean
+	deactivateTabResearch?: boolean
 	performSearch?: boolean
 	toggle?: {
 		highlightsShownOn?: boolean
 		barCollapsedOn?: boolean
 	}
-}
+} & (WithId extends true
+	? {
+		tabId: number
+	} : {
+		tabId?: number
+	}
+)
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type BackgroundMessageResponse = HighlightMessage | null
 
 enum CommandType {
 	NONE,
@@ -213,14 +221,14 @@ interface CommandInfo {
 
 // TODO document
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise<HighlightDetails> =>
+const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise<HighlightMessageResponse> =>
 	chrome.tabs.sendMessage(tabId, message)
 ;
 
 // TODO document
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const messageSendBackground = (message: BackgroundMessage): Promise<never> =>
-	chrome.runtime.sendMessage(message)
+const messageSendBackground = (message: BackgroundMessage): Promise<BackgroundMessageResponse> =>
+	browser.runtime.sendMessage(message)
 ;
 
 /**

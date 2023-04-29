@@ -639,15 +639,11 @@ const insertTermInput = (() => {
 			}
 			messageSendBackground({
 				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
-				termChanged: term,
-				termChangedIdx: TermChange.REMOVE,
 			});
 		} else if (replaces && inputValue !== term.phrase) {
 			const termChanged = new MatchTerm(inputValue, term.matchMode);
 			messageSendBackground({
 				terms: terms.map((term, i) => i === idx ? termChanged : term),
-				termChanged,
-				termChangedIdx: idx,
 			});
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
@@ -655,8 +651,6 @@ const insertTermInput = (() => {
 			});
 			messageSendBackground({
 				terms: terms.concat(termChanged),
-				termChanged,
-				termChangedIdx: TermChange.CREATE,
 			});
 		}
 	};
@@ -1054,8 +1048,6 @@ const createTermOptionMenu = (
 		termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
 		messageSendBackground({
 			terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
-			termChanged: termUpdate,
-			termChangedIdx: getTermIdxFromArray(term, terms),
 		});
 	},
 ): { optionList: HTMLElement, controlReveal: HTMLButtonElement } => {
@@ -1313,7 +1305,7 @@ const controlsInsert = (() => {
 					path: "/icons/close.svg",
 					containerId: ElementID.BAR_LEFT,	
 					onClick: () => messageSendBackground({
-						disableTabResearch: true,
+						deactivateTabResearch: true,
 					}),
 				},
 				performSearch: {
@@ -3033,7 +3025,6 @@ const getTermsFromSelection = () => {
 	;
 
 	return () => {
-		window[WindowVariable.SCRIPTS_LOADED] = true;
 		if (!paintUsePaintingFallback) {
 			(CSS["paintWorklet"] as PaintWorkletType).addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
@@ -3097,21 +3088,23 @@ const getTermsFromSelection = () => {
 		const mutationUpdates = mutationUpdatesGet(termCountCheck, getHighlightingId,
 			styleUpdates, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-		const obs = new MutationObserver(() => {
-			if (document.body && document.head) {
-				obs.disconnect();
-				messageSendBackground({ sendMessage: true });
-			}
-		});
-		obs.observe(document.documentElement, {
-			childList: true,
-		});
+		//const obs = new MutationObserver(() => {
+		//	if (document.body && document.head) {
+		//		obs.disconnect();
+		//		messageSendBackground({
+		//			initializationGet: true,
+		//		});
+		//	}
+		//});
+		//obs.observe(document.documentElement, {
+		//	childList: true,
+		//});
 		const messageHandleHighlight = (
 			message: HighlightMessage,
-			sender,
-			sendResponse: (response: HighlightDetails) => void,
+			sender: chrome.runtime.MessageSender,
+			sendResponse: (response: HighlightMessageResponse) => void,
 		) => {
-			obs.disconnect();
+			//obs.disconnect();
 			if (!document.head || !document.body) {
 				const obs = new MutationObserver(() => {
 					if (document.head && document.body) {
@@ -3125,14 +3118,11 @@ const getTermsFromSelection = () => {
 			}
 			styleElementsInsert();
 			if (message.getDetails) {
-				const details: HighlightDetails = {};
-				if (message.getDetails.termsFromSelection) {
-					details.terms = getTermsFromSelection();
-				}
-				if (message.getDetails.highlightsShown) {
-					details.highlightsShown = controlsInfo.highlightsShown;
-				}
-				sendResponse(details);
+				const getDetails = message.getDetails;
+				sendResponse({
+					terms: getDetails.termsFromSelection ? getTermsFromSelection() : undefined,
+					highlightsShown: getDetails.highlightsShown ? controlsInfo.highlightsShown : undefined,
+				});
 			}
 			if (message.useClassicHighlighting !== undefined) {
 				controlsInfo.paintReplaceByClassic = message.useClassicHighlighting;
@@ -3202,17 +3192,41 @@ const getTermsFromSelection = () => {
 					message.terms, message.termUpdate, message.termToUpdateIdx, //
 				);
 			}
-			if (message.command) {
-				produceEffectOnCommand.next(message.command);
-			}
+			(message.commands ?? []).forEach(command => {
+				produceEffectOnCommand.next(command);
+			});
 			controlVisibilityUpdate("replaceTerms", controlsInfo, terms);
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
 				bar.classList.toggle(getSel(ElementClass.HIGHLIGHTS_SHOWN), controlsInfo.highlightsShown);
 				bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
 			}
-			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
 		};
-		chrome.runtime.onMessage.addListener(messageHandleHighlight);
+		(() => {
+			const messageQueue: Array<{
+				message: HighlightMessage,
+				sender: chrome.runtime.MessageSender,
+				sendResponse: (response: HighlightMessageResponse) => void,
+			}> = [];
+			const messageEnqueue: typeof messageHandleHighlight = (message, sender, sendResponse) => {
+				if (messageQueue.length === 0) {
+					messageSendBackground({
+						initializationGet: true,
+					}).then(message => {
+						if (!message) {
+							return;
+						}
+						chrome.runtime.onMessage.removeListener(messageEnqueue);
+						chrome.runtime.onMessage.addListener(messageHandleHighlight);
+						messageHandleHighlight(message, sender, sendResponse);
+						messageQueue.forEach(messageInfo => {
+							messageHandleHighlight(messageInfo.message, messageInfo.sender, messageInfo.sendResponse);
+						});
+					});
+				}
+				messageQueue.unshift({ message, sender, sendResponse });
+			};
+			chrome.runtime.onMessage.addListener(messageEnqueue);
+		})();
 	};
 })()();
