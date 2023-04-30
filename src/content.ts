@@ -324,7 +324,7 @@ ${
 	controlsInfo.paintReplaceByClassic
 		? `
 mms-h
-	{ font: inherit; }
+	{ font: inherit; visibility: visible !important; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }`
 		: ""
@@ -3143,34 +3143,11 @@ const getTermsFromSelection = () => {
 		const mutationUpdates = mutationUpdatesGet(termCountCheck, getHighlightingId,
 			styleUpdates, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-		//const obs = new MutationObserver(() => {
-		//	if (document.body && document.head) {
-		//		obs.disconnect();
-		//		messageSendBackground({
-		//			initializationGet: true,
-		//		});
-		//	}
-		//});
-		//obs.observe(document.documentElement, {
-		//	childList: true,
-		//});
 		const messageHandleHighlight = (
 			message: HighlightMessage,
 			sender: chrome.runtime.MessageSender,
 			sendResponse: (response: HighlightMessageResponse) => void,
 		) => {
-			//obs.disconnect();
-			if (!document.head || !document.body) {
-				const obs = new MutationObserver(() => {
-					if (document.head && document.body) {
-						obs.disconnect();
-						messageHandleHighlight(message, sender, sendResponse);
-					}
-				});
-				obs.observe(document.documentElement, {
-					childList: true,
-				});
-			}
 			styleElementsInsert();
 			if (message.getDetails) {
 				const getDetails = message.getDetails;
@@ -3270,12 +3247,27 @@ const getTermsFromSelection = () => {
 						if (!message) {
 							return;
 						}
-						chrome.runtime.onMessage.removeListener(messageEnqueue);
-						chrome.runtime.onMessage.addListener(messageHandleHighlight);
-						messageHandleHighlight(message, sender, sendResponse);
-						messageQueue.forEach(messageInfo => {
-							messageHandleHighlight(messageInfo.message, messageInfo.sender, messageInfo.sendResponse);
-						});
+						const initialize = () => {
+							chrome.runtime.onMessage.removeListener(messageEnqueue);
+							chrome.runtime.onMessage.addListener(messageHandleHighlight);
+							messageHandleHighlight(message, sender, sendResponse);
+							messageQueue.forEach(messageInfo => {
+								messageHandleHighlight(messageInfo.message, messageInfo.sender, messageInfo.sendResponse);
+							});
+						};
+						if (document.body) {
+							initialize();
+						} else {
+							const observer = new MutationObserver(() => {
+								if (document.body) {
+									observer.disconnect();
+									initialize();
+								}
+							});
+							observer.observe(document.documentElement, {
+								childList: true,
+							});
+						}
 					});
 				}
 				messageQueue.unshift({ message, sender, sendResponse });
