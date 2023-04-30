@@ -236,6 +236,15 @@ const updateActionIcon = (enabled?: boolean) =>
 ;
 
 (() => {
+	const contextMenuListener = async (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) => {
+		if (tab && tab.id !== undefined) {
+			log("research-activation request", "context menu item activated", { tabId: tab.id });
+			activateResearchInTab(tab.id, await getTermsSelectedInTab(tab.id));
+		} else {
+			assert(false, "research-activation (from context menu) void request", "no valid tab", { tab });
+		}
+	};
+
 	/**
 	 * Registers items to selectively appear in context menus, if not present, to serve as shortcuts for managing the extension.
 	 */
@@ -249,15 +258,9 @@ const updateActionIcon = (enabled?: boolean) =>
 			id: "activate-research-tab",
 			contexts: [ "selection", "page" ],
 		});
-		chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-			if (tab && tab.id !== undefined) {
-				log("research activation request", "context menu item activated", { tabId: tab.id });
-				const termsSelected = await getTermsSelectedInTab(tab.id);
-				activateResearchInTab(tab.id, termsSelected);
-			} else {
-				assert(false, "research activation [from context menu] no request", "", { tab });
-			}
-		});
+		if (!chrome.contextMenus.onClicked.hasListener(contextMenuListener)) {
+			chrome.contextMenus.onClicked.addListener(contextMenuListener);
+		}
 	};
 
 	/**
@@ -556,12 +559,12 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
  * @returns The terms extracted if successful, `undefined` otherwise.
  */
 const getTermsSelectedInTab = async (tabId: number): Promise<MatchTerms | undefined> => {
-	log("selection terms retrieval start", "");
+	log("selection-terms-retrieval start", "");
 	return messageSendHighlight(tabId, { getDetails: { termsFromSelection: true } }).then(response => {
-		log("selection terms retrieval finish", "", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
+		log("selection-terms-retrieval finish", "", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
 		return response.terms ?? [];
-	}).catch(async () => {
-		log("selection terms retrieval fail", "selection terms not received in response, perhaps no script is injected", { tabId });
+	}).catch(() => {
+		log("selection-terms-retrieval fail", "selection terms not received in response, perhaps no script is injected", { tabId });
 		return undefined;
 	});
 };
@@ -660,7 +663,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 		if (await isTabResearchPage(tabId)) {
 			deactivateResearchInTab(tabId);
 		} else {
-			activateResearchInTab(tabId);
+			activateResearchInTab(tabId, await getTermsSelectedInTab(tabId));
 		}
 		return;
 	} case CommandType.TOGGLE_HIGHLIGHTS: {

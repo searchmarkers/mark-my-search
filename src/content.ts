@@ -2806,6 +2806,7 @@ const getTermsFromSelection = () => {
 							termsCopy.splice(0, 1);
 							i++;
 						}
+						break;
 					}
 				}
 			}
@@ -3143,6 +3144,10 @@ const getTermsFromSelection = () => {
 		const mutationUpdates = mutationUpdatesGet(termCountCheck, getHighlightingId,
 			styleUpdates, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
+		const getDetails = (request: HighlightDetailsRequest) => ({
+			terms: request.termsFromSelection ? getTermsFromSelection() : undefined,
+			highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
+		});
 		const messageHandleHighlight = (
 			message: HighlightMessage,
 			sender: chrome.runtime.MessageSender,
@@ -3150,11 +3155,7 @@ const getTermsFromSelection = () => {
 		) => {
 			styleElementsInsert();
 			if (message.getDetails) {
-				const getDetails = message.getDetails;
-				sendResponse({
-					terms: getDetails.termsFromSelection ? getTermsFromSelection() : undefined,
-					highlightsShown: getDetails.highlightsShown ? controlsInfo.highlightsShown : undefined,
-				});
+				sendResponse(getDetails(message.getDetails));
 			}
 			if (message.useClassicHighlighting !== undefined) {
 				controlsInfo.paintReplaceByClassic = message.useClassicHighlighting;
@@ -3239,16 +3240,25 @@ const getTermsFromSelection = () => {
 				sender: chrome.runtime.MessageSender,
 				sendResponse: (response: HighlightMessageResponse) => void,
 			}> = [];
-			const messageEnqueue: typeof messageHandleHighlight = (message, sender, sendResponse) => {
-				if (messageQueue.length === 0) {
+			const messageHandleHighlightUninitialized: typeof messageHandleHighlight = (message, sender, sendResponse) => {
+				if (message.getDetails) {
+					sendResponse(getDetails(message.getDetails));
+					delete message.getDetails;
+				}
+				if (!Object.keys(message).length) {
+					return;
+				}
+				messageQueue.unshift({ message, sender, sendResponse });
+				if (messageQueue.length === 1) {
 					messageSendBackground({
 						initializationGet: true,
 					}).then(message => {
 						if (!message) {
+							assert(false, "not initialized, so highlighting remains inactive", "no init response was received");
 							return;
 						}
 						const initialize = () => {
-							chrome.runtime.onMessage.removeListener(messageEnqueue);
+							chrome.runtime.onMessage.removeListener(messageHandleHighlightUninitialized);
 							chrome.runtime.onMessage.addListener(messageHandleHighlight);
 							messageHandleHighlight(message, sender, sendResponse);
 							messageQueue.forEach(messageInfo => {
@@ -3264,15 +3274,12 @@ const getTermsFromSelection = () => {
 									initialize();
 								}
 							});
-							observer.observe(document.documentElement, {
-								childList: true,
-							});
+							observer.observe(document.documentElement, { childList: true });
 						}
 					});
 				}
-				messageQueue.unshift({ message, sender, sendResponse });
 			};
-			chrome.runtime.onMessage.addListener(messageEnqueue);
+			chrome.runtime.onMessage.addListener(messageHandleHighlightUninitialized);
 		})();
 		messageHandleHighlightGlobal = messageHandleHighlight;
 	};

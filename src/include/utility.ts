@@ -25,12 +25,12 @@ const getObjectStringLog = (object: Record<string, unknown>): string =>
  * Logs a debug message as part of normal operation.
  * @param operation Description of the process started or completed, or the event encountered.
  * Single lowercase command with capitalisation where appropriate and no fullstop, subject before verb.
- * @param reason Description of the reason for the process or situation.
+ * @param reason Description (omittable) of the reason for the process or situation.
  * Single lowercase statement with capitalisation where appropriate and no fullstop.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const log = (operation: string, reason: string, metadata: Record<string, unknown> = {}) => {
-	const operationStatement = `DEBUG: ${operation[0].toUpperCase() + operation.slice(1)}`;
+	const operationStatement = `LOG: ${operation[0].toUpperCase() + operation.slice(1)}`;
 	const reasonStatement = reason.length ? reason[0].toUpperCase() + reason.slice(1) : "";
 	console.log(operationStatement
 		+ (reasonStatement.length ? `: ${reasonStatement}.` : ".")
@@ -39,7 +39,7 @@ const log = (operation: string, reason: string, metadata: Record<string, unknown
 };
 
 /**
- * Logs a graceful failure message.
+ * Logs a graceful failure message if the condition is not met.
  * @param condition A value which will be evaluated to `true` or `false`. If falsy, there has been a problem which will be logged.
  * @param problem Description of the operation failure.
  * Single lowercase command with capitalisation where appropriate and no fullstop, subject before verb.
@@ -51,7 +51,7 @@ const log = (operation: string, reason: string, metadata: Record<string, unknown
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const assert = (condition: unknown, problem: string, reason: string, metadata: Record<string, unknown> = {}): boolean => {
 	if (!condition) {
-		console.warn(`DEBUG: ${problem[0].toUpperCase() + problem.slice(1)}: ${reason[0].toUpperCase() + reason.slice(1)}.`
+		console.warn(`LOG: ${problem[0].toUpperCase() + problem.slice(1)}: ${reason[0].toUpperCase() + reason.slice(1)}.`
 		+ (Object.keys(metadata).length ? (" " + getObjectStringLog(metadata)) : ""));
 	}
 	return !!condition;
@@ -154,12 +154,14 @@ const termEquals = (termA: MatchTerm | undefined, termB: MatchTerm | undefined):
 	Object.values(termA.matchMode).join(",") === Object.values(termB.matchMode).join(","))
 ;
 
+type HighlightDetailsRequest = {
+	termsFromSelection?: true
+	highlightsShown?: true
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type HighlightMessage = {
-	getDetails?: {
-		termsFromSelection?: true
-		highlightsShown?: true
-	}
+	getDetails?: HighlightDetailsRequest
 	commands?: Array<CommandInfo>
 	extensionCommands?: Array<chrome.commands.Command>
 	terms?: MatchTerms
@@ -229,7 +231,9 @@ interface CommandInfo {
 // TODO document
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise<HighlightMessageResponse> =>
-	chrome.tabs.sendMessage(tabId, message)
+	chrome.tabs.sendMessage(tabId, message).catch(() => {
+		log("messaging fail", "scripts may not be injected");
+	})
 ;
 
 // TODO document
