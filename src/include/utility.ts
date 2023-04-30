@@ -155,8 +155,6 @@ type HighlightMessage = {
 	commands?: Array<CommandInfo>
 	extensionCommands?: Array<chrome.commands.Command>
 	terms?: MatchTerms
-	termUpdate?: MatchTerm
-	termToUpdateIdx?: number
 	termsOnHold?: MatchTerms
 	deactivate?: boolean
 	useClassicHighlighting?: boolean
@@ -180,6 +178,7 @@ type BackgroundMessage<WithId = false> = {
 	highlightCommands?: Array<CommandInfo>
 	initializationGet?: boolean
 	terms?: MatchTerms
+	termsSend?: boolean
 	deactivateTabResearch?: boolean
 	performSearch?: boolean
 	toggle?: {

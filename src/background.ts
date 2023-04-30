@@ -548,6 +548,7 @@ const activateResearchInTab = async (tabId: number, terms: MatchTerms = []) => {
 	await messageHandleBackground({
 		tabId,
 		terms: researchInstance.terms,
+		termsSend: true,
 		toggle: {
 			highlightsShownOn: true,
 		},
@@ -669,7 +670,10 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 		}
 	}
 	const highlightMessage: HighlightMessage = {
-		terms: message.terms,
+		terms: message.termsSend
+			? (message.terms
+				?? (await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ])).researchInstances[tabId]?.terms)
+			: undefined,
 		commands: message.highlightCommands,
 	};
 	if (Object.values(highlightMessage).some(value => value !== undefined)) {

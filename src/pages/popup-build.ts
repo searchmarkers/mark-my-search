@@ -140,6 +140,7 @@ const loadPopup = (() => {
 											}
 											messageSendBackground({
 												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
+												termsSend: true,
 												toggle: {
 													highlightsShownOn: true,
 												},
@@ -470,6 +471,7 @@ const loadPopup = (() => {
 													)
 												)
 												: sync.termLists[index].terms,
+											termsSend: true,
 											toggle: {
 												highlightsShownOn: true,
 											},

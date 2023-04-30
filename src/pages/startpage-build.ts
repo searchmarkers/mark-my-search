@@ -54,6 +54,7 @@ const loadStartpage = (() => {
 												highlightsShownOn: true,
 											},
 											terms: messageText.split(" ").filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase)),
+											termsSend: true,
 										});
 										onSuccess();
 									}

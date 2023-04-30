@@ -142,6 +142,17 @@ const paintUsePaintingFallback = !CSS["paintWorklet"]?.addModule;
  */
 const paintUseExperimental = false;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
 
+let messageHandleHighlightGlobal: (
+	message: HighlightMessage,
+	sender: chrome.runtime.MessageSender | null,
+	sendResponse: (response: HighlightMessageResponse) => void,
+) => void = () => undefined;
+
+const termsSet = async (terms: MatchTerms) => {
+	messageHandleHighlightGlobal({ terms: terms.slice() }, null, () => undefined);
+	await messageSendBackground({ terms });
+};
+
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
  * __Always__ use for ID, class, and at-rule identifiers.
@@ -626,32 +637,27 @@ const insertTermInput = (() => {
 	 * @param term A term to attempt committing the control input text of.
 	 * @param terms Terms being controlled and highlighted.
 	 */
-	const commit = (term: MatchTerm | undefined, terms: MatchTerms) => {
+	const commit = (term: MatchTerm | undefined, terms: MatchTerms, inputValue?: string) => {
 		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
-		const inputValue = termInput.value;
+		inputValue = inputValue ?? termInput.value;
 		const idx = getTermIdxFromArray(term, terms);
+		// TODO standard method of avoiding race condition (arising from calling termsSet, which immediately updates controls)
 		if (replaces && inputValue === "") {
 			if (document.activeElement === termInput) {
 				selectInput(getControl(undefined, idx + 1) as HTMLElement);
 				return;
 			}
-			messageSendBackground({
-				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
-			});
+			termsSet(terms.slice(0, idx).concat(terms.slice(idx + 1)));
 		} else if (replaces && inputValue !== term.phrase) {
 			const termChanged = new MatchTerm(inputValue, term.matchMode);
-			messageSendBackground({
-				terms: terms.map((term, i) => i === idx ? termChanged : term),
-			});
+			termsSet(terms.map((term, i) => i === idx ? termChanged : term));
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
 				allowStemOverride: true,
 			});
-			messageSendBackground({
-				terms: terms.concat(termChanged),
-			});
+			termsSet(terms.concat(termChanged));
 		}
 	};
 
@@ -767,8 +773,9 @@ const insertTermInput = (() => {
 					hide();
 					termControlInputsVisibilityReset();
 				} else {
-					commit(term, terms);
-					resetInput(input.value);
+					const inputValue = input.value;
+					resetInput(inputValue);
+					commit(term, terms, inputValue);
 				}
 				return;
 			}
@@ -1046,9 +1053,7 @@ const createTermOptionMenu = (
 		const termUpdate = Object.assign({}, term);
 		termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
 		termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
-		messageSendBackground({
-			terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
-		});
+		termsSet(terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent));
 	},
 ): { optionList: HTMLElement, controlReveal: HTMLButtonElement } => {
 	const termIsValid = terms.includes(term); // If virtual and used for appending terms, this will be `false`.
@@ -1356,9 +1361,7 @@ const controlsInsert = (() => {
 					path: "/icons/refresh.svg",
 					containerId: ElementID.BAR_RIGHT,
 					onClick: () => {
-						messageSendBackground({
-							terms: controlsInfo.termsOnHold,
-						});
+						termsSet(controlsInfo.termsOnHold);
 					},
 				},
 			} as Record<ControlButtonName, ControlButtonInfo>)[controlName], hideWhenInactive);
@@ -2801,7 +2804,9 @@ const getTermsFromSelection = () => {
 					}
 				} else {
 					terms.splice(0);
-					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
+					termsUpdate.forEach(term => {
+						terms.push(new MatchTerm(term.phrase, term.matchMode));
+					});
 					insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 				}
 			} else {
@@ -2814,10 +2819,12 @@ const getTermsFromSelection = () => {
 				return;
 			}
 			if (controlsInfo.paintReplaceByClassic) {
-				beginHighlighting(
-					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-					controlsInfo, highlightTags, termCountCheck, mutationUpdates,
-				);
+				setTimeout(() => {
+					beginHighlighting(
+						termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+						controlsInfo, highlightTags, termCountCheck, mutationUpdates,
+					);
+				});
 			} else {
 				cacheExtend(document.body, highlightTags);
 				boxesInfoRemoveForTerms(termsToPurge);
@@ -2936,9 +2943,7 @@ const getTermsFromSelection = () => {
 				selectModeFocus = !selectModeFocus;
 				break;
 			} case CommandType.REPLACE_TERMS: {
-				messageSendBackground({
-					terms: controlsInfo.termsOnHold,
-				});
+				termsSet(controlsInfo.termsOnHold);
 				break;
 			} case CommandType.STEP_GLOBAL: {
 				if (focusReturnToDocument()) {
@@ -3177,10 +3182,10 @@ const getTermsFromSelection = () => {
 				});
 				highlightingAttributesCleanup(document.body);
 			}
-			if (message.termUpdate || (message.terms !== undefined && (
-				!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
-				|| (!terms.length && !document.getElementById(ElementID.BAR))
-			))) {
+			if (message.terms !== undefined && (
+				!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase) ||
+				(!terms.length && !document.getElementById(ElementID.BAR))
+			)) {
 				refreshTermControlsAndBeginHighlighting(
 					terms, //
 					controlsInfo, commands, //
@@ -3189,7 +3194,7 @@ const getTermsFromSelection = () => {
 					produceEffectOnCommand, //
 					getHighlightingId, //
 					styleUpdates, elementsVisible, //
-					message.terms, message.termUpdate, message.termToUpdateIdx, //
+					message.terms, //
 				);
 			}
 			(message.commands ?? []).forEach(command => {
@@ -3228,5 +3233,6 @@ const getTermsFromSelection = () => {
 			};
 			chrome.runtime.onMessage.addListener(messageEnqueue);
 		})();
+		messageHandleHighlightGlobal = messageHandleHighlight;
 	};
 })()();
