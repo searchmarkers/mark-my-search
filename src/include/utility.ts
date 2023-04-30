@@ -147,6 +147,14 @@ class MatchTerm {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
+const termEquals = (termA: MatchTerm | undefined, termB: MatchTerm | undefined): boolean =>
+	(!termA && !termB) ||
+	!!(termA && termB &&
+	termA.phrase === termB.phrase &&
+	Object.values(termA.matchMode).join(",") === Object.values(termB.matchMode).join(","))
+;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type HighlightMessage = {
 	getDetails?: {
 		termsFromSelection?: true

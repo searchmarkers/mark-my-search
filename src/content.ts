@@ -2766,9 +2766,49 @@ const getTermsFromSelection = () => {
 			produceEffectOnCommand: ProduceEffectOnCommand,
 			getHighlightingId: GetHighlightingID,
 			styleUpdates: StyleUpdates, elementsVisible: Set<Element>,
-			termsUpdate?: MatchTerms, termUpdate?: MatchTerm,
-			termToUpdateIdx?: TermChange.CREATE | TermChange.REMOVE | number,
+			termsUpdate?: MatchTerms,
 		) => {
+			// TODO fix this abomination of a function
+			let termUpdate: MatchTerm | undefined = undefined;
+			let termToUpdateIdx: TermChange.CREATE | TermChange.REMOVE | number | undefined = undefined;
+			if (termsUpdate && termsUpdate.length < terms.length && (terms.length === 1 || termEquals(termsUpdate[termsUpdate.length - 1], terms[terms.length - 2]))) {
+				termToUpdateIdx = TermChange.REMOVE;
+				termUpdate = terms[terms.length - 1];
+			} else if (termsUpdate && termsUpdate.length > terms.length && (termsUpdate.length === 1 || termEquals(termsUpdate[termsUpdate.length - 2], terms[terms.length - 1]))) {
+				termToUpdateIdx = TermChange.CREATE;
+				termUpdate = termsUpdate[termsUpdate.length - 1];
+			} else if (termsUpdate) {
+				const termsCopy = terms.slice();
+				const termsUpdateCopy = termsUpdate?.slice();
+				let i = 0;
+				while (termsUpdateCopy.length && termsCopy.length) {
+					if (termEquals(termsUpdateCopy[0], termsCopy[0])) {
+						termsUpdateCopy.splice(0, 1);
+						termsCopy.splice(0, 1);
+						i++;
+					} else {
+						if (termEquals(termsUpdateCopy[0], termsCopy[1])) {
+							// Term deleted at current index.
+							termToUpdateIdx = TermChange.REMOVE;
+							termUpdate = termsCopy[0];
+							termsCopy.splice(0, 1);
+							i++;
+						} else if (termEquals(termsUpdateCopy[1], termsCopy[0])) {
+							// Term created at current index.
+							termToUpdateIdx = TermChange.CREATE;
+							termUpdate = termsUpdateCopy[0];
+							termsUpdateCopy.splice(0, 1);
+						} else if (termEquals(termsUpdateCopy[1], termsCopy[1])) {
+							// Term changed at current index.
+							termToUpdateIdx = i;
+							termUpdate = termsUpdateCopy[0];
+							termsUpdateCopy.splice(0, 1);
+							termsCopy.splice(0, 1);
+							i++;
+						}
+					}
+				}
+			}
 			const termsToHighlight: MatchTerms = [];
 			const termsToPurge: MatchTerms = [];
 			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
@@ -3182,10 +3222,9 @@ const getTermsFromSelection = () => {
 				});
 				highlightingAttributesCleanup(document.body);
 			}
-			if (message.terms !== undefined && (
-				!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase) ||
-				(!terms.length && !document.getElementById(ElementID.BAR))
-			)) {
+			if (message.terms !== undefined &&
+				(!itemsMatch(terms, message.terms, termEquals) || (!terms.length && !document.getElementById(ElementID.BAR)))
+			) {
 				refreshTermControlsAndBeginHighlighting(
 					terms, //
 					controlsInfo, commands, //
