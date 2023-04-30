@@ -142,6 +142,44 @@ const paintUsePaintingFallback = !CSS["paintWorklet"]?.addModule;
  */
 const paintUseExperimental = false;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
 
+/**
+ * Returns a generator function, the generator of which consumes empty requests for calling the specified function.
+ * Request fulfillment is variably delayed based on activity.
+ * @param call The function to be intermittently called.
+ * @param waitDuration Return the time to wait after the last request, before fulfilling it.
+ * @param reschedulingDelayMax Return the maximum total delay time between requests and fulfillment.
+ */
+const requestCallFn = function* (
+	call: () => void,
+	waitDuration: () => number,
+	reschedulingDelayMax: () => number,
+) {
+	const reschedulingRequestCountMargin = 1;
+	let timeRequestAcceptedLast = 0;
+	let requestCount = 0;
+	const scheduleRefresh = () =>
+		setTimeout(() => {
+			const dateMs = Date.now();
+			if (requestCount > reschedulingRequestCountMargin
+				&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax()) {
+				requestCount = 0;
+				scheduleRefresh();
+				return;
+			}
+			requestCount = 0;
+			call();
+		}, waitDuration() + 20); // Arbitrary small amount added to account for lag (preventing lost updates).
+	while (true) {
+		requestCount++;
+		const dateMs = Date.now();
+		if (dateMs > timeRequestAcceptedLast + waitDuration()) {
+			timeRequestAcceptedLast = dateMs;
+			scheduleRefresh();
+		}
+		yield;
+	}
+};
+
 let messageHandleHighlightGlobal: (
 	message: HighlightMessage,
 	sender: chrome.runtime.MessageSender | null,
@@ -324,7 +362,7 @@ ${
 	controlsInfo.paintReplaceByClassic
 		? `
 mms-h
-	{ font: inherit; visibility: visible !important; }
+	{ font: inherit; border-radius: 2px; visibility: visible; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }`
 		: ""
@@ -403,7 +441,7 @@ ${controlsInfo.paintReplaceByClassic
 #${getSel(ElementID.BAR)}
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`)};
-	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
+	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
 		: paintUseExperimental && paintUsePaintingFallback
 			? `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
@@ -2586,10 +2624,42 @@ const mutationUpdatesGet = (() => {
 			}),
 			disconnect: () => observer.disconnect(),
 		};
+		const elements: Set<HTMLElement> = new Set;
+		let periodDateLast = 0;
+		let periodHighlightCount = 0;
+		let throttling = false;
+		let highlightIsPending = false;
+		const highlightElements = () => {
+			highlightIsPending = false;
+			for (const element of elements) {
+				restoreNodes([], element);
+				generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
+			}
+			periodHighlightCount += elements.size;
+			elements.clear();
+		};
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		const highlightElementsLimited = () => {
+			const periodInterval = Date.now() - periodDateLast;
+			if (periodInterval > 2000) {
+				const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
+				console.log(periodHighlightCount, periodInterval, periodHighlightRate);
+				throttling = periodHighlightRate > 0.004;
+				periodDateLast = Date.now();
+				periodHighlightCount = 0;
+			}
+			if (throttling || highlightIsPending) {
+				if (!highlightIsPending) {
+					highlightIsPending = true;
+					setTimeout(highlightElements, 1000);
+				}
+			} else {
+				highlightElements();
+			}
+		};
 		const observer = controlsInfo.paintReplaceByClassic
 			? new MutationObserver(mutations => {
-				mutationUpdates.disconnect();
-				const elements: Set<HTMLElement> = new Set;
+				//mutationUpdates.disconnect();
 				const elementsKnown: Set<HTMLElement> = new Set;
 				for (const mutation of mutations) {
 					const element = mutation.target.nodeType === Node.TEXT_NODE
@@ -2608,7 +2678,7 @@ const mutationUpdatesGet = (() => {
 					delete element["markmysearchKnown"];
 				}
 				if (elementsKnown.size) {
-					mutationUpdates.observe();
+					//mutationUpdates.observe();
 					return;
 				}
 				for (const element of elements) {
@@ -2618,11 +2688,8 @@ const mutationUpdatesGet = (() => {
 						}
 					}
 				}
-				for (const element of elements) {
-					restoreNodes([], element);
-					generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
-				}
-				mutationUpdates.observe();
+				highlightElements();
+				//mutationUpdates.observe();
 			}) : new MutationObserver(mutations => {
 				// TODO optimise as above
 				for (const mutation of mutations) {
@@ -2923,44 +2990,6 @@ const getTermsFromSelection = () => {
 			while (stylePaint.sheet.cssRules.length) {
 				stylePaint.sheet.deleteRule(0);
 			}
-		}
-	};
-
-	/**
-	 * Returns a generator function, the generator of which consumes empty requests for calling the specified function.
-	 * Request fulfillment is variably delayed based on activity.
-	 * @param call The function to be intermittently called.
-	 * @param waitDuration Return the time to wait after the last request, before fulfilling it.
-	 * @param reschedulingDelayMax Return the maximum total delay time between requests and fulfillment.
-	 */
-	const requestCallFn = function* (
-		call: () => void,
-		waitDuration: () => number,
-		reschedulingDelayMax: () => number,
-	) {
-		const reschedulingRequestCountMargin = 1;
-		let timeRequestAcceptedLast = 0;
-		let requestCount = 0;
-		const scheduleRefresh = () =>
-			setTimeout(() => {
-				const dateMs = Date.now();
-				if (requestCount > reschedulingRequestCountMargin
-					&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax()) {
-					requestCount = 0;
-					scheduleRefresh();
-					return;
-				}
-				requestCount = 0;
-				call();
-			}, waitDuration() + 20); // Arbitrary small amount added to account for lag (preventing lost updates).
-		while (true) {
-			requestCount++;
-			const dateMs = Date.now();
-			if (dateMs > timeRequestAcceptedLast + waitDuration()) {
-				timeRequestAcceptedLast = dateMs;
-				scheduleRefresh();
-			}
-			yield;
 		}
 	};
 
