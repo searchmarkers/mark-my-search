@@ -151,7 +151,7 @@ const termEquals = (termA: MatchTerm | undefined, termB: MatchTerm | undefined):
 	(!termA && !termB) ||
 	!!(termA && termB &&
 	termA.phrase === termB.phrase &&
-	Object.values(termA.matchMode).join(",") === Object.values(termB.matchMode).join(","))
+	Object.entries(termA.matchMode).every(([ key, value ]) => termB.matchMode[key] === value))
 ;
 
 type HighlightDetailsRequest = {
@@ -239,7 +239,7 @@ const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise
 // TODO document
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const messageSendBackground = (message: BackgroundMessage): Promise<BackgroundMessageResponse> =>
-	browser.runtime.sendMessage(message)
+	chrome.runtime.sendMessage(message)
 ;
 
 /**

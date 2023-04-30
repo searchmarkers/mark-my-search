@@ -2638,20 +2638,19 @@ const mutationUpdatesGet = (() => {
 			periodHighlightCount += elements.size;
 			elements.clear();
 		};
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const highlightElementsLimited = () => {
 			const periodInterval = Date.now() - periodDateLast;
-			if (periodInterval > 2000) {
+			if (periodInterval > 400) {
 				const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
 				console.log(periodHighlightCount, periodInterval, periodHighlightRate);
-				throttling = periodHighlightRate > 0.004;
+				throttling = periodHighlightRate > 0.006;
 				periodDateLast = Date.now();
 				periodHighlightCount = 0;
 			}
 			if (throttling || highlightIsPending) {
 				if (!highlightIsPending) {
 					highlightIsPending = true;
-					setTimeout(highlightElements, 1000);
+					setTimeout(highlightElements, 100);
 				}
 			} else {
 				highlightElements();
@@ -2688,7 +2687,7 @@ const mutationUpdatesGet = (() => {
 						}
 					}
 				}
-				highlightElements();
+				highlightElementsLimited();
 				//mutationUpdates.observe();
 			}) : new MutationObserver(mutations => {
 				// TODO optimise as above

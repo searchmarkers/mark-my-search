@@ -18,10 +18,6 @@
 		"contextMenus"
 	],
 
-	"host_permissions": [
-		"*://*/*"
-	],
-
 	"background": {
 		"service_worker": "/dist/background.js"
 	},

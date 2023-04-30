@@ -4,7 +4,7 @@ if (this.importScripts) {
 		"/dist/include/utility.js",
 		"/dist/include/pattern-stem.js",
 		"/dist/include/pattern-diacritic.js",
-		"/dist/include/util-priviliged.js",
+		"/dist/include/util-privileged.js",
 		"/dist/include/storage.js",
 	);
 }
@@ -535,14 +535,19 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 		}
 	});
 
-	(useChromeAPI() ? chrome as unknown as typeof browser : browser).tabs.onUpdated.addListener(async (tabId, changeInfo) => {
-		if (changeInfo.status === "loading" || changeInfo.status === "complete") {
+	const pageEventListener = async (tabId: number, changeInfo: browser.tabs._OnUpdatedChangeInfo) => {
+		// Note: emitted events differ between Firefox and Chromium.
+		if (changeInfo.url || changeInfo.status === "loading" || changeInfo.status === "complete") {
 			pageChangeRespond(changeInfo.url ?? (await chrome.tabs.get(tabId)).url ?? "", tabId);
 		}
-		if (changeInfo.url) { // Note: not emitted by Chromium as a distinct event.
-			pageChangeRespond(changeInfo.url, tabId);
-		}
-	}, { properties: [ "url", "status" ] });
+	};
+
+	// Note: emitted events differ between Firefox and Chromium.
+	if (useChromeAPI()) {
+		chrome.tabs.onUpdated.addListener(pageEventListener);
+	} else {
+		browser.tabs.onUpdated.addListener(pageEventListener, { properties: [ "url", "status" ] });
+	}
 
 	chrome.tabs.onRemoved.addListener(async tabId => {
 		const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
@@ -778,16 +783,12 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 	return null;
 };
 
-browser.runtime.onMessage.addListener(async (message: BackgroundMessage, sender) => {
-	if (message.tabId === undefined) {
-		if (sender.tab && sender.tab.id !== undefined) {
-			message.tabId = sender.tab.id;
-		} else {
-			const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-			message.tabId = tab.id;
-		}
-	}
-	return messageHandleBackground(message as BackgroundMessage<true>);
+chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
+	(async () => {
+		message.tabId ??= sender.tab?.id ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
+		messageHandleBackground(message as BackgroundMessage<true>).then(sendResponse);
+	})();
+	return true;
 });
 
 chrome.permissions.onAdded.addListener(permissions => {
