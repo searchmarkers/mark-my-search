@@ -2811,44 +2811,54 @@ const getTermsFromSelection = () => {
 			}
 			const termsToHighlight: MatchTerms = [];
 			const termsToPurge: MatchTerms = [];
-			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
-				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
-				if (termToUpdateIdx === TermChange.CREATE) {
-					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
-					const termCommands = getTermCommands(commands);
-					const idx = terms.length - 1;
-					insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
-					termsToHighlight.push(terms[idx]);
-				} else {
-					const term = terms[termToUpdateIdx];
-					termsToPurge.push(Object.assign({}, term));
-					term.matchMode = termUpdate.matchMode;
-					term.phrase = termUpdate.phrase;
-					term.compile();
-					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags, controlsInfo);
-					termsToHighlight.push(term);
-				}
-			} else if (termsUpdate !== undefined) {
-				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
-					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
-					if (assert(
-						termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
-					)) {
-						removeTermControl(termRemovedPreviousIdx);
-						boxesInfoRemoveForTerms([ terms[termRemovedPreviousIdx] ]);
-						restoreNodes([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
-						terms.splice(termRemovedPreviousIdx, 1);
-						fillStylesheetContent(terms, hues, controlsInfo);
-						termCountCheck();
-						return;
+			if (document.getElementById(getSel(ElementID.BAR))) {
+				if (termsUpdate !== undefined && termToUpdateIdx !== undefined
+					&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
+					if (termToUpdateIdx === TermChange.CREATE) {
+						terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
+						const termCommands = getTermCommands(commands);
+						const idx = terms.length - 1;
+						insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
+						termsToHighlight.push(terms[idx]);
+					} else {
+						const term = terms[termToUpdateIdx];
+						termsToPurge.push(Object.assign({}, term));
+						term.matchMode = termUpdate.matchMode;
+						term.phrase = termUpdate.phrase;
+						term.compile();
+						refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags, controlsInfo);
+						termsToHighlight.push(term);
+					}
+				} else if (termsUpdate !== undefined) {
+					if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
+						const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
+						if (assert(
+							termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
+						)) {
+							removeTermControl(termRemovedPreviousIdx);
+							boxesInfoRemoveForTerms([ terms[termRemovedPreviousIdx] ]);
+							restoreNodes([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
+							terms.splice(termRemovedPreviousIdx, 1);
+							fillStylesheetContent(terms, hues, controlsInfo);
+							termCountCheck();
+							return;
+						}
+					} else {
+						terms.splice(0);
+						termsUpdate.forEach(term => {
+							terms.push(new MatchTerm(term.phrase, term.matchMode));
+						});
+						insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 					}
 				} else {
-					terms.splice(0);
-					termsUpdate.forEach(term => {
-						terms.push(new MatchTerm(term.phrase, term.matchMode));
-					});
-					insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
+					return;
 				}
+			} else if (termsUpdate) {
+				terms.splice(0);
+				termsUpdate.forEach(term => {
+					terms.push(new MatchTerm(term.phrase, term.matchMode));
+				});
+				insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 			} else {
 				return;
 			}
