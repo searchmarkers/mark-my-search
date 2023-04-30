@@ -879,18 +879,18 @@ textarea
 					: () => {
 						const box = document.createElement("textarea");
 						box.rows = messageInfo.rows;
-						if (messageInfo.required) {
-							allowInputs = (allowed = true) => {
-								box.disabled = !allowed;
-							};
-							button.disabled = true;
-							box.addEventListener("input", () => {
-								button.disabled = box.value === "";
-							});
-						}
 						return box;
 					}
 				)();
+				if (messageInfo.required) {
+					allowInputs = (allowed = true) => {
+						messageBox.disabled = !allowed;
+					};
+					button.disabled = true;
+					messageBox.addEventListener("input", () => {
+						button.disabled = messageBox.value === "";
+					});
+				}
 				messageBox.classList.add("message");
 				messageBox.placeholder = submitterInfo.message.placeholder;
 				messageBox.spellcheck = true;
