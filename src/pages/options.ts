@@ -173,7 +173,7 @@ label[for]:hover
 					}
 					row.appendChild(cell);
 				};
-				const inputId = getIdSequential.next().value;
+				const inputId = `input-${getIdSequential.next().value}`;
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
 				preferenceLabel.textContent = preferenceInfo.label;

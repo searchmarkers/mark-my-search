@@ -140,7 +140,56 @@ const paintUsePaintingFallback = !CSS["paintWorklet"]?.addModule;
  * Whether experimental browser technologies (namely paint/element) should be used over SVG rendering
  * when using the PAINT algorithm.
  */
-const paintUseExperimental = window[WindowVariable.CONFIG_HARD].paintUseExperimental;
+const paintUseExperimental = false;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
+
+/**
+ * Returns a generator function, the generator of which consumes empty requests for calling the specified function.
+ * Request fulfillment is variably delayed based on activity.
+ * @param call The function to be intermittently called.
+ * @param waitDuration Return the time to wait after the last request, before fulfilling it.
+ * @param reschedulingDelayMax Return the maximum total delay time between requests and fulfillment.
+ */
+const requestCallFn = function* (
+	call: () => void,
+	waitDuration: () => number,
+	reschedulingDelayMax: () => number,
+) {
+	const reschedulingRequestCountMargin = 1;
+	let timeRequestAcceptedLast = 0;
+	let requestCount = 0;
+	const scheduleRefresh = () =>
+		setTimeout(() => {
+			const dateMs = Date.now();
+			if (requestCount > reschedulingRequestCountMargin
+				&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax()) {
+				requestCount = 0;
+				scheduleRefresh();
+				return;
+			}
+			requestCount = 0;
+			call();
+		}, waitDuration() + 20); // Arbitrary small amount added to account for lag (preventing lost updates).
+	while (true) {
+		requestCount++;
+		const dateMs = Date.now();
+		if (dateMs > timeRequestAcceptedLast + waitDuration()) {
+			timeRequestAcceptedLast = dateMs;
+			scheduleRefresh();
+		}
+		yield;
+	}
+};
+
+let messageHandleHighlightGlobal: (
+	message: HighlightMessage,
+	sender: chrome.runtime.MessageSender | null,
+	sendResponse: (response: HighlightMessageResponse) => void,
+) => void = () => undefined;
+
+const termsSet = async (terms: MatchTerms) => {
+	messageHandleHighlightGlobal({ terms: terms.slice() }, null, () => undefined);
+	await messageSendBackground({ terms });
+};
 
 /**
  * Gets a selector for selecting by ID or class, or for CSS at-rules. Abbreviated due to prolific use.
@@ -313,7 +362,7 @@ ${
 	controlsInfo.paintReplaceByClassic
 		? `
 mms-h
-	{ font: inherit; }
+	{ font: inherit; border-radius: 2px; visibility: visible; }
 .${getSel(ElementClass.FOCUS_CONTAINER)}
 	{ animation: ${getSel(AtRuleID.FLASH)} 1s; }`
 		: ""
@@ -392,7 +441,7 @@ ${controlsInfo.paintReplaceByClassic
 #${getSel(ElementID.BAR)}
 ~ body .${getSel(ElementClass.FOCUS_CONTAINER)} mms-h.${getSel(ElementClass.TERM, term.selector)}
 	{ background: ${getBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`)};
-	border-radius: 2px; box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
+	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35); }`
 		: paintUseExperimental && paintUsePaintingFallback
 			? `
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.HIGHLIGHTS_SHOWN)}
@@ -626,38 +675,27 @@ const insertTermInput = (() => {
 	 * @param term A term to attempt committing the control input text of.
 	 * @param terms Terms being controlled and highlighted.
 	 */
-	const commit = (term: MatchTerm | undefined, terms: MatchTerms) => {
+	const commit = (term: MatchTerm | undefined, terms: MatchTerms, inputValue?: string) => {
 		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = getControl(term) as HTMLElement;
 		const termInput = control.querySelector("input") as HTMLInputElement;
-		const inputValue = termInput.value;
+		inputValue = inputValue ?? termInput.value;
 		const idx = getTermIdxFromArray(term, terms);
+		// TODO standard method of avoiding race condition (arising from calling termsSet, which immediately updates controls)
 		if (replaces && inputValue === "") {
 			if (document.activeElement === termInput) {
 				selectInput(getControl(undefined, idx + 1) as HTMLElement);
 				return;
 			}
-			messageSendBackground({
-				terms: terms.slice(0, idx).concat(terms.slice(idx + 1)),
-				termChanged: term,
-				termChangedIdx: TermChange.REMOVE,
-			});
+			termsSet(terms.slice(0, idx).concat(terms.slice(idx + 1)));
 		} else if (replaces && inputValue !== term.phrase) {
 			const termChanged = new MatchTerm(inputValue, term.matchMode);
-			messageSendBackground({
-				terms: terms.map((term, i) => i === idx ? termChanged : term),
-				termChanged,
-				termChangedIdx: idx,
-			});
+			termsSet(terms.map((term, i) => i === idx ? termChanged : term));
 		} else if (!replaces && inputValue !== "") {
 			const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
 				allowStemOverride: true,
 			});
-			messageSendBackground({
-				terms: terms.concat(termChanged),
-				termChanged,
-				termChangedIdx: TermChange.CREATE,
-			});
+			termsSet(terms.concat(termChanged));
 		}
 	};
 
@@ -774,8 +812,9 @@ const insertTermInput = (() => {
 					hide();
 					termControlInputsVisibilityReset();
 				} else {
-					commit(term, terms);
-					resetInput(input.value);
+					const inputValue = input.value;
+					resetInput(inputValue);
+					commit(term, terms, inputValue);
 				}
 				return;
 			}
@@ -1053,11 +1092,7 @@ const createTermOptionMenu = (
 		const termUpdate = Object.assign({}, term);
 		termUpdate.matchMode = Object.assign({}, termUpdate.matchMode);
 		termUpdate.matchMode[matchType] = !termUpdate.matchMode[matchType];
-		messageSendBackground({
-			terms: terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent),
-			termChanged: termUpdate,
-			termChangedIdx: getTermIdxFromArray(term, terms),
-		});
+		termsSet(terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent));
 	},
 ): { optionList: HTMLElement, controlReveal: HTMLButtonElement } => {
 	const termIsValid = terms.includes(term); // If virtual and used for appending terms, this will be `false`.
@@ -1302,7 +1337,9 @@ const controlsInsert = (() => {
 					onClick: () => {
 						controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
 						messageSendBackground({
-							toggleBarCollapsedOn: controlsInfo.barCollapsed,
+							toggle: {
+								barCollapsedOn: controlsInfo.barCollapsed,
+							},
 						});
 						const bar = document.getElementById(getSel(ElementID.BAR)) as HTMLElement;
 						bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
@@ -1312,7 +1349,7 @@ const controlsInsert = (() => {
 					path: "/icons/close.svg",
 					containerId: ElementID.BAR_LEFT,	
 					onClick: () => messageSendBackground({
-						disableTabResearch: true,
+						deactivateTabResearch: true,
 					}),
 				},
 				performSearch: {
@@ -1326,7 +1363,9 @@ const controlsInsert = (() => {
 					path: "/icons/show.svg",
 					containerId: ElementID.BAR_LEFT,
 					onClick: () => messageSendBackground({
-						toggleHighlightsOn: !controlsInfo.highlightsShown,
+						toggle: {
+							highlightsShownOn: !controlsInfo.highlightsShown,
+						},
 					}),
 				},
 				appendTerm: {
@@ -1361,9 +1400,7 @@ const controlsInsert = (() => {
 					path: "/icons/refresh.svg",
 					containerId: ElementID.BAR_RIGHT,
 					onClick: () => {
-						messageSendBackground({
-							terms: controlsInfo.termsOnHold,
-						});
+						termsSet(controlsInfo.termsOnHold);
 					},
 				},
 			} as Record<ControlButtonName, ControlButtonInfo>)[controlName], hideWhenInactive);
@@ -2624,10 +2661,41 @@ const mutationUpdatesGet = (() => {
 			}),
 			disconnect: () => observer.disconnect(),
 		};
+		const elements: Set<HTMLElement> = new Set;
+		let periodDateLast = 0;
+		let periodHighlightCount = 0;
+		let throttling = false;
+		let highlightIsPending = false;
+		const highlightElements = () => {
+			highlightIsPending = false;
+			for (const element of elements) {
+				restoreNodes([], element);
+				generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
+			}
+			periodHighlightCount += elements.size;
+			elements.clear();
+		};
+		const highlightElementsLimited = () => {
+			const periodInterval = Date.now() - periodDateLast;
+			if (periodInterval > 400) {
+				const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
+				console.log(periodHighlightCount, periodInterval, periodHighlightRate);
+				throttling = periodHighlightRate > 0.006;
+				periodDateLast = Date.now();
+				periodHighlightCount = 0;
+			}
+			if (throttling || highlightIsPending) {
+				if (!highlightIsPending) {
+					highlightIsPending = true;
+					setTimeout(highlightElements, 100);
+				}
+			} else {
+				highlightElements();
+			}
+		};
 		const observer = controlsInfo.paintReplaceByClassic
 			? new MutationObserver(mutations => {
-				mutationUpdates.disconnect();
-				const elements: Set<HTMLElement> = new Set;
+				//mutationUpdates.disconnect();
 				const elementsKnown: Set<HTMLElement> = new Set;
 				for (const mutation of mutations) {
 					const element = mutation.target.nodeType === Node.TEXT_NODE
@@ -2642,11 +2710,11 @@ const mutationUpdatesGet = (() => {
 						}
 					}
 				}
+				for (const element of elementsKnown) {
+					delete element["markmysearchKnown"];
+				}
 				if (elementsKnown.size) {
-					for (const element of elementsKnown) {
-						delete element["markmysearchKnown"];
-					}
-					mutationUpdates.observe();
+					//mutationUpdates.observe();
 					return;
 				}
 				for (const element of elements) {
@@ -2656,11 +2724,8 @@ const mutationUpdatesGet = (() => {
 						}
 					}
 				}
-				for (const element of elements) {
-					restoreNodes([], element);
-					generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
-				}
-				mutationUpdates.observe();
+				highlightElementsLimited();
+				//mutationUpdates.observe();
 			}) : new MutationObserver(mutations => {
 				// TODO optimise as above
 				for (const mutation of mutations) {
@@ -2804,47 +2869,100 @@ const getTermsFromSelection = () => {
 			produceEffectOnCommand: ProduceEffectOnCommand,
 			getHighlightingId: GetHighlightingID,
 			styleUpdates: StyleUpdates, elementsVisible: Set<Element>,
-			termsUpdate?: MatchTerms, termUpdate?: MatchTerm,
-			termToUpdateIdx?: TermChange.CREATE | TermChange.REMOVE | number,
+			termsUpdate?: MatchTerms,
 		) => {
+			// TODO fix this abomination of a function
+			let termUpdate: MatchTerm | undefined = undefined;
+			let termToUpdateIdx: TermChange.CREATE | TermChange.REMOVE | number | undefined = undefined;
+			if (termsUpdate && termsUpdate.length < terms.length && (terms.length === 1 || termEquals(termsUpdate[termsUpdate.length - 1], terms[terms.length - 2]))) {
+				termToUpdateIdx = TermChange.REMOVE;
+				termUpdate = terms[terms.length - 1];
+			} else if (termsUpdate && termsUpdate.length > terms.length && (termsUpdate.length === 1 || termEquals(termsUpdate[termsUpdate.length - 2], terms[terms.length - 1]))) {
+				termToUpdateIdx = TermChange.CREATE;
+				termUpdate = termsUpdate[termsUpdate.length - 1];
+			} else if (termsUpdate) {
+				const termsCopy = terms.slice();
+				const termsUpdateCopy = termsUpdate?.slice();
+				let i = 0;
+				while (termsUpdateCopy.length && termsCopy.length) {
+					if (termEquals(termsUpdateCopy[0], termsCopy[0])) {
+						termsUpdateCopy.splice(0, 1);
+						termsCopy.splice(0, 1);
+						i++;
+					} else {
+						if (termEquals(termsUpdateCopy[0], termsCopy[1])) {
+							// Term deleted at current index.
+							termToUpdateIdx = TermChange.REMOVE;
+							termUpdate = termsCopy[0];
+							termsCopy.splice(0, 1);
+							i++;
+						} else if (termEquals(termsUpdateCopy[1], termsCopy[0])) {
+							// Term created at current index.
+							termToUpdateIdx = TermChange.CREATE;
+							termUpdate = termsUpdateCopy[0];
+							termsUpdateCopy.splice(0, 1);
+						} else if (termEquals(termsUpdateCopy[1], termsCopy[1])) {
+							// Term changed at current index.
+							termToUpdateIdx = i;
+							termUpdate = termsUpdateCopy[0];
+							termsUpdateCopy.splice(0, 1);
+							termsCopy.splice(0, 1);
+							i++;
+						}
+						break;
+					}
+				}
+			}
 			const termsToHighlight: MatchTerms = [];
 			const termsToPurge: MatchTerms = [];
-			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
-				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
-				if (termToUpdateIdx === TermChange.CREATE) {
-					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
-					const termCommands = getTermCommands(commands);
-					const idx = terms.length - 1;
-					insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
-					termsToHighlight.push(terms[idx]);
-				} else {
-					const term = terms[termToUpdateIdx];
-					termsToPurge.push(Object.assign({}, term));
-					term.matchMode = termUpdate.matchMode;
-					term.phrase = termUpdate.phrase;
-					term.compile();
-					refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags, controlsInfo);
-					termsToHighlight.push(term);
-				}
-			} else if (termsUpdate !== undefined) {
-				if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
-					const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
-					if (assert(
-						termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
-					)) {
-						removeTermControl(termRemovedPreviousIdx);
-						boxesInfoRemoveForTerms([ terms[termRemovedPreviousIdx] ]);
-						restoreNodes([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
-						terms.splice(termRemovedPreviousIdx, 1);
-						fillStylesheetContent(terms, hues, controlsInfo);
-						termCountCheck();
-						return;
+			if (document.getElementById(getSel(ElementID.BAR))) {
+				if (termsUpdate !== undefined && termToUpdateIdx !== undefined
+					&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
+					if (termToUpdateIdx === TermChange.CREATE) {
+						terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
+						const termCommands = getTermCommands(commands);
+						const idx = terms.length - 1;
+						insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlightTags);
+						termsToHighlight.push(terms[idx]);
+					} else {
+						const term = terms[termToUpdateIdx];
+						termsToPurge.push(Object.assign({}, term));
+						term.matchMode = termUpdate.matchMode;
+						term.phrase = termUpdate.phrase;
+						term.compile();
+						refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags, controlsInfo);
+						termsToHighlight.push(term);
+					}
+				} else if (termsUpdate !== undefined) {
+					if (termToUpdateIdx === TermChange.REMOVE && termUpdate) {
+						const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
+						if (assert(
+							termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
+						)) {
+							removeTermControl(termRemovedPreviousIdx);
+							boxesInfoRemoveForTerms([ terms[termRemovedPreviousIdx] ]);
+							restoreNodes([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
+							terms.splice(termRemovedPreviousIdx, 1);
+							fillStylesheetContent(terms, hues, controlsInfo);
+							termCountCheck();
+							return;
+						}
+					} else {
+						terms.splice(0);
+						termsUpdate.forEach(term => {
+							terms.push(new MatchTerm(term.phrase, term.matchMode));
+						});
+						insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 					}
 				} else {
-					terms.splice(0);
-					termsUpdate.forEach(term => terms.push(new MatchTerm(term.phrase, term.matchMode)));
-					insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
+					return;
 				}
+			} else if (termsUpdate) {
+				terms.splice(0);
+				termsUpdate.forEach(term => {
+					terms.push(new MatchTerm(term.phrase, term.matchMode));
+				});
+				insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 			} else {
 				return;
 			}
@@ -2855,10 +2973,12 @@ const getTermsFromSelection = () => {
 				return;
 			}
 			if (controlsInfo.paintReplaceByClassic) {
-				beginHighlighting(
-					termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
-					controlsInfo, highlightTags, termCountCheck, mutationUpdates,
-				);
+				setTimeout(() => {
+					beginHighlighting(
+						termsToHighlight.length ? termsToHighlight : terms, termsToPurge,
+						controlsInfo, highlightTags, termCountCheck, mutationUpdates,
+					);
+				});
 			} else {
 				cacheExtend(document.body, highlightTags);
 				boxesInfoRemoveForTerms(termsToPurge);
@@ -2910,44 +3030,6 @@ const getTermsFromSelection = () => {
 	};
 
 	/**
-	 * Returns a generator function, the generator of which consumes empty requests for calling the specified function.
-	 * Request fulfillment is variably delayed based on activity.
-	 * @param call The function to be intermittently called.
-	 * @param waitDuration Return the time to wait after the last request, before fulfilling it.
-	 * @param reschedulingDelayMax Return the maximum total delay time between requests and fulfillment.
-	 */
-	const requestCallFn = function* (
-		call: () => void,
-		waitDuration: () => number,
-		reschedulingDelayMax: () => number,
-	) {
-		const reschedulingRequestCountMargin = 1;
-		let timeRequestAcceptedLast = 0;
-		let requestCount = 0;
-		const scheduleRefresh = () =>
-			setTimeout(() => {
-				const dateMs = Date.now();
-				if (requestCount > reschedulingRequestCountMargin
-					&& dateMs < timeRequestAcceptedLast + reschedulingDelayMax()) {
-					requestCount = 0;
-					scheduleRefresh();
-					return;
-				}
-				requestCount = 0;
-				call();
-			}, waitDuration() + 20); // Arbitrary small amount added to account for lag (preventing lost updates).
-		while (true) {
-			requestCount++;
-			const dateMs = Date.now();
-			if (dateMs > timeRequestAcceptedLast + waitDuration()) {
-				timeRequestAcceptedLast = dateMs;
-				scheduleRefresh();
-			}
-			yield;
-		}
-	};
-
-	/**
 	 * Returns a generator function to consume individual command objects and produce their desired effect.
 	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 * @param terms Terms being controlled, highlighted, and jumped to.
@@ -2977,9 +3059,7 @@ const getTermsFromSelection = () => {
 				selectModeFocus = !selectModeFocus;
 				break;
 			} case CommandType.REPLACE_TERMS: {
-				messageSendBackground({
-					terms: controlsInfo.termsOnHold,
-				});
+				termsSet(controlsInfo.termsOnHold);
 				break;
 			} case CommandType.STEP_GLOBAL: {
 				if (focusReturnToDocument()) {
@@ -3066,7 +3146,6 @@ const getTermsFromSelection = () => {
 	;
 
 	return () => {
-		window[WindowVariable.SCRIPTS_LOADED] = true;
 		if (!paintUsePaintingFallback) {
 			(CSS["paintWorklet"] as PaintWorkletType).addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
@@ -3130,18 +3209,18 @@ const getTermsFromSelection = () => {
 		const mutationUpdates = mutationUpdatesGet(termCountCheck, getHighlightingId,
 			styleUpdates, highlightTags, terms, controlsInfo);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-		styleElementsInsert();
-		chrome.runtime.onMessage.addListener((message: HighlightMessage, sender,
-			sendResponse: (response: HighlightDetails) => void) => {
+		const getDetails = (request: HighlightDetailsRequest) => ({
+			terms: request.termsFromSelection ? getTermsFromSelection() : undefined,
+			highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
+		});
+		const messageHandleHighlight = (
+			message: HighlightMessage,
+			sender: chrome.runtime.MessageSender,
+			sendResponse: (response: HighlightMessageResponse) => void,
+		) => {
+			styleElementsInsert();
 			if (message.getDetails) {
-				const details: HighlightDetails = {};
-				if (message.getDetails.termsFromSelection) {
-					details.terms = getTermsFromSelection();
-				}
-				if (message.getDetails.highlightsShown) {
-					details.highlightsShown = controlsInfo.highlightsShown;
-				}
-				sendResponse(details);
+				sendResponse(getDetails(message.getDetails));
 			}
 			if (message.useClassicHighlighting !== undefined) {
 				controlsInfo.paintReplaceByClassic = message.useClassicHighlighting;
@@ -3196,10 +3275,9 @@ const getTermsFromSelection = () => {
 				});
 				highlightingAttributesCleanup(document.body);
 			}
-			if (message.termUpdate || (message.terms !== undefined && (
-				!itemsMatch(terms, message.terms, (a, b) => a.phrase === b.phrase)
-				|| (!terms.length && !document.getElementById(ElementID.BAR))
-			))) {
+			if (message.terms !== undefined &&
+				(!itemsMatch(terms, message.terms, termEquals) || (!terms.length && !document.getElementById(ElementID.BAR)))
+			) {
 				refreshTermControlsAndBeginHighlighting(
 					terms, //
 					controlsInfo, commands, //
@@ -3208,19 +3286,66 @@ const getTermsFromSelection = () => {
 					produceEffectOnCommand, //
 					getHighlightingId, //
 					styleUpdates, elementsVisible, //
-					message.terms, message.termUpdate, message.termToUpdateIdx, //
+					message.terms, //
 				);
 			}
-			if (message.command) {
-				produceEffectOnCommand.next(message.command);
-			}
+			(message.commands ?? []).forEach(command => {
+				produceEffectOnCommand.next(command);
+			});
 			controlVisibilityUpdate("replaceTerms", controlsInfo, terms);
 			const bar = document.getElementById(getSel(ElementID.BAR));
 			if (bar) {
 				bar.classList.toggle(getSel(ElementClass.HIGHLIGHTS_SHOWN), controlsInfo.highlightsShown);
 				bar.classList.toggle(getSel(ElementClass.COLLAPSED), controlsInfo.barCollapsed);
 			}
-			sendResponse({}); // Mitigates manifest V3 bug which otherwise logs an error message.
-		});
+		};
+		(() => {
+			const messageQueue: Array<{
+				message: HighlightMessage,
+				sender: chrome.runtime.MessageSender,
+				sendResponse: (response: HighlightMessageResponse) => void,
+			}> = [];
+			const messageHandleHighlightUninitialized: typeof messageHandleHighlight = (message, sender, sendResponse) => {
+				if (message.getDetails) {
+					sendResponse(getDetails(message.getDetails));
+					delete message.getDetails;
+				}
+				if (!Object.keys(message).length) {
+					return;
+				}
+				messageQueue.unshift({ message, sender, sendResponse });
+				if (messageQueue.length === 1) {
+					messageSendBackground({
+						initializationGet: true,
+					}).then(message => {
+						if (!message) {
+							assert(false, "not initialized, so highlighting remains inactive", "no init response was received");
+							return;
+						}
+						const initialize = () => {
+							chrome.runtime.onMessage.removeListener(messageHandleHighlightUninitialized);
+							chrome.runtime.onMessage.addListener(messageHandleHighlight);
+							messageHandleHighlight(message, sender, sendResponse);
+							messageQueue.forEach(messageInfo => {
+								messageHandleHighlight(messageInfo.message, messageInfo.sender, messageInfo.sendResponse);
+							});
+						};
+						if (document.body) {
+							initialize();
+						} else {
+							const observer = new MutationObserver(() => {
+								if (document.body) {
+									observer.disconnect();
+									initialize();
+								}
+							});
+							observer.observe(document.documentElement, { childList: true });
+						}
+					});
+				}
+			};
+			chrome.runtime.onMessage.addListener(messageHandleHighlightUninitialized);
+		})();
+		messageHandleHighlightGlobal = messageHandleHighlight;
 	};
 })()();
