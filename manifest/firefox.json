@@ -13,6 +13,7 @@
 
 	"permissions": [
 		"tabs",
+		"scripting",
 		"storage",
 		"search",
 		"contextMenus"
@@ -20,6 +21,10 @@
 
 	"optional_permissions": [
 		"bookmarks"
+	],
+
+	"host_permissions": [
+		"*://*/*"
 	],
 
 	"background": {

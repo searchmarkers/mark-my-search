@@ -536,7 +536,7 @@ const getContainerBlock = (element: HTMLElement, highlightTags: HighlightTags, s
  * Sets their `tabIndex` to -1.
  * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
  */
-const elementsRemakeUnfocusable = (root = document.body) => {
+const elementsRemakeUnfocusable = (root: HTMLElement | DocumentFragment = document.body) => {
 	if (!root.parentNode) {
 		return;
 	}
@@ -1516,23 +1516,20 @@ const controlsInsert = (() => {
 })();
 
 /**
- * Remove the control bar and marker gutter and purge term focus class names.
+ * Removes the control bar and scroll gutter.
  */
-const removeControls = () => {
+const controlsRemove = () => {
 	const bar = document.getElementById(getSel(ElementID.BAR));
 	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER));
 	if (bar) {
 		if (document.activeElement && bar.contains(document.activeElement)) {
-			(document.activeElement as HTMLElement).blur();
+			(document.activeElement as HTMLElement).blur(); // Allow focus+selection to be properly restored.
 		}
 		bar.remove();
 	}
 	if (gutter) {
 		gutter.remove();
 	}
-	elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER));
-	elementsPurgeClass(getSel(ElementClass.FOCUS));
-	elementsRemakeUnfocusable();
 };
 
 /**
@@ -1586,8 +1583,12 @@ const getAncestorHighlightable: (node: Node) => HTMLElement = !paintUseExperimen
  * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
  * @param predicate A function called for each element, the condition of which must be met in order to purge from that element.
  */
-const elementsPurgeClass = (className: string, root: HTMLElement = document.body, selectorPrefix = "",
-	predicate?: (classList: DOMTokenList) => boolean) =>
+const elementsPurgeClass = (
+	className: string,
+	root: HTMLElement | DocumentFragment = document.body,
+	selectorPrefix = "",
+	predicate?: (classList: DOMTokenList) => boolean
+) =>
 	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(predicate
 		? element => predicate(element.classList) ? element.classList.remove(className) : undefined
 		: element => element.classList.remove(className) // Predicate not called when not supplied, for efficiency (bulk purges)
@@ -2286,12 +2287,12 @@ const generateTermHighlightsUnderNode = (() => {
 })();
 
 /**
- * Revert all direct DOM tree changes under a root node introduced by the extension.
+ * Revert all direct DOM tree changes introduced by the extension, under a root node.
  * Circumstantial and non-direct alterations may remain.
  * @param classNames Class names of the highlights to remove. If left empty, all highlights are removed.
  * @param root A root node under which to remove highlights.
  */
-const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
+const elementsRestore = (classNames: Array<string> = [], root: HTMLElement | DocumentFragment = document.body) => {
 	const highlights = Array.from(root.querySelectorAll(classNames.length ? `mms-h.${classNames.join(", mms-h.")}` : "mms-h"))
 		.reverse();
 	for (const highlight of Array.from(highlights)) {
@@ -2303,9 +2304,9 @@ const restoreNodes = (classNames: Array<string> = [], root: HTMLElement | Docume
 			return;
 		}
 	}
-	elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER), root as HTMLElement);
-	elementsPurgeClass(getSel(ElementClass.FOCUS), root as HTMLElement);
-	elementsRemakeUnfocusable(root as HTMLElement);
+	elementsPurgeClass(getSel(ElementClass.FOCUS_CONTAINER), root);
+	elementsPurgeClass(getSel(ElementClass.FOCUS), root);
+	elementsRemakeUnfocusable(root);
 };
 
 /**
@@ -2613,7 +2614,7 @@ const beginHighlighting = (
 ) => {
 	mutationUpdates.disconnect();
 	if (termsToPurge.length) {
-		restoreNodes(termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)));
+		elementsRestore(termsToPurge.map(term => getSel(ElementClass.TERM, term.selector)));
 	}
 	generateTermHighlightsUnderNode(terms, document.body, highlightTags, termCountCheck);
 	terms.forEach(term => updateTermOccurringStatus(term, controlsInfo));
@@ -2679,7 +2680,7 @@ const mutationUpdatesGet = (() => {
 			const highlightElements = () => {
 				highlightIsPending = false;
 				for (const element of elements) {
-					restoreNodes([], element);
+					elementsRestore([], element);
 					generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
 				}
 				periodHighlightCount += elements.size;
@@ -2689,7 +2690,7 @@ const mutationUpdatesGet = (() => {
 				const periodInterval = Date.now() - periodDateLast;
 				if (periodInterval > 400) {
 					const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
-					console.log(periodHighlightCount, periodInterval, periodHighlightRate);
+					//console.log(periodHighlightCount, periodInterval, periodHighlightRate);
 					throttling = periodHighlightRate > 0.006;
 					periodDateLast = Date.now();
 					periodHighlightCount = 0;
@@ -2869,7 +2870,7 @@ const getTermsFromSelection = () => {
 			highlightTags: HighlightTags, hues: TermHues, produceEffectOnCommand: ProduceEffectOnCommand) => {
 			const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
 				&& document.activeElement.closest(`#${getSel(ElementID.BAR)}`);
-			removeControls();
+			controlsRemove();
 			controlsInsert(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 			if (focusingControlAppend) {
 				const input = (getControl() as HTMLElement).querySelector("input") as HTMLInputElement;
@@ -2957,7 +2958,7 @@ const getTermsFromSelection = () => {
 						)) {
 							removeTermControl(termRemovedPreviousIdx);
 							boxesInfoRemoveForTerms([ terms[termRemovedPreviousIdx] ]);
-							restoreNodes([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
+							elementsRestore([ getSel(ElementClass.TERM, terms[termRemovedPreviousIdx].selector) ]);
 							terms.splice(termRemovedPreviousIdx, 1);
 							fillStylesheetContent(terms, hues, controlsInfo);
 							termCountCheck();
@@ -2968,6 +2969,7 @@ const getTermsFromSelection = () => {
 						termsUpdate.forEach(term => {
 							terms.push(new MatchTerm(term.phrase, term.matchMode));
 						});
+						elementsRestore();
 						insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 					}
 				} else {
@@ -2978,6 +2980,7 @@ const getTermsFromSelection = () => {
 				termsUpdate.forEach(term => {
 					terms.push(new MatchTerm(term.phrase, term.matchMode));
 				});
+				elementsRestore();
 				insertToolbar(terms, controlsInfo, commands, highlightTags, hues, produceEffectOnCommand);
 			} else {
 				return;
@@ -3165,6 +3168,7 @@ const getTermsFromSelection = () => {
 		if (!paintUsePaintingFallback) {
 			(CSS["paintWorklet"] as PaintWorkletType).addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
+		controlsRemove();
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
@@ -3284,8 +3288,8 @@ const getTermsFromSelection = () => {
 				mutationUpdates.disconnect();
 				styleUpdates.disconnectAll();
 				terms.splice(0);
-				removeControls();
-				restoreNodes();
+				controlsRemove();
+				elementsRestore();
 				styleElementsCleanup();
 				document.querySelectorAll("*").forEach(element => {
 					delete element[ElementProperty.INFO];

@@ -222,6 +222,20 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	};
 })();
 
+const injectIntoTabs = async () => {
+	(await chrome.tabs.query({})).filter(tab => tab.id !== undefined).forEach(tab => {
+		chrome.scripting.executeScript({
+			target: { tabId: tab.id as number },
+			files: [
+				"/dist/include/utility.js",
+				"/dist/include/pattern-stem.js",
+				"/dist/include/pattern-diacritic.js",
+				"/dist/content.js",
+			],
+		}).catch(() => chrome.runtime.lastError); // Read `lastError` to suppress injection errors.
+	});
+};
+
 /**
  * Updates the action icon to reflect the extension's enabled/disabled status.
  * @param enabled If specified, overrides the extension's enabled/disabled status.
@@ -268,7 +282,11 @@ const updateActionIcon = (enabled?: boolean) =>
 	 */
 	const initialize = () => {
 		chrome.runtime.setUninstallURL("https://searchmarkers.github.io/pages/sendoff/");
-		manageEnginesCacheOnBookmarkUpdate();
+		try {
+			manageEnginesCacheOnBookmarkUpdate();
+		} catch (error) {
+			console.warn("TODO fix bookmark search engines check", error);
+		}
 		createContextMenuItems();
 		storageInitialize();
 		updateActionIcon();
@@ -284,9 +302,10 @@ const updateActionIcon = (enabled?: boolean) =>
 		initialize();
 	};
 
-	chrome.runtime.onInstalled.addListener(details =>
-		startOnInstall(details.reason === chrome.runtime.OnInstalledReason.INSTALL)
-	);
+	chrome.runtime.onInstalled.addListener(async details => {
+		startOnInstall(details.reason === chrome.runtime.OnInstalledReason.INSTALL);
+		injectIntoTabs();
+	});
 
 	chrome.runtime.onStartup.addListener(initialize);
 
@@ -794,5 +813,8 @@ chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendRe
 chrome.permissions.onAdded.addListener(permissions => {
 	if (permissions?.permissions?.includes("bookmarks")) {
 		manageEnginesCacheOnBookmarkUpdate();
+	} else {
+		console.log(permissions);
+		injectIntoTabs();
 	}
 });
