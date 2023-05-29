@@ -78,10 +78,10 @@ const loadPopup = (() => {
 									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
 									setChecked(local.autoFindOptions.enabled);
 								},
-								onChange: checked => {
-									messageSendBackground({
-										toggleResearchOn: checked,
-									});
+								onChange: async checked => {
+									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									config.autoFindOptions.enabled = checked;
+									await configSet(config);
 								},
 							},
 						},
@@ -121,7 +121,7 @@ const loadPopup = (() => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 									setChecked(tab.id === undefined ? false :
-										isTabResearchPage(
+										await isTabResearchPage(
 											session.researchInstances, tab.id));
 								},
 								onChange: checked => {
@@ -138,14 +138,15 @@ const loadPopup = (() => {
 											}
 											messageSendBackground({
 												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
-												makeUnique: true,
-												makeUniqueNoCreate: true,
-												toggleHighlightsOn: true,
+												termsSend: true,
+												toggle: {
+													highlightsShownOn: true,
+												},
 											});
 										});
 									} else {
 										messageSendBackground({
-											disableTabResearch: true,
+											deactivateTabResearch: true,
 										});
 									}
 								}
@@ -170,7 +171,7 @@ const loadPopup = (() => {
 									delete session.researchInstances[tab.id];
 									await bankSet(session);
 									messageSendBackground({
-										disableTabResearch: true,
+										deactivateTabResearch: true,
 									});
 								},
 							} ],
@@ -468,8 +469,10 @@ const loadPopup = (() => {
 													)
 												)
 												: sync.termLists[index].terms,
-											makeUnique: true,
-											toggleHighlightsOn: true,
+											termsSend: true,
+											toggle: {
+												highlightsShownOn: true,
+											},
 										});
 										onSuccess();
 									},

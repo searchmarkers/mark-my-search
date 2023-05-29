@@ -520,7 +520,7 @@ PAINT
 							"paintReplaceByClassic",
 							InputType.CHECKBOX,
 						),
-						getControlOptionTemp(
+						/*getControlOptionTemp(
 							{
 								text: "Use experimental browser APIs",
 								tooltip:
@@ -538,7 +538,7 @@ PAINT
 							ConfigKey.HIGHLIGHT_METHOD,
 							"paintUseExperimental",
 							InputType.CHECKBOX,
-						),
+						),*/
 					],
 				},
 				{

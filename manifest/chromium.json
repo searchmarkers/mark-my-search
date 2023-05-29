@@ -12,9 +12,8 @@
 	},
 
 	"permissions": [
-		"scripting",
 		"tabs",
-		"webNavigation",
+		"scripting",
 		"storage",
 		"search",
 		"contextMenus"
@@ -27,6 +26,19 @@
 	"background": {
 		"service_worker": "/dist/background.js"
 	},
+
+	"content_scripts": [
+		{
+			"matches": [ "*://*/*" ],
+			"js": [
+				"/dist/include/utility.js",
+				"/dist/include/pattern-stem.js",
+				"/dist/include/pattern-diacritic.js",
+				"/dist/content.js"
+			],
+			"run_at": "document_start"
+		}
+	],
 
 	"options_ui": {
 		"page": "/pages/options.html?frame",

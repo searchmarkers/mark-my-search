@@ -888,7 +888,7 @@ textarea
 					if (labelInfo.getText) {
 						labelInfo.getText(containerIndex).then(text => label.textContent = text);
 					}
-					const inputId = getIdSequential.next().value;
+					const inputId = `input-${getIdSequential.next().value}`;
 					label.htmlFor = inputId;
 					return [ label, inputId ];
 				}
@@ -1032,7 +1032,7 @@ textarea
 				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
 				const insertColumn = (columnInfo: PageInteractionObjectColumnInfo) => {
 					if (columnInfo.rows.length > 1) {
-						const inputId = getIdSequential.next().value;
+						const inputId = `input-${getIdSequential.next().value}`;
 						const toggleCheckbox = document.createElement("input");
 						toggleCheckbox.type = "checkbox";
 						toggleCheckbox.id = inputId;
@@ -1219,18 +1219,18 @@ textarea
 					: () => {
 						const box = document.createElement("textarea");
 						box.rows = messageInfo.rows;
-						if (messageInfo.required) {
-							allowInputs = (allowed = true) => {
-								box.disabled = !allowed;
-							};
-							button.disabled = true;
-							box.addEventListener("input", () => {
-								button.disabled = box.value === "";
-							});
-						}
 						return box;
 					}
 				)();
+				if (messageInfo.required) {
+					allowInputs = (allowed = true) => {
+						messageBox.disabled = !allowed;
+					};
+					button.disabled = true;
+					messageBox.addEventListener("input", () => {
+						button.disabled = messageBox.value === "";
+					});
+				}
 				messageBox.classList.add("message");
 				messageBox.placeholder = submitterInfo.message.placeholder;
 				messageBox.spellcheck = true;
@@ -1363,7 +1363,7 @@ textarea
 					// TODO make function
 					const titleRow = document.createElement("label");
 					titleRow.classList.add("title-row");
-					const checkboxId = getIdSequential.next().value;
+					const checkboxId = `input-${getIdSequential.next().value}`;
 					titleRow.htmlFor = checkboxId;
 					const toggleCheckbox = document.createElement("input");
 					toggleCheckbox.type = "checkbox";
