@@ -67,15 +67,16 @@ You can always activate ${getName()} by opening its popup (from the 'extensions'
 							label: {
 								text: "Should online searches be highlighted automatically?",
 							},
-							checkbox: {
+							input: {
+								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
-									setChecked(local.enabled);
+									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									setChecked(config.autoFindOptions.enabled);
 								},
-								onToggle: checked => {
-									storageSet("local", {
-										enabled: checked,
-									} as StorageLocalValues);
+								onChange: async checked => {
+									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									config.autoFindOptions.enabled = checked;
+									await configSet(config);
 								},
 							},
 						},

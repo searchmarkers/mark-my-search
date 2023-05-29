@@ -119,10 +119,7 @@ const loadPopup = (() => {
 								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-									setChecked(tab.id === undefined ? false :
-										await isTabResearchPage(
-											session.researchInstances, tab.id));
+									setChecked(tab.id === undefined ? false : await isTabResearchPage(tab.id));
 								},
 								onChange: checked => {
 									if (checked) {
