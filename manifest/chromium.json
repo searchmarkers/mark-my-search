@@ -13,9 +13,14 @@
 
 	"permissions": [
 		"tabs",
+		"scripting",
 		"storage",
 		"search",
 		"contextMenus"
+	],
+
+	"host_permissions": [
+		"*://*/*"
 	],
 
 	"background": {

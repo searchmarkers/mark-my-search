@@ -63,6 +63,23 @@ You can always activate ${getName()} by opening its popup (from the 'extensions'
 							},
 						},
 						{
+							className: "option",
+							label: {
+								text: "Should online searches be highlighted automatically?",
+							},
+							checkbox: {
+								onLoad: async setChecked => {
+									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
+									setChecked(local.enabled);
+								},
+								onToggle: checked => {
+									storageSet("local", {
+										enabled: checked,
+									} as StorageLocalValues);
+								},
+							},
+						},
+						{
 							className: "action",
 							submitters: [ {
 								text: "Type search words, then click here to open search results",
@@ -81,23 +98,6 @@ You can always activate ${getName()} by opening its popup (from the 'extensions'
 									placeholder: "Search keywords",
 								},
 							} ],
-						},
-						{
-							className: "option",
-							label: {
-								text: `Should ${getName()} highlight searches?`,
-							},
-							checkbox: {
-								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
-									setChecked(local.enabled);
-								},
-								onToggle: checked => {
-									storageSet("local", {
-										enabled: checked,
-									} as StorageLocalValues);
-								},
-							},
 						},
 					],
 				},
