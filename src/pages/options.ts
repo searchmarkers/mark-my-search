@@ -306,7 +306,7 @@ PAINT
 							,
 							type: PreferenceType.BOOLEAN,
 						},
-						paintUseExperimental: {
+						/*paintUseExperimental: {
 							label: "Use experimental browser APIs (hover for details)",
 							tooltip:
 `Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
@@ -320,7 +320,7 @@ PAINT
 • Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
 							,
 							type: PreferenceType.BOOLEAN,
-						},
+						},*/
 						hues: {
 							label: "Highlight color hue cycle",
 							type: PreferenceType.ARRAY_NUMBER,

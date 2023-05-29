@@ -140,7 +140,7 @@ const paintUsePaintingFallback = !CSS["paintWorklet"]?.addModule;
  * Whether experimental browser technologies (namely paint/element) should be used over SVG rendering
  * when using the PAINT algorithm.
  */
-const paintUseExperimental = false;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
+const paintUseExperimental = true;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
 
 /**
  * Returns a generator function, the generator of which consumes empty requests for calling the specified function.
@@ -894,33 +894,37 @@ const selectInputTextAll = (input: HTMLInputElement) =>
 	input.setSelectionRange(0, input.value.length)
 ;
 
-const getHighlightFlows = (element: Element): Array<HighlightFlow> =>
-	(element[ElementProperty.INFO] as ElementInfo).flows.concat((() => {
-		let flows: Array<HighlightFlow> = [];
-		for (let i = 0; i < element.children.length; i++) {
-			if ((element.children.item(i) as Element)[ElementProperty.INFO]) {
-				flows = flows.concat(getHighlightFlows((element.children.item(i) as Element)).flat());
-			}
-		}
-		return flows;
-	})())
-;
-
 /**
  * Gets the number of matches for a term in the document.
  * @param term A term to get the occurrence count for.
  * @returns The occurrence count for the term.
  */
-const getTermOccurrenceCount = (term: MatchTerm, controlsInfo: ControlsInfo): number => controlsInfo.paintReplaceByClassic
+const getTermOccurrenceCount = (term: MatchTerm, controlsInfo: ControlsInfo, checkExistsOnly = false): number => controlsInfo.paintReplaceByClassic
 	? (() => { // Increasingly inaccurate as highlights elements are more often split.
 		const occurrences = Array.from(document.body.getElementsByClassName(getSel(ElementClass.TERM, term.selector)));
 		//const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
 		//return matches ? matches.length : 0; // Works poorly in situations such as matching whole words.
 		return occurrences.length; // Poor and changeable heuristic, but so far the most reliable efficient method.
 	})()
-	: getHighlightFlows(document.body)
-		.map(flow => flow.boxesInfo.filter(boxInfo => boxInfo.term.selector === term.selector).length)
-		.reduce((a, b) => a + b, 0)
+	: ((): number => {
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
+			(ElementProperty.INFO in element) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
+		let count = 0;
+		let element: Element;
+		// eslint-disable-next-line no-cond-assign
+		while (element = walker.nextNode() as Element) {
+			if (!element) {
+				break;
+			}
+			(element[ElementProperty.INFO] as ElementInfo).flows.forEach(flow => {
+				count += flow.boxesInfo.filter(boxInfo => boxInfo.term === term).length;
+			});
+			if (checkExistsOnly && count > 0) {
+				return 1;
+			}
+		}
+		return count;
+	})()
 ;
 
 /**
@@ -930,7 +934,7 @@ const getTermOccurrenceCount = (term: MatchTerm, controlsInfo: ControlsInfo): nu
 const updateTermOccurringStatus = (term: MatchTerm, controlsInfo: ControlsInfo) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(getSel(ElementClass.CONTROL_PAD))[0] as HTMLElement;
-	controlPad.classList.toggle(getSel(ElementClass.DISABLED), !getTermOccurrenceCount(term, controlsInfo));
+	controlPad.classList.toggle(getSel(ElementClass.DISABLED), !getTermOccurrenceCount(term, controlsInfo, true));
 };
 
 /**
@@ -1192,8 +1196,12 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
-	controlContent.onclick = () => // Hack: archaic event handler property for overriding.
+	controlContent.onclick = () => { // Hack: event handler property used so that the listener is not duplicated.
 		focusOnTermJump(controlsInfo, highlightTags, false, term);
+	};
+	controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
+		updateTermTooltip(term, controlsInfo);
+	});
 	controlPad.appendChild(controlContent);
 	const controlEdit = document.createElement("button");
 	controlEdit.type = "button";
@@ -1594,7 +1602,6 @@ Methods for handling scrollbar highlight-flow position markers.
 /**
  * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
  * @param terms Terms highlighted in the page to mark the scroll position of.
- * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
  * @param hues Color hues for term styles to cycle through.
  */
 const insertScrollMarkersPaint = (terms: MatchTerms, hues: TermHues) => {
@@ -1605,8 +1612,10 @@ const insertScrollMarkersPaint = (terms: MatchTerms, hues: TermHues) => {
 	const termSelectorsAllowed = new Set(terms.slice(0, hues.length).map(term => term.selector));
 	const gutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 	let markersHtml = "";
-	document.body.querySelectorAll("[markmysearch-h_id]").forEach((element: HTMLElement) => {
-		const termSelectors: Set<string> = new Set((element[ElementProperty.INFO] as ElementInfo).flows
+	document.body.querySelectorAll(
+		"[markmysearch-h_id]" + ((paintUseExperimental && !paintUsePaintingFallback) ? ", [markmysearch-h_beneath]" : "")
+	).forEach((element: HTMLElement) => {
+		const termSelectors: Set<string> = new Set((element[ElementProperty.INFO] as ElementInfo | undefined)?.flows
 			.flatMap(flow => flow.boxesInfo
 				.map(boxInfo => boxInfo.term.selector)
 				.filter(termSelector => termSelectorsAllowed.has(termSelector))
@@ -2139,7 +2148,7 @@ class UnbrokenNodeList {
  * @param terms Terms to find, highlight, and mark.
  * @param rootNode A node under which to find and highlight term occurrences.
  * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
- * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
+ * @param termCountCheck A function for requesting that term occurrence count indicators be regenerated.
  */
 const generateTermHighlightsUnderNode = (() => {
 	/**
@@ -2591,7 +2600,7 @@ const focusOnTermStepClassic = (() => {
  * @param termsToPurge Terms for which to remove previous highlights.
  * @param controlsInfo Details of controls to insert.
  * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
- * @param termCountCheck A generator function for requesting that term occurrence count indicators be regenerated.
+ * @param termCountCheck A function for requesting that term occurrence count indicators be regenerated.
  * @param mutationUpdates An observer which selectively performs highlighting on observing changes.
  */
 const beginHighlighting = (
@@ -2661,40 +2670,40 @@ const mutationUpdatesGet = (() => {
 			}),
 			disconnect: () => observer.disconnect(),
 		};
-		const elements: Set<HTMLElement> = new Set;
-		let periodDateLast = 0;
-		let periodHighlightCount = 0;
-		let throttling = false;
-		let highlightIsPending = false;
-		const highlightElements = () => {
-			highlightIsPending = false;
-			for (const element of elements) {
-				restoreNodes([], element);
-				generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
-			}
-			periodHighlightCount += elements.size;
-			elements.clear();
-		};
-		const highlightElementsLimited = () => {
-			const periodInterval = Date.now() - periodDateLast;
-			if (periodInterval > 400) {
-				const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
-				console.log(periodHighlightCount, periodInterval, periodHighlightRate);
-				throttling = periodHighlightRate > 0.006;
-				periodDateLast = Date.now();
-				periodHighlightCount = 0;
-			}
-			if (throttling || highlightIsPending) {
-				if (!highlightIsPending) {
-					highlightIsPending = true;
-					setTimeout(highlightElements, 100);
+		const observer = (controlsInfo.paintReplaceByClassic ? () => {
+			const elements: Set<HTMLElement> = new Set;
+			let periodDateLast = 0;
+			let periodHighlightCount = 0;
+			let throttling = false;
+			let highlightIsPending = false;
+			const highlightElements = () => {
+				highlightIsPending = false;
+				for (const element of elements) {
+					restoreNodes([], element);
+					generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
 				}
-			} else {
-				highlightElements();
-			}
-		};
-		const observer = controlsInfo.paintReplaceByClassic
-			? new MutationObserver(mutations => {
+				periodHighlightCount += elements.size;
+				elements.clear();
+			};
+			const highlightElementsLimited = () => {
+				const periodInterval = Date.now() - periodDateLast;
+				if (periodInterval > 400) {
+					const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
+					console.log(periodHighlightCount, periodInterval, periodHighlightRate);
+					throttling = periodHighlightRate > 0.006;
+					periodDateLast = Date.now();
+					periodHighlightCount = 0;
+				}
+				if (throttling || highlightIsPending) {
+					if (!highlightIsPending) {
+						highlightIsPending = true;
+						setTimeout(highlightElements, 100);
+					}
+				} else {
+					highlightElements();
+				}
+			};
+			return new MutationObserver(mutations => {
 				//mutationUpdates.disconnect();
 				const elementsKnown: Set<HTMLElement> = new Set;
 				for (const mutation of mutations) {
@@ -2726,8 +2735,11 @@ const mutationUpdatesGet = (() => {
 				}
 				highlightElementsLimited();
 				//mutationUpdates.observe();
-			}) : new MutationObserver(mutations => {
+			});
+		} : () => {
+			return new MutationObserver(mutations => {
 				// TODO optimise as above
+				const elements: Set<HTMLElement> = new Set;
 				for (const mutation of mutations) {
 					for (const node of Array.from(mutation.addedNodes)) {
 						if (node.nodeType === Node.ELEMENT_NODE && canHighlightElement(rejectSelector, node as Element)) {
@@ -2736,23 +2748,26 @@ const mutationUpdatesGet = (() => {
 					}
 					if (mutation.type === "characterData"
 						&& mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement)) {
-						boxesInfoCalculateForFlowOwnersFromContent(terms, mutation.target.parentElement, highlightTags,
-							termCountCheck, getHighlightingId, styleUpdates);
+						elements.add(mutation.target.parentElement);
 					}
 					for (const node of Array.from(mutation.addedNodes)) {
 						if (node.nodeType === Node.ELEMENT_NODE) {
 							if (canHighlightElement(rejectSelector, node as Element)) {
-								boxesInfoCalculateForFlowOwnersFromContent(terms, node as Element, highlightTags,
-									termCountCheck, getHighlightingId, styleUpdates);
+								elements.add(node as HTMLElement);
 							}
 						} else if (node.nodeType === Node.TEXT_NODE
 							&& canHighlightElement(rejectSelector, node.parentElement as Element)) {
-							boxesInfoCalculateForFlowOwners(terms, node, highlightTags,
-								termCountCheck, getHighlightingId, styleUpdates);
+							// Previously used `boxesInfoCalculateForFlowOwners()` on `node`.
+							elements.add(node.parentElement as HTMLElement);
 						}
 					}
 				}
+				for (const element of elements) {
+					boxesInfoCalculateForFlowOwnersFromContent(terms, element, highlightTags,
+						termCountCheck, getHighlightingId, styleUpdates);
+				}
 			});
+		})();
 		return mutationUpdates;
 	};
 })();
@@ -2833,12 +2848,12 @@ const getTermsFromSelection = () => {
 	 * @param commands Browser commands to use in shortcut hints.
 	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 * @param hues Color hues for term styles to cycle through.
-	 * @param observer An observer which selectively performs highlighting on observing changes.
-	 * @param requestRefreshIndicators A generator function for requesting that term occurrence count indicators be regenerated.
+	 * @param mutationUpdates
+	 * @param produceEffectOnCommand
+	 * @param getHighlightingId
+	 * @param styleUpdates
+	 * @param elementsVisible
 	 * @param termsUpdate An array of terms to which to update the existing terms, if change is necessary.
-	 * @param termUpdate A new term to insert, a term to be removed, or a changed version of a term, if supplied.
-	 * @param termToUpdateIdx The create term constant, the remove term constant, or the index of a term to update, if supplied.
-	 * The argument type from these determines how the single term update is interpreted.
 	 */
 	const refreshTermControlsAndBeginHighlighting = (() => {
 		/**
@@ -2848,6 +2863,7 @@ const getTermsFromSelection = () => {
 		 * @param commands Browser commands to use in shortcut hints.
 		 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 		 * @param hues Color hues for term styles to cycle through.
+		 * @param produceEffectOnCommand
 		 */
 		const insertToolbar = (terms: MatchTerms, controlsInfo: ControlsInfo, commands: BrowserCommands,
 			highlightTags: HighlightTags, hues: TermHues, produceEffectOnCommand: ProduceEffectOnCommand) => {
@@ -3188,20 +3204,21 @@ const getTermsFromSelection = () => {
 				"mms-h" as keyof HTMLElementTagNameMap ]),
 			// break: any other class of element
 		};
-		const requestRefreshIndicators = requestCallFn(() => controlsInfo.paintReplaceByClassic
-			? insertScrollMarkersClassic(terms, highlightTags, hues)
-			: insertScrollMarkersPaint(terms, hues),
-		() => controlsInfo.paintReplaceByClassic ? 50 : 150, () => controlsInfo.paintReplaceByClassic ? 500 : 2000);
-		const requestRefreshTermControls = requestCallFn(() => {
-			terms.forEach(term => {
-				updateTermTooltip(term, controlsInfo);
-				updateTermOccurringStatus(term, controlsInfo);
-			});
-		}, () => controlsInfo.paintReplaceByClassic ? 50 : 150, () => controlsInfo.paintReplaceByClassic ? 500 : 2000);
-		const termCountCheck = () => {
-			requestRefreshIndicators.next();
-			requestRefreshTermControls.next();
-		};
+		const termCountCheck = (() => {
+			const requestRefreshIndicators = requestCallFn(() => controlsInfo.paintReplaceByClassic
+				? insertScrollMarkersClassic(terms, highlightTags, hues)
+				: insertScrollMarkersPaint(terms, hues),
+			() => controlsInfo.paintReplaceByClassic ? 50 : 200, () => controlsInfo.paintReplaceByClassic ? 500 : 2000);
+			const requestRefreshTermControls = requestCallFn(() => {
+				terms.forEach(term => {
+					updateTermOccurringStatus(term, controlsInfo);
+				});
+			}, () => controlsInfo.paintReplaceByClassic ? 50 : 50, () => controlsInfo.paintReplaceByClassic ? 500 : 500);
+			return () => {
+				requestRefreshIndicators.next();
+				requestRefreshTermControls.next();
+			};
+		})();
 		const elementsVisible: Set<Element> = new Set;
 		const styleUpdates = styleUpdatesGet(elementsVisible, terms);
 		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags, controlsInfo);
@@ -3271,7 +3288,7 @@ const getTermsFromSelection = () => {
 				restoreNodes();
 				styleElementsCleanup();
 				document.querySelectorAll("*").forEach(element => {
-					element[ElementProperty.INFO] = undefined;
+					delete element[ElementProperty.INFO];
 				});
 				highlightingAttributesCleanup(document.body);
 			}
