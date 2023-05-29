@@ -3168,7 +3168,8 @@ const getTermsFromSelection = () => {
 		if (!paintUsePaintingFallback) {
 			(CSS["paintWorklet"] as PaintWorkletType).addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
-		controlsRemove();
+		// Can't remove controls because a script may be left behind from the last install, and start producing unhandled errors. FIXME
+		//controlsRemove();
 		const commands: BrowserCommands = [];
 		const terms: MatchTerms = [];
 		const hues: TermHues = [];
