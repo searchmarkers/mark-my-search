@@ -805,6 +805,9 @@ const insertTermInput = (() => {
 			entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
 		)).observe(input);
 		input.addEventListener("keydown", event => {
+			if (event.key === "Tab") {
+				return; // Must be caught by the bar to be handled independently.
+			}
 			event.stopPropagation();
 			switch (event.key) {
 			case "Enter": {
@@ -1463,24 +1466,36 @@ const controlsInsert = (() => {
 				document[property] = documentEventProperties[property];
 			});
 		});
-		window.addEventListener("keydown", event => {
-			if (event.key === "Tab") {
+		bar.addEventListener("keydown", event => {
+			if (event.key === "Tab") { // This is the only key that will propagate from term inputs; the others are blocked automatically.
+				event.stopPropagation();
 				const controlInput = document.activeElement as HTMLInputElement | null;
 				if (!controlInput || !bar.contains(controlInput)) {
 					return;
 				}
 				const control = controlInput.closest(`.${getSel(ElementClass.CONTROL)}`);
+				const barTerms = document.getElementById(getSel(ElementID.BAR_TERMS)) as Element;
+				if (control && !event.shiftKey && control === barTerms.lastElementChild) {
+					// Special case to specifically focus the term append input, in case the button is hidden.
+					event.preventDefault();
+					produceEffectOnCommand.next({ type: CommandType.FOCUS_TERM_INPUT });
+					return;
+				}
 				if (!control || !(event.shiftKey
-					? control === (document.getElementById(getSel(ElementID.BAR_TERMS)) as Element).firstElementChild
-					: control === getControlAppendTerm())) {
+					? control === barTerms.firstElementChild
+					: control === getControlAppendTerm())
+				) {
 					return;
 				}
 				event.preventDefault();
-				if (!event.shiftKey && controlInput.value.length) { // Force term-append to commit (add new term) then regain focus.
+				if (!event.shiftKey && controlInput.value.length) {
+					// Force term-append to commit (add new term) then regain focus.
 					controlInput.blur();
+					// Use focus-term-input command to ensure that focus+selection will later be restored.
 					// TODO ensure focus+selection is restored by a cleaner method
 					produceEffectOnCommand.next({ type: CommandType.FOCUS_TERM_INPUT });
 				} else {
+					// Ensure proper return of focus+selection.
 					controlInput.blur();
 				}
 			}
@@ -2826,8 +2841,8 @@ const getTermsFromSelection = () => {
 	if (selection && selection.anchorNode) {
 		const termsAll = selection.toString().split(/\r|\p{Zs}|\p{Po}|\p{Cc}/gu)
 			// (carriage return) | Space Separators | Other Punctuation | Control
-			.map(phrase => phrase.replace(/\p{Pc}|\p{Ps}|\p{Pe}|\p{Pi}|\p{Pf}/gu, ""))
-			// Connector Punctuation | Open Punctuation | Close Punctuation | Initial Punctuation | Final Punctuation
+			.map(phrase => phrase.replace(/\p{Ps}|\p{Pe}|\p{Pi}|\p{Pf}/gu, ""))
+			// Open Punctuation | Close Punctuation | Initial Punctuation | Final Punctuation
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 		const termSelectors: Set<string> = new Set;
 		termsAll.forEach(term => {
