@@ -288,6 +288,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			console.warn("TODO fix bookmark search engines check", error);
 		}
 		createContextMenuItems();
+		optionsRepair();
 		storageInitialize();
 		updateActionIcon();
 	};
@@ -298,7 +299,6 @@ const updateActionIcon = (enabled?: boolean) =>
 				chrome.tabs.create({ url: chrome.runtime.getURL("/pages/startpage.html") });
 			}
 		}
-		optionsRepair();
 		initialize();
 	};
 
