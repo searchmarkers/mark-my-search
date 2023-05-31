@@ -223,16 +223,16 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 })();
 
 const injectIntoTabs = async () => {
-	(await chrome.tabs.query({})).filter(tab => tab.id !== undefined).forEach(tab => {
-		chrome.scripting.executeScript({
-			target: { tabId: tab.id as number },
-			files: [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
-				"/dist/content.js",
-			],
-		}).catch(() => chrome.runtime.lastError); // Read `lastError` to suppress injection errors.
+	(await chrome.tabs.query({})).filter(tab => tab.id !== undefined).forEach(async tab => {
+		for (const file of [
+			"/dist/include/utility.js",
+			"/dist/include/pattern-stem.js",
+			"/dist/include/pattern-diacritic.js",
+			"/dist/content.js",
+		]) {
+			await chrome.tabs.executeScript(tab.id as number, { file })
+				?.catch(() => chrome.runtime.lastError); // Read `lastError` to suppress injection errors.;
+		}
 	});
 };
 
@@ -243,7 +243,7 @@ const injectIntoTabs = async () => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? storageGet("local", [ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: useChromeAPI()
+		: chrome.browserAction.setIcon({ path: useChromeAPI()
 			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -666,7 +666,7 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 
 chrome.commands.onCommand.addListener(async commandString => {
 	if (commandString === "open-popup") {
-		(chrome.action["openPopup"] ?? (() => undefined))();
+		(chrome.browserAction["openPopup"] ?? (() => undefined))();
 	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id as number; // `tab.id` always defined for this case.

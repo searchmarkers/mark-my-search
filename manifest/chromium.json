@@ -1,5 +1,5 @@
 {
-	"manifest_version": 3,
+	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
 	"version": "1.14.2",
@@ -12,19 +12,23 @@
 	},
 
 	"permissions": [
+		"*://*/*",
 		"tabs",
-		"scripting",
 		"storage",
 		"search",
 		"contextMenus"
 	],
 
-	"host_permissions": [
-		"*://*/*"
-	],
-
 	"background": {
-		"service_worker": "/dist/background.js"
+		"persistent": false,
+		"scripts": [
+			"/dist/include/utility.js",
+			"/dist/include/pattern-stem.js",
+			"/dist/include/pattern-diacritic.js",
+			"/dist/include/util-privileged.js",
+			"/dist/include/storage.js",
+			"/dist/background.js"
+		]
 	},
 
 	"content_scripts": [
@@ -45,7 +49,7 @@
 		"browser_style": true
 	},
 
-	"action": {
+	"browser_action": {
 		"default_icon": {
 			"16": "/icons/dist/mms-16.png",
 			"32": "/icons/dist/mms-32.png"

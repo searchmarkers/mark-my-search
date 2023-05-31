@@ -1,10 +1,10 @@
 {
-	"manifest_version": 3,
+	"manifest_version": 2,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
 	"version": "1.14.2",
 
-	"browser_specific_settings": { "gecko": { "id": "mark-my-search@searchmarkers.github.io" } },
+	"browser_specific_settings": { "gecko": { "id": "{3c87dcad-dbbd-4be1-b07b-b6d0739b0aec}" } },
 
 	"icons": {
 		"48": "/icons/mms.svg",
@@ -12,8 +12,8 @@
 	},
 
 	"permissions": [
+		"*://*/*",
 		"tabs",
-		"scripting",
 		"storage",
 		"search",
 		"contextMenus"
@@ -23,11 +23,8 @@
 		"bookmarks"
 	],
 
-	"host_permissions": [
-		"*://*/*"
-	],
-
 	"background": {
+		"persistent": false,
 		"scripts": [
 			"/dist/include/utility.js",
 			"/dist/include/pattern-stem.js",
@@ -56,28 +53,23 @@
 		"browser_style": true
 	},
 
-	"action": {
+	"browser_action": {
 		"default_icon": "/icons/mms.svg",
 		"default_title": "Mark My Search",
 		"default_popup": "/pages/popup.html"
 	},
 
 	"web_accessible_resources": [
-		{
-			"resources": [
-				"/dist/paint.js",
-				"/icons/arrow.svg",
-				"/icons/close.svg",
-				"/icons/search.svg",
-				"/icons/show.svg",
-				"/icons/refresh.svg",
-				"/icons/create.svg",
-				"/icons/delete.svg",
-				"/icons/edit.svg",
-				"/icons/reveal.svg"
-			],
-			"matches": [ "*://*/*" ]
-		}
+		"/dist/paint.js",
+		"/icons/arrow.svg",
+		"/icons/close.svg",
+		"/icons/search.svg",
+		"/icons/show.svg",
+		"/icons/refresh.svg",
+		"/icons/create.svg",
+		"/icons/delete.svg",
+		"/icons/edit.svg",
+		"/icons/reveal.svg"
 	],
 
 	"commands": {
