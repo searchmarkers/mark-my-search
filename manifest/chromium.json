@@ -42,7 +42,7 @@
 
 	"options_ui": {
 		"page": "/pages/options.html",
-		"browser_style": true
+		"browser_style": false
 	},
 
 	"action": {

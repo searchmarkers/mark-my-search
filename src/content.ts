@@ -1933,9 +1933,9 @@ const constructHighlightStyleRule: (highlightId: string, boxes: Array<HighlightB
 paintUseExperimental
 	? paintUsePaintingFallback
 		? highlightId =>
-			`body [markmysearch-h_id="${highlightId}"] { background: -moz-element(#${
+			`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
 				getSel(ElementID.DRAW_ELEMENT, highlightId)
-			}) no-repeat !important; }`
+			}) !important; background-repeat: no-repeat !important; }`
 		: (highlightId, boxes) =>
 			`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${
 				JSON.stringify(boxes)
