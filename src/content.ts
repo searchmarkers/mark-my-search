@@ -78,6 +78,7 @@ enum ElementID {
 	MARKER_GUTTER = "markers",
 	DRAW_CONTAINER = "draw-container",
 	DRAW_ELEMENT = "draw",
+	INPUT = "input",
 }
 
 enum TermChange {
@@ -292,7 +293,9 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 #${getSel(ElementID.BAR)}.${getSel(ElementClass.BAR_HIDDEN)}
 	{ display: none; }
 #${getSel(ElementID.BAR)} *
-	{ all: revert; font: revert; font-size: inherit; line-height: 120%; padding: 0; outline: none; }
+	{ all: revert; font: revert; font-family: sans-serif; font-size: inherit; line-height: 120%; padding: 0; }
+#${getSel(ElementID.BAR)} :not(input)
+	{ outline: none; }
 #${getSel(ElementID.BAR)} img
 	{ height: 1.1em; width: 1.1em; object-fit: cover; }
 #${getSel(ElementID.BAR)} button
@@ -307,18 +310,18 @@ input:not(:focus, .${getSel(ElementClass.OVERRIDE_VISIBILITY)})
 /**/
 
 /* || Term Pulldown */
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:is(:focus, :active),
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:is(:focus-within, :active),
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}.${getSel(ElementClass.OVERRIDE_VISIBILITY)},
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.CONTROL_PAD)}:active:not(:hover)
 + .${getSel(ElementClass.OPTION_LIST)}
 	{ display: flex; }
-#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus .${getSel(ElementClass.OPTION)}::first-letter
+#${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}:focus-within .${getSel(ElementClass.OPTION)}::first-letter
 	{ text-decoration: underline; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION_LIST)}
 	{ display: none; position: absolute; flex-direction: column; padding: 0; width: max-content; margin: 0 0 0 4px;
 	z-index: 1; font-size: max(14px, 0.8em); }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}
-	{ display: block; padding-block: 2px; background: hsl(0 0% 94% / 0.76);
+	{ display: flex; padding-block: 2px; background: hsl(0 0% 94% / 0.76);
 	color: hsl(0 0% 6%); filter: grayscale(100%); width: 100%; text-align: left;
 	border-width: 2px; border-color: hsl(0 0% 40% / 0.7); border-left-style: solid; }
 #${getSel(ElementID.BAR)} .${getSel(ElementClass.OPTION)}:hover
@@ -959,23 +962,14 @@ const updateTermTooltip = (term: MatchTerm, controlsInfo: ControlsInfo) => {
 
 /**
  * Gets the term match type identifier for a match option.
- * @param text The text of a match option.
+ * @param classList The class list of a match option.
  * @returns The corresponding match type identifier string.
  */
-const getTermOptionMatchType = (text: string): string => // TODO rework system to not rely on option text
-	text.slice(0, text.includes(" ") ? text.indexOf(" ") : undefined).toLowerCase()
-;
-
-/**
- * Transforms the current text of a term match option to reflect whether or not it is currently enabled.
- * @param optionIsEnabled Indicates whether the option text should display enablement.
- * @param title Option text in an unknown previous state.
- * @returns The option text reflecting the given enablement.
- */
-const getTermOptionText = (optionIsEnabled: boolean, title: string): string =>
-	optionIsEnabled
-		? title.includes("🗹") ? title : `${title} 🗹`
-		: title.includes("🗹") ? title.slice(0, -2) : title
+const getTermOptionMatchType = (classList: Array<string>): keyof MatchMode =>
+	(classList.find(className => {
+		const parts = className.split("-");
+		return parts[1] === ElementClass.OPTION && parts[2];
+	})?.split("-")[2] ?? "") as keyof MatchMode
 ;
 
 /**
@@ -1021,11 +1015,8 @@ const refreshTermControl = (term: MatchTerm, idx: number, highlightTags: Highlig
 		focusOnTermJump(controlsInfo, highlightTags, event.shiftKey, term);
 	controlContent.textContent = term.phrase;
 	// TODO make function
-	Array.from(control.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
-		option.textContent = getTermOptionText(
-			term.matchMode[getTermOptionMatchType(option.textContent as string)],
-			option.textContent as string,
-		),
+	control.querySelectorAll(`.${getSel(ElementClass.OPTION)}`).forEach(option =>
+		(option.querySelector("input") as HTMLInputElement).checked = term.matchMode[getTermOptionMatchType(Array.from(option.classList))]
 	);
 };
 
@@ -1038,26 +1029,41 @@ const removeTermControl = (idx: number) => {
 };
 
 /**
- * Creates an clickable element to toggle one of the matching options for a term.
+ * Creates a clickable element to toggle one of the matching options for a term.
  * @param term The term for which to create a matching option.
  * @param text Text content for the option, which is also used to determine the matching mode it controls.
  * @param onActivated A function, taking the identifier for the match option, to execute each time the option is activated.
  * @returns The resulting option element.
  */
-const createTermOption = (term: MatchTerm, text: string,
-	onActivated: (matchType: string) => void): HTMLButtonElement => {
-	const matchType = getTermOptionMatchType(text);
-	const option = document.createElement("button");
-	option.type = "button";
+const createTermOption = (term: MatchTerm, matchType: keyof MatchMode, text: string,
+	onActivated: (matchType: string) => void): HTMLElement => {
+	const option = document.createElement("span");
 	option.classList.add(getSel(ElementClass.OPTION));
-	option.tabIndex = -1;
-	option.textContent = getTermOptionText(term.matchMode[matchType], text);
-	option.addEventListener("mouseup", () => {
-		if (!option.matches(":active")) {
+	option.classList.add(getSel(ElementClass.OPTION, matchType));
+	const id = getSel(ElementID.INPUT, getIdSequential.next().value.toString());
+	const checkbox = document.createElement("input");
+	checkbox.id = id;
+	checkbox.type = "checkbox";
+	checkbox.checked = term.matchMode[matchType];
+	checkbox.addEventListener("change", () => {
+		onActivated(matchType);
+	});
+	checkbox.addEventListener("keydown", event => {
+		if (event.key === " ") {
+			event.stopPropagation();
+		}
+	});
+	const label = document.createElement("label");
+	label.htmlFor = id;
+	label.textContent = text;
+	label.addEventListener("mouseup", () => {
+		if (!label.matches(":active")) {
 			onActivated(matchType);
 		}
 	});
-	option.addEventListener("click", () => onActivated(matchType));
+	label.addEventListener("click", () => onActivated(matchType));
+	option.appendChild(checkbox);
+	option.appendChild(label);
 	return option;
 };
 
@@ -1105,23 +1111,29 @@ const createTermOptionMenu = (
 	const termIsValid = terms.includes(term); // If virtual and used for appending terms, this will be `false`.
 	const optionList = document.createElement("span");
 	optionList.classList.add(getSel(ElementClass.OPTION_LIST));
-	optionList.appendChild(createTermOption(term, "Case Sensitive", onActivated));
-	optionList.appendChild(createTermOption(term, "Whole Word", onActivated));
-	optionList.appendChild(createTermOption(term, "Stem Word", onActivated));
-	optionList.appendChild(createTermOption(term, "Diacritics", onActivated));
-	optionList.appendChild(createTermOption(term, "Regex Mode", onActivated));
+	optionList.appendChild(createTermOption(term, "case", "Case Sensitive", onActivated));
+	optionList.appendChild(createTermOption(term, "whole", "Whole Word", onActivated));
+	optionList.appendChild(createTermOption(term, "stem", "Stem Word", onActivated));
+	optionList.appendChild(createTermOption(term, "diacritics", "Diacritics", onActivated));
+	optionList.appendChild(createTermOption(term, "regex", "Regex Mode", onActivated));
 	const handleKeyEvent = (event: KeyboardEvent, executeResult = true) => {
+		if (event.key === "Tab") {
+			event.stopPropagation();
+			return;
+		}
 		event.preventDefault();
 		if (!executeResult) {
 			return;
 		}
 		if (event.key === "Escape") {
-			optionList.blur();
+			if (document.activeElement && document.activeElement["blue"]) {
+				document.activeElement["blur"]();
+			}
 			return;
 		} else if (event.key === " " || event.key.length !== 1) {
 			return;
 		}
-		Array.from(optionList.querySelectorAll(`.${getSel(ElementClass.OPTION)}`)).some((option: HTMLButtonElement) => {
+		Array.from(optionList.querySelectorAll(`.${getSel(ElementClass.OPTION)} label`)).some((option: HTMLButtonElement) => {
 			if ((option.textContent ?? "").toLowerCase().startsWith(event.key)) {
 				option.click();
 				return true;
@@ -1133,7 +1145,9 @@ const createTermOptionMenu = (
 	optionList.addEventListener("keydown", event => handleKeyEvent(event, false));
 	optionList.addEventListener("keyup", event => handleKeyEvent(event));
 	optionList.addEventListener("focusout", () => {
-		optionList.removeAttribute("tabindex");
+		if (!optionList.contains(document.activeElement)) {
+			optionList.removeAttribute("tabindex");
+		}
 	});
 	const controlReveal = document.createElement("button");
 	controlReveal.type = "button";
@@ -1395,11 +1409,9 @@ const controlsInsert = (() => {
 								const matchMode = getTermControlMatchModeFromClassList(container.classList);
 								matchMode[matchType] = !matchMode[matchType];
 								updateTermControlMatchModeClassList(matchMode, container.classList);
-								Array.from(container.getElementsByClassName(getSel(ElementClass.OPTION))).forEach(option =>
-									option.textContent = getTermOptionText(
-										matchMode[getTermOptionMatchType(option.textContent as string)],
-										option.textContent as string,
-									),
+								// TODO make function
+								container.querySelectorAll(`.${getSel(ElementClass.OPTION)} > input[type="checkbox"]`).forEach((checkbox: HTMLInputElement) =>
+									checkbox.checked = matchMode[getTermOptionMatchType(Array.from(container.classList))]
 								);
 							},
 						);
@@ -1467,7 +1479,7 @@ const controlsInsert = (() => {
 			});
 		});
 		bar.addEventListener("keydown", event => {
-			if (event.key === "Tab") { // This is the only key that will propagate from term inputs; the others are blocked automatically.
+			if (event.key === "Tab") { // This is the only key that will take effect in term inputs; the rest are blocked automatically.
 				event.stopPropagation();
 				const controlInput = document.activeElement as HTMLInputElement | null;
 				if (!controlInput || !bar.contains(controlInput)) {
