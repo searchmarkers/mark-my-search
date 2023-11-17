@@ -298,7 +298,6 @@ const updateActionIcon = (enabled?: boolean) =>
 				chrome.tabs.create({ url: chrome.runtime.getURL("/pages/startpage.html") });
 			}
 		}
-		optionsRepair();
 		initialize();
 	};
 

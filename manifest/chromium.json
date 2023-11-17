@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.14.0",
+	"version": "1.14.2",
 
 	"icons": {
 		"16": "/icons/dist/mms-16.png",
@@ -42,7 +42,7 @@
 
 	"options_ui": {
 		"page": "/pages/options.html?frame",
-		"browser_style": true
+		"browser_style": false
 	},
 
 	"action": {
@@ -58,6 +58,7 @@
 		{
 			"resources": [
 				"/dist/paint.js",
+				"/icons/mms.svg",
 				"/icons/arrow.svg",
 				"/icons/close.svg",
 				"/icons/search.svg",
