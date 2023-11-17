@@ -66,6 +66,7 @@
 		{
 			"resources": [
 				"/dist/paint.js",
+				"/icons/mms.svg",
 				"/icons/arrow.svg",
 				"/icons/close.svg",
 				"/icons/search.svg",
