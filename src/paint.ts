@@ -20,7 +20,7 @@ type PaintWorkletType = {
 		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles").toString() || "{}") as TermSelectorStyles;
 		const boxes = JSON.parse(properties.get("--markmysearch-boxes").toString() || "[]") as Array<HighlightBox>;
 		boxes.forEach(box => {
-			const style = selectorStyles[box.selector];
+			const style = selectorStyles[box.token];
 			if (!style) {
 				return;
 			}

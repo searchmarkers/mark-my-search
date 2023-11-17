@@ -42,7 +42,7 @@
 
 	"options_ui": {
 		"page": "/pages/options.html",
-		"browser_style": true
+		"browser_style": false
 	},
 
 	"action": {
@@ -58,6 +58,7 @@
 		{
 			"resources": [
 				"/dist/paint.js",
+				"/icons/mms.svg",
 				"/icons/arrow.svg",
 				"/icons/close.svg",
 				"/icons/search.svg",

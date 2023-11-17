@@ -75,7 +75,7 @@ interface MatchMode {
  */
 class MatchTerm {
 	phrase: string;
-	selector: string;
+	token: string;
 	pattern: RegExp;
 	matchMode: MatchMode;
 	hue: number;
@@ -112,7 +112,7 @@ class MatchTerm {
 		const sanitize: (phrase: string, replacement?: string) => string = this.matchMode.regex
 			? phrase => phrase
 			: (phrase, replacement) => sanitizeForRegex(phrase, replacement);
-		this.selector = `${
+		this.token = `${
 			sanitize(this.phrase, "_").replace(/\W/g, "_")
 		}-${
 			Object.values(this.matchMode).map((matchFlag: boolean) => Number(matchFlag)).join("")
