@@ -19,7 +19,7 @@ const createResearchInstance = async (args: {
 	url?: { stoplist: Array<string>, url: string, engine?: Engine }
 	terms?: MatchTerms
 }): Promise<ResearchInstance> => {
-	const sync = await configGet([
+	const config = await configGet([
 		ConfigKey.SHOW_HIGHLIGHTS,
 		ConfigKey.BAR_COLLAPSE,
 	]);
@@ -34,15 +34,15 @@ const createResearchInstance = async (args: {
 			terms: Array.from(new Set(termsRaw))
 				.filter(phrase => args.url ? !args.url.stoplist.includes(phrase) : false)
 				.map(phrase => new MatchTerm(phrase)),
-			highlightsShown: sync.showHighlights.default,
-			barCollapsed: sync.barCollapse.fromSearch,
+			highlightsShown: config.showHighlights.default,
+			barCollapsed: config.barCollapse.fromSearch,
 			enabled: true,
 		};
 	}
 	args.terms ??= [];
 	return {
 		terms: args.terms,
-		highlightsShown: sync.showHighlights.default,
+		highlightsShown: config.showHighlights.default,
 		barCollapsed: false,
 		enabled: true,
 	};
@@ -185,38 +185,38 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			return;
 		}
 		browser.bookmarks.getTree().then(async nodes => {
-			const session = await bankGet([ BankKey.ENGINES ]);
+			const bank = await bankGet([ BankKey.ENGINES ]);
 			nodes.forEach(node =>
-				setEngines(session.engines, node => {
+				setEngines(bank.engines, node => {
 					if (node.url) {
-						updateEngine(session.engines, node.id, node.url);
+						updateEngine(bank.engines, node.id, node.url);
 					}
 				}, node)
 			);
-			bankSet(session);
+			bankSet(bank);
 		});
 
 		browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
-			const session = await bankGet([ BankKey.ENGINES ]);
-			setEngines(session.engines, node => {
-				delete session.engines[node.id];
+			const bank = await bankGet([ BankKey.ENGINES ]);
+			setEngines(bank.engines, node => {
+				delete bank.engines[node.id];
 			}, removeInfo.node);
-			bankSet(session);
+			bankSet(bank);
 		});
 
 		browser.bookmarks.onCreated.addListener(async (id, createInfo) => {
 			if (createInfo.url) {
-				const session = await bankGet([ BankKey.ENGINES ]);
-				updateEngine(session.engines, id, createInfo.url);
-				bankSet(session);
+				const bank = await bankGet([ BankKey.ENGINES ]);
+				updateEngine(bank.engines, id, createInfo.url);
+				bankSet(bank);
 			}
 		});
 
 		browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
 			if (changeInfo.url) {
-				const session = await bankGet([ BankKey.ENGINES ]);
-				updateEngine(session.engines, id, changeInfo.url);
-				bankSet(session);
+				const bank = await bankGet([ BankKey.ENGINES ]);
+				updateEngine(bank.engines, id, changeInfo.url);
+				bankSet(bank);
 			}
 		});
 	};
@@ -444,10 +444,10 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	});
 
 	chrome.tabs.onRemoved.addListener(async tabId => {
-		const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-		if (session.researchInstances[tabId]) {
-			delete session.researchInstances[tabId];
-			bankSet(session);
+		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+		if (bank.researchInstances[tabId]) {
+			delete bank.researchInstances[tabId];
+			bankSet(bank);
 		}
 	});
 });//();
@@ -691,8 +691,8 @@ chrome.commands.onCommand.addListener(async commandString => {
 		toggleHighlightsInTab(tabId);
 		return;
 	} case CommandType.TOGGLE_BAR: {
-		const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-		const researchInstance = session.researchInstances[tabId];
+		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+		const researchInstance = bank.researchInstances[tabId];
 		if (!researchInstance) {
 			return;
 		}
@@ -700,7 +700,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 		messageSendHighlight(tabId, {
 			toggleBarCollapsedOn: researchInstance.barCollapsed,
 		});
-		bankSet(session);
+		bankSet(bank);
 		return;
 	}}
 	messageSendHighlight(tabId, { commands: [ commandInfo ] });
@@ -763,9 +763,9 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 		deactivateResearchInTab(tabId);
 	}
 	if (message.performSearch) {
-		const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 		(chrome.search["search"] as typeof browser.search.search)({
-			query: session.researchInstances[tabId].terms.map(term => term.phrase).join(" "),
+			query: bank.researchInstances[tabId].terms.map(term => term.phrase).join(" "),
 			tabId,
 		});
 	}

@@ -1,5 +1,4 @@
 chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chrome.storage;
-chrome.storage.session ??= chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
 type Engines = Record<string, Engine>
@@ -148,49 +147,19 @@ interface ResearchInstance {
  */
 const configDefault: ConfigValues<true, true> = {
 	theme: {
-		edition: {
-			wValue: ThemeEdition.CLASSIC,
-			wUseDefault: false,
-			sync: false,
-		},
-		variant: {
-			wValue: ThemeVariant.DARK,
-			wUseDefault: true,
-			sync: false,
-		},
-		hue: {
-			wValue: 284,
-			wUseDefault: true,
-			sync: true,
-		},
-		contrast: {
-			wValue: 1,
-			sync: true,
-		},
-		lightness: {
-			wValue: 1,
-			sync: true,
-		},
-		saturation: {
-			wValue: 1,
-			sync: true,
-		},
-		fontScale: {
-			wValue: 1,
-			sync: false,
-		},
+		edition: { wValue: ThemeEdition.CLASSIC, wUseDefault: false, sync: false },
+		variant: { wValue: ThemeVariant.DARK, wUseDefault: true, sync: false },
+		hue: { wValue: 284, wUseDefault: true, sync: true },
+		contrast: { wValue: 1, sync: true },
+		lightness: { wValue: 1, sync: true },
+		saturation: { wValue: 1, sync: true },
+		fontScale: { wValue: 1, sync: false },
 	},
 	researchInstanceOptions: {
-		restoreLastInTab: {
-			wValue: true,
-			sync: false,
-		},
+		restoreLastInTab: { wValue: true, sync: false },
 	},
 	autoFindOptions: {
-		enabled: {
-			wValue: true,
-			sync: false,
-		},
+		enabled: { wValue: true, sync: false },
 		searchParams: {
 			list: [ // Order of specificity, as only the first match will be used.
 				"search_terms", "search_term", "searchTerms", "searchTerm",
@@ -234,95 +203,33 @@ const configDefault: ConfigValues<true, true> = {
 		sync: false,
 	},
 	showHighlights: {
-		default: {
-			wValue: true,
-			sync: true,
-		},
-		overrideSearchPages: {
-			wValue: false,
-			sync: true,
-		},
-		overrideResearchPages: {
-			wValue: false,
-			sync: true,
-		},
+		default: { wValue: true, sync: true },
+		overrideSearchPages: { wValue: false, sync: true },
+		overrideResearchPages: { wValue: false, sync: true },
 	},
 	barCollapse: {
-		fromSearch: {
-			wValue: false,
-			sync: true,
-		},
-		fromTermListAuto: {
-			wValue: false,
-			sync: true,
-		},
+		fromSearch: { wValue: false, sync: true },
+		fromTermListAuto: { wValue: false, sync: true },
 	},
 	barControlsShown: {
-		toggleBarCollapsed: {
-			wValue: true,
-			sync: true,
-		},
-		disableTabResearch: {
-			wValue: true,
-			sync: true,
-		},
-		performSearch: {
-			wValue: false,
-			sync: true,
-		},
-		toggleHighlights: {
-			wValue: true,
-			sync: true,
-		},
-		appendTerm: {
-			wValue: true,
-			sync: true,
-		},
-		replaceTerms: {
-			wValue: true,
-			sync: true,
-		},
+		toggleBarCollapsed: { wValue: true, sync: true },
+		disableTabResearch: { wValue: true, sync: true },
+		performSearch: { wValue: false, sync: true },
+		toggleHighlights: { wValue: true, sync: true },
+		appendTerm: { wValue: true, sync: true },
+		replaceTerms: { wValue: true, sync: true },
 	},
 	barLook: {
-		showEditIcon: {
-			wValue: true,
-			sync: true,
-		},
-		showRevealIcon: {
-			wValue: true,
-			sync: true,
-		},
-		fontSize: {
-			wValue: "14.6px",
-			wUseDefault: true,
-			sync: true,
-		},
-		opacityControl: {
-			wValue: 0.8,
-			wUseDefault: true,
-			sync: true,
-		},
-		opacityTerm: {
-			wValue: 0.86,
-			wUseDefault: true,
-			sync: true,
-		},
-		borderRadius: {
-			wValue: "4px",
-			wUseDefault: true,
-			sync: true,
-		},
+		showEditIcon: { wValue: true, sync: true },
+		showRevealIcon: { wValue: true, sync: true },
+		fontSize: { wValue: "14.6px", wUseDefault: true, sync: true },
+		opacityControl: { wValue: 0.8, wUseDefault: true, sync: true },
+		opacityTerm: { wValue: 0.86, wUseDefault: true, sync: true },
+		borderRadius: { wValue: "4px", wUseDefault: true, sync: true },
 	},
 	highlightMethod: {
-		paintReplaceByClassic: {
-			wValue: true,
-			sync: false,
-		},
-		paintUseExperimental: {
-			wValue: false,
-			wUseDefault: true,
-			sync: false,
-		},
+		paintReplaceByClassic: { wValue: true, sync: false },
+		paintUseExperimental: { wValue: false, wUseDefault: true, sync: false },
 		hues: {
 			wValue: [ 300, 60, 110, 220, 30, 190, 0 ],
 			wUseDefault: true,
@@ -380,15 +287,18 @@ const bankSet = async (bank: Partial<BankValues>) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const bankGet = async (keys: Array<BankKey>): Promise<BankValues> => {
+const bankGet = async <T extends BankKey>(keys: Array<T>): Promise<{ [P in T]: BankValues[P] }> => {
 	// TODO investigate flattening storage of research instances (one level)
-	const bank = await (chrome.storage.session
-		? chrome.storage.session.get(keys)
-		: chrome.storage.local.get(keys)) as BankValues;
-	keys.forEach(key => {
-		if (!(key in bank) || bank[key] === undefined) {
-			bank[key] = {};
+	const bank = {} as { [P in T]: BankValues[P] };
+	const keysToGet: Array<BankKey> = keys.filter(key => {
+		if (bankCache[key] !== undefined) {
+			bank[key] = bankCache[key] as BankValues[T];
 		}
+	});
+	chrome.storage.session.get(keysToGet).then((bankStore: BankValues) => {
+		keysToGet.forEach(<K extends BankKey>(key: K) => {
+			bankCache[key] = bankStore[key];
+		});
 	});
 	return bank;
 };
@@ -651,15 +561,6 @@ const optionsRepair = async () => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
 	// TODO check that the change was not initiated from the same script
-	//if ([ "researchInstances", "engines" ].some(key => changes[key])) {
-	//	areaName = "session";
-	//}
-	[ BankKey.RESEARCH_INSTANCES, BankKey.ENGINES ].forEach(key => {
-		if (changes[key] !== undefined) {
-			bankCache[key] = changes[key].newValue;
-			delete changes[key];
-		}
-	});
 	switch (areaName) {
 	case "session": {
 		Object.entries(changes).forEach(([ key, value ]) => {
@@ -668,8 +569,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 		break;
 	} case "local":
 	case "sync": {
-		const keyCacheThis = areaName === "local" ? configCacheKeysLocal : configCacheKeysSync;
-		const keyCacheOther = areaName === "local" ? configCacheKeysSync : configCacheKeysLocal;
+		const [ keyCache, keyCacheOther ] = areaName === "local"
+			? [ configCacheKeysLocal, configCacheKeysSync ]
+			: [ configCacheKeysSync, configCacheKeysLocal ];
 		console.log(changes);
 		Object.keys(changes).forEach(key1 => {
 			if (configDefault[key1].wValue) {
@@ -677,7 +579,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 					(configCache[key1] as StorageValue<unknown>) = {
 						wValue: changes[key1].newValue.wValue,
 					};
-					keyCacheThis.add(key1);
+					keyCache.add(key1);
 					keyCacheOther.delete(key1);
 				}
 			} else {
@@ -688,7 +590,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 							wValue: changes[key1].newValue[key2].wValue,
 						};
 						const key2Full = `${key1}_${key2}`;
-						keyCacheThis.add(key2Full);
+						keyCache.add(key2Full);
 						keyCacheOther.delete(key2Full);
 					}
 				});

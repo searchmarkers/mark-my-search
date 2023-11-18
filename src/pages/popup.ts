@@ -17,8 +17,8 @@ const loadPopup = (() => {
 		},
 		input: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
-				const sync = await configGet([ ConfigKey.TERM_LISTS ]);
-				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
+				const config = await configGet([ ConfigKey.TERM_LISTS ]);
+				setChecked(config.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
 			onChange: (checked, objectIndex, containerIndex) => {
 				configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
@@ -75,8 +75,8 @@ const loadPopup = (() => {
 							input: {
 								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
-									const local = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
-									setChecked(local.autoFindOptions.enabled);
+									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									setChecked(config.autoFindOptions.enabled);
 								},
 								onChange: async checked => {
 									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
@@ -128,9 +128,9 @@ const loadPopup = (() => {
 											if (tab.id === undefined) {
 												return;
 											}
-											const local = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
+											const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
 											const researchInstance = session.researchInstances[tab.id];
-											if (researchInstance && local.researchInstanceOptions.restoreLastInTab) {
+											if (researchInstance && config.researchInstanceOptions.restoreLastInTab) {
 												researchInstance.enabled = true;
 											}
 											messageSendBackground({
@@ -164,9 +164,9 @@ const loadPopup = (() => {
 									if (tab.id === undefined) {
 										return;
 									}
-									const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-									delete session.researchInstances[tab.id];
-									await bankSet(session);
+									const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+									delete bank.researchInstances[tab.id];
+									await bankSet(bank);
 									messageSendBackground({
 										deactivateTabResearch: true,
 									});
@@ -394,8 +394,8 @@ const loadPopup = (() => {
 													placeholder: "keyword",
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
-														const sync = await configGet([ ConfigKey.TERM_LISTS ]);
-														setText(sync.termLists[containerIndex].terms[objectIndex] ? sync.termLists[containerIndex].terms[objectIndex].phrase : "");
+														const config = await configGet([ ConfigKey.TERM_LISTS ]);
+														setText(config.termLists[containerIndex].terms[objectIndex] ? config.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
 														configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
@@ -451,21 +451,21 @@ const loadPopup = (() => {
 										if (tab.id === undefined) {
 											return;
 										}
-										const sync = await configGet([ ConfigKey.TERM_LISTS ]);
-										const session = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-										const researchInstance = session.researchInstances[tab.id];
+										const config = await configGet([ ConfigKey.TERM_LISTS ]);
+										const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+										const researchInstance = bank.researchInstances[tab.id];
 										if (researchInstance) {
 											researchInstance.enabled = true;
-											await bankSet(session);
+											await bankSet(bank);
 										}
 										messageSendBackground({
 											terms: researchInstance
 												? researchInstance.terms.concat(
-													sync.termLists[index].terms.filter(termFromList =>
+													config.termLists[index].terms.filter(termFromList =>
 														!researchInstance.terms.find(term => term.phrase === termFromList.phrase)
 													)
 												)
-												: sync.termLists[index].terms,
+												: config.termLists[index].terms,
 											termsSend: true,
 											toggle: {
 												highlightsShownOn: true,
