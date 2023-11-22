@@ -1128,6 +1128,10 @@ textarea
 		chrome.tabs.query = useChromeAPI()
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
+		const viewportMeta = document.createElement("meta");
+		viewportMeta.name = "viewport";
+		viewportMeta.content = "width=device-width, initial-scale=1";
+		document.head.appendChild(viewportMeta);
 		fillAndInsertStylesheet(additionalStyleText);
 		insertAndManageContent(panelsInfo, shiftModifierIsRequired);
 		pageFocusScrollContainer();
