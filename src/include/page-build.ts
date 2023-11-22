@@ -1131,6 +1131,7 @@ textarea
 		const viewportMeta = document.createElement("meta");
 		viewportMeta.name = "viewport";
 		viewportMeta.content = "width=device-width, initial-scale=1";
+		document.head.appendChild(viewportMeta);
 		fillAndInsertStylesheet(additionalStyleText);
 		insertAndManageContent(panelsInfo, shiftModifierIsRequired);
 		pageFocusScrollContainer();
