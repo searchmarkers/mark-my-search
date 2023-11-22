@@ -51,7 +51,7 @@ jobs:
         with:
           tag: ${{ env.TAG_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "pack/**"
+          artifacts: "pack/*.zip"
           replacesArtifacts: true
           draft: true
           generateReleaseNotes: true
