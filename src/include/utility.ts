@@ -91,7 +91,7 @@ class MatchTerm {
 			case: false,
 			stem: true,
 			whole: false,
-			diacritics: false,
+			diacritics: true,
 		};
 		if (matchMode) {
 			Object.assign(this.matchMode, matchMode);
@@ -126,7 +126,7 @@ class MatchTerm {
 		const optionalHyphenStandin = "_ _ _"; // TODO improve method of inserting optional hyphens
 		const optionalHyphen = this.matchMode.regex ? "" : "(\\p{Pd})?";
 		const getDiacriticsMatchingPatternStringSafe = (chars: string) =>
-			this.matchMode.diacritics ? getDiacriticsMatchingPatternString(chars) : chars;
+			this.matchMode.diacritics ? chars : getDiacriticsMatchingPatternString(chars);
 		const getHyphenatedPatternString = (word: string) =>
 			word.replace(/(\w\?|\w)/g,`$1${optionalHyphenStandin}`);
 		const getBoundaryTest = (charBoundary: string) =>
@@ -171,10 +171,10 @@ type HighlightMessage = {
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	toggleBarCollapsedOn?: boolean
-	barControlsShown?: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
-	barLook?: StorageSyncValues[StorageSync.BAR_LOOK]
-	highlightMethod?: StorageSyncValues[StorageSync.HIGHLIGHT_METHOD]
-	matchMode?: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
+	barControlsShown?: ConfigBarControlsShown
+	barLook?: ConfigBarLook
+	highlightMethod?: ConfigHighlightMethod
+	matchMode?: MatchMode
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -298,6 +298,11 @@ const getIdSequential = (function* () {
 		yield id++;
 	}
 })();
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const getVersion = (): string =>
+	chrome.runtime.getManifest().version
+;
 
 const getNameFull = (): string =>
 	chrome.runtime.getManifest().name

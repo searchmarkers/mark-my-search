@@ -15,35 +15,17 @@ const loadPopup = (() => {
 		label: {
 			text: labelText,
 		},
-		checkbox: {
+		input: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
-				const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
+				const config = await configGet([ ConfigKey.TERM_LIST_OPTIONS ]);
+				setChecked(config.termListOptions.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
-			onToggle: (checked, objectIndex, containerIndex) => {
-				storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
-					storageSet("sync", sync);
+			onChange: (checked, objectIndex, containerIndex) => {
+				configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+					sync.termListOptions.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
+					configSet(sync);
 				});
 			},
-		},
-	});
-
-	/**
-	 * Creates info for a checkbox handling a basic storage field.
-	 * @param storageArea The name of the storage area to use.
-	 * @param storageKey The key for the field within the storage area.
-	 * @returns The resulting info object.
-	 */
-	const getStorageFieldCheckboxInfo = (storageArea: StorageAreaName, storageKey: StorageArea<typeof storageArea>): PageInteractionCheckboxInfo => ({
-		onLoad: async setChecked => {
-			const store = await storageGet(storageArea, [ storageKey ]);
-			setChecked(store[storageKey]);
-		},
-		onToggle: checked => {
-			storageSet(storageArea, {
-				[storageKey]: checked
-			} as StorageLocalValues);
 		},
 	});
 
@@ -90,15 +72,16 @@ const loadPopup = (() => {
 							label: {
 								text: "Detect search engines",//"Highlight web searches",
 							},
-							checkbox: {
+							input: {
+								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
-									setChecked(local.enabled);
+									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									setChecked(config.autoFindOptions.enabled);
 								},
-								onToggle: checked => {
-									storageSet("local", {
-										enabled: checked,
-									} as StorageLocalValues);
+								onChange: async checked => {
+									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									config.autoFindOptions.enabled = checked;
+									await configSet(config);
 								},
 							},
 						},
@@ -107,7 +90,18 @@ const loadPopup = (() => {
 							label: {
 								text: "Restore keywords on reactivation",
 							},
-							checkbox: getStorageFieldCheckboxInfo("local", StorageLocal.PERSIST_RESEARCH_INSTANCES),
+							input: {
+								getType: () => InputType.CHECKBOX,
+								onLoad: async setChecked => {
+									const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
+									setChecked(config.researchInstanceOptions.restoreLastInTab);
+								},
+								onChange: async checked => {
+									const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
+									config.researchInstanceOptions.restoreLastInTab = checked;
+									await configSet(config);
+								},
+							},
 						},
 					],
 				},
@@ -121,21 +115,22 @@ const loadPopup = (() => {
 							label: {
 								text: "Active",
 							},
-							checkbox: {
+							input: {
+								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									setChecked(tab.id === undefined ? false : await isTabResearchPage(tab.id));
 								},
-								onToggle: checked => {
+								onChange: checked => {
 									if (checked) {
-										storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
+										bankGet([ BankKey.RESEARCH_INSTANCES ]).then(async session => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 											if (tab.id === undefined) {
 												return;
 											}
-											const local = await storageGet("local", [ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
+											const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
 											const researchInstance = session.researchInstances[tab.id];
-											if (researchInstance && local.persistResearchInstances) {
+											if (researchInstance && config.researchInstanceOptions.restoreLastInTab) {
 												researchInstance.enabled = true;
 											}
 											messageSendBackground({
@@ -162,16 +157,16 @@ const loadPopup = (() => {
 								onLoad: async setEnabled => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									setEnabled(tab.id === undefined ? false :
-										!!(await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ])).researchInstances[tab.id]);
+										!!(await bankGet([ BankKey.RESEARCH_INSTANCES ])).researchInstances[tab.id]);
 								},
 								onClick: async () => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									if (tab.id === undefined) {
 										return;
 									}
-									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
-									delete session.researchInstances[tab.id];
-									await storageSet("session", session);
+									const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+									delete bank.researchInstances[tab.id];
+									await bankSet(bank);
 									messageSendBackground({
 										deactivateTabResearch: true,
 									});
@@ -251,20 +246,20 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+											sync.urlFilters.noPageModify.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.noPageModify = array.map(value => {
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+											sync.urlFilters.noPageModify.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 								},
@@ -285,20 +280,20 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+											sync.urlFilters.nonSearch.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.nonSearch = array.map(value => {
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+											sync.urlFilters.nonSearch.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 								},
@@ -325,38 +320,38 @@ const loadPopup = (() => {
 							className: "temp-class",
 							list: {
 								getLength: () =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
-										sync.termLists.length
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync =>
+										sync.termListOptions.termLists.length
 									)
 								,
 								pushWithName: name =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-										sync.termLists.push({
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+										sync.termListOptions.termLists.push({
 											name,
 											terms: [],
 											urlFilter: [],
 										});
-										storageSet("sync", sync);
+										configSet(sync);
 									})
 								,
 								removeAt: index =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-										sync.termLists.splice(index, 1);
-										storageSet("sync", sync);
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+										sync.termListOptions.termLists.splice(index, 1);
+										configSet(sync);
 									})
 								,
 							},
 							label: {
 								text: "",
 								getText: index =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
-										sync.termLists[index] ? sync.termLists[index].name : ""
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync =>
+										sync.termListOptions.termLists[index] ? sync.termListOptions.termLists[index].name : ""
 									)
 								,
 								setText: (text, index) =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-										sync.termLists[index].name = text;
-										storageSet("sync", sync);
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+										sync.termListOptions.termLists[index].name = text;
+										configSet(sync);
 									})
 								,
 								textbox: {
@@ -367,14 +362,15 @@ const loadPopup = (() => {
 								className: "term",
 								list: {
 									getArray: index =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
-											sync.termLists[index].terms as unknown as Array<Record<string, unknown>>
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync =>
+											sync.termListOptions.termLists[index].terms as unknown as Array<Record<string, unknown>>
 										)
 									,
 									setArray: (array, index) =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-											sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
-											storageSet("sync", sync);
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+											sync.termListOptions.termLists[index].terms =
+												array as unknown as typeof sync["termListOptions"]["termLists"][number]["terms"];
+											configSet(sync);
 										})
 									,
 									getNew: text =>
@@ -399,13 +395,14 @@ const loadPopup = (() => {
 													placeholder: "keyword",
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-														setText(sync.termLists[containerIndex].terms[objectIndex] ? sync.termLists[containerIndex].terms[objectIndex].phrase : "");
+														const config = await configGet([ ConfigKey.TERM_LIST_OPTIONS ]);
+														setText(config.termListOptions.termLists[containerIndex].terms[objectIndex]
+															? config.termListOptions.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].phrase = text;
-															storageSet("sync", sync);
+														configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+															sync.termListOptions.termLists[containerIndex].terms[objectIndex].phrase = text;
+															configSet(sync);
 														});
 													},
 												},
@@ -418,7 +415,7 @@ const loadPopup = (() => {
 											getMatchModeInteractionInfo("whole", "Stemming"),
 											getMatchModeInteractionInfo("stem", "Whole Words"),
 											getMatchModeInteractionInfo("case", "Case Sensitive"),
-											getMatchModeInteractionInfo("diacritics", "Diacritics Insensitive"),
+											getMatchModeInteractionInfo("diacritics", "Accent Sensitive"),
 											getMatchModeInteractionInfo("regex", "Regular Expression"),
 										],
 									},
@@ -428,20 +425,20 @@ const loadPopup = (() => {
 								className: "temp-class",
 								list: {
 									getArray: index =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => //
-											sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => //
+											sync.termListOptions.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: (array, index) =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
-											sync.termLists[index].urlFilter = array.map(value => {
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+											sync.termListOptions.termLists[index].urlFilter = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											storageSet("sync", sync);
+											configSet(sync);
 										})
 									,
 								},
@@ -456,21 +453,21 @@ const loadPopup = (() => {
 										if (tab.id === undefined) {
 											return;
 										}
-										const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-										const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
-										const researchInstance = session.researchInstances[tab.id];
+										const config = await configGet([ ConfigKey.TERM_LIST_OPTIONS ]);
+										const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
+										const researchInstance = bank.researchInstances[tab.id];
 										if (researchInstance) {
 											researchInstance.enabled = true;
-											await storageSet("session", session);
+											await bankSet(bank);
 										}
 										messageSendBackground({
 											terms: researchInstance
 												? researchInstance.terms.concat(
-													sync.termLists[index].terms.filter(termFromList =>
+													config.termListOptions.termLists[index].terms.filter(termFromList =>
 														!researchInstance.terms.find(term => term.phrase === termFromList.phrase)
 													)
 												)
-												: sync.termLists[index].terms,
+												: config.termListOptions.termLists[index].terms,
 											termsSend: true,
 											toggle: {
 												highlightsShownOn: true,
@@ -488,18 +485,20 @@ const loadPopup = (() => {
 	];
 
 	return () => {
-		loadPage(panelsInfo, `
-body
-	{ width: 300px; height: 500px; user-select: none; }
-.container-panel > .panel, .brand
-	{ margin-inline: 0; }
-		`, false);
+		loadPage(panelsInfo, {
+			titleText: "Control",
+			tabsFill: true,
+			borderShow: true,
+			brandShow: true,
+			height: 520,
+			width: 300,
+		});
 		pageInsertWarning(
-			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
+			document.querySelector(".container.panel .panel-sites_search_research") ?? document.body,
 			"List entries are saved as you type them. This will be more clear in future.",
 		);
 		pageInsertWarning(
-			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
+			document.querySelector(".container.panel .panel-term_lists") ?? document.body,
 			"Keyword lists are highly experimental. Please report any issues.",
 		);
 	};

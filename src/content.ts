@@ -4,7 +4,7 @@ type HighlightTags = {
 	flow: ReadonlySet<string>,
 }
 type TermHues = Array<number>
-type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
+type ControlButtonName = keyof ConfigBarControlsShown
 type ControlButtonInfo = {
 	controlClasses?: Array<EleClass>
 	buttonClasses?: Array<EleClass>
@@ -101,8 +101,8 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: MatchTerms
-	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
-	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
+	[ConfigKey.BAR_CONTROLS_SHOWN]: ConfigBarControlsShown
+	[ConfigKey.BAR_LOOK]: ConfigBarLook
 	matchMode: MatchMode
 }
 
@@ -287,7 +287,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: 
 		&.${EleClass.MATCH_REGEX} .${EleClass.CONTROL_CONTENT} {
 			font-weight: bold;
 		}
-		&.${EleClass.MATCH_DIACRITICS} .${EleClass.CONTROL_CONTENT} {
+		&:not(.${EleClass.MATCH_DIACRITICS}) .${EleClass.CONTROL_CONTENT} {
 			font-style: italic;
 		}
 	}
@@ -317,7 +317,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: 
 		&:not(.${EleClass.MATCH_STEM}) .${EleClass.CONTROL_CONTENT} {
 			border-bottom: 3px solid hsl(0 0% 38%);
 		}
-		&.${EleClass.MATCH_DIACRITICS} .${EleClass.CONTROL_CONTENT} {
+		&:not(.${EleClass.MATCH_DIACRITICS}) .${EleClass.CONTROL_CONTENT} {
 			border-left: 3px dashed black;
 		}
 	}
@@ -1288,7 +1288,7 @@ const createTermOptionList = (
 			{ matchType: "case", title: "Case Sensitive" },
 			{ matchType: "whole", title: "Whole Word" },
 			{ matchType: "stem", title: "Stem Word" },
-			{ matchType: "diacritics", title: "Diacritics" },
+			{ matchType: "diacritics", title: "Diacritics Sensitive" },
 			{ matchType: "regex", title: "Regex Mode" },
 		];
 		return options.map(({ matchType, title }) => {

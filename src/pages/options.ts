@@ -1,295 +1,512 @@
-type OptionsInfo = Array<{
-	label: string
-	options: Partial<Record<keyof StorageSyncValues, {
-		label: string
-		preferences?: Partial<Record<keyof StorageSyncValues["barCollapse"]
-			| keyof StorageSyncValues["barControlsShown"]
-			| keyof StorageSyncValues["barLook"]
-			| keyof StorageSyncValues["highlightMethod"]
-			| keyof StorageSyncValues["showHighlights"]
-			| keyof StorageSyncValues["autoFindOptions"]
-			| keyof StorageSyncValues["matchModeDefaults"], {
-			label: string
-			tooltip?: string
-			type: PreferenceType
-		}>>
-		type?: PreferenceType
-	}>>
-}>
-
-enum OptionClass {
-	ERRONEOUS = "erroneous",
-	MODIFIED = "modified",
-	TAB_BUTTON = "tab-button",
-	CONTAINER_TAB = "container-tab",
-	OPTION_SECTION = "option-section",
-	OPTION_LABEL = "option-label",
-	TABLE_PREFERENCES = "table-preferences",
-	PREFERENCE_ROW = "preference-row",
-	PREFERENCE_CELL_LABEL = "preference-cell",
-	EVEN = "even",
-	ODD = "odd",
-}
-
-enum PreferenceType {
-	BOOLEAN,
-	INTEGER,
-	FLOAT,
-	TEXT,
-	ARRAY,
-	ARRAY_NUMBER,
-}
+const getControlOptionTemp = (
+	labelInfo: { text: string, tooltip?: string },
+	configKey: ConfigKey,
+	key: string,
+	inputType: InputType,
+	details?: {
+		onChange?: () => unknown
+		command?: { name?: string, shortcut?: string }
+	}
+): PageInteractionInfo => ({
+	className: "option",
+	label: {
+		text: labelInfo.text,
+		tooltip: labelInfo.tooltip,
+	},
+	note: {
+		text: details?.command?.shortcut,
+		getText: details?.command?.name
+			? async () => getOrderedShortcut(
+				(await chrome.commands.getAll())
+					.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
+			).join("+") : undefined,
+		forInput: details?.command?.name && (chrome.commands["update"] || (this["browser"] && browser.commands.update))
+			? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
+			: undefined,
+	},
+	input: {
+		getType: () => inputType,
+		onLoad: async setValue => {
+			const config = await configGet([ configKey ]);
+			const value = config[configKey][key];
+			setValue(((typeof value === "object" && "w_listIn" in value) ? value.w_listIn : value));
+		},
+		onChange: async (value, objectIndex, containerIndex, store) => {
+			if (store) {
+				const config = await configGet([ configKey ]);
+				const valueTransformed = (inputType === InputType.TEXT_ARRAY)
+					? (value as unknown as string).split(",")
+					: inputType === InputType.TEXT_NUMBER
+						? parseFloat(value as unknown as string)
+						: value;
+				if (typeof config[configKey][key] === "object" && "w_listIn" in config[configKey][key]) {
+					config[configKey][key].w_listIn = valueTransformed;
+				} else {
+					config[configKey][key] = valueTransformed;
+				}
+				await configSet(config);
+			}
+			if (details?.onChange) {
+				details.onChange();
+			}
+		},
+	},
+});
 
 /**
- * Loads the options content into the page.
- * This presents the user with advanced options for customizing the extension.
- * @param optionsInfo Details of the options to present.
+ * Loads the sendoff page content into the page.
+ * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.
  */
 const loadOptions = (() => {
 	/**
-	 * Fills and inserts a CSS stylesheet element to style all options and surrounding page structure.
+	 * Details of the page's panels and their various components.
 	 */
-	const fillAndInsertStylesheet = () => {
-		const style = document.createElement("style");
-		style.textContent = `
-body
-	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; user-select: none; }
-.${OptionClass.ERRONEOUS}
-	{ color: #e11; }
-.${OptionClass.MODIFIED}
-	{ font-weight: bold; }
-.${OptionClass.TAB_BUTTON}
-	{ border-radius: 0; display: none; }
-.${OptionClass.CONTAINER_TAB}
-	{ display: flex; flex-flow: column; }
-.${OptionClass.OPTION_SECTION}
-	{ padding: 6px; margin-block: 4px; border-radius: 6px;
-	background-color: #eee; box-shadow: 2px 2px 4px hsla(0, 0%, 0%, 0.4); }
-.${OptionClass.OPTION_LABEL}
-	{ color: hsl(0 0% 6%); margin-bottom: 4px; }
-.${OptionClass.TABLE_PREFERENCES}
-	{ display: flex; flex-flow: column; width: 100%; }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
-	{ flex: 1; display: flex; align-items: center; }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > ::after
-	{ content: ":" }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
-	{ flex: 1; }
-.${OptionClass.TABLE_PREFERENCES} input[type=text]
-	{ width: 110px; }
-.${OptionClass.PREFERENCE_ROW}
-	{ display: flex; color: hsl(0 0% 21%); }
-.${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN}
-	{ background-color: hsl(0 0% 87%); }
-label
-	{ color: hsl(0 0% 28%); }
-label[for]:hover
-	{ color: hsl(0 0% 18%); }
-		`;
-		document.head.appendChild(style);
-	};
-
-	/**
-	 * Loads a tab of options into a container.
-	 * @param tabIdx The index of the tab content in `optionsInfo` to load.
-	 * @param tabContainer A parent element for the tab.
-	 * @param optionsInfo Details of the options to present.
-	 */
-	const loadTab = async (tabIdx: number, tabContainer: HTMLElement, optionsInfo: OptionsInfo) => {
-		const sync = await storageGet("sync");
-		const tabInfo = optionsInfo[tabIdx];
-		const tabButton = document.createElement("button");
-		tabButton.textContent = tabInfo.label;
-		tabButton.classList.add(OptionClass.TAB_BUTTON);
-		tabContainer.appendChild(tabButton);
-		const form = document.createElement("form");
-		tabContainer.appendChild(form);
-		const container = document.createElement("div");
-		container.classList.add(OptionClass.CONTAINER_TAB);
-		form.appendChild(container);
-		const save = document.createElement("button");
-		save.textContent = "Save Changes";
-		form.appendChild(save);
-		const valuesCurrent = {};
-		// Collect all values from inputs and commit them to storage on user form submission.
-		form.addEventListener("submit", event => {
-			event.preventDefault();
-			// TODO remove code duplication using function
-			Object.keys(tabInfo.options).forEach(optionKey => {
-				const optionInfo = tabInfo.options[optionKey];
-				const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-				Object.keys(preferences).forEach(preferenceKey => {
-					const preferenceInfo = preferences[preferenceKey];
-					const className = `${optionKey}-${preferenceKey}`;
-					const input = document.getElementsByClassName(className)[0];
-					if (!input) {
-						return;
-					}
-					const valueEnteredString = input["value"] as string;
-					const valueEnteredBool = input["checked"] as boolean;
-					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
-					sync[optionKey][preferenceKey] = ((type: PreferenceType) => { // Convert value for storage.
-						if (type === PreferenceType.ARRAY || type === PreferenceType.ARRAY_NUMBER) {
-							return valueEnteredString.split(",").map(item => type === PreferenceType.ARRAY_NUMBER ? Number(item) : item);
-						} else if (type === PreferenceType.INTEGER || type === PreferenceType.FLOAT) {
-							return Number(valueEnteredString);
-						}
-						return valueEntered;
-					})(preferenceInfo.type);
-					valuesCurrent[optionKey][preferenceKey] = valueEntered;
-					Array.from(document.getElementsByClassName(OptionClass.MODIFIED))
-						.forEach((preferenceLabel: HTMLElement) => preferenceLabel.classList.remove(OptionClass.MODIFIED));
-				});
-			});
-			storageSet("sync", sync);
-		});
-		// Construct and insert option elements from the option details.
-		Object.keys(tabInfo.options).forEach(optionKey => {
-			valuesCurrent[optionKey] = {};
-			const optionInfo = tabInfo.options[optionKey];
-			const section = document.createElement("div");
-			section.classList.add(OptionClass.OPTION_SECTION);
-			const optionLabel = document.createElement("div");
-			optionLabel.textContent = optionInfo.label;
-			optionLabel.classList.add(OptionClass.OPTION_LABEL);
-			section.appendChild(optionLabel);
-			const table = document.createElement("div");
-			table.classList.add(OptionClass.TABLE_PREFERENCES);
-			section.appendChild(table);
-			container.appendChild(section);
-			if (sync[optionKey] === undefined) {
-				optionLabel.classList.add(OptionClass.ERRONEOUS);
-				return;
-			}
-			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-			Object.keys(preferences).forEach((preferenceKey, i) => {
-				const preferenceInfo = preferences[preferenceKey];
-				const row = document.createElement("div");
-				const addCell = (node: Node, isInFirstColumn = false) => {
-					const cell = document.createElement("div");
-					cell.appendChild(node);
-					if (isInFirstColumn) {
-						cell.classList.add(OptionClass.PREFERENCE_CELL_LABEL);
-					}
-					row.appendChild(cell);
-				};
-				const inputId = `input-${getIdSequential.next().value}`;
-				const preferenceLabel = document.createElement("label");
-				preferenceLabel.htmlFor = inputId;
-				preferenceLabel.textContent = preferenceInfo.label;
-				preferenceLabel.title = preferenceInfo.tooltip ?? "";
-				const inputDefault = document.createElement("input");
-				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
-				inputDefault.disabled = true;
-				const input = document.createElement("input");
-				input.id = inputId;
-				input.type = inputDefault.type;
-				input.classList.add(`${optionKey}-${preferenceKey}`);
-				addCell(preferenceLabel, true);
-				addCell(input);
-				addCell(inputDefault);
-				table.appendChild(row);
-				row.classList.add(OptionClass.PREFERENCE_ROW);
-				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
-				const valueDefault = optionsDefault[optionKey][preferenceKey];
-				const value = sync[optionKey][preferenceKey];
-				if (value === undefined) {
-					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
-					input.disabled = true;
-				} else {
-					const propertyKey = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
-					inputDefault[propertyKey as string] = valueDefault;
-					input[propertyKey as string] = value;
-					valuesCurrent[optionKey][preferenceKey] = input[propertyKey];
-					input.addEventListener("input", () =>
-						preferenceLabel.classList[
-							input[propertyKey] === valuesCurrent[optionKey][preferenceKey] ? "remove" : "add"
-						](OptionClass.MODIFIED)
-					);
-				}
-			});
-		});
-	};
-
-	return (optionsInfo: OptionsInfo) => {
-		fillAndInsertStylesheet();
-		loadTab(0, document.body, optionsInfo);
-	};
-})();
-
-(() => {
-	/**
-	 * Gets details of the options to present, in a defined structure with tabs at the top level.
-	 * Corresponds exactly with extension storage items.
-	 * @returns Details of all exposed options.
-	 */
-	const getOptionsInfo = (): OptionsInfo => [
+	const panelsInfo: Array<PagePanelInfo> = [
 		{
-			label: "Behaviour",
-			options: {
-				barControlsShown: {
-					label: "Controls to show in the toolbar",
-					preferences: {
-						disableTabResearch: {
-							label: "Disable research in the current tab",
-							type: PreferenceType.BOOLEAN,
-						},
-						performSearch: {
-							label: "Perform a search using the current terms",
-							type: PreferenceType.BOOLEAN,
-						},
-						toggleHighlights: {
-							label: "Toggle display of highlighting",
-							type: PreferenceType.BOOLEAN,
-						},
-						appendTerm: {
-							label: "Append a new term to the toolbar",
-							type: PreferenceType.BOOLEAN,
-						},
-						replaceTerms: {
-							label: "Replace keywords with detected search keywords",
-							type: PreferenceType.BOOLEAN,
-						},
+			className: "panel-general",
+			name: {
+				text: "Highlighting",
+			},
+			sections: [
+				{
+					title: {
+						text: "Highlight Style",
 					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Color hues to cycle through" },
+							ConfigKey.HIGHLIGHT_METHOD,
+							"hues",
+							InputType.TEXT_ARRAY,
+						),
+						{
+							className: "option",
+							label: {
+								text: "Accessibility options",
+								tooltip: `${getName()} lacks visibility and screen reader options.\nI have a few plans, but need ideas!`,
+							},
+						},
+					],
 				},
-				barLook: {
-					label: "Toolbar style and icons",
-					preferences: {
-						showEditIcon: {
-							label: "Display an edit button in controls with editable text",
-							type: PreferenceType.BOOLEAN,
-						},
-						showRevealIcon: {
-							label: "Display a menu button in controls with match options",
-							type: PreferenceType.BOOLEAN,
-						},
-						fontSize: {
-							label: "Font size",
-							type: PreferenceType.TEXT,
-						},
-						opacityTerm: {
-							label: "Opacity of keyword buttons",
-							type: PreferenceType.FLOAT,
-						},
-						opacityControl: {
-							label: "Opacity of other buttons",
-							type: PreferenceType.FLOAT,
-						},
-						borderRadius: {
-							label: "Radius of rounded corners",
-							type: PreferenceType.TEXT,
-						},
+				{
+					title: {
+						text: "Suggest Usability Improvements",
+						expands: true,
 					},
+					interactions: [
+						{
+							className: "action",
+							submitters: [ {
+								text: "Send suggestions",
+								onClick: (messageText, formFields, onSuccess, onError) => {
+									sendProblemReport(messageText, formFields)
+										.then(onSuccess)
+										.catch(onError);
+								},
+								message: {
+									rows: 2,
+									placeholder: `How can I make ${getName()} more usable for you?`,
+									required: true,
+								},
+								alerts: {
+									[PageAlertType.SUCCESS]: {
+										text: "Success",
+									},
+									[PageAlertType.FAILURE]: {
+										text: "Status {status}: {text}",
+									},
+									[PageAlertType.PENDING]: {
+										text: "Pending, do not close popup",
+									},
+								},
+							} ],
+						},
+					],
 				},
-				highlightMethod: {
-					label: "Keyword highlighting method and style",
-					preferences: {
-						paintReplaceByClassic: {
-							label: "Use CLASSIC highlighting (hover for details)",
-							tooltip:
-`Mark My Search has two highlighting methods. \
+				{
+					title: {
+						text: "Highlight Display",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{
+								text: "Show on activation",
+								tooltip:
+`This relates to automatic activation:
+• when a search is detected
+• when a Keyword List applies to the page`
+								,
+							},
+							ConfigKey.SHOW_HIGHLIGHTS,
+							"default",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Always show on search pages" },
+							ConfigKey.SHOW_HIGHLIGHTS,
+							"overrideSearchPages",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Always show on other pages" },
+							ConfigKey.SHOW_HIGHLIGHTS,
+							"overrideResearchPages",
+							InputType.CHECKBOX,
+						),
+					],
+				},
+				{
+					title: {
+						text: "URL Blocklist",
+					},
+					interactions: [
+						{
+							className: "url",
+							textbox: {
+								className: "url-input",
+								list: {
+									getArray: () =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+											sync.urlFilters.noPageModify.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
+										)
+									,
+									setArray: array =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+											sync.urlFilters.noPageModify.w_listIn = array.map(value => {
+												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+												return {
+													hostname: value.slice(0, pathnameStart),
+													pathname: value.slice(pathnameStart),
+												};
+											});
+											configSet(sync);
+										})
+									,
+								},
+								placeholder: "example.com/optional-path",
+								spellcheck: false,
+							},
+						},
+					],
+				},
+				{
+					className: isWindowInFrame() ? undefined : "hidden",
+					interactions: [
+						{
+							className: "link",
+							anchor: {
+								text: "Open in new tab",
+								url: chrome.runtime.getURL("/pages/options.html"),
+							},
+						},
+					],
+				},
+			],
+		},
+		{
+			className: "panel-theme",
+			name: {
+				text: "Theme",
+			},
+			sections: [
+				{
+					title: {
+						text: "Type",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Edition" },
+							ConfigKey.THEME,
+							"edition",
+							InputType.TEXT,
+							{ onChange: pageReload },
+						),
+						getControlOptionTemp(
+							{ text: "Variant" },
+							ConfigKey.THEME,
+							"variant",
+							InputType.TEXT,
+							{ onChange: pageReload },
+						),
+					],
+				},
+				{
+					title: {
+						text: "Style",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Hue" },
+							ConfigKey.THEME,
+							"hue",
+							InputType.TEXT_NUMBER,
+							{ onChange: pageThemeUpdate },
+						),
+						getControlOptionTemp(
+							{ text: "Contrast" },
+							ConfigKey.THEME,
+							"contrast",
+							InputType.TEXT_NUMBER,
+							{ onChange: pageThemeUpdate },
+						),
+						getControlOptionTemp(
+							{ text: "Lightness" },
+							ConfigKey.THEME,
+							"lightness",
+							InputType.TEXT_NUMBER,
+							{ onChange: pageThemeUpdate },
+						),
+						getControlOptionTemp(
+							{ text: "Saturation" },
+							ConfigKey.THEME,
+							"saturation",
+							InputType.TEXT_NUMBER,
+							{ onChange: pageThemeUpdate },
+						),
+					],
+				},
+				{
+					title: {
+						text: "Font",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Font scale" },
+							ConfigKey.THEME,
+							"fontScale",
+							InputType.TEXT_NUMBER,
+							{ onChange: pageThemeUpdate },
+						),
+					],
+				},
+			],
+		},
+		{
+			className: "panel-toolbar",
+			name: {
+				text: "Toolbar",
+			},
+			sections: [
+				{
+					title: {
+						text: "Style",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Font size" },
+							ConfigKey.BAR_LOOK,
+							"fontSize",
+							InputType.TEXT_NUMBER,
+						),
+						getControlOptionTemp(
+							{ text: "Opacity of keyword buttons" },
+							ConfigKey.BAR_LOOK,
+							"opacityTerm",
+							InputType.TEXT_NUMBER,
+						),
+						getControlOptionTemp(
+							{ text: "Opacity of control buttons" },
+							ConfigKey.BAR_LOOK,
+							"opacityControl",
+							InputType.TEXT_NUMBER,
+						),
+						getControlOptionTemp(
+							{ text: "Rounded corners" },
+							ConfigKey.BAR_LOOK,
+							"borderRadius",
+							InputType.TEXT_NUMBER,
+						),
+					],
+				},
+				{
+					title: {
+						text: "Buttons",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "\"Deactivate in the current tab\"" },
+							ConfigKey.BAR_CONTROLS_SHOWN,
+							"disableTabResearch",
+							InputType.CHECKBOX,
+							{ command: { name: "toggle-research-tab" } },
+						),
+						getControlOptionTemp(
+							{ text: "\"Web Search with these keywords\"" },
+							ConfigKey.BAR_CONTROLS_SHOWN,
+							"performSearch",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "\"Show/hide highlights\"" },
+							ConfigKey.BAR_CONTROLS_SHOWN,
+							"toggleHighlights",
+							InputType.CHECKBOX,
+							{ command: { name: "toggle-highlights" } },
+						),
+						getControlOptionTemp(
+							{ text: "\"Add a new keyword\"" },
+							ConfigKey.BAR_CONTROLS_SHOWN,
+							"appendTerm",
+							InputType.CHECKBOX,
+							{ command: { name: "focus-term-append" } },
+						),
+						getControlOptionTemp(
+							{ text: "\"Replace keywords with detected search\"" },
+							ConfigKey.BAR_CONTROLS_SHOWN,
+							"replaceTerms",
+							InputType.CHECKBOX,
+							{ command: { name: "terms-replace" } },
+						),
+					],
+				},
+				{
+					title: {
+						text: "Keyword Buttons",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Show edit pen" },
+							ConfigKey.BAR_LOOK,
+							"showEditIcon",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Show options button" },
+							ConfigKey.BAR_LOOK,
+							"showRevealIcon",
+							InputType.CHECKBOX,
+							{ command: { shortcut: "Shift+Space" } }, // Hardcoded in the content script.
+						),
+					],
+				},
+				{
+					title: {
+						text: "Collapse On Activation",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Collapse when a search is detected" },
+							ConfigKey.BAR_COLLAPSE,
+							"fromSearch",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Collapse when a Keyword List applies to the page" },
+							ConfigKey.BAR_COLLAPSE,
+							"fromTermListAuto",
+							InputType.CHECKBOX,
+						),
+					],
+				},
+			],
+		},
+		{
+			className: "panel-search",
+			name: {
+				text: "Search",
+			},
+			sections: [
+				{
+					title: {
+						text: "Keywords",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "URL parameters containing keywords" },
+							ConfigKey.AUTO_FIND_OPTIONS,
+							"searchParams",
+							InputType.TEXT_ARRAY,
+						),
+						getControlOptionTemp(
+							{ text: "Keywords to exclude" },
+							ConfigKey.AUTO_FIND_OPTIONS,
+							"stoplist",
+							InputType.TEXT_ARRAY,
+						),
+					],
+				},
+				{
+					title: {
+						text: "Search Engine Blocklist",
+					},
+					interactions: [
+						{
+							className: "url",
+							textbox: {
+								className: "url-input",
+								list: {
+									getArray: () =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+											sync.urlFilters.nonSearch.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
+										)
+									,
+									setArray: array =>
+										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+											sync.urlFilters.nonSearch.w_listIn = array.map(value => {
+												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
+												return {
+													hostname: value.slice(0, pathnameStart),
+													pathname: value.slice(pathnameStart),
+												};
+											});
+											configSet(sync);
+										})
+									,
+								},
+								placeholder: "example.com/optional-path",
+								spellcheck: false,
+							},
+						},
+					],
+				},
+			],
+		},
+		{
+			className: "panel-term_lists",
+			name: {
+				text: "Keyword Lists",
+			},
+			sections: [
+				{
+					title: {
+						text: "Keyword Lists",
+					},
+					interactions: [
+						{
+							className: "link",
+							label: {
+								text:
+`Keyword Lists are available in the popup, but are glitchy and difficult to use.
+Once fixed, they will be accessible here too.`
+								,
+							},
+							anchor: {
+								text: "Roadmap",
+								url: "https://github.com/searchmarkers/mark-my-search/discussions/108",
+							},
+						},
+					],
+				},
+			],
+		},
+		{
+			className: "panel-advanced",
+			name: {
+				text: "Advanced",
+			},
+			sections: [
+				{
+					title: {
+						text: "Highlighting Engine",
+					},
+					interactions: [
+						getControlOptionTemp(
+							{
+								text: "Use CLASSIC highlighting",
+								tooltip:
+`${getName()} has two highlighting methods. \
 CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
-PAINT is an alternate model invented for Mark My Search.
+PAINT is an alternate model invented for the Mark My Search browser extension.
 
 CLASSIC
 • Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.
@@ -303,13 +520,17 @@ PAINT
 	• Large numbers of highlights are handled well.
 • Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
-							,
-							type: PreferenceType.BOOLEAN,
-						},
-						/*paintUseExperimental: {
-							label: "Use experimental browser APIs (hover for details)",
-							tooltip:
-`Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
+								,
+							},
+							ConfigKey.HIGHLIGHT_METHOD,
+							"paintReplaceByClassic",
+							InputType.CHECKBOX,
+						),
+						/*getControlOptionTemp(
+							{
+								text: "Use experimental browser APIs",
+								tooltip:
+`${getName()} can highlight using experimental APIs. The behavior of this flag will change over time.
 Current effects:
 
 CLASSIC
@@ -318,85 +539,70 @@ CLASSIC
 PAINT
 • Firefox: The CSS element() function is used instead of SVG rendering.
 • Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
-							,
-							type: PreferenceType.BOOLEAN,
-						},*/
-						hues: {
-							label: "Highlight color hue cycle",
-							type: PreferenceType.ARRAY_NUMBER,
-						},
-					},
+								,
+							},
+							ConfigKey.HIGHLIGHT_METHOD,
+							"paintUseExperimental",
+							InputType.CHECKBOX,
+						),*/
+					],
 				},
-				showHighlights: {
-					label: "Visibility when highlighting search engine keywords",
-					preferences: {
-						default: {
-							label: "Highlights begin visible",
-							type: PreferenceType.BOOLEAN,
-						},
-						overrideSearchPages: {
-							label: "Highlights are always visible on search pages",
-							type: PreferenceType.BOOLEAN,
-						},
+				{
+					title: {
+						text: "Matching Options for New Keywords",
 					},
+					interactions: [
+						getControlOptionTemp(
+							{ text: "Case sensitivity" },
+							ConfigKey.MATCHING_DEFAULTS,
+							"case",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Word stemming" },
+							ConfigKey.MATCHING_DEFAULTS,
+							"stem",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Whole word matching" },
+							ConfigKey.MATCHING_DEFAULTS,
+							"whole",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Diacritics sensitivity" },
+							ConfigKey.MATCHING_DEFAULTS,
+							"diacritics",
+							InputType.CHECKBOX,
+						),
+						getControlOptionTemp(
+							{ text: "Custom regular expression (regex)" },
+							ConfigKey.MATCHING_DEFAULTS,
+							"regex",
+							InputType.CHECKBOX,
+						),
+					],
 				},
-				barCollapse: {
-					label: "When to collapse the toolbar immediately",
-					preferences: {
-						fromSearch: {
-							label: "Started from a search",
-							type: PreferenceType.BOOLEAN,
-						},
-						fromTermListAuto: {
-							label: "Started from a keyword list automatically",
-							type: PreferenceType.BOOLEAN,
-						},
-					},
-				},
-				autoFindOptions: {
-					label: "Options for highlighting search engine keywords",
-					preferences: {
-						searchParams: {
-							label: "URL parameters containing keywords",
-							type: PreferenceType.ARRAY,
-						},
-						stoplist: {
-							label: "Keywords to exclude",
-							type: PreferenceType.ARRAY,
-						},
-					},
-				},
-				matchModeDefaults: {
-					label: "Matching options for new terms",
-					preferences: {
-						case: {
-							label: "Default case sensitivity",
-							type: PreferenceType.BOOLEAN,
-						},
-						stem: {
-							label: "Default word stemming",
-							type: PreferenceType.BOOLEAN,
-						},
-						whole: {
-							label: "Default whole word matching",
-							type: PreferenceType.BOOLEAN,
-						},
-						diacritics: {
-							label: "Default diacritics matching (ignore accents)",
-							type: PreferenceType.BOOLEAN,
-						},
-						regex: {
-							label: "Use custom regular expressions by default (advanced)",
-							type: PreferenceType.BOOLEAN,
-						},
-					},
-				},
-			},
+			],
 		},
 	];
 
 	return () => {
-		// TODO use storage.onChanged to refresh rather than manually updating page
-		loadOptions(getOptionsInfo());
+		loadPage(panelsInfo, {
+			titleText: "Options",
+			tabsFill: isWindowInFrame(),
+			borderShow: false,
+			brandShow: !isWindowInFrame(),
+			borderRadiusUse: !isWindowInFrame(),
+			height: isWindowInFrame() ? 570 : undefined,
+			width: isWindowInFrame() && useChromeAPI() ? 650 : undefined,
+		});
+	};
+})();
+
+(() => {
+	return () => {
+		loadOptions();
 	};
 })()();

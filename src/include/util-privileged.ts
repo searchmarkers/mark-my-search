@@ -177,6 +177,6 @@ const parseCommand = (commandString: string): CommandInfo => {
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const isTabResearchPage = async (tabId: number): Promise<boolean> => {
-	const { researchInstances } = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+	const { researchInstances } = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 	return (tabId in researchInstances) && researchInstances[tabId].enabled;
 };

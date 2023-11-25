@@ -1,57 +1,100 @@
 chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chrome.storage;
-chrome.storage.session ??= chrome.storage.local;
+
+enum StorageContext {
+	SCHEMA,
+	STORE,
+	INTERFACE,
+}
 
 type ResearchInstances = Record<number, ResearchInstance>
 type Engines = Record<string, Engine>
-type StorageSessionValues = {
-	[StorageSession.RESEARCH_INSTANCES]: ResearchInstances
-	[StorageSession.ENGINES]: Engines
+type BankValues = {
+	[BankKey.RESEARCH_INSTANCES]: ResearchInstances
+	[BankKey.ENGINES]: Engines
 }
-type StorageLocalValues = {
-	[StorageLocal.ENABLED]: boolean
-	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
+type StorageValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? {
+	w_value: T
+	useDefault?: true
+	sync?: true
+} : Context extends StorageContext.STORE ? {
+	w_value: T
+} : T
+type StorageListValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? {
+	listBase: Array<T>
+	sync?: true
+} : Context extends StorageContext.STORE ? {
+	w_listIn: Array<T>
+	w_listOut: Array<T>
+} : {
+	listBase: Array<T>
+	w_listIn: Array<T>
+	w_listOut: Array<T>
 }
-type StorageSyncValues = {
-	[StorageSync.AUTO_FIND_OPTIONS]: {
-		stoplist: Array<string>
-		searchParams: Array<string>
+type ConfigBarControlsShown<Context = StorageContext.INTERFACE> = {
+	toggleBarCollapsed: StorageValue<boolean, Context>
+	disableTabResearch: StorageValue<boolean, Context>
+	performSearch: StorageValue<boolean, Context>
+	toggleHighlights: StorageValue<boolean, Context>
+	appendTerm: StorageValue<boolean, Context>
+	replaceTerms: StorageValue<boolean, Context>
+}
+type ConfigBarLook<Context = StorageContext.INTERFACE> = {
+	showEditIcon: StorageValue<boolean, Context>
+	showRevealIcon: StorageValue<boolean, Context>
+	fontSize: StorageValue<string, Context>
+	opacityControl: StorageValue<number, Context>
+	opacityTerm: StorageValue<number, Context>
+	borderRadius: StorageValue<string, Context>
+}
+type ConfigHighlightMethod<Context = StorageContext.INTERFACE> = {
+	paintReplaceByClassic: StorageValue<boolean, Context>
+	paintUseExperimental: StorageValue<boolean, Context>
+	hues: StorageValue<Array<number>, Context>
+}
+type ConfigURLFilters<Context = StorageContext.INTERFACE> = {
+	noPageModify: StorageListValue<URLFilter[number], Context>
+	nonSearch: StorageListValue<URLFilter[number], Context>
+}
+type ConfigGroup<Context = StorageContext.INTERFACE> = Record<string,
+	StorageValue<unknown, Context> | StorageListValue<unknown, Context>
+>
+type ConfigValues<Context = StorageContext.INTERFACE> = {
+	[ConfigKey.THEME]: {
+		edition: StorageValue<ThemeEdition, Context>
+		variant: StorageValue<ThemeVariant, Context>
+		hue: StorageValue<number, Context>
+		contrast: StorageValue<number, Context>
+		lightness: StorageValue<number, Context>
+		saturation: StorageValue<number, Context>
+		fontScale: StorageValue<number, Context>
 	}
-	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
-	[StorageSync.SHOW_HIGHLIGHTS]: {
-		default: boolean
-		overrideSearchPages: boolean
-		overrideResearchPages: boolean
+	[ConfigKey.RESEARCH_INSTANCE_OPTIONS]: {
+		restoreLastInTab: StorageValue<boolean, Context>
 	}
-	[StorageSync.BAR_COLLAPSE]: {
-		fromSearch: boolean
-		fromTermListAuto: boolean
+	[ConfigKey.AUTO_FIND_OPTIONS]: {
+		enabled: StorageValue<boolean, Context>
+		stoplist: StorageListValue<string, Context>
+		searchParams: StorageListValue<string, Context>
 	}
-	[StorageSync.BAR_CONTROLS_SHOWN]: {
-		toggleBarCollapsed: boolean
-		disableTabResearch: boolean
-		performSearch: boolean
-		toggleHighlights: boolean
-		appendTerm: boolean
-		replaceTerms: boolean
+	[ConfigKey.MATCHING_DEFAULTS]: {
+		matchMode: StorageValue<MatchMode, Context>
 	}
-	[StorageSync.BAR_LOOK]: {
-		showEditIcon: boolean
-		showRevealIcon: boolean
-		fontSize: string
-		opacityControl: number
-		opacityTerm: number
-		borderRadius: string
+	[ConfigKey.SHOW_HIGHLIGHTS]: {
+		default: StorageValue<boolean, Context>
+		overrideSearchPages: StorageValue<boolean, Context>
+		overrideResearchPages: StorageValue<boolean, Context>
 	}
-	[StorageSync.HIGHLIGHT_METHOD]: {
-		paintReplaceByClassic: boolean
-		paintUseExperimental: boolean
-		hues: Array<number>
+	[ConfigKey.BAR_COLLAPSE]: {
+		fromSearch: StorageValue<boolean, Context>
+		fromTermListAuto: StorageValue<boolean, Context>
 	}
-	[StorageSync.URL_FILTERS]: {
-		noPageModify: URLFilter
-		nonSearch: URLFilter
+	[ConfigKey.BAR_CONTROLS_SHOWN]: ConfigBarControlsShown<Context>
+	[ConfigKey.BAR_LOOK]: ConfigBarLook<Context>
+	[ConfigKey.HIGHLIGHT_METHOD]: ConfigHighlightMethod<Context>
+	[ConfigKey.URL_FILTERS]: ConfigURLFilters<Context>
+	[ConfigKey.TERM_LIST_OPTIONS]: {
+		termLists: StorageValue<Array<TermList>, Context>
 	}
-	[StorageSync.TERM_LISTS]: Array<TermList>
 }
 type URLFilter = Array<{
 	hostname: string,
@@ -63,40 +106,33 @@ type TermList = {
 	urlFilter: URLFilter
 }
 
-type StorageAreaName = "session" | "local" | "sync"
-
-type StorageArea<Area extends StorageAreaName> =
-	Area extends "session" ? StorageSession :
-	Area extends "local" ? StorageLocal :
-	Area extends "sync" ? StorageSync :
-never;
-
-type StorageAreaValues<Area extends StorageAreaName> =
-	Area extends "session" ? StorageSessionValues :
-	Area extends "local" ? StorageLocalValues :
-	Area extends "sync" ? StorageSyncValues :
-never;
-
-enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
+enum BankKey {
 	RESEARCH_INSTANCES = "researchInstances",
 	ENGINES = "engines",
 }
 
-enum StorageLocal {
-	ENABLED = "enabled",
-	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
-}
-
-enum StorageSync {
+enum ConfigKey {
+	THEME = "theme",
+	RESEARCH_INSTANCE_OPTIONS = "researchInstanceOptions",
 	AUTO_FIND_OPTIONS = "autoFindOptions",
-	MATCH_MODE_DEFAULTS = "matchModeDefaults",
+	MATCHING_DEFAULTS = "matchingDefaults",
 	SHOW_HIGHLIGHTS = "showHighlights",
 	BAR_COLLAPSE = "barCollapse",
 	BAR_CONTROLS_SHOWN = "barControlsShown",
 	BAR_LOOK = "barLook",
 	HIGHLIGHT_METHOD = "highlightMethod",
 	URL_FILTERS = "urlFilters",
-	TERM_LISTS = "termLists",
+	TERM_LIST_OPTIONS = "termListOptions",
+}
+
+enum ThemeEdition {
+	CLASSIC = "classic",
+}
+
+enum ThemeVariant {
+	DARK = "dark",
+	LIGHT = "light",
+	AUTO = "auto",
 }
 
 interface ResearchInstance {
@@ -106,85 +142,138 @@ interface ResearchInstance {
 	enabled: boolean
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const configResolveList = <T>(listValue: StorageListValue<T, StorageContext.INTERFACE>): Array<T> =>
+	listValue.listBase.filter(value => !listValue.w_listOut.includes(value)).concat(listValue.w_listIn)
+;
+
 /**
  * The default options to be used for items missing from storage, or to which items may be reset.
- * Set to sensible options for a generic first-time user of the extension.
+ * Set to sensible values for a generic first-time user of the extension.
  */
-const optionsDefault: StorageSyncValues = {
-	autoFindOptions: {
-		searchParams: [ // Order of specificity, as only the first match will be used.
-			"search_terms", "search_term", "searchTerms", "searchTerm",
-			"search_query", "searchQuery",
-			"search",
-			"query",
-			"phrase",
-			"keywords", "keyword",
-			"terms", "term",
-			"text",
-			// Short forms:
-			"s", "q", "p", "k",
-			// Special cases:
-			"_nkw", // eBay
-			"wd", // Baidu
-		],
-		stoplist: [
-			"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
-			"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
-			"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
-		],
+const configDefault: ConfigValues<StorageContext.SCHEMA> = {
+	theme: {
+		edition: { w_value: ThemeEdition.CLASSIC },
+		variant: { w_value: ThemeVariant.DARK },
+		hue: { w_value: 284, useDefault: true },
+		contrast: { w_value: 1 },
+		lightness: { w_value: 1 },
+		saturation: { w_value: 1 },
+		fontScale: { w_value: 1 },
 	},
-	matchModeDefaults: {
-		regex: false,
-		case: false,
-		stem: true,
-		whole: false,
-		diacritics: false,
+	researchInstanceOptions: {
+		restoreLastInTab: { w_value: true },
+	},
+	autoFindOptions: {
+		enabled: { w_value: true },
+		// TODO allow specifying mappings of params to URL filters and whether the filter should be inverted?
+		searchParams: {
+			listBase: [ // Order of specificity, as only the first match will be used.
+				"search_terms", "search_term", "searchTerms", "searchTerm",
+				"search_query", "searchQuery",
+				"search",
+				"query",
+				"phrase",
+				"keywords", "keyword",
+				"terms", "term",
+				"text",
+				// Short forms:
+				"s", "q", "p", "k",
+				// Special cases:
+				"_nkw", // eBay
+				"wd", // Baidu
+			],
+			sync: true,
+		},
+		stoplist: {
+			listBase: [
+				"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
+				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
+				"them", "their", "theirs", "her", "hers", "him", "his", "it", "its", "me", "my", "one", "one's", "you", "your", "yours",
+			],
+			sync: true,
+		},
+	},
+	matchingDefaults: {
+		matchMode: {
+			w_value: {
+				regex: false,
+				case: false,
+				stem: true,
+				whole: false,
+				diacritics: true,
+			},
+			useDefault: true,
+		},
 	},
 	showHighlights: {
-		default: true,
-		overrideSearchPages: false,
-		overrideResearchPages: false,
+		default: { w_value: true, sync: true },
+		overrideSearchPages: { w_value: false, sync: true },
+		overrideResearchPages: { w_value: false, sync: true },
 	},
 	barCollapse: {
-		fromSearch: false,
-		fromTermListAuto: false,
+		fromSearch: { w_value: false, sync: true },
+		fromTermListAuto: { w_value: false, sync: true },
 	},
 	barControlsShown: {
-		toggleBarCollapsed: true,
-		disableTabResearch: true,
-		performSearch: false,
-		toggleHighlights: true,
-		appendTerm: true,
-		replaceTerms: true,
+		toggleBarCollapsed: { w_value: true, sync: true },
+		disableTabResearch: { w_value: true, sync: true },
+		performSearch: { w_value: false, sync: true },
+		toggleHighlights: { w_value: true, sync: true },
+		appendTerm: { w_value: true, sync: true },
+		replaceTerms: { w_value: true, sync: true },
 	},
 	barLook: {
-		showEditIcon: true,
-		showRevealIcon: true,
-		fontSize: "14.6px",
-		opacityControl: 0.8,
-		opacityTerm: 0.86,
-		borderRadius: "4px",
+		showEditIcon: { w_value: true, sync: true },
+		showRevealIcon: { w_value: true, sync: true },
+		fontSize: { w_value: "14.6px", useDefault: true, sync: true },
+		opacityControl: { w_value: 0.8, useDefault: true, sync: true },
+		opacityTerm: { w_value: 0.86, useDefault: true, sync: true },
+		borderRadius: { w_value: "4px", useDefault: true, sync: true },
 	},
 	highlightMethod: {
-		paintReplaceByClassic: true,
-		paintUseExperimental: false,
-		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
+		paintReplaceByClassic: { w_value: true },
+		paintUseExperimental: { w_value: false, useDefault: true },
+		hues: {
+			w_value: [ 300, 60, 110, 220, 30, 190, 0 ],
+			useDefault: true,
+			sync: true,
+		},
 	},
 	urlFilters: {
-		noPageModify: [],
-		nonSearch: [],
+		noPageModify: {
+			listBase: [],
+			sync: true
+		},
+		nonSearch: {
+			listBase: [],
+			sync: true,
+		},
 	},
-	termLists: [],
+	termListOptions: {
+		termLists: {
+			w_value: [],
+			sync: true,
+		},
+	},
 };
 
 /**
- * The working cache of items retrieved from storage since the last background startup.
+ * The working cache of items retrieved from the volatile bank since the last background startup.
  */
-const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> | Record<never, never>> = {
-	session: {},
-	local: {},
-	sync: {},
+const bankCache: Partial<BankValues> = {};
+const bankDefault: BankValues = {
+	researchInstances: [],
+	engines: {},
 };
+
+/**
+ * The working cache of items retrieved from the persistent config since the last background startup.
+ */
+const configCache: Partial<ConfigValues<StorageContext.STORE>> = {};
+
+const configCacheKeysLocal: Set<string> = new Set;
+const configCacheKeysSync: Set<string> = new Set;
 
 /**
  * Gets an object of key-value pairs corresponding to a set of keys in the given area of storage.
@@ -193,61 +282,110 @@ const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> |
  * @param keys The keys corresponding to the entries to retrieve.
  * @returns A promise resolving to an object of storage entries.
  */
+//
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
-	Promise<StorageAreaValues<Area>> =>
-{
-	if (keys && keys.every(key => storageCache[area][key as string] !== undefined)) {
-		return { ...storageCache[area] } as StorageAreaValues<Area>;
-	}
-	const store = await chrome.storage[area].get(keys) as StorageAreaValues<Area>;
-	const storeAsSession = store as StorageAreaValues<"session">;
-	if (storeAsSession.engines) {
-		const engines = storeAsSession.engines as Engines;
-		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
-	}
-	Object.entries(store).forEach(([ key, value ]) => {
-		storageCache[area][key] = value;
+const bankSet = async (bank: Partial<BankValues>) => {
+	Object.entries(bank).forEach(([ key, value ]) => {
+		bankCache[key] = value;
 	});
-	return { ...store };
+	await chrome.storage.session.set(bank);
 };
 
-/**
- * 
- * @param area 
- * @param store 
- */
-const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
-	Object.entries(store).forEach(([ key, value ]) => {
-		storageCache[area][key] = value;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const bankGet = async <T extends BankKey>(keys: Array<T>): Promise<{ [P in T]: BankValues[P] }> => {
+	// TODO investigate flattening storage of research instances (one level)
+	const bank = {} as { [P in T]: BankValues[P] };
+	const keysToGet: Array<BankKey> = keys.filter(key => {
+		if (bankCache[key] !== undefined) {
+			bank[key] = bankCache[key] as BankValues[T];
+			return false;
+		}
+		return true;
 	});
-	await chrome.storage[area].set(store);
+	chrome.storage.session.get(keysToGet).then((bankStore: BankValues) => {
+		keysToGet.forEach(<K extends BankKey>(key: K) => {
+			bankCache[key] = bankStore[key] ?? bankDefault[key];
+		});
+	});
+	return bank;
 };
 
-/**
- * Sets internal storage to its default working values.
- */
+type ConfigAreaName = "local" | "sync"
+
+const configAreaNames: Array<ConfigAreaName> = [ "local", "sync" ];
+const configValueGetAreaName = (sync?: boolean): ConfigAreaName => sync ? "sync" : "local";
+
+// NOTE: need to consider how to deal with timings as "local" and "sync" are set separately; default value considerations etc.
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const storageInitialize = async () => {
-	const local = await storageGet("local");
-	const localOld = { ...local };
-	const toRemove: Array<string> = [];
-	if (objectFixWithDefaults(local, {
-		enabled: true,
-		followLinks: true,
-		persistResearchInstances: true,
-	} as StorageLocalValues, toRemove)) {
-		console.warn("Storage 'local' cleanup rectified issues. Results:", localOld, local); // Use standard logging system?
-	}
-	await storageSet("local", local);
-	if (chrome.storage["session"] !== chrome.storage.local) { // Temporary fix. Without the 'session' API, its values may be stored in 'local'.
-		await chrome.storage.local.remove(toRemove);
-	}
-	await storageSet("session", {
-		researchInstances: {},
-		engines: {},
+const configSet = async (config: Partial<ConfigValues>) => {
+	const storageSends: Record<ConfigAreaName, Array<ConfigKey>> = { local: [], sync: [] };
+	const storageFetchSends: Record<ConfigAreaName, Array<ConfigKey>> = { local: [], sync: [] };
+	Object.entries(config).forEach(([ configKey, configGroup ]: [ ConfigKey, ConfigValues[ConfigKey] ]) => {
+		const configGroupDefault = configDefault[configKey] as ConfigGroup<StorageContext.SCHEMA>;
+		if (!assert(typeof configGroupDefault !== "object", "config group could not be set", "config key is invalid", { configKey }))
+			return;
+		const configGroupCache = ((configCache[configKey] as unknown)
+			??= {}) as Partial<ConfigValues<StorageContext.STORE>[ConfigKey]>;
+		Object.entries(configGroup).forEach(([ key, value ]) => {
+			const configValueDefault = configGroupDefault[key];
+			if (!assert(typeof configValueDefault !== "object", "config value could not be set", "key is invalid", { key }))
+				return;
+			configGroupCache[key] = value;
+		});
+		configAreaNames.forEach(areaName => {
+			(Object.entries(configGroupDefault).some(([ key, valueDefault ]) =>
+				configValueGetAreaName(valueDefault.sync) === areaName && configGroupCache[key] !== undefined
+			) ? storageFetchSends : storageSends)[areaName].push(configKey);
+		});
 	});
+	const storageOperations = Object.entries(storageFetchSends)
+		.filter(({ 1: areaFetches }) => Object.keys(areaFetches).length)
+		.map(([ areaName, areaFetches ]: [ ConfigAreaName, Array<ConfigKey> ]) =>
+			chrome.storage[areaName].get(Object.keys(areaFetches)).then(configGroup => {
+				// TODO needs plenty of safeguards
+				//Object.entries(configGroup).forEach(([ key, value ]) => {
+
+				//})
+				//storageOperations.push(chrome.storage[areaName].set());
+			})
+		).concat(Object.entries(storageSends)
+			.filter(({ 1: areaFetches }) => Object.keys(areaFetches).length)
+			.map(([ areaName, areaFetches ]: [ ConfigAreaName, Array<ConfigKey> ]) =>
+				chrome.storage[areaName].set(Object.keys(areaFetches))
+			)
+		);
+	for (const promise of storageOperations) await promise;
 };
+
+/*const configGet = async <T extends ConfigKey>(keys: Array<T>): Promise<{ [P in T]: ConfigValues[P] }> => {
+	await configCachePopulate(keys);
+	const config = {} as { [P in T]: ConfigValues[P] };
+	keys.forEach(key1 => {
+		if ((configDefault[key1] as StorageValue<unknown, true, true>).w_value !== undefined) {
+			(config[key1] as StorageValue<unknown, false>) = (configCache[key1] as StorageValue<unknown>).w_value;
+		} else {
+			const config1 = {} as Record<string, StorageValue<unknown, false>>;
+			(config[key1] as typeof config1) = config1;
+			Object.keys(configDefault[key1]).forEach(key2 => {
+				config1[key2] = (configCache[key1] as Record<string, StorageValue<unknown>>)[key2].w_value;
+			});
+		}
+	});
+	return config;
+};*/
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const configGet = async <T extends ConfigKey>(keys: Array<T>): Promise<{ [P in T]: ConfigValues[P] }> =>
+	Object.fromEntries(keys.map(configKey =>
+		[ configKey, Object.fromEntries(Object.entries(configDefault[configKey] as ConfigGroup)
+			.map(([ key, valueDefault ]: [ string, Record<string, unknown> ]) =>
+				[ key, ("w_value" in valueDefault) ? valueDefault.w_value : { listBase: valueDefault.listBase, w_listIn: [], w_listOut: [] } ]
+			)
+		) ]
+	)) as { [P in T]: ConfigValues[P] }
+;
 
 /**
  * Makes an object conform to an object of defaults.
@@ -258,6 +396,7 @@ const storageInitialize = async () => {
  * @param atTopLevel Indicates whether or not the function is currently at the top level of the object.
  * @returns Whether or not any fixes were applied.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const objectFixWithDefaults = (
 	object: Record<string, unknown>,
 	defaults: Record<string, unknown>,
@@ -293,31 +432,45 @@ const objectFixWithDefaults = (
 	return hasModified;
 };
 
-/**
- * Checks persistent options storage for unwanted or misconfigured values, then restores it to a normal state.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const optionsRepair = async () => {
-	const sync = await storageGet("sync");
-	const syncOld = { ...sync };
-	const toRemove = [];
-	if (objectFixWithDefaults(sync, optionsDefault, toRemove)) {
-		console.warn("Storage 'sync' cleanup rectified issues. Results:", syncOld, sync); // Use standard logging system?
-	}
-	storageSet("sync", sync);
-	await chrome.storage.sync.remove(toRemove);
-};
-
 chrome.storage.onChanged.addListener((changes, areaName) => {
-	if (areaName === "managed") {
-		return;
-	}
-	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
-		areaName = "session";
-	}
-	Object.entries(changes).forEach(([ key, value ]) => {
-		storageCache[areaName][key] = value.newValue;
-	});
+	// TODO check that the change was not initiated from the same script
+	switch (areaName) {
+	case "session": {
+		Object.entries(changes).forEach(([ key, value ]) => {
+			bankCache[key] = value.newValue;
+		});
+		break;
+	} case "local":
+	case "sync": {
+		const [ keyCache, keyCacheOther ] = areaName === "local"
+			? [ configCacheKeysLocal, configCacheKeysSync ]
+			: [ configCacheKeysSync, configCacheKeysLocal ];
+		console.log(changes);
+		Object.keys(changes).forEach(key1 => {
+			if (configDefault[key1].w_value) {
+				if (changes[key1].newValue?.w_value !== undefined) {
+					(configCache[key1] as StorageValue<unknown>) = {
+						w_value: changes[key1].newValue.w_value,
+					};
+					keyCache.add(key1);
+					keyCacheOther.delete(key1);
+				}
+			} else {
+				configCache[key1] ??= {};
+				Object.keys(changes[key1].newValue ?? {}).forEach(key2 => {
+					if (changes[key1].newValue[key2]?.w_value !== undefined) {
+						(configCache[key1][key2] as StorageValue<unknown>) = {
+							w_value: changes[key1].newValue[key2].w_value,
+						};
+						const key2Full = `${key1}_${key2}`;
+						keyCache.add(key2Full);
+						keyCacheOther.delete(key2Full);
+					}
+				});
+			}
+		});
+		break;
+	}}
 });
 
 /*const updateCache = (changes: Record<string, chrome.storage.StorageChange>, areaName: StorageAreaName | "managed") => {
