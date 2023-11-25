@@ -1027,18 +1027,18 @@ const insertTermInput = (() => {
 				input.select();
 			}
 		});
-		input.addEventListener("focusin", () => {
-			setTimeout(() => {
-				input.select();
-			});
-		});
 		// Potential future improvement to mitigate cross-browser quirk where the first time an input is focused, it cannot be selected.
-		//input.addEventListener("focusout", event => {
-		//	const newFocus = event.relatedTarget as Element | null;
-		//	if (newFocus?.closest(`#${EleID.BAR}`)) {
-		//		input.classList.add(EleClass.WAS_FOCUSED);
-		//	}
+		//input.addEventListener("focusin", () => {
+		//	setTimeout(() => {
+		//		input.select();
+		//	});
 		//});
+		input.addEventListener("focusout", event => {
+			const newFocus = event.relatedTarget as Element | null;
+			if (newFocus?.closest(`#${EleID.BAR}`)) {
+				input.classList.add(EleClass.WAS_FOCUSED);
+			}
+		});
 		let inputSize = 0;
 		new ResizeObserver(entries => {
 			const inputSizeNew = entries[0]?.contentBoxSize[0]?.inlineSize ?? 0;

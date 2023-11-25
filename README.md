@@ -1,8 +1,6 @@
-__Note from ator-dev:__ Mark My Search may appear to be slowing down, despite having several ongoing mini-projects and issues. This is not the case, but I will not be committing to it for nearly 2 months. After that period has expired, efforts will be renewed. I am still a student and have entered a very important period, so please bear with me while I deal with my own unrelated work.
+__Note from ator-dev:__ Sorry for the dry and verbose README. Since I'm restarting work on this project, I'll (hopefully) get around to making a new one.
 
-I am aware that this README is very outdated. A fresh one to reflect our aspirations is coming in the future. Please get started in Discussions or contribute an idea in Issues in the meantime!
-
-Any pull requests submitted in this time are, as ever, gratefully accepted and will be reviewed according to my spare time.
+Please feel free to contribute to the extension!
 
 # Mark My Search
 

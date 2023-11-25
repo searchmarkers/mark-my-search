@@ -1508,6 +1508,10 @@ textarea
 		height?: number
 		width?: number
 	}) => {
+		const viewportMeta = document.createElement("meta");
+		viewportMeta.name = "viewport";
+		viewportMeta.content = "width=device-width, initial-scale=1";
+		document.head.appendChild(viewportMeta);
 		const title = document.createElement("title");
 		title.text = `${info.titleText} - ${getName()}`;
 		document.head.appendChild(title);
