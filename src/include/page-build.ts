@@ -510,11 +510,11 @@ const loadPage = (() => {
 		};
 		style.textContent =
 `:root {
-	--hue: ${configDefault.theme.hue.wValue};
-	--contrast: ${configDefault.theme.contrast.wValue};
-	--lightness: ${configDefault.theme.lightness.wValue};
-	--saturation: ${configDefault.theme.saturation.wValue};
-	--font-scale: ${configDefault.theme.fontScale.wValue};
+	--hue: ${configDefault.theme.hue.w_value};
+	--contrast: ${configDefault.theme.contrast.w_value};
+	--lightness: ${configDefault.theme.lightness.w_value};
+	--saturation: ${configDefault.theme.saturation.w_value};
+	--font-scale: ${configDefault.theme.fontScale.w_value};
 }
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;

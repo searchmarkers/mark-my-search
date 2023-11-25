@@ -28,16 +28,22 @@ const getControlOptionTemp = (
 		getType: () => inputType,
 		onLoad: async setValue => {
 			const config = await configGet([ configKey ]);
-			setValue(config[configKey][key]);
+			const value = config[configKey][key];
+			setValue(((typeof value === "object" && "w_listIn" in value) ? value.w_listIn : value));
 		},
 		onChange: async (value, objectIndex, containerIndex, store) => {
 			if (store) {
 				const config = await configGet([ configKey ]);
-				config[configKey][key] = (inputType === InputType.TEXT_ARRAY)
+				const valueTransformed = (inputType === InputType.TEXT_ARRAY)
 					? (value as unknown as string).split(",")
 					: inputType === InputType.TEXT_NUMBER
 						? parseFloat(value as unknown as string)
 						: value;
+				if (typeof config[configKey][key] === "object" && "w_listIn" in config[configKey][key]) {
+					config[configKey][key].w_listIn = valueTransformed;
+				} else {
+					config[configKey][key] = valueTransformed;
+				}
 				await configSet(config);
 			}
 			if (details?.onChange) {
@@ -161,12 +167,12 @@ const loadOptions = (() => {
 								list: {
 									getArray: () =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
+											sync.urlFilters.noPageModify.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.noPageModify = array.map(value => {
+											sync.urlFilters.noPageModify.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
@@ -431,12 +437,12 @@ const loadOptions = (() => {
 								list: {
 									getArray: () =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
+											sync.urlFilters.nonSearch.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.nonSearch = array.map(value => {
+											sync.urlFilters.nonSearch.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
@@ -548,31 +554,31 @@ PAINT
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Case sensitivity" },
-							ConfigKey.MATCH_MODE_DEFAULTS,
+							ConfigKey.MATCHING_DEFAULTS,
 							"case",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Word stemming" },
-							ConfigKey.MATCH_MODE_DEFAULTS,
+							ConfigKey.MATCHING_DEFAULTS,
 							"stem",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Whole word matching" },
-							ConfigKey.MATCH_MODE_DEFAULTS,
+							ConfigKey.MATCHING_DEFAULTS,
 							"whole",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Diacritics sensitivity" },
-							ConfigKey.MATCH_MODE_DEFAULTS,
+							ConfigKey.MATCHING_DEFAULTS,
 							"diacritics",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Custom regular expression (regex)" },
-							ConfigKey.MATCH_MODE_DEFAULTS,
+							ConfigKey.MATCHING_DEFAULTS,
 							"regex",
 							InputType.CHECKBOX,
 						),
@@ -590,7 +596,7 @@ PAINT
 			brandShow: !isWindowInFrame(),
 			borderRadiusUse: !isWindowInFrame(),
 			height: isWindowInFrame() ? 570 : undefined,
-			width: isWindowInFrame() ? 650 : undefined,
+			width: isWindowInFrame() && useChromeAPI() ? 650 : undefined,
 		});
 	};
 })();

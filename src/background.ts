@@ -56,7 +56,7 @@ const createResearchInstance = async (args: {
 const getSearchQuery = async (url: string): Promise<string> =>
 	configGet([ ConfigKey.AUTO_FIND_OPTIONS ]).then(sync =>
 		new URL(url).searchParams.get(
-			sync.autoFindOptions.searchParams.find(param => new URL(url).searchParams.has(param)) ?? ""
+			configResolveList(sync.autoFindOptions.searchParams).find(param => new URL(url).searchParams.has(param)) ?? ""
 		) ?? ""
 	).catch(() => {
 		log("search query extraction fail", "", { url });
@@ -108,7 +108,7 @@ const isUrlFilteredIn = (() => {
  */
 const isUrlPageModifyAllowed = (urlString: string, urlFilters: ConfigURLFilters) => {
 	try {
-		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
+		return !isUrlFilteredIn(new URL(urlString), configResolveList(urlFilters.noPageModify));
 	} catch {
 		return true;
 	}
@@ -122,7 +122,7 @@ const isUrlPageModifyAllowed = (urlString: string, urlFilters: ConfigURLFilters)
  * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
  */
 const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: ConfigURLFilters) =>
-	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
+	!isUrlFilteredIn(new URL(urlString), configResolveList(urlFilters.nonSearch))
 ;
 
 /**
@@ -334,9 +334,9 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 		ConfigKey.BAR_CONTROLS_SHOWN,
 		ConfigKey.BAR_LOOK,
 		ConfigKey.HIGHLIGHT_METHOD,
-		ConfigKey.MATCH_MODE_DEFAULTS,
+		ConfigKey.MATCHING_DEFAULTS,
 		ConfigKey.URL_FILTERS,
-		ConfigKey.TERM_LISTS,
+		ConfigKey.TERM_LIST_OPTIONS,
 	]);
 	const bank = await bankGet([
 		BankKey.RESEARCH_INSTANCES,
@@ -346,7 +346,8 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 		? await isTabSearchPage(bank.engines, urlString)
 		: { isSearch: false };
 	searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, config.urlFilters);
-	const termsFromLists = config.termLists.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
+	const termsFromLists = config.termListOptions.termLists
+		.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 		.flatMap(termList => termList.terms);
 	const getTermsAdditionalDistinct = (terms: MatchTerms, termsExtra: MatchTerms) =>
 		termsExtra.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
@@ -356,7 +357,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
 	if (searchDetails.isSearch) {
 		const researchInstance = await createResearchInstance({ url: {
-			stoplist: config.autoFindOptions.stoplist,
+			stoplist: configResolveList(config.autoFindOptions.stoplist),
 			url: urlString,
 			engine: searchDetails.engine,
 		} });
@@ -397,7 +398,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			barControlsShown: config.barControlsShown,
 			barLook: config.barLook,
 			highlightMethod: config.highlightMethod,
-			matchMode: config.matchModeDefaults,
+			matchMode: config.matchingDefaults.matchMode,
 			useClassicHighlighting: config.highlightMethod.paintReplaceByClassic,
 			enablePageModify: isUrlPageModifyAllowed(urlString, config.urlFilters),
 		});
@@ -461,7 +462,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			ConfigKey.SHOW_HIGHLIGHTS,
 			ConfigKey.BAR_COLLAPSE,
 			ConfigKey.URL_FILTERS,
-			ConfigKey.TERM_LISTS,
+			ConfigKey.TERM_LIST_OPTIONS,
 		]);
 		const bank = await bankGet([
 			BankKey.RESEARCH_INSTANCES,
@@ -471,7 +472,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			? await isTabSearchPage(bank.engines, urlString)
 			: { isSearch: false };
 		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, config.urlFilters);
-		const termsFromLists = config.termLists
+		const termsFromLists = config.termListOptions.termLists
 			.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 			.flatMap(termList => termList.terms);
 		const getTermsAdditionalDistinct = (terms: MatchTerms, termsExtra: MatchTerms) => termsExtra
@@ -484,7 +485,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 		// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
 		if (searchDetails.isSearch) {
 			const researchInstance = await createResearchInstance({ url: {
-				stoplist: config.autoFindOptions.stoplist,
+				stoplist: configResolveList(config.autoFindOptions.stoplist),
 				url: urlString,
 				engine: searchDetails.engine,
 			} });
@@ -775,7 +776,7 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 			ConfigKey.BAR_CONTROLS_SHOWN,
 			ConfigKey.BAR_LOOK,
 			ConfigKey.HIGHLIGHT_METHOD,
-			ConfigKey.MATCH_MODE_DEFAULTS,
+			ConfigKey.MATCHING_DEFAULTS,
 			ConfigKey.URL_FILTERS,
 		]));
 		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
@@ -789,7 +790,7 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				barControlsShown: config.barControlsShown,
 				barLook: config.barLook,
 				highlightMethod: config.highlightMethod,
-				matchMode: config.matchModeDefaults,
+				matchMode: config.matchingDefaults.matchMode,
 				useClassicHighlighting: config.highlightMethod.paintReplaceByClassic,
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", config.urlFilters),
 			};

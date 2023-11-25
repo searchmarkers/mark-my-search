@@ -17,12 +17,12 @@ const loadPopup = (() => {
 		},
 		input: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
-				const config = await configGet([ ConfigKey.TERM_LISTS ]);
-				setChecked(config.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
+				const config = await configGet([ ConfigKey.TERM_LIST_OPTIONS ]);
+				setChecked(config.termListOptions.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
 			onChange: (checked, objectIndex, containerIndex) => {
-				configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
+				configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+					sync.termListOptions.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
 					configSet(sync);
 				});
 			},
@@ -247,12 +247,12 @@ const loadPopup = (() => {
 								list: {
 									getArray: () =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
+											sync.urlFilters.noPageModify.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.noPageModify = array.map(value => {
+											sync.urlFilters.noPageModify.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
@@ -281,12 +281,12 @@ const loadPopup = (() => {
 								list: {
 									getArray: () =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
-											sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
+											sync.urlFilters.nonSearch.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
-											sync.urlFilters.nonSearch = array.map(value => {
+											sync.urlFilters.nonSearch.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
@@ -320,13 +320,13 @@ const loadPopup = (() => {
 							className: "temp-class",
 							list: {
 								getLength: () =>
-									configGet([ ConfigKey.TERM_LISTS ]).then(sync =>
-										sync.termLists.length
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync =>
+										sync.termListOptions.termLists.length
 									)
 								,
 								pushWithName: name =>
-									configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-										sync.termLists.push({
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+										sync.termListOptions.termLists.push({
 											name,
 											terms: [],
 											urlFilter: [],
@@ -335,8 +335,8 @@ const loadPopup = (() => {
 									})
 								,
 								removeAt: index =>
-									configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-										sync.termLists.splice(index, 1);
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+										sync.termListOptions.termLists.splice(index, 1);
 										configSet(sync);
 									})
 								,
@@ -344,13 +344,13 @@ const loadPopup = (() => {
 							label: {
 								text: "",
 								getText: index =>
-									configGet([ ConfigKey.TERM_LISTS ]).then(sync =>
-										sync.termLists[index] ? sync.termLists[index].name : ""
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync =>
+										sync.termListOptions.termLists[index] ? sync.termListOptions.termLists[index].name : ""
 									)
 								,
 								setText: (text, index) =>
-									configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-										sync.termLists[index].name = text;
+									configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+										sync.termListOptions.termLists[index].name = text;
 										configSet(sync);
 									})
 								,
@@ -362,13 +362,14 @@ const loadPopup = (() => {
 								className: "term",
 								list: {
 									getArray: index =>
-										configGet([ ConfigKey.TERM_LISTS ]).then(sync =>
-											sync.termLists[index].terms as unknown as Array<Record<string, unknown>>
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync =>
+											sync.termListOptions.termLists[index].terms as unknown as Array<Record<string, unknown>>
 										)
 									,
 									setArray: (array, index) =>
-										configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-											sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+											sync.termListOptions.termLists[index].terms =
+												array as unknown as typeof sync["termListOptions"]["termLists"][number]["terms"];
 											configSet(sync);
 										})
 									,
@@ -394,12 +395,13 @@ const loadPopup = (() => {
 													placeholder: "keyword",
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
-														const config = await configGet([ ConfigKey.TERM_LISTS ]);
-														setText(config.termLists[containerIndex].terms[objectIndex] ? config.termLists[containerIndex].terms[objectIndex].phrase : "");
+														const config = await configGet([ ConfigKey.TERM_LIST_OPTIONS ]);
+														setText(config.termListOptions.termLists[containerIndex].terms[objectIndex]
+															? config.termListOptions.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
-														configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].phrase = text;
+														configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+															sync.termListOptions.termLists[containerIndex].terms[objectIndex].phrase = text;
 															configSet(sync);
 														});
 													},
@@ -423,13 +425,13 @@ const loadPopup = (() => {
 								className: "temp-class",
 								list: {
 									getArray: index =>
-										configGet([ ConfigKey.TERM_LISTS ]).then(sync => //
-											sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => //
+											sync.termListOptions.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: (array, index) =>
-										configGet([ ConfigKey.TERM_LISTS ]).then(sync => {
-											sync.termLists[index].urlFilter = array.map(value => {
+										configGet([ ConfigKey.TERM_LIST_OPTIONS ]).then(sync => {
+											sync.termListOptions.termLists[index].urlFilter = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
@@ -451,7 +453,7 @@ const loadPopup = (() => {
 										if (tab.id === undefined) {
 											return;
 										}
-										const config = await configGet([ ConfigKey.TERM_LISTS ]);
+										const config = await configGet([ ConfigKey.TERM_LIST_OPTIONS ]);
 										const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 										const researchInstance = bank.researchInstances[tab.id];
 										if (researchInstance) {
@@ -461,11 +463,11 @@ const loadPopup = (() => {
 										messageSendBackground({
 											terms: researchInstance
 												? researchInstance.terms.concat(
-													config.termLists[index].terms.filter(termFromList =>
+													config.termListOptions.termLists[index].terms.filter(termFromList =>
 														!researchInstance.terms.find(term => term.phrase === termFromList.phrase)
 													)
 												)
-												: config.termLists[index].terms,
+												: config.termListOptions.termLists[index].terms,
 											termsSend: true,
 											toggle: {
 												highlightsShownOn: true,
