@@ -43,7 +43,7 @@ type StorageSyncValues = {
 		borderRadius: string
 	}
 	[StorageSync.HIGHLIGHT_METHOD]: {
-		paintReplaceByClassic: boolean
+		paintReplaceByElement: boolean
 		paintUseExperimental: boolean
 		hues: Array<number>
 	}
@@ -166,7 +166,7 @@ const optionsDefault: StorageSyncValues = {
 		borderRadius: "4px",
 	},
 	highlightMethod: {
-		paintReplaceByClassic: true,
+		paintReplaceByElement: true,
 		paintUseExperimental: false,
 		hues: [ 300, 60, 110, 220, 30, 190, 0 ],
 	},

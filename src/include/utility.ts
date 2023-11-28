@@ -5,6 +5,9 @@ const useChromeAPI = () =>
 	!this.browser
 ;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
+
 /**
  * Gets a JSON-stringified form of the given object for use in logging.
  * @param object An object.
@@ -167,7 +170,7 @@ type HighlightMessage = {
 	terms?: MatchTerms
 	termsOnHold?: MatchTerms
 	deactivate?: boolean
-	useClassicHighlighting?: boolean
+	useElementHighlighting?: boolean
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	toggleBarCollapsedOn?: boolean

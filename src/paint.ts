@@ -18,7 +18,7 @@ type PaintWorkletType = {
 		properties: { get: (property: string) => { toString: () => string } },
 	) {
 		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles").toString() || "{}") as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--markmysearch-boxes").toString() || "[]") as Array<HighlightBox>;
+		const boxes = JSON.parse(properties.get("--markmysearch-boxes").toString() || "[]") as Array<Paint.Box>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.token];
 			if (!style) {

@@ -401,7 +401,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			barLook: sync.barLook,
 			highlightMethod: sync.highlightMethod,
 			matchMode: sync.matchModeDefaults,
-			useClassicHighlighting: sync.highlightMethod.paintReplaceByClassic,
+			useElementHighlighting: sync.highlightMethod.paintReplaceByElement,
 			enablePageModify: isUrlPageModifyAllowed(urlString, sync.urlFilters),
 		});
 		session.researchInstances[tabId] = researchInstance;
@@ -792,7 +792,7 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				barLook: sync.barLook,
 				highlightMethod: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
-				useClassicHighlighting: sync.highlightMethod.paintReplaceByClassic,
+				useElementHighlighting: sync.highlightMethod.paintReplaceByElement,
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
 			};
 		} else {

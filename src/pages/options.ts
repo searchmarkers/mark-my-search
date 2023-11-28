@@ -284,14 +284,14 @@ label[for]:hover
 				highlightMethod: {
 					label: "Keyword highlighting method and style",
 					preferences: {
-						paintReplaceByClassic: {
-							label: "Use CLASSIC highlighting (hover for details)",
+						paintReplaceByElement: {
+							label: "Use ELEMENT highlighting (hover for details)",
 							tooltip:
 `Mark My Search has two highlighting methods. \
-CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
+ELEMENT is a powerful variant of the model used by traditional highlighter extensions. \
 PAINT is an alternate model invented for Mark My Search.
 
-CLASSIC
+ELEMENT
 • Fairly efficient at idle time. Once highlighted, text is never re-highlighted until it changes.
 	• Rendering is expensive, and makes the page sluggish when there are many highlights.
 • Not efficient at matching time. The page can freeze for several seconds if many highlights are inserted.
@@ -312,7 +312,7 @@ PAINT
 `Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
 Current effects:
 
-CLASSIC
+ELEMENT
 • None.
 
 PAINT
