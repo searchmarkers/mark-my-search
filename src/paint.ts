@@ -1,10 +1,4 @@
-type PaintWorkletType = {
-	devicePixelRatio: number
-	registerPaint: (name: string, classRef: unknown) => void
-	addModule: (moduleURL: string, options?: { credentials: "omit" | "same-origin" | "include" }) => void
-}
-
-(globalThis as unknown as PaintWorkletType).registerPaint("markmysearch-highlights", class {
+registerPaint("markmysearch-highlights", class {
 	static get inputProperties () {
 		return [
 			"--markmysearch-styles",
@@ -13,12 +7,12 @@ type PaintWorkletType = {
 	}
 
 	paint (
-		ctx: CanvasRenderingContext2D,
-		size: { width: number, height: number },
-		properties: { get: (property: string) => { toString: () => string } },
+		ctx: PaintRenderingContext2D,
+		geom: PaintSize,
+		properties: StylePropertyMapReadOnly,
 	) {
-		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles").toString() || "{}") as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--markmysearch-boxes").toString() || "[]") as Array<Paint.Box>;
+		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles")?.toString() || "{}") as TermSelectorStyles;
+		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() || "[]") as Array<Paint.Box>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.token];
 			if (!style) {

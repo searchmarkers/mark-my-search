@@ -830,7 +830,7 @@ namespace Toolbar {
 	 * Updates the look of a term control to reflect whether or not it occurs within the document.
 	 * @param term A term to update the term control status for.
 	 */
-	export const updateTermOccurringStatus = (term: MatchTerm, highlighter: HighlighterInterface) => {
+	export const updateTermOccurringStatus = (term: MatchTerm, highlighter: AbstractEngine) => {
 		const controlPad = (getControl(term) as HTMLElement)
 			.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
 		controlPad.classList.toggle(EleClass.DISABLED, !highlighter.getTermOccurrenceCount(term, true));
@@ -1662,7 +1662,7 @@ enum HighlighterProcess {
 	REFRESH_INDICATORS,
 }
 
-interface HighlighterInterface {
+interface AbstractEngine {
 	// TODO document each
 	getMiscCSS: () => string
 	getTermHighlightsCSS: () => string
@@ -1742,7 +1742,7 @@ interface HighlighterInterface {
 	) => number
 }
 
-type Highlighter = { current: HighlighterInterface }
+type Highlighter = { current: AbstractEngine }
 
 /**
  * Gets the containing block of an element.
@@ -1856,7 +1856,7 @@ namespace Elem {
 	}
 }
 
-class ElementEngine implements HighlighterInterface {
+class ElementEngine implements AbstractEngine {
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
 
@@ -2531,21 +2531,19 @@ namespace Paint {
 	}
 }
 
-class PaintEngine implements HighlighterInterface {
-	paintWorklet = CSS["paintWorklet"] as PaintWorkletType | undefined;
-
+class PaintEngine implements AbstractEngine {
 	/**
 	 * Whether the experimental `element()` CSS function should be used over the preferred `paint()` function (Painting API).
 	 * Painting is faster and simpler to implement, but is not supported by Firefox or Safari as of 2022-12-01.
 	 * Element backgrounds can be expensive but are hugely versatile for relatively low cost, and are supported only by Firefox.
 	 * This applies to the PAINT algorithm only, with no bearing on ELEMENT.
 	 */
-	usePaintingFallback = !this.paintWorklet;
+	usePaintingFallback = !CSS.paintWorklet;
 	/**
 	 * Whether experimental browser technologies (namely paint/element) should be used over SVG rendering
 	 * when using the PAINT algorithm.
 	 */
-	useExperimental = false;//window[WindowVariable.CONFIG_HARD].paintUseExperimental;
+	useExperimental = false;
 
 	static paintModuleAdded = false;
 
@@ -2581,7 +2579,7 @@ class PaintEngine implements HighlighterInterface {
 		this.visibilityObserver = visibilityObserver;
 		this.useExperimental = useExperimental;
 		if (!this.usePaintingFallback && !PaintEngine.paintModuleAdded) {
-			this.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
+			CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
 			PaintEngine.paintModuleAdded = true;
 		}
 	}
@@ -2787,10 +2785,8 @@ class PaintEngine implements HighlighterInterface {
 		terms.forEach(term => Toolbar.updateTermOccurringStatus(term, this));
 	}
 
-	undoHighlights (terms?: MatchTerms) {
-		if (terms) {
-			this.boxesInfoRemoveForTerms(terms);
-		}
+	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+		this.boxesInfoRemoveForTerms(terms, root);
 	}
 
 	terminate () {
@@ -3040,16 +3036,16 @@ class PaintEngine implements HighlighterInterface {
 	 * @param terms Terms for which to remove highlights. If left empty, all highlights are removed.
 	 * @param root A root node under which to remove highlights.
 	 */
-	boxesInfoRemoveForTerms (terms: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+	boxesInfoRemoveForTerms (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+		const editFlow: (flow: Paint.Flow) => void = terms
+			? flow => flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token))
+			: flow => flow.boxesInfo = [];
 		for (const element of Array.from(root.querySelectorAll("[markmysearch-h_id]"))) {
 			const filterBoxesInfo = (element: Element) => {
 				const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-				if (!elementInfo) {
+				if (!elementInfo)
 					return;
-				}
-				elementInfo.flows.forEach(flow => {
-					flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token));
-				});
+				elementInfo.flows.forEach(editFlow);
 				Array.from(element.children).forEach(child => filterBoxesInfo(child));
 			};
 			filterBoxesInfo(element);
