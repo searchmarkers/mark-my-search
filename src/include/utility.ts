@@ -18,11 +18,23 @@ const compatibility = {
 	highlight: {
 		paintEngine: {
 			paintMethod: !!CSS.paintWorklet,
-			elementMethod: !!document["mozSetImageElement"], // Could return false negatives - `element()` might be defined anyway.
-			highlightMethod: !!CSS.highlights,
+			elementMethod: !!document["mozSetImageElement"], // `element()` might be defined anyway, could have false negatives.
 		},
+		highlightEngine: !!CSS.highlights,
 	},
 };
+
+enum Engine {
+	ELEMENT,
+	PAINT,
+	HIGHLIGHT,
+}
+
+enum PaintEngineMethod {
+	PAINT,
+	ELEMENT,
+	URL,
+}
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
@@ -189,7 +201,10 @@ type HighlightMessage = {
 	terms?: MatchTerms
 	termsOnHold?: MatchTerms
 	deactivate?: boolean
-	useElementHighlighting?: boolean
+	setHighlighter?: {
+		engine: Engine
+		paintEngineMethod?: PaintEngineMethod
+	}
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	toggleBarCollapsedOn?: boolean

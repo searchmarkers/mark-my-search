@@ -1736,6 +1736,22 @@ interface AbstractEngine {
 	) => number
 }
 
+class DummyEngine implements AbstractEngine {
+	getMiscCSS = () => "";
+	getTermHighlightsCSS = () => "";
+	getTermHighlightCSS = () => "";
+	getTermBackgroundStyle = () => "";
+	getRequestWaitDuration = () => 0;
+	getRequestReschedulingDelayMax = () => 0;
+	insertScrollMarkers = () => undefined;
+	raiseScrollMarker = () => undefined;
+	beginHighlighting = () => undefined;
+	undoHighlights = () => undefined;
+	terminate = () => undefined;
+	focusNextTerm = () => undefined;
+	getTermOccurrenceCount = () => 0;
+}
+
 type Highlighter = { current: AbstractEngine }
 
 /**
@@ -2894,15 +2910,15 @@ class PaintEngine implements AbstractEngine {
 		terms: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
-		useExperimental = false,
+		methodPreference: PaintEngineMethod,
 	) {
 		this.mutationObserver = this.getMutationUpdatesObserver(terms, highlightTags, termCountCheck);
 		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
 		this.shiftObserver = shiftObserver;
 		this.visibilityObserver = visibilityObserver;
-		if (useExperimental && compatibility.highlight.paintEngine.paintMethod) {
+		if (methodPreference === PaintEngineMethod.PAINT && compatibility.highlight.paintEngine.paintMethod) {
 			this.method = new Paint.PaintMethod();
-		} else if (useExperimental && compatibility.highlight.paintEngine.elementMethod) {
+		} else if (methodPreference === PaintEngineMethod.ELEMENT && compatibility.highlight.paintEngine.elementMethod) {
 			this.method = new Paint.ElementMethod();
 		} else {
 			this.method = new Paint.UrlMethod();
@@ -3788,7 +3804,7 @@ const getTermsFromSelection = () => {
 				requestRefreshTermControls.next();
 			};
 		})();
-		const highlighter: Highlighter = { current: new ElementEngine(terms, highlightTags, termCountCheck) };
+		const highlighter: Highlighter = { current: new DummyEngine() };
 		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags, controlsInfo, highlighter);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 		const getDetails = (request: HighlightDetailsRequest) => ({
@@ -3804,11 +3820,16 @@ const getTermsFromSelection = () => {
 			if (message.getDetails) {
 				sendResponse(getDetails(message.getDetails));
 			}
-			if (message.useElementHighlighting !== undefined) {
+			if (message.setHighlighter !== undefined) {
 				highlighter.current.terminate();
-				highlighter.current = message.useElementHighlighting
-					? new ElementEngine(terms, highlightTags, termCountCheck)
-					: new PaintEngine(terms, highlightTags, termCountCheck, true);
+				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
+					highlighter.current = new DummyEngine();
+				} else if (message.setHighlighter.engine === Engine.PAINT) {
+					highlighter.current = new PaintEngine(terms, highlightTags, termCountCheck,
+						message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT);
+				} else {
+					highlighter.current = new ElementEngine(terms, highlightTags, termCountCheck);
+				}
 			}
 			if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;

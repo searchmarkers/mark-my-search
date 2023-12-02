@@ -13,7 +13,7 @@ chrome.commands.getAll = useChromeAPI() ? chrome.commands.getAll : browser.comma
  * Represents the set of URLs used by a particular search engine and how to extract the dynamic search query section.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-class Engine {
+class SearchSite {
 	// All appropriate attributes must be compared in `this.equals`
 	hostname: string;
 	pathname: [ string, string ];
@@ -69,7 +69,7 @@ class Engine {
 	 * @param engine The other user search engine.
 	 * @returns `true` if considered equal, `false` otherwise.
 	 */
-	equals (engine: Engine) {
+	equals (engine: SearchSite) {
 		return engine.hostname === this.hostname
 			&& engine.param === this.param
 			&& engine.pathname === this.pathname;

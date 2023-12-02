@@ -2,7 +2,7 @@ chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chr
 chrome.storage.session ??= chrome.storage.local;
 
 type ResearchInstances = Record<number, ResearchInstance>
-type Engines = Record<string, Engine>
+type Engines = Record<string, SearchSite>
 type StorageSessionValues = {
 	[StorageSession.RESEARCH_INSTANCES]: ResearchInstances
 	[StorageSession.ENGINES]: Engines
@@ -204,7 +204,7 @@ const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array
 	const storeAsSession = store as StorageAreaValues<"session">;
 	if (storeAsSession.engines) {
 		const engines = storeAsSession.engines as Engines;
-		Object.keys(engines).forEach(id => engines[id] = Object.assign(new Engine, engines[id]));
+		Object.keys(engines).forEach(id => engines[id] = Object.assign(new SearchSite, engines[id]));
 	}
 	Object.entries(store).forEach(([ key, value ]) => {
 		storageCache[area][key] = value;
