@@ -135,8 +135,6 @@ const getTermClass = (termToken: string): string => EleClass.TERM + "-" + termTo
 
 const getTermToken = (termClass: string) => termClass.slice(EleClass.TERM.length + 1);
 
-const getElementDrawId = (highlightId: string) => EleID.DRAW_ELEMENT + "-" + highlightId;
-
 /**
  * Fills a CSS stylesheet element to style all UI elements we insert.
  * @param terms Terms to account for and style.
@@ -1669,11 +1667,7 @@ interface AbstractEngine {
 	getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
 
 	// TODO document
-	getTermBackgroundStyle: (
-		colorA: string,
-		colorB: string,
-		cycle: number,
-	) => string
+	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
 
 	// TODO document
 	getRequestWaitDuration: (process: HighlighterProcess) => number
@@ -1890,11 +1884,11 @@ ${HIGHLIGHT_TAG} {
 		const hue = hues[termIndex % hues.length];
 		const cycle = Math.floor(termIndex / hues.length);
 		return `
-		#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
-		#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
-			background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
-			box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
-		}`
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
+#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
+	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
+	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
+}`
 		;
 	}
 
@@ -2498,7 +2492,7 @@ namespace Paint {
 	export type ElementInfo = {
 		id: string
 		styleRuleIdx: number
-		isPaintable: boolean
+		isHighlightable: boolean
 		flows: Array<Flow>
 	}
 
@@ -2529,23 +2523,345 @@ namespace Paint {
 		rule: string
 		element: Element
 	}
+
+	export const getTermBackgroundStyle = (colorA: string, colorB: string, cycle: number) => {
+		const isAboveStyleLevel = (level: number) => cycle >= level;
+		return isAboveStyleLevel(1)
+			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
+				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
+			)})`
+			: colorA;
+	};
+
+	const styleRulesCalculateBoxes = (owner: Element, element: Element, range: Range): Array<Paint.Box> => {
+		const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
+		if (!elementInfo || elementInfo.flows.every(flow => flow.boxesInfo.length === 0)) {
+			return [];
+		}
+		let ownerRects = Array.from(owner.getClientRects());
+		if (!ownerRects.length) {
+			ownerRects = [ owner.getBoundingClientRect() ];
+		}
+		elementInfo.flows.forEach(flow => {
+			flow.boxesInfo.forEach(boxInfo => {
+				boxInfo.boxes.splice(0, boxInfo.boxes.length);
+				range.setStart(boxInfo.node, boxInfo.start);
+				range.setEnd(boxInfo.node, boxInfo.end);
+				const textRects = range.getClientRects();
+				for (let i = 0; i < textRects.length; i++) {
+					const textRect = textRects.item(i) as DOMRect;
+					if (i !== 0
+						&& textRect.x === (textRects.item(i - 1) as DOMRect).x
+						&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
+						continue;
+					}
+					let x = 0;
+					let y = 0;
+					for (const ownerRect of ownerRects) {
+						if (ownerRect.bottom > textRect.top) {
+							x += textRect.x - ownerRect.x;
+							y = textRect.y - ownerRect.y;
+							break;
+						} else {
+							x += ownerRect.width;
+						}
+					}
+					boxInfo.boxes.push({
+						token: boxInfo.term.token,
+						x: Math.round(x),
+						y: Math.round(y),
+						width: Math.round(textRect.width),
+						height: Math.round(textRect.height),
+					});
+				}
+			});
+		});
+		return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes));
+	};
+
+	export const styleRulesGetBoxesOwned = (owner: Element, element: Element, range: Range): Array<Paint.Box> =>
+		styleRulesCalculateBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
+			(child[Paint.ELEMENT_INFO] ? !(child[Paint.ELEMENT_INFO] as Paint.ElementInfo).isHighlightable : false)
+				? styleRulesGetBoxesOwned(owner, child, range) : []
+		))
+	;
+
+	export interface AbstractMethod {
+		getMiscCSS: () => string
+
+		getTermHighlightsCSS: () => string
+
+		getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
+
+		terminate: () => void
+
+		getHighlightedElements: () => NodeListOf<Element>
+
+		isElementHighlightable: (node: Node) => boolean
+
+		getAncestorHighlightable: <T extends Element>(element: T) => T
+
+		/**
+		 * From the element specified (included) to its highest ancestor element (not included),
+		 * mark each as _an element beneath a highlightable one_ (which could e.g. have a background that obscures highlights).
+		 * This allows them to be selected in CSS.
+		 * @param element The lowest descendant to be marked of the highlightable element.
+		 */
+		markElementsUpToHighlightable: (element: Element) => void
+
+		/**
+		 * Gets a CSS rule to style all elements as per the enabled PAINT variant.
+		 * @param highlightId The unique highlighting identifier of the element on which highlights should be painted.
+		 * @param boxes Details of the highlight boxes to be painted. May not be required depending on the PAINT variant in use.
+		 * @param terms Terms currently being highlighted. Some PAINT variants use this information at this point.
+		 */
+		constructHighlightStyleRule: (highlightId: string, boxes: Array<Paint.Box>, terms: MatchTerms) => string
+
+		tempReplaceContainers: (root: Element, recurse: boolean) => void
+
+		tempRemoveDrawElement: (element: Element) => void
+	}
+
+	export class DummyMethod implements AbstractMethod {
+		getMiscCSS = () => "";
+		getTermHighlightsCSS = () => "";
+		getTermHighlightCSS = () => "";
+		getHighlightedElements = (): NodeListOf<Element> => document.querySelectorAll("#_");
+		terminate = () => undefined;
+		isElementHighlightable = () => true;
+		getAncestorHighlightable = <T extends Element>(element: T) => element;
+		markElementsUpToHighlightable = () => undefined;
+		constructHighlightStyleRule = () => "";
+		tempReplaceContainers = () => undefined;
+		tempRemoveDrawElement = () => undefined;
+	}
+
+	export class PaintMethod implements AbstractMethod {
+		static paintModuleAdded = false;
+
+		constructor () {
+			if (!PaintMethod.paintModuleAdded) {
+				CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
+				PaintMethod.paintModuleAdded = true;
+			}
+		}
+
+		getMiscCSS = () => "";
+
+		getTermHighlightsCSS = () => "";
+
+		getTermHighlightCSS (terms: MatchTerms, hues: number[]) {
+			const styles: TermSelectorStyles = {};
+			terms.forEach((term, i) => {
+				styles[term.token] = {
+					hue: hues[i % hues.length],
+					cycle: Math.floor(i / hues.length),
+				};
+			});
+			return `
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id] {
+	& [markmysearch-h_beneath] {
+		background-color: transparent;
+	}
+	& {
+		background-image: paint(markmysearch-highlights) !important;
+		--markmysearch-styles: ${JSON.stringify(styles)};
+	}
+	& > :not([markmysearch-h_id]) {
+		--markmysearch-styles: unset;
+		--markmysearch-boxes: unset;
+	}
+}`
+			;
+		}
+
+		terminate () {
+			document.body.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
+				element.removeAttribute("markmysearch-h_beneath");
+			});
+		}
+
+		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
+
+		isElementHighlightable = (element: Element) => !element.closest("a");
+
+		getAncestorHighlightable <T extends Element>(element: T) {
+			let ancestor = element;
+			// eslint-disable-next-line no-constant-condition
+			while (true) {
+				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
+				const ancestorUnhighlightable = ancestor.closest("a") as T | null;
+				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+					ancestor = ancestorUnhighlightable.parentElement as unknown as T;
+				} else {
+					break;
+				}
+			}
+			return ancestor;
+		}
+
+		markElementsUpToHighlightable (element: Element) {
+			if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
+				element.setAttribute("markmysearch-h_beneath", "");
+				this.markElementsUpToHighlightable(element.parentElement as Element);
+			}
+		}
+
+		constructHighlightStyleRule = (highlightId: string, boxes: Array<Paint.Box>) =>
+			`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`;
+		
+		tempReplaceContainers = () => undefined;
+
+		tempRemoveDrawElement = () => undefined;
+	}
+
+	export class ElementMethod implements AbstractMethod {
+		getMiscCSS () {
+			return `
+#${EleID.DRAW_CONTAINER} {
+	& {
+		position: fixed;
+		width: 100%;
+		height: 100%;
+		top: 100%;
+		z-index: ${Z_INDEX_MIN};
+	}
+	& > * {
+		position: fixed;
+		width: 100%;
+		height: 100%;
+	}
+}
+
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${EleClass.TERM} {
+	outline: 2px solid hsl(0 0% 0% / 0.1);
+	outline-offset: -2px;
+	border-radius: 2px;
+}`
+			;
+		}
+
+		getTermHighlightsCSS = () => "";
+
+		getTermHighlightCSS (terms: MatchTerms, hues: number[], termIndex: number) {
+			const term = terms[termIndex];
+			const hue = hues[termIndex % hues.length];
+			const cycle = Math.floor(termIndex / hues.length);
+			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
+				getTermClass(term.token)
+			}`;
+			const backgroundStyle = getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
+			return`${selector} { background: ${backgroundStyle}; }`;
+		}
+
+		terminate = () => undefined;
+
+		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
+
+		isElementHighlightable = () => true;
+
+		getAncestorHighlightable = <T extends Element>(element: T) => element;
+
+		markElementsUpToHighlightable = () => undefined;
+
+		getElementDrawId = (highlightId: string) => EleID.DRAW_ELEMENT + "-" + highlightId;
+
+		constructHighlightStyleRule = (highlightId: string) =>
+			`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
+				this.getElementDrawId(highlightId)
+			}) !important; background-repeat: no-repeat !important; }`;
+
+		tempReplaceContainers (root: Element, recurse: boolean) {
+			const containers: Array<Element> = [];
+			this.collectElements(root, recurse, document.createRange(), containers);
+			const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
+			containers.forEach(container => {
+				const containerExisting = document.getElementById(container.id);
+				if (containerExisting) {
+					containerExisting.remove();
+				}
+				parent.appendChild(container);
+			});
+		}
+		
+		collectElements (element: Element, recurse: boolean, range: Range, containers: Array<Element>) {
+			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
+			const boxes: Array<Paint.Box> = styleRulesGetBoxesOwned(element, element, range);
+			if (boxes.length) {
+				const container = document.createElement("div");
+				container.id = this.getElementDrawId(elementInfo.id);
+				boxes.forEach(box => {
+					const element = document.createElement("div");
+					element.style.position = "absolute";
+					element.style.left = box.x.toString() + "px";
+					element.style.top = box.y.toString() + "px";
+					element.style.width = box.width.toString() + "px";
+					element.style.height = box.height.toString() + "px";
+					element.classList.add(EleClass.TERM, getTermClass(box.token));
+					container.appendChild(element);
+				});
+				const boxRightmost = boxes.reduce((box, boxCurrent) =>
+					box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent
+				);
+				const boxDownmost = boxes.reduce((box, boxCurrent) =>
+					box && (box.y + box.height > boxCurrent.y + boxCurrent.height) ? box : boxCurrent
+				);
+				container.style.width = (boxRightmost.x + boxRightmost.width).toString() + "px";
+				container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
+				containers.push(container);
+			}
+			if (recurse) Array.from(element.children).forEach(child => {
+				if (child[Paint.ELEMENT_INFO]) {
+					this.collectElements(child, recurse, range, containers);
+				}
+			});
+		}
+
+		tempRemoveDrawElement (element: Element) {
+			document.getElementById(this.getElementDrawId((element[Paint.ELEMENT_INFO] as Paint.ElementInfo).id))?.remove();
+		}
+	}
+
+	export class UrlMethod implements AbstractMethod {
+		getMiscCSS = () => "";
+
+		getTermHighlightsCSS = () => "";
+
+		getTermHighlightCSS = () => "";
+
+		terminate = () => undefined;
+
+		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
+
+		isElementHighlightable = () => true;
+
+		getAncestorHighlightable = <T extends Element>(element: T) => element;
+
+		markElementsUpToHighlightable = () => undefined;
+
+		constructHighlightStyleRule = (highlightId: string, boxes: Array<Paint.Box>, terms: MatchTerms) =>
+			`#${
+				EleID.BAR
+			}.${
+				EleClass.HIGHLIGHTS_SHOWN
+			} ~ body [markmysearch-h_id="${
+				highlightId
+			}"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
+				boxes.map(box =>
+					`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(
+						terms.find(term => term.token === box.token) as MatchTerm).hue
+					} 100% 50% / 0.4)'/%3E`
+				).join("")
+			}%3C/svg%3E") !important; }`;
+
+		tempReplaceContainers = () => undefined;
+
+		tempRemoveDrawElement = () => undefined;
+	}
 }
 
 class PaintEngine implements AbstractEngine {
-	/**
-	 * Whether the experimental `element()` CSS function should be used over the preferred `paint()` function (Painting API).
-	 * Painting is faster and simpler to implement, but is not supported by Firefox or Safari as of 2022-12-01.
-	 * Element backgrounds can be expensive but are hugely versatile for relatively low cost, and are supported only by Firefox.
-	 * This applies to the PAINT algorithm only, with no bearing on ELEMENT.
-	 */
-	usePaintingFallback = !CSS.paintWorklet;
-	/**
-	 * Whether experimental browser technologies (namely paint/element) should be used over SVG rendering
-	 * when using the PAINT algorithm.
-	 */
-	useExperimental = false;
-
-	static paintModuleAdded = false;
+	method: Paint.AbstractMethod = new Paint.DummyMethod();
 
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
@@ -2567,6 +2883,13 @@ class PaintEngine implements AbstractEngine {
 		}
 	}
 
+	/**
+	 * 
+	 * @param terms 
+	 * @param highlightTags 
+	 * @param termCountCheck 
+	 * @param useExperimental Whether experimental browser technologies (paint/element methods) should be used, if available.
+	 */
 	constructor (
 		terms: MatchTerms,
 		highlightTags: HighlightTags,
@@ -2577,94 +2900,24 @@ class PaintEngine implements AbstractEngine {
 		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
 		this.shiftObserver = shiftObserver;
 		this.visibilityObserver = visibilityObserver;
-		this.useExperimental = useExperimental;
-		if (!this.usePaintingFallback && !PaintEngine.paintModuleAdded) {
-			CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
-			PaintEngine.paintModuleAdded = true;
+		if (useExperimental && compatibility.highlight.paintEngine.paintMethod) {
+			this.method = new Paint.PaintMethod();
+		} else if (useExperimental && compatibility.highlight.paintEngine.elementMethod) {
+			this.method = new Paint.ElementMethod();
+		} else {
+			this.method = new Paint.UrlMethod();
 		}
+		this.getMiscCSS = this.method.getMiscCSS;
+		this.getTermHighlightsCSS = this.method.getTermHighlightsCSS;
+		this.getTermHighlightCSS = this.method.getTermHighlightCSS;
 	}
 
-	getMiscCSS () {
-		if (!(this.useExperimental && this.usePaintingFallback)) {
-			return "";
-		}
-		return `
-#${EleID.DRAW_CONTAINER} {
-	& {
-		position: fixed;
-		width: 100%;
-		height: 100%;
-		top: 100%;
-		z-index: ${Z_INDEX_MIN};
-	}
-	& > * {
-		position: fixed;
-		width: 100%;
-		height: 100%;
-	}
-}
+	// These are applied before construction, so we need to apply them in the constructor too.
+	getMiscCSS = this.method.getMiscCSS;
+	getTermHighlightsCSS = this.method.getTermHighlightsCSS;
+	getTermHighlightCSS = this.method.getTermHighlightCSS;
 
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${EleClass.TERM} {
-	outline: 2px solid hsl(0 0% 0% / 0.1);
-	outline-offset: -2px;
-	border-radius: 2px;
-}`
-		;
-	}
-
-	getTermHighlightsCSS () {
-		return "";
-	}
-
-	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
-		const term = terms[termIndex];
-		const hue = hues[termIndex % hues.length];
-		const cycle = Math.floor(termIndex / hues.length);
-		let css = "";
-		if (this.useExperimental && !this.usePaintingFallback) {
-			css += `
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id] {
-	& [markmysearch-h_beneath] {
-		background-color: transparent;
-	}
-	& {
-		background-image: paint(markmysearch-highlights) !important; --markmysearch-styles: ${
-	JSON.stringify((() => {
-		const styles: TermSelectorStyles = {};
-		terms.forEach((term, i) => {
-			styles[term.token] = {
-				hue: hues[i % hues.length],
-				cycle: Math.floor(i / hues.length),
-			};
-		});
-		return styles;
-	})())};
-	}
-	& > :not([markmysearch-h_id]) {
-		--markmysearch-styles: unset;
-		--markmysearch-boxes: unset;
-	}
-}`
-			;
-		}
-		if (this.useExperimental && this.usePaintingFallback) {
-			css += `
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${getTermClass(term.token)} {
-	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
-}`
-			;
-		}
-		return css;
-	}
-
-	getTermBackgroundStyle (colorA: string, colorB: string, cycle: number) {
-		const isAboveStyleLevel = (level: number) => cycle >= level;
-		return isAboveStyleLevel(1)
-			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
-				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
-			)})`
-			: colorA;
-	}
+	getTermBackgroundStyle = Paint.getTermBackgroundStyle;
 
 	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
 	case HighlighterProcess.REFRESH_INDICATORS: return 200;
@@ -2684,9 +2937,7 @@ class PaintEngine implements AbstractEngine {
 		const termsAllowed = new Set(terms.slice(0, hues.length));
 		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		let markersHtml = "";
-		document.body.querySelectorAll(
-			"[markmysearch-h_id]" + ((this.useExperimental && !this.usePaintingFallback) ? ", [markmysearch-h_beneath]" : "")
-		).forEach((element: HTMLElement) => {
+		this.method.getHighlightedElements().forEach((element: HTMLElement) => {
 			const terms = (element[Paint.ELEMENT_INFO] as Paint.ElementInfo | undefined)?.flows.flatMap(flow => flow.boxesInfo
 				.map(boxInfo => boxInfo.term)
 				.filter(term => termsAllowed.has(term))
@@ -2780,7 +3031,7 @@ class PaintEngine implements AbstractEngine {
 		this.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
 		this.mutationUpdates.observe();
 		this.styleUpdate(Array.from(new Set(
-			Array.from(this.elementsVisible).map(element => this.getAncestorHighlightable(element.firstChild as Node))
+			Array.from(this.elementsVisible).map(element => this.method.getAncestorHighlightable(element))
 		)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms)));
 		terms.forEach(term => Toolbar.updateTermOccurringStatus(term, this));
 	}
@@ -2796,34 +3047,19 @@ class PaintEngine implements AbstractEngine {
 		document.querySelectorAll("*").forEach(element => {
 			delete element[Paint.ELEMENT_INFO];
 		});
-		this.highlightingAttributesCleanup(document.body);
+		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
+			element.removeAttribute("markmysearch-h_id");
+			delete element["markmysearch-h_id"];
+		});
+		this.method.terminate();
 	}
-
-	getAncestorHighlightable: (node: Node) => HTMLElement = !this.useExperimental || this.usePaintingFallback
-		? node => node.parentElement as HTMLElement
-		: node => {
-			let ancestor = node.parentElement as HTMLElement;
-			// eslint-disable-next-line no-constant-condition
-			while (true) {
-				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
-				const ancestorUnhighlightable = (ancestor as HTMLElement).closest("a");
-				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
-					ancestor = ancestorUnhighlightable.parentElement;
-				} else {
-					break;
-				}
-			}
-			return ancestor;
-		};
 
 	cacheExtend (element: Element, highlightTags: HighlightTags, cacheModify = (element: Element) => {
 		if (!element[Paint.ELEMENT_INFO]) {
 			element[Paint.ELEMENT_INFO] = {
 				id: "",
 				styleRuleIdx: -1,
-				isPaintable: (this.useExperimental && !this.usePaintingFallback)
-					? !element.closest("a") // Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
-					: true,
+				isHighlightable: this.method.isElementHighlightable(element),
 				flows: [],
 			} as Paint.ElementInfo;
 		}
@@ -2833,35 +3069,6 @@ class PaintEngine implements AbstractEngine {
 			Array.from(element.children).forEach(child => this.cacheExtend(child, highlightTags));
 		}
 	}
-	
-	/**
-	 * Reverts all DOM changes made by the PAINT algorithm, under a given root.
-	 * @param root The root element under which changes are reverted, __not included__.
-	 */
-	highlightingAttributesCleanup (root: Element) {
-		root.querySelectorAll("[markmysearch-h_id]").forEach(element => {
-			element.removeAttribute("markmysearch-h_id");
-			delete element["markmysearch-h_id"];
-		});
-		root.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
-			element.removeAttribute("markmysearch-h_beneath");
-		});
-	}
-	
-	/**
-	 * From the element specified (included) to its highest ancestor element (not included),
-	 * mark each as _an element beneath a highlightable one_ (which could e.g. have a background that obscures highlights).
-	 * This allows them to be selected in CSS.
-	 * @param element The lowest descendant to be marked of the highlightable element.
-	 */
-	markElementsUpToHighlightable: (element: Element) => void = this.usePaintingFallback
-		? () => undefined
-		: element => {
-			if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
-				element.setAttribute("markmysearch-h_beneath", "");
-				this.markElementsUpToHighlightable(element.parentElement as Element);
-			}
-		};
 	
 	/**
 	 * Removes the flows cache from all descendant elements.
@@ -2915,12 +3122,10 @@ class PaintEngine implements AbstractEngine {
 					textStart = textEnd;
 					textEnd += node.length;
 				}
-				(node.parentElement as Element).setAttribute("markmysearch-h_beneath", ""); // TODO optimise?
-				if ((node.parentElement as Element)["markmysearch-h_id"]
-					&& !(node.parentElement as Element).hasAttribute("markmysearch-h_id")
-				) {
-					(node.parentElement as Element).setAttribute("markmysearch-h_id",
-						(node.parentElement as Element)["markmysearch-h_id"]);
+				const parent = node.parentElement as Element;
+				//parent.setAttribute("markmysearch-h_beneath", ""); // Obsolete due to markElementsUpToHighlightable?
+				if (parent["markmysearch-h_id"]) { // Highlighting ID may already be set, but set it just in case.
+					parent.setAttribute("markmysearch-h_id", parent["markmysearch-h_id"]);
 				}
 				// eslint-disable-next-line no-constant-condition
 				while (true) {
@@ -2941,7 +3146,7 @@ class PaintEngine implements AbstractEngine {
 			}
 		}
 		if (flow.boxesInfo.length) {
-			const ancestorHighlightable = this.getAncestorHighlightable(ancestor.firstChild as Node);
+			const ancestorHighlightable = this.method.getAncestorHighlightable(ancestor);
 			this.styleUpdates.observe(ancestorHighlightable);
 			if ((ancestorHighlightable[Paint.ELEMENT_INFO] as Paint.ElementInfo).id === "") {
 				const highlighting = ancestorHighlightable[Paint.ELEMENT_INFO] as Paint.ElementInfo;
@@ -2949,7 +3154,7 @@ class PaintEngine implements AbstractEngine {
 				ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
 				ancestorHighlightable["markmysearch-h_id"] = highlighting.id;
 			}
-			this.markElementsUpToHighlightable(ancestor);
+			this.method.markElementsUpToHighlightable(ancestor);
 		}
 	}
 
@@ -3051,171 +3256,36 @@ class PaintEngine implements AbstractEngine {
 			filterBoxesInfo(element);
 		}
 	}
-	
-	/**
-	 * Gets a CSS rule to style all elements as per the enabled PAINT variant.
-	 * @param highlightId The unique highlighting identifier of the element on which highlights should be painted.
-	 * @param boxes Details of the highlight boxes to be painted. May not be required depending on the PAINT variant in use.
-	 * @param terms Terms currently being highlighted. Some PAINT variants use this information at this point.
-	 */
-	constructHighlightStyleRule: (highlightId: string, boxes: Array<Paint.Box>, terms: MatchTerms) => string = this.useExperimental
-		? this.usePaintingFallback
-			? highlightId =>
-				`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
-					getElementDrawId(highlightId)
-				}) !important; background-repeat: no-repeat !important; }`
-			: (highlightId, boxes) =>
-				`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${
-					JSON.stringify(boxes)
-				}; }`
-		: (highlightId, boxes, terms) =>
-			`#${
-				EleID.BAR
-			}.${
-				EleClass.HIGHLIGHTS_SHOWN
-			} ~ body [markmysearch-h_id="${
-				highlightId
-			}"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
-				boxes.map(box =>
-					`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(
-						terms.find(term => term.token === box.token) as MatchTerm).hue
-					} 100% 50% / 0.4)'/%3E`
-				).join("")
-			}%3C/svg%3E") !important; }`;
-	
-	getStyleRules: (root: Element, recurse: boolean, terms: MatchTerms) => Array<Paint.StyleRuleInfo> = (() => {
-		const calculateBoxes = (owner: Element, element: Element, range: Range): Array<Paint.Box> => {
-			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-			if (!elementInfo || elementInfo.flows.every(flow => flow.boxesInfo.length === 0)) {
-				return [];
-			}
-			let ownerRects = Array.from(owner.getClientRects());
-			if (!ownerRects.length) {
-				ownerRects = [ owner.getBoundingClientRect() ];
-			}
-			elementInfo.flows.forEach(flow => {
-				flow.boxesInfo.forEach(boxInfo => {
-					boxInfo.boxes.splice(0, boxInfo.boxes.length);
-					range.setStart(boxInfo.node, boxInfo.start);
-					range.setEnd(boxInfo.node, boxInfo.end);
-					const textRects = range.getClientRects();
-					for (let i = 0; i < textRects.length; i++) {
-						const textRect = textRects.item(i) as DOMRect;
-						if (i !== 0
-							&& textRect.x === (textRects.item(i - 1) as DOMRect).x
-							&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
-							continue;
-						}
-						let x = 0;
-						let y = 0;
-						for (const ownerRect of ownerRects) {
-							if (ownerRect.bottom > textRect.top) {
-								x += textRect.x - ownerRect.x;
-								y = textRect.y - ownerRect.y;
-								break;
-							} else {
-								x += ownerRect.width;
-							}
-						}
-						boxInfo.boxes.push({
-							token: boxInfo.term.token,
-							x: Math.round(x),
-							y: Math.round(y),
-							width: Math.round(textRect.width),
-							height: Math.round(textRect.height),
-						});
-					}
-				});
+
+	getStyleRules (root: Element, recurse: boolean, terms: MatchTerms) {
+		this.method.tempReplaceContainers(root, recurse);
+		const styleRules: Array<Paint.StyleRuleInfo> = [];
+		// 'root' must have [elementInfo].
+		this.collectStyleRules(root, recurse, document.createRange(), styleRules, terms);
+		return styleRules;
+	}
+
+	collectStyleRules (
+		element: Element,
+		recurse: boolean,
+		range: Range,
+		styleRules: Array<Paint.StyleRuleInfo>,
+		terms: MatchTerms,
+	) {
+		const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
+		const boxes: Array<Paint.Box> = Paint.styleRulesGetBoxesOwned(element, element, range);
+		if (boxes.length) {
+			styleRules.push({
+				rule: this.method.constructHighlightStyleRule(elementInfo.id, boxes, terms),
+				element,
 			});
-			return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes));
-		};
-	
-		const getBoxesOwned = (owner: Element, element: Element, range: Range): Array<Paint.Box> =>
-			calculateBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
-				(child[Paint.ELEMENT_INFO] ? !(child[Paint.ELEMENT_INFO] as Paint.ElementInfo).isPaintable : false)
-					? getBoxesOwned(owner, child, range) : []
-			))
-		;
-	
-		const collectStyleRules = (
-			element: Element,
-			recurse: boolean,
-			range: Range,
-			styleRules: Array<Paint.StyleRuleInfo>,
-			terms: MatchTerms,
-		) => {
-			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-			const boxes: Array<Paint.Box> = getBoxesOwned(element, element, range);
-			if (boxes.length) {
-				styleRules.push({
-					rule: this.constructHighlightStyleRule(elementInfo.id, boxes, terms),
-					element,
-				});
+		}
+		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
+			if (child[Paint.ELEMENT_INFO]) {
+				this.collectStyleRules(child, recurse, range, styleRules, terms);
 			}
-			(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
-				if (child[Paint.ELEMENT_INFO]) {
-					collectStyleRules(child, recurse, range, styleRules, terms);
-				}
-			});
-		};
-	
-		const collectElements = (element: Element, recurse: boolean, range: Range, containers: Array<Element>) => {
-			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-			const boxes: Array<Paint.Box> = getBoxesOwned(element, element, range);
-			if (boxes.length) {
-				const container = document.createElement("div");
-				container.id = getElementDrawId(elementInfo.id);
-				boxes.forEach(box => {
-					const element = document.createElement("div");
-					element.style.position = "absolute";
-					element.style.left = box.x.toString() + "px";
-					element.style.top = box.y.toString() + "px";
-					element.style.width = box.width.toString() + "px";
-					element.style.height = box.height.toString() + "px";
-					element.classList.add(EleClass.TERM, getTermClass(box.token));
-					container.appendChild(element);
-				});
-				const boxRightmost = boxes.reduce((box, boxCurrent) =>
-					box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent
-				);
-				const boxDownmost = boxes.reduce((box, boxCurrent) =>
-					box && (box.y + box.height > boxCurrent.y + boxCurrent.height) ? box : boxCurrent
-				);
-				container.style.width = (boxRightmost.x + boxRightmost.width).toString() + "px";
-				container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
-				containers.push(container);
-			}
-			(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
-				if (child[Paint.ELEMENT_INFO]) {
-					collectElements(child, recurse, range, containers);
-				}
-			});
-		};
-	
-		return this.useExperimental && this.usePaintingFallback
-			? (root, recurse, terms) => {
-				const containers: Array<Element> = [];
-				collectElements(root, recurse, document.createRange(), containers);
-				const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
-				containers.forEach(container => {
-					const containerExisting = document.getElementById(container.id);
-					if (containerExisting) {
-						containerExisting.remove();
-					}
-					parent.appendChild(container);
-				});
-				const styleRules: Array<Paint.StyleRuleInfo> = [];
-				// 'root' must have [elementInfo].
-				collectStyleRules(root, recurse, document.createRange(), styleRules, terms);
-				return styleRules;
-			}
-			: (root, recurse, terms) => {
-				const styleRules: Array<Paint.StyleRuleInfo> = [];
-				// 'root' must have [elementInfo].
-				collectStyleRules(root, recurse, document.createRange(), styleRules, terms);
-				return styleRules;
-			};
-	})();
+		});
+	}
 	
 	styleUpdate (styleRules: Array<Paint.StyleRuleInfo>) {
 		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement)
@@ -3290,7 +3360,7 @@ class PaintEngine implements AbstractEngine {
 	getShiftAndVisibilityObservers (terms: MatchTerms) {
 		const shiftObserver = new ResizeObserver(entries => {
 			const styleRules: Array<Paint.StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(this.getAncestorHighlightable(entry.target.firstChild as Node), true, terms)
+				this.getStyleRules(this.method.getAncestorHighlightable(entry.target), true, terms)
 			);
 			if (styleRules.length) {
 				this.styleUpdate(styleRules);
@@ -3305,13 +3375,13 @@ class PaintEngine implements AbstractEngine {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
-							this.getStyleRules(this.getAncestorHighlightable(entry.target.firstChild as Node), false, terms)
+							this.getStyleRules(this.method.getAncestorHighlightable(entry.target), false, terms)
 						);
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
-					if (this.usePaintingFallback && entry.target[Paint.ELEMENT_INFO]) {
-						document.getElementById(getElementDrawId((entry.target[Paint.ELEMENT_INFO] as Paint.ElementInfo).id))?.remove();
+					if (entry.target[Paint.ELEMENT_INFO]) {
+						this.method.tempRemoveDrawElement(entry.target);
 					}
 					this.elementsVisible.delete(entry.target);
 					shiftObserver.unobserve(entry.target);
