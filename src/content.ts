@@ -54,6 +54,7 @@ enum EleClass {
 enum EleID {
 	STYLE = "markmysearch__style",
 	STYLE_PAINT = "markmysearch__style_paint",
+	STYLE_PAINT_SPECIAL = "markmysearch__style_paint_special",
 	BAR = "markmysearch__bar",
 	BAR_LEFT = "markmysearch__bar_left",
 	BAR_TERMS = "markmysearch__bar_terms",
@@ -61,6 +62,7 @@ enum EleID {
 	MARKER_GUTTER = "markmysearch__markers",
 	DRAW_CONTAINER = "markmysearch__draw_container",
 	DRAW_ELEMENT = "markmysearch__draw",
+	ELEMENT_CONTAINER_SPECIAL = "markmysearch__element_container_special",
 	INPUT = "markmysearch__input",
 }
 
@@ -828,10 +830,10 @@ namespace Toolbar {
 	 * Updates the look of a term control to reflect whether or not it occurs within the document.
 	 * @param term A term to update the term control status for.
 	 */
-	export const updateTermOccurringStatus = (term: MatchTerm, highlighter: AbstractEngine) => {
+	export const updateTermOccurringStatus = (term: MatchTerm, highlighter: Highlighter) => {
 		const controlPad = (getControl(term) as HTMLElement)
 			.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
-		controlPad.classList.toggle(EleClass.DISABLED, !highlighter.getTermOccurrenceCount(term, true));
+		controlPad.classList.toggle(EleClass.DISABLED, !highlighter.current.getTermOccurrenceCount(term, true));
 	};
 
 	/**
@@ -1655,6 +1657,148 @@ HIGHLIGHTING - MAIN
 Types, methods, and classes for use in highlighting. Includes all available highlighting engines.
 */
 
+interface SpecialAbstractEngine {
+	startHighlighting: (terms: MatchTerms) => void
+
+	endHighlighting: () => void
+
+	highlight: (highlightCtx: SpecialPaint.HighlightContext, terms: MatchTerms) => void
+
+	unhighlight: (highlightCtx: SpecialPaint.HighlightContext) => void
+}
+
+class SpecialDummyEngine implements SpecialAbstractEngine {
+	startHighlighting = () => undefined;
+	endHighlighting = () => undefined;
+	highlight = () => undefined;
+	unhighlight = () => undefined;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace SpecialPaint {
+	export const contextCSS = { hovered: ":hover", focused: ":focus" };
+
+	export type HighlightContext = keyof typeof contextCSS
+
+	export type StyleRulesInfo = Record<HighlightContext, string>
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+class SpecialPaintEngine implements SpecialAbstractEngine {
+	method = new Paint.UrlMethod();
+	terms: MatchTerms = [];
+	styleRules: SpecialPaint.StyleRulesInfo = { hovered: "", focused: "" };
+
+	onFocusInListener: (event: FocusEvent) => void = () => undefined;
+	onHoverListener: (event: MouseEvent) => void = () => undefined;
+
+	constructor () {
+		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		const objectThis = this;
+		this.onFocusInListener = event => objectThis.onFocusIn(event);
+		this.onHoverListener = event => objectThis.onHover(event);
+	}
+
+	startHighlighting (terms: MatchTerms) {
+		this.endHighlighting();
+		this.insertElements();
+		this.terms = terms;
+		window.addEventListener("focusin", this.onFocusInListener);
+		window.addEventListener("mouseover", this.onHoverListener);
+	}
+
+	endHighlighting () {
+		this.terms = [];
+		window.removeEventListener("focusin", this.onFocusInListener);
+		window.removeEventListener("mouseover", this.onHoverListener);
+		this.removeElements();
+	}
+
+	insertElements () {
+		const style = document.createElement("style");
+		style.id = EleID.STYLE_PAINT_SPECIAL;
+		document.head.appendChild(style);
+		const elementContainer = document.createElement("div");
+		elementContainer.id = EleID.ELEMENT_CONTAINER_SPECIAL;
+		document.body.insertAdjacentElement("afterend", elementContainer);
+	}
+
+	removeElements () {
+		document.querySelectorAll(
+			`#${EleID.STYLE_PAINT_SPECIAL}, #${EleID.ELEMENT_CONTAINER_SPECIAL}`
+		).forEach(Element.prototype.remove);
+	}
+
+	getFlow (terms: MatchTerms, input: HTMLInputElement) {
+		const flow: Paint.Flow<true> = {
+			text: input.value,
+			boxesInfo: [],
+		};
+		for (const term of terms) {
+			for (const match of flow.text.matchAll(term.pattern)) {
+				flow.boxesInfo.push({
+					term,
+					start: match.index as number,
+					end: (match.index as number) + match[0].length,
+					boxes: [],
+				});
+			}
+		}
+	}
+
+	onFocusIn (event: FocusEvent) {
+		console.log("focus in", event.target, event.relatedTarget);
+		if ((event.target as HTMLElement | null)?.tagName === "INPUT") {
+			this.highlight("focused", this.terms);
+		} else if ((event.relatedTarget as HTMLElement | null)?.tagName === "INPUT") {
+			this.unhighlight("focused");
+		}
+	}
+
+	onHover (event: MouseEvent) {
+		console.log("mouse enter", event.target, event.relatedTarget);
+		if ((event.target as HTMLElement | null)?.tagName === "INPUT") {
+			this.highlight("hovered", this.terms);
+		} else if ((event.relatedTarget as HTMLElement | null)?.tagName === "INPUT") {
+			this.unhighlight("hovered");
+		}
+	}
+
+	highlight (highlightCtx: SpecialPaint.HighlightContext, terms: MatchTerms) {
+		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(terms, highlightCtx) });
+	}
+
+	unhighlight (highlightCtx: SpecialPaint.HighlightContext) {
+		this.styleUpdate({ [highlightCtx]: "" });
+	}
+
+	constructHighlightStyleRule = (terms: MatchTerms, highlightCtx: SpecialPaint.HighlightContext) =>
+		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${SpecialPaint.contextCSS[highlightCtx]} { background-image: ${
+			this.constructHighlightStyleRuleUrl(terms)
+		} !important; }`;
+
+	constructHighlightStyleRuleUrl (terms: MatchTerms) {
+		if (!terms.length) {
+			return "url()";
+		}
+		return this.method.constructHighlightStyleRuleUrl([ { token: terms[0].token, x: 20, y: 0, width: 50, height: 16 } ], terms);
+	}
+
+	styleUpdate (styleRules: Partial<SpecialPaint.StyleRulesInfo>) {
+		const style = document.getElementById(EleID.STYLE_PAINT_SPECIAL) as HTMLStyleElement;
+		Object.keys(SpecialPaint.contextCSS).forEach(highlightContext => {
+			const rule = styleRules[highlightContext];
+			if (rule !== undefined) {
+				this.styleRules[highlightContext] = rule;
+			}
+		});
+		const styleContent = Object.values(this.styleRules).join("\n");
+		if (styleContent !== style.textContent) {
+			style.textContent = styleContent;
+		}
+	}
+}
+
 enum HighlighterProcess {
 	REFRESH_TERM_CONTROLS,
 	REFRESH_INDICATORS,
@@ -1701,7 +1845,7 @@ interface AbstractEngine {
 	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 * @param termCountCheck A function for requesting that term occurrence count indicators be regenerated.
 	 */
-	beginHighlighting: (
+	startHighlighting: (
 		terms: MatchTerms,
 		termsToPurge: MatchTerms,
 		highlightTags: HighlightTags,
@@ -1715,7 +1859,7 @@ interface AbstractEngine {
 	) => void
 
 	// TODO document
-	terminate: () => void
+	endHighlighting: () => void
 
 	// TODO document
 	focusNextTerm: (
@@ -1736,6 +1880,8 @@ interface AbstractEngine {
 	) => number
 }
 
+type Highlighter = { current: AbstractEngine }
+
 class DummyEngine implements AbstractEngine {
 	getMiscCSS = () => "";
 	getTermHighlightsCSS = () => "";
@@ -1745,14 +1891,12 @@ class DummyEngine implements AbstractEngine {
 	getRequestReschedulingDelayMax = () => 0;
 	insertScrollMarkers = () => undefined;
 	raiseScrollMarker = () => undefined;
-	beginHighlighting = () => undefined;
+	startHighlighting = () => undefined;
 	undoHighlights = () => undefined;
-	terminate = () => undefined;
+	endHighlighting = () => undefined;
 	focusNextTerm = () => undefined;
 	getTermOccurrenceCount = () => 0;
 }
-
-type Highlighter = { current: AbstractEngine }
 
 /**
  * Gets the containing block of an element.
@@ -1869,6 +2013,7 @@ namespace Elem {
 class ElementEngine implements AbstractEngine {
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
+	specialHighlighter: SpecialAbstractEngine = new SpecialDummyEngine();
 
 	constructor (
 		terms: MatchTerms,
@@ -1989,17 +2134,19 @@ ${HIGHLIGHT_TAG} {
 		});
 	}
 
-	beginHighlighting (
+	startHighlighting (
 		terms: MatchTerms,
 		termsToPurge: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
 	) {
+		// Clean up.
 		this.mutationUpdates.disconnect();
 		this.undoHighlights(termsToPurge);
+		// MAIN
 		this.generateTermHighlightsUnderNode(terms, document.body, highlightTags, termCountCheck);
-		terms.forEach(term => Toolbar.updateTermOccurringStatus(term, this));
 		this.mutationUpdates.observe();
+		this.specialHighlighter.startHighlighting(terms);
 	}
 
 	/**
@@ -2030,9 +2177,10 @@ ${HIGHLIGHT_TAG} {
 		elementsReMakeUnfocusable(root);
 	}
 
-	terminate () {
+	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
+		this.specialHighlighter.endHighlighting();
 	}
 
 	/**
@@ -2096,8 +2244,7 @@ ${HIGHLIGHT_TAG} {
 				let nodeItem: Elem.FlowNodeListItem | null = nodeItems.first as Elem.FlowNodeListItem;
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
-				const matches = textFlow.matchAll(term.pattern);
-				for (const match of matches) {
+				for (const match of textFlow.matchAll(term.pattern)) {
 					let highlightStart = match.index as number;
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {
@@ -2512,22 +2659,19 @@ namespace Paint {
 		flows: Array<Flow>
 	}
 
-	export interface Flow {
+	export type Flow<NoNodeReference = false> = {
 		text: string
-		nodeStart: Text
-		nodeEnd: Text
-		boxesInfo: Array<BoxInfo>
+		boxesInfo: Array<BoxInfo<NoNodeReference>>
 	}
 
-	export interface BoxInfo {
+	export type BoxInfo<NoNodeReference = false> = {
 		term: MatchTerm
-		node: Text
 		start: number
 		end: number
 		boxes: Array<Box>
-	}
+	} & (NoNodeReference extends true ? Record<never, never> : { node: Text })
 
-	export interface Box {
+	export type Box = {
 		token: string
 		x: number
 		y: number
@@ -2535,7 +2679,7 @@ namespace Paint {
 		height: number
 	}
 
-	export interface StyleRuleInfo {
+	export type StyleRuleInfo = {
 		rule: string
 		element: Element
 	}
@@ -2609,7 +2753,7 @@ namespace Paint {
 
 		getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
 
-		terminate: () => void
+		endHighlighting: () => void
 
 		getHighlightedElements: () => NodeListOf<Element>
 
@@ -2643,7 +2787,7 @@ namespace Paint {
 		getTermHighlightsCSS = () => "";
 		getTermHighlightCSS = () => "";
 		getHighlightedElements = (): NodeListOf<Element> => document.querySelectorAll("#_");
-		terminate = () => undefined;
+		endHighlighting = () => undefined;
 		isElementHighlightable = () => true;
 		getAncestorHighlightable = <T extends Element>(element: T) => element;
 		markElementsUpToHighlightable = () => undefined;
@@ -2691,7 +2835,7 @@ namespace Paint {
 			;
 		}
 
-		terminate () {
+		endHighlighting () {
 			document.body.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
 				element.removeAttribute("markmysearch-h_beneath");
 			});
@@ -2770,7 +2914,7 @@ namespace Paint {
 			return`${selector} { background: ${backgroundStyle}; }`;
 		}
 
-		terminate = () => undefined;
+		endHighlighting = () => undefined;
 
 		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
 
@@ -2845,7 +2989,7 @@ namespace Paint {
 
 		getTermHighlightCSS = () => "";
 
-		terminate = () => undefined;
+		endHighlighting = () => undefined;
 
 		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
 
@@ -2856,19 +3000,18 @@ namespace Paint {
 		markElementsUpToHighlightable = () => undefined;
 
 		constructHighlightStyleRule = (highlightId: string, boxes: Array<Paint.Box>, terms: MatchTerms) =>
-			`#${
-				EleID.BAR
-			}.${
-				EleClass.HIGHLIGHTS_SHOWN
-			} ~ body [markmysearch-h_id="${
-				highlightId
-			}"] { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
+			`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id="${highlightId}"] { background-image: ${
+				this.constructHighlightStyleRuleUrl(boxes, terms)
+			} !important; }`;
+
+		constructHighlightStyleRuleUrl = (boxes: Array<Paint.Box>, terms: MatchTerms) =>
+			`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
 				boxes.map(box =>
 					`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(
 						terms.find(term => term.token === box.token) as MatchTerm).hue
 					} 100% 50% / 0.4)'/%3E`
 				).join("")
-			}%3C/svg%3E") !important; }`;
+			}%3C/svg%3E")`;
 
 		tempReplaceContainers = () => undefined;
 
@@ -3036,27 +3179,29 @@ class PaintEngine implements AbstractEngine {
 		this.raiseScrollMarker(term, element);
 	}
 
-	beginHighlighting (
+	startHighlighting (
 		terms: MatchTerms,
 		termsToPurge: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
 	) {
-		this.cacheExtend(document.body, highlightTags);
-		this.boxesInfoRemoveForTerms(termsToPurge);
+		// Clean up.
+		this.mutationUpdates.disconnect();
+		this.boxesInfoRemoveForTerms(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
+		// MAIN
+		this.cacheExtend(document.body, highlightTags); // Ensure the *whole* document is set up for highlight-caching.
 		this.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
 		this.mutationUpdates.observe();
 		this.styleUpdate(Array.from(new Set(
 			Array.from(this.elementsVisible).map(element => this.method.getAncestorHighlightable(element))
 		)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms)));
-		terms.forEach(term => Toolbar.updateTermOccurringStatus(term, this));
 	}
 
 	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
 		this.boxesInfoRemoveForTerms(terms, root);
 	}
 
-	terminate () {
+	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.styleUpdates.disconnectAll();
 		this.undoHighlights();
@@ -3067,7 +3212,7 @@ class PaintEngine implements AbstractEngine {
 			element.removeAttribute("markmysearch-h_id");
 			delete element["markmysearch-h_id"];
 		});
-		this.method.terminate();
+		this.method.endHighlighting();
 	}
 
 	cacheExtend (element: Element, highlightTags: HighlightTags, cacheModify = (element: Element) => {
@@ -3109,13 +3254,11 @@ class PaintEngine implements AbstractEngine {
 	flowCacheWithBoxesInfo (terms: MatchTerms, textFlow: Array<Text>) {
 		const flow: Paint.Flow = {
 			text: textFlow.map(node => node.textContent).join(""),
-			nodeStart: textFlow[0],
-			nodeEnd: textFlow[textFlow.length - 1],
 			boxesInfo: [],
 		};
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
-		const ancestor = getAncestorCommon(flow.nodeStart.parentElement as Element, flow.nodeEnd);
+		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow[textFlow.length - 1]);
 		if (ancestor[Paint.ELEMENT_INFO]) {
 			(ancestor[Paint.ELEMENT_INFO] as Paint.ElementInfo).flows.push(flow);
 		} else {
@@ -3129,8 +3272,7 @@ class PaintEngine implements AbstractEngine {
 			let node = textFlow[0];
 			let textStart = 0;
 			let textEnd = node.length;
-			const matches = flow.text.matchAll(term.pattern);
-			for (const match of matches) {
+			for (const match of flow.text.matchAll(term.pattern)) {
 				const highlightStart = match.index as number;
 				const highlightEnd = highlightStart + match[0].length;
 				while (textEnd <= highlightStart) {
@@ -3139,12 +3281,12 @@ class PaintEngine implements AbstractEngine {
 					textEnd += node.length;
 				}
 				const parent = node.parentElement as Element;
-				//parent.setAttribute("markmysearch-h_beneath", ""); // Obsolete due to markElementsUpToHighlightable?
 				if (parent["markmysearch-h_id"]) { // Highlighting ID may already be set, but set it just in case.
 					parent.setAttribute("markmysearch-h_id", parent["markmysearch-h_id"]);
 				}
 				// eslint-disable-next-line no-constant-condition
 				while (true) {
+					// Register as much of this highlight that fits into this node.
 					flow.boxesInfo.push({
 						term,
 						node,
@@ -3155,6 +3297,7 @@ class PaintEngine implements AbstractEngine {
 					if (highlightEnd <= textEnd) {
 						break;
 					}
+					// The highlight extends beyond this node, so keep going; move onto the next node.
 					node = textFlow[++i];
 					textStart = textEnd;
 					textEnd += node.length;
@@ -3304,8 +3447,7 @@ class PaintEngine implements AbstractEngine {
 	}
 	
 	styleUpdate (styleRules: Array<Paint.StyleRuleInfo>) {
-		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement)
-			.sheet as CSSStyleSheet;
+		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
 		styleRules.forEach(({ rule, element }) => {
 			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
 			if (elementInfo.styleRuleIdx === -1) {
@@ -3346,8 +3488,10 @@ class PaintEngine implements AbstractEngine {
 			// TODO optimise as above
 			const elements: Set<HTMLElement> = new Set;
 			for (const mutation of mutations) {
-				for (const node of Array.from(mutation.addedNodes)) {
-					if (node.nodeType === Node.ELEMENT_NODE && canHighlightElement(rejectSelector, node as Element)) {
+				const addedNodes = Array.from(mutation.addedNodes);
+				for (const node of addedNodes) {
+					if (node.parentElement && node.nodeType === Node.ELEMENT_NODE
+						&& canHighlightElement(rejectSelector, node as Element)) {
 						this.cacheExtend(node as Element, highlightTags);
 					}
 				}
@@ -3355,15 +3499,15 @@ class PaintEngine implements AbstractEngine {
 					&& mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement)) {
 					elements.add(mutation.target.parentElement);
 				}
-				for (const node of Array.from(mutation.addedNodes)) {
+				for (const node of addedNodes) if (node.parentElement) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
 						if (canHighlightElement(rejectSelector, node as Element)) {
 							elements.add(node as HTMLElement);
 						}
 					} else if (node.nodeType === Node.TEXT_NODE
-						&& canHighlightElement(rejectSelector, node.parentElement as Element)) {
+						&& canHighlightElement(rejectSelector, node.parentElement)) {
 						// Previously used `boxesInfoCalculateForFlowOwners()` on `node`.
-						elements.add(node.parentElement as HTMLElement);
+						elements.add(node.parentElement);
 					}
 				}
 			}
@@ -3471,7 +3615,7 @@ const getTermsFromSelection = () => {
 	 * Highlighting refreshes may be whole or partial depending on which terms changed.
 	 * TODO document params
 	 */
-	const refreshTermControlsAndBeginHighlighting = (
+	const refreshTermControlsAndStartHighlighting = (
 		terms: MatchTerms,
 		controlsInfo: ControlsInfo,
 		highlighter: Highlighter,
@@ -3593,12 +3737,13 @@ const getTermsFromSelection = () => {
 		}
 		// Give the interface a chance to redraw before performing [expensive] highlighting.
 		setTimeout(() => {
-			highlighter.current.beginHighlighting(
+			highlighter.current.startHighlighting(
 				termsToHighlight.length ? termsToHighlight : terms,
 				termsToPurge,
 				highlightTags,
 				termCountCheck,
 			);
+			terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter));
 		});
 	};
 
@@ -3795,7 +3940,7 @@ const getTermsFromSelection = () => {
 				() => highlighter.current.getRequestReschedulingDelayMax(HighlighterProcess.REFRESH_INDICATORS),
 			);
 			const requestRefreshTermControls = requestCallFn(
-				() => terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter.current)),
+				() => terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter)),
 				() => highlighter.current.getRequestWaitDuration(HighlighterProcess.REFRESH_TERM_CONTROLS),
 				() => highlighter.current.getRequestReschedulingDelayMax(HighlighterProcess.REFRESH_TERM_CONTROLS),
 			);
@@ -3821,7 +3966,7 @@ const getTermsFromSelection = () => {
 				sendResponse(getDetails(message.getDetails));
 			}
 			if (message.setHighlighter !== undefined) {
-				highlighter.current.terminate();
+				highlighter.current.endHighlighting();
 				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
 					highlighter.current = new DummyEngine();
 				} else if (message.setHighlighter.engine === Engine.PAINT) {
@@ -3834,7 +3979,7 @@ const getTermsFromSelection = () => {
 			if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 				controlsInfo.pageModifyEnabled = message.enablePageModify;
 				if (!controlsInfo.pageModifyEnabled) {
-					highlighter.current.terminate();
+					highlighter.current.endHighlighting();
 				}
 			}
 			if (message.extensionCommands) {
@@ -3866,7 +4011,7 @@ const getTermsFromSelection = () => {
 			}
 			if (message.deactivate) {
 				window.removeEventListener("mouseup", onWindowMouseUp);
-				highlighter.current.terminate();
+				highlighter.current.endHighlighting();
 				terms.splice(0);
 				Toolbar.controlsRemove();
 				styleElementsCleanup();
@@ -3875,7 +4020,7 @@ const getTermsFromSelection = () => {
 				(!itemsMatch(terms, message.terms, termEquals) || (!terms.length && !document.getElementById(EleID.BAR)))
 			) {
 				window.addEventListener("mouseup", onWindowMouseUp);
-				refreshTermControlsAndBeginHighlighting(
+				refreshTermControlsAndStartHighlighting(
 					terms,
 					controlsInfo,
 					highlighter,
