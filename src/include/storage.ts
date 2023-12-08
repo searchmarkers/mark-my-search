@@ -204,7 +204,7 @@ const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array
 	const storeAsSession = store as StorageAreaValues<"session">;
 	if (storeAsSession.engines) {
 		const engines = storeAsSession.engines as Engines;
-		Object.keys(engines).forEach(id => engines[id] = Object.assign(new SearchSite, engines[id]));
+		Object.keys(engines).forEach(id => engines[id] = Object.assign(new SearchSite(), engines[id]));
 	}
 	Object.entries(store).forEach(([ key, value ]) => {
 		storageCache[area][key] = value;

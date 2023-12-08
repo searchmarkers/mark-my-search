@@ -2292,7 +2292,7 @@ ${HIGHLIGHT_TAG} {
 			terms: MatchTerms,
 			node: Node,
 			highlightTags: HighlightTags,
-			nodeItems = new Elem.FlowNodeList,
+			nodeItems = new Elem.FlowNodeList(),
 			visitSiblings = true,
 		) => {
 			// TODO support for <iframe>?
@@ -2331,11 +2331,11 @@ ${HIGHLIGHT_TAG} {
 			termCountCheck: TermCountCheck,
 		) => {
 			if (rootNode.nodeType === Node.TEXT_NODE) {
-				const nodeItems = new Elem.FlowNodeList;
+				const nodeItems = new Elem.FlowNodeList();
 				nodeItems.push(rootNode as Text);
 				highlightInBlock(terms, nodeItems);
 			} else {
-				const nodeItems = new Elem.FlowNodeList;
+				const nodeItems = new Elem.FlowNodeList();
 				insertHighlights(terms, rootNode, highlightTags, nodeItems, false);
 				if (nodeItems.first) {
 					highlightInBlock(terms, nodeItems);
@@ -2580,7 +2580,7 @@ ${HIGHLIGHT_TAG} {
 		termCountCheck: TermCountCheck,
 	) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		const elements: Set<HTMLElement> = new Set;
+		const elements: Set<HTMLElement> = new Set();
 		let periodDateLast = 0;
 		let periodHighlightCount = 0;
 		let throttling = false;
@@ -2614,7 +2614,7 @@ ${HIGHLIGHT_TAG} {
 		};
 		return new MutationObserver(mutations => {
 			//mutationUpdates.disconnect();
-			const elementsKnown: Set<HTMLElement> = new Set;
+			const elementsKnown: Set<HTMLElement> = new Set();
 			for (const mutation of mutations) {
 				const element = mutation.target.nodeType === Node.TEXT_NODE
 					? mutation.target.parentElement as HTMLElement
@@ -2933,7 +2933,7 @@ namespace Paint {
 
 		tempReplaceContainers (root: Element, recurse: boolean) {
 			const containers: Array<Element> = [];
-			this.collectElements(root, recurse, document.createRange(), containers);
+			this.collectElements(root, recurse, new Range(), containers);
 			const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
 			containers.forEach(container => {
 				const containerExisting = document.getElementById(container.id);
@@ -3025,7 +3025,7 @@ class PaintEngine implements AbstractEngine {
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
 
-	elementsVisible: Set<Element> = new Set;
+	elementsVisible: Set<Element> = new Set();
 	shiftObserver: ResizeObserver | null = null;
 	visibilityObserver: IntersectionObserver | null = null;
 	styleUpdates = getStyleUpdates(this.elementsVisible, () => ({
@@ -3420,7 +3420,7 @@ class PaintEngine implements AbstractEngine {
 		this.method.tempReplaceContainers(root, recurse);
 		const styleRules: Array<Paint.StyleRuleInfo> = [];
 		// 'root' must have [elementInfo].
-		this.collectStyleRules(root, recurse, document.createRange(), styleRules, terms);
+		this.collectStyleRules(root, recurse, new Range(), styleRules, terms);
 		return styleRules;
 	}
 
@@ -3486,7 +3486,7 @@ class PaintEngine implements AbstractEngine {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			// TODO optimise as above
-			const elements: Set<HTMLElement> = new Set;
+			const elements: Set<HTMLElement> = new Set();
 			for (const mutation of mutations) {
 				const addedNodes = Array.from(mutation.addedNodes);
 				for (const node of addedNodes) {
@@ -3597,7 +3597,7 @@ const getTermsFromSelection = () => {
 			.map(phrase => phrase.replace(/\p{Ps}|\p{Pe}|\p{Pi}|\p{Pf}/gu, ""))
 			// Open Punctuation | Close Punctuation | Initial Punctuation | Final Punctuation
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-		const termSelectors: Set<string> = new Set;
+		const termSelectors: Set<string> = new Set();
 		termsAll.forEach(term => {
 			if (!termSelectors.has(term.token)) {
 				termSelectors.add(term.token);
