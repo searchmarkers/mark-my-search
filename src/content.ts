@@ -604,7 +604,9 @@ namespace Toolbar {
 		 */
 		const commit = (term: MatchTerm | undefined, terms: MatchTerms, inputValue?: string) => {
 			const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
-			const control = getControl(term) as HTMLElement;
+			const control = getControl(term);
+			if (!control)
+				return;
 			const termInput = control.querySelector("input") as HTMLInputElement;
 			inputValue = inputValue ?? termInput.value;
 			const idx = getTermIndexFromArray(term, terms);
@@ -823,7 +825,7 @@ namespace Toolbar {
 	 * @returns The control if present, `null` otherwise.
 	 */
 	const getControlAppendTerm = (): Element | null =>
-		(document.getElementById(EleID.BAR_RIGHT) as HTMLElement).firstElementChild
+		document.getElementById(EleID.BAR_RIGHT)?.firstElementChild ?? null
 	;
 
 	/**
@@ -1657,17 +1659,365 @@ HIGHLIGHTING - MAIN
 Types, methods, and classes for use in highlighting. Includes all available highlighting engines.
 */
 
-interface SpecialAbstractEngine {
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace TermCSS {
+	export const getFlatStyle = (color: string) => color;
+
+	export const getDiagonalStyle = (colorA: string, colorB: string, cycle: number) => {
+		const isAboveStyleLevel = (level: number) => cycle >= level;
+		return isAboveStyleLevel(1)
+			? `repeating-linear-gradient(${
+				isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
+			}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
+			: colorA;
+	};
+
+	export const getHorizontalStyle = (colorA: string, colorB: string, cycle: number) => {
+		const isAboveStyleLevel = (level: number) => cycle >= level;
+		return isAboveStyleLevel(1)
+			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
+				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
+			)})`
+			: colorA;
+	};
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace Matcher {
+	export type BaseFlow<HasBoxes extends boolean, NodeReference extends boolean> = {
+		text: string
+		boxesInfo: Array<BaseBoxInfo<HasBoxes, NodeReference>>
+	}
+	export type Flow<NodeReference extends boolean = true> = BaseFlow<false, NodeReference>
+
+	export type BaseBoxInfo<HasBoxes extends boolean, NodeReference extends boolean> = {
+		term: MatchTerm
+		start: number
+		end: number
+		boxes: Array<Box>
+	} & (HasBoxes extends true ? { boxes: Array<Box> } : Record<never, never>)
+	& (NodeReference extends true ? { node: Text } : Record<never, never>)
+	export type BoxInfo<NodeReference extends boolean = true> = BaseBoxInfo<false, NodeReference>
+
+	export type Box = {
+		token: string
+		x: number
+		y: number
+		width: number
+		height: number
+	}
+
+	export const flowPopulateBoxesInfo = (flow: Flow, textFlow: Array<Text>, terms: MatchTerms) => {
+		for (const term of terms) {
+			let i = 0;
+			let node = textFlow[0];
+			let textStart = 0;
+			let textEnd = node.length;
+			for (const match of flow.text.matchAll(term.pattern)) {
+				const highlightStart = match.index as number;
+				const highlightEnd = highlightStart + match[0].length;
+				while (textEnd <= highlightStart) {
+					node = textFlow[++i];
+					textStart = textEnd;
+					textEnd += node.length;
+				}
+				// eslint-disable-next-line no-constant-condition
+				while (true) {
+					// Register as much of this highlight that fits into this node.
+					flow.boxesInfo.push({
+						term,
+						node,
+						start: Math.max(0, highlightStart - textStart),
+						end: Math.min(highlightEnd - textStart, node.length),
+						boxes: [],
+					});
+					if (highlightEnd <= textEnd) {
+						break;
+					}
+					// The highlight extends beyond this node, so keep going; move onto the next node.
+					node = textFlow[++i];
+					textStart = textEnd;
+					textEnd += node.length;
+				}
+			}
+		}
+	};
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace FlowMonitor {
+	export const CACHE = "markmysearch__cache";
+
+	export type TreeCache<Flow = unknown> = {
+		flows: Array<Flow>
+	}
+	
+	export interface AbstractHighlightable {
+		checkElement: (node: Node) => boolean
+
+		findAncestor: <T extends Element>(element: T) => T
+
+		/**
+		 * From the element specified (included) to its highest ancestor element (not included),
+		 * mark each as _an element beneath a highlightable one_ (which could e.g. have a background that obscures highlights).
+		 * This allows them to be selected in CSS.
+		 * @param element The lowest descendant to be marked of the highlightable element.
+		 */
+		markElementsUpTo: (element: Element) => void
+	}
+
+	export class StandardHighlightable implements AbstractHighlightable {
+		checkElement = () => true;
+
+		findAncestor = <T extends Element>(element: T) => element;
+
+		markElementsUpTo = () => undefined;
+	}
+
+	export class CSSPaintHighlightable implements AbstractHighlightable {
+		checkElement = (element: Element) => !element.closest("a");
+
+		findAncestor <T extends Element>(element: T) {
+			let ancestor = element;
+			// eslint-disable-next-line no-constant-condition
+			while (true) {
+				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
+				const ancestorUnhighlightable = ancestor.closest("a") as T | null;
+				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+					ancestor = ancestorUnhighlightable.parentElement as unknown as T;
+				} else {
+					break;
+				}
+			}
+			return ancestor;
+		}
+
+		markElementsUpTo (element: Element) {
+			if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
+				element.setAttribute("markmysearch-h_beneath", "");
+				this.markElementsUpTo(element.parentElement as Element);
+			}
+		}
+	}
+}
+
+interface AbstractFlowMonitor {
+	getMutationUpdatesObserver: (
+		terms: MatchTerms,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+		onElementsAdded: (elements: Set<Element>) => void,
+	) => MutationObserver
+
+	boxesInfoCalculate: (
+		terms: MatchTerms,
+		flowOwner: Element,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+	) => void
+}
+
+class DummyFlowMonitor implements AbstractFlowMonitor {
+	getMutationUpdatesObserver = () => new MutationObserver(() => undefined);
+	boxesInfoCalculate = () => undefined;
+}
+
+class StandardFlowMonitor implements AbstractFlowMonitor {
+	highlightable: FlowMonitor.AbstractHighlightable;
+
+	onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void = () => undefined;
+
+	createElementCache: (element: Element) => FlowMonitor.TreeCache = () => ({ flows: [] });
+
+	constructor (
+		highlightable: FlowMonitor.AbstractHighlightable,
+		onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void,
+		createElementCache: (element: Element) => FlowMonitor.TreeCache,
+	) {
+		this.highlightable = highlightable;
+		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
+		this.createElementCache = createElementCache;
+	}
+
+	getMutationUpdatesObserver (
+		terms: MatchTerms,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+		onElementsAdded: (elements: Set<Element>) => void,
+	) {
+		const rejectSelector = Array.from(highlightTags.reject).join(", ");
+		return new MutationObserver(mutations => {
+			// TODO optimise as above
+			const elementsAffected: Set<Element> = new Set();
+			const elementsAdded: Set<Element> = new Set();
+			for (const mutation of mutations) {
+				if (mutation.type === "characterData"
+					&& mutation.target.parentElement
+					&& canHighlightElement(rejectSelector, mutation.target.parentElement)
+				) {
+					elementsAffected.add(mutation.target.parentElement);
+				}
+				for (const node of mutation.addedNodes) if (node.parentElement) {
+					switch (node.nodeType) {
+					case Node.ELEMENT_NODE: { if (canHighlightElement(rejectSelector, node as Element)) {
+						elementsAdded.add(node as Element);
+						elementsAffected.add(node as Element);
+					} break; }
+					case Node.TEXT_NODE: { if (canHighlightElement(rejectSelector, node.parentElement)) {
+						elementsAffected.add(node.parentElement);
+					} break; }
+					}
+				}
+			}
+			onElementsAdded(elementsAdded);
+			for (const element of elementsAffected) {
+				this.boxesInfoCalculateForFlowOwnersFromContent(terms, element, highlightTags, termCountCheck);
+			}
+		});
+	}
+
+	boxesInfoCalculateForFlowOwnersFromContent (
+		terms: MatchTerms,
+		element: Element,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+	) {
+		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
+		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
+		if (highlightTags.flow.has(element.tagName)) {
+			// The element may include non self-contained flows.
+			this.boxesInfoCalculateForFlowOwners(terms, element, highlightTags, termCountCheck);
+		} else {
+			// The element can only include self-contained flows, so flows need only be recalculated below the element.
+			this.boxesInfoCalculate(terms, element, highlightTags, termCountCheck);
+		}
+	}
+
+	boxesInfoCalculateForFlowOwners (
+		terms: MatchTerms,
+		node: Node,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+	) {
+		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
+		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
+		const parent = node.parentElement;
+		if (!parent) {
+			return;
+		}
+		if (highlightTags.flow.has(parent.tagName)) {
+			// The parent may include non self-contained flows.
+			const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+			walker.currentNode = node;
+			let breakFirst: Element | null = walker.previousNode() as Element;
+			while (breakFirst && highlightTags.flow.has(breakFirst.tagName)) {
+				breakFirst = breakFirst !== parent ? walker.previousNode() as Element : null;
+			}
+			walker.currentNode = node.nextSibling ?? node;
+			let breakLast: Element | null = node.nextSibling ? walker.nextNode() as Element : null;
+			while (breakLast && highlightTags.flow.has(breakLast.tagName)) {
+				breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
+			}
+			if (breakFirst && breakLast) {
+				// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
+				// ALL flows of descendants are recalculated. See below.
+				this.boxesInfoCalculate(terms, parent, highlightTags, termCountCheck);
+			} else {
+				// The flow containing the node may leave the parent, which we assume disrupted the text flows of an ancestor.
+				this.boxesInfoCalculateForFlowOwners(terms, parent, highlightTags, termCountCheck);
+			}
+		} else {
+			// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
+			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin;
+			// example can be seen when loading DuckDuckGo results dynamically. Could be fixed by discarding text flows which start
+			// or end inside elements which do not contain and are not contained by a given element. Will not implement.
+			this.boxesInfoCalculate(terms, parent, highlightTags, termCountCheck);
+		}
+	}
+
+	boxesInfoCalculate (
+		terms: MatchTerms,
+		flowOwner: Element,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+	) {
+		if (!flowOwner.firstChild)
+			return;
+		const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
+		const textFlows = getTextFlows(flowOwner.firstChild, highlightTags);
+		this.flowsRemove(flowOwner, highlightTags);
+		textFlows // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
+			.slice((breaksFlow && textFlows[0]?.length) ? 0 : 1, (breaksFlow && textFlows.at(-1)?.length) ? undefined : -1)
+			.forEach(textFlow => this.flowCacheWithBoxesInfo(terms, textFlow));
+		termCountCheck(); // Major performance hit when using very small delay or small delay maximum for debounce.
+	}
+
+	/**
+	 * TODO document
+	 * @param terms Terms to find and highlight.
+	 * @param textFlow Consecutive text nodes to highlight inside.
+	 */
+	flowsRemove (element: Element, highlightTags: HighlightTags) {
+		if (highlightTags.reject.has(element.tagName)) {
+			return;
+		}
+		if (element[FlowMonitor.CACHE]) {
+			(element[FlowMonitor.CACHE] as FlowMonitor.TreeCache).flows = [];
+		}
+		for (const child of element.children) {
+			this.flowsRemove(child, highlightTags);
+		}
+	}
+
+	/**
+	 * Removes the flows cache from all descendant elements.
+	 * @param element The ancestor below which to forget flows.
+	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
+	 */
+	flowCacheWithBoxesInfo (
+		terms: MatchTerms,
+		textFlow: Array<Text>,
+	) {
+		const text = textFlow.map(node => node.textContent).join("");
+		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
+			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
+		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow.at(-1) as Text);
+		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined;
+		const flow: Matcher.Flow = {
+			text,
+			boxesInfo: [],
+		};
+		if (ancestorHighlighting) {
+			ancestorHighlighting.flows.push(flow);
+		} else {
+			// This condition *should* be impossible, but since in rare cases (typically when running before "document_idle")
+			// mutation observers may not always fire, it must be accounted for.
+			ancestorHighlighting = this.createElementCache(ancestor);
+			ancestorHighlighting.flows.push(flow);
+			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
+			console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
+		}
+		// Match the terms inside the flow to produce highlighting box info.
+		Matcher.flowPopulateBoxesInfo(flow, textFlow, terms);
+		if (!flow.boxesInfo.length) {
+			return;
+		}
+		const ancestorHighlightable = this.highlightable.findAncestor(ancestor);
+		this.onNewHighlightedAncestor(ancestor, ancestorHighlightable);
+	}
+}
+
+interface AbstractSpecialEngine {
 	startHighlighting: (terms: MatchTerms) => void
 
 	endHighlighting: () => void
 
-	highlight: (highlightCtx: SpecialPaint.HighlightContext, terms: MatchTerms) => void
+	highlight: (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms) => void
 
-	unhighlight: (highlightCtx: SpecialPaint.HighlightContext) => void
+	unhighlight: (highlightCtx: PaintSpecial.HighlightContext) => void
 }
 
-class SpecialDummyEngine implements SpecialAbstractEngine {
+class DummySpecialEngine implements AbstractSpecialEngine {
 	startHighlighting = () => undefined;
 	endHighlighting = () => undefined;
 	highlight = () => undefined;
@@ -1675,7 +2025,7 @@ class SpecialDummyEngine implements SpecialAbstractEngine {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
-namespace SpecialPaint {
+namespace PaintSpecial {
 	export const contextCSS = { hovered: ":hover", focused: ":focus" };
 
 	export type HighlightContext = keyof typeof contextCSS
@@ -1684,10 +2034,10 @@ namespace SpecialPaint {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-class SpecialPaintEngine implements SpecialAbstractEngine {
+class PaintSpecialEngine implements AbstractSpecialEngine {
 	method = new Paint.UrlMethod();
 	terms: MatchTerms = [];
-	styleRules: SpecialPaint.StyleRulesInfo = { hovered: "", focused: "" };
+	styleRules: PaintSpecial.StyleRulesInfo = { hovered: "", focused: "" };
 
 	onFocusInListener: (event: FocusEvent) => void = () => undefined;
 	onHoverListener: (event: MouseEvent) => void = () => undefined;
@@ -1700,7 +2050,9 @@ class SpecialPaintEngine implements SpecialAbstractEngine {
 	}
 
 	startHighlighting (terms: MatchTerms) {
+		// Clean up.
 		this.endHighlighting();
+		// MAIN
 		this.insertElements();
 		this.terms = terms;
 		window.addEventListener("focusin", this.onFocusInListener);
@@ -1730,7 +2082,7 @@ class SpecialPaintEngine implements SpecialAbstractEngine {
 	}
 
 	getFlow (terms: MatchTerms, input: HTMLInputElement) {
-		const flow: Paint.Flow<true> = {
+		const flow: Matcher.Flow<false> = {
 			text: input.value,
 			boxesInfo: [],
 		};
@@ -1764,16 +2116,16 @@ class SpecialPaintEngine implements SpecialAbstractEngine {
 		}
 	}
 
-	highlight (highlightCtx: SpecialPaint.HighlightContext, terms: MatchTerms) {
+	highlight (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms) {
 		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(terms, highlightCtx) });
 	}
 
-	unhighlight (highlightCtx: SpecialPaint.HighlightContext) {
+	unhighlight (highlightCtx: PaintSpecial.HighlightContext) {
 		this.styleUpdate({ [highlightCtx]: "" });
 	}
 
-	constructHighlightStyleRule = (terms: MatchTerms, highlightCtx: SpecialPaint.HighlightContext) =>
-		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${SpecialPaint.contextCSS[highlightCtx]} { background-image: ${
+	constructHighlightStyleRule = (terms: MatchTerms, highlightCtx: PaintSpecial.HighlightContext) =>
+		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${PaintSpecial.contextCSS[highlightCtx]} { background-image: ${
 			this.constructHighlightStyleRuleUrl(terms)
 		} !important; }`;
 
@@ -1784,9 +2136,9 @@ class SpecialPaintEngine implements SpecialAbstractEngine {
 		return this.method.constructHighlightStyleRuleUrl([ { token: terms[0].token, x: 20, y: 0, width: 50, height: 16 } ], terms);
 	}
 
-	styleUpdate (styleRules: Partial<SpecialPaint.StyleRulesInfo>) {
+	styleUpdate (styleRules: Partial<PaintSpecial.StyleRulesInfo>) {
 		const style = document.getElementById(EleID.STYLE_PAINT_SPECIAL) as HTMLStyleElement;
-		Object.keys(SpecialPaint.contextCSS).forEach(highlightContext => {
+		Object.keys(PaintSpecial.contextCSS).forEach(highlightContext => {
 			const rule = styleRules[highlightContext];
 			if (rule !== undefined) {
 				this.styleRules[highlightContext] = rule;
@@ -1847,6 +2199,7 @@ interface AbstractEngine {
 	 */
 	startHighlighting: (
 		terms: MatchTerms,
+		termsToHighlight: MatchTerms,
 		termsToPurge: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
@@ -2013,7 +2366,7 @@ namespace Elem {
 class ElementEngine implements AbstractEngine {
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
-	specialHighlighter: SpecialAbstractEngine = new SpecialDummyEngine();
+	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
 
 	constructor (
 		terms: MatchTerms,
@@ -2045,22 +2398,15 @@ ${HIGHLIGHT_TAG} {
 		const hue = hues[termIndex % hues.length];
 		const cycle = Math.floor(termIndex / hues.length);
 		return `
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
-#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
+#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
 	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
 	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
 }`
 		;
 	}
 
-	getTermBackgroundStyle (colorA: string, colorB: string, cycle: number) {
-		const isAboveStyleLevel = (level: number) => cycle >= level;
-		return isAboveStyleLevel(1)
-			? `repeating-linear-gradient(${
-				isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
-			}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
-			: colorA;
-	}
+	getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
 	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
 	case HighlighterProcess.REFRESH_INDICATORS: return 50;
@@ -2099,7 +2445,7 @@ ${HIGHLIGHT_TAG} {
 					if (containersInfo[containerIdx].termsAdded.has(getTermToken(className))) {
 						return;
 					} else {
-						const termsAddedCount = Array.from(containersInfo[containerIdx].termsAdded).length;
+						const termsAddedCount = containersInfo[containerIdx].termsAdded.size;
 						markerCss += `padding-left: ${termsAddedCount * 5}px; z-index: ${termsAddedCount * -1}`;
 						containersInfo[containerIdx].termsAdded.add(getTermToken(className));
 					}
@@ -2136,6 +2482,7 @@ ${HIGHLIGHT_TAG} {
 
 	startHighlighting (
 		terms: MatchTerms,
+		termsToHighlight: MatchTerms,
 		termsToPurge: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
@@ -2144,9 +2491,16 @@ ${HIGHLIGHT_TAG} {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights(termsToPurge);
 		// MAIN
-		this.generateTermHighlightsUnderNode(terms, document.body, highlightTags, termCountCheck);
+		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms,
+			document.body, highlightTags, termCountCheck);
 		this.mutationUpdates.observe();
 		this.specialHighlighter.startHighlighting(terms);
+	}
+
+	endHighlighting () {
+		this.mutationUpdates.disconnect();
+		this.undoHighlights();
+		this.specialHighlighter.endHighlighting();
 	}
 
 	/**
@@ -2163,7 +2517,7 @@ ${HIGHLIGHT_TAG} {
 			classNames ? `${HIGHLIGHT_TAG}.${classNames.join(`, ${HIGHLIGHT_TAG}.`)}` : HIGHLIGHT_TAG
 		)).reverse();
 		// TODO attempt to join text nodes back together
-		for (const highlight of Array.from(highlights)) {
+		for (const highlight of highlights) {
 			highlight.outerHTML = highlight.innerHTML;
 		}
 		if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
@@ -2175,12 +2529,6 @@ ${HIGHLIGHT_TAG} {
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER, root);
 		elementsPurgeClass(EleClass.FOCUS, root);
 		elementsReMakeUnfocusable(root);
-	}
-
-	endHighlighting () {
-		this.mutationUpdates.disconnect();
-		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
 	}
 
 	/**
@@ -2292,7 +2640,7 @@ ${HIGHLIGHT_TAG} {
 			terms: MatchTerms,
 			node: Node,
 			highlightTags: HighlightTags,
-			nodeItems = new Elem.FlowNodeList,
+			nodeItems: Elem.FlowNodeList,
 			visitSiblings = true,
 		) => {
 			// TODO support for <iframe>?
@@ -2331,11 +2679,11 @@ ${HIGHLIGHT_TAG} {
 			termCountCheck: TermCountCheck,
 		) => {
 			if (rootNode.nodeType === Node.TEXT_NODE) {
-				const nodeItems = new Elem.FlowNodeList;
+				const nodeItems = new Elem.FlowNodeList();
 				nodeItems.push(rootNode as Text);
 				highlightInBlock(terms, nodeItems);
 			} else {
-				const nodeItems = new Elem.FlowNodeList;
+				const nodeItems = new Elem.FlowNodeList();
 				insertHighlights(terms, rootNode, highlightTags, nodeItems, false);
 				if (nodeItems.first) {
 					highlightInBlock(terms, nodeItems);
@@ -2568,7 +2916,7 @@ ${HIGHLIGHT_TAG} {
 
 	// Increasingly inaccurate as highlights elements are more often split.
 	getTermOccurrenceCount (term: MatchTerm) {
-		const occurrences = Array.from(document.body.getElementsByClassName(getTermClass(term.token)));
+		const occurrences = document.body.getElementsByClassName(getTermClass(term.token));
 		//const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
 		//return matches ? matches.length : 0; // Works poorly in situations such as matching whole words.
 		return occurrences.length; // Poor and changeable heuristic, but so far the most reliable efficient method.
@@ -2650,51 +2998,44 @@ ${HIGHLIGHT_TAG} {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Paint {
-	export const ELEMENT_INFO = "markmysearch__cache";
+	export type Flow<NodeReference extends boolean = true> = Matcher.BaseFlow<true, NodeReference>
 
-	export type ElementInfo = {
+	export type BoxInfo<NodeReference extends boolean = true> = Matcher.BaseBoxInfo<true, NodeReference>
+
+	export type Box = Matcher.Box
+
+	export type TreeCache = {
 		id: string
 		styleRuleIdx: number
 		isHighlightable: boolean
-		flows: Array<Flow>
-	}
-
-	export type Flow<NoNodeReference = false> = {
-		text: string
-		boxesInfo: Array<BoxInfo<NoNodeReference>>
-	}
-
-	export type BoxInfo<NoNodeReference = false> = {
-		term: MatchTerm
-		start: number
-		end: number
-		boxes: Array<Box>
-	} & (NoNodeReference extends true ? Record<never, never> : { node: Text })
-
-	export type Box = {
-		token: string
-		x: number
-		y: number
-		width: number
-		height: number
-	}
+	} & FlowMonitor.TreeCache<Flow>
 
 	export type StyleRuleInfo = {
 		rule: string
 		element: Element
 	}
 
-	export const getTermBackgroundStyle = (colorA: string, colorB: string, cycle: number) => {
-		const isAboveStyleLevel = (level: number) => cycle >= level;
-		return isAboveStyleLevel(1)
-			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
-				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
-			)})`
-			: colorA;
+	export const getTermBackgroundStyle = TermCSS.getHorizontalStyle;
+
+	export const styleRulesGetBoxesOwned = (
+		owner: Element,
+		element?: Element,
+		range = new Range,
+	): Array<Box> => {
+		element ??= owner;
+		return getOwnedBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
+			(child[FlowMonitor.CACHE] ? !(child[FlowMonitor.CACHE] as Paint.TreeCache).isHighlightable : false)
+				? styleRulesGetBoxesOwned(owner, child, range) : []
+		));
 	};
 
-	const styleRulesCalculateBoxes = (owner: Element, element: Element, range: Range): Array<Paint.Box> => {
-		const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
+	const getOwnedBoxes = (
+		owner: Element,
+		element?: Element,
+		range = new Range(),
+	) => {
+		element ??= owner;
+		const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
 		if (!elementInfo || elementInfo.flows.every(flow => flow.boxesInfo.length === 0)) {
 			return [];
 		}
@@ -2702,51 +3043,52 @@ namespace Paint {
 		if (!ownerRects.length) {
 			ownerRects = [ owner.getBoundingClientRect() ];
 		}
-		elementInfo.flows.forEach(flow => {
-			flow.boxesInfo.forEach(boxInfo => {
-				boxInfo.boxes.splice(0, boxInfo.boxes.length);
-				range.setStart(boxInfo.node, boxInfo.start);
-				range.setEnd(boxInfo.node, boxInfo.end);
-				const textRects = range.getClientRects();
-				for (let i = 0; i < textRects.length; i++) {
-					const textRect = textRects.item(i) as DOMRect;
-					if (i !== 0
-						&& textRect.x === (textRects.item(i - 1) as DOMRect).x
-						&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
-						continue;
-					}
-					let x = 0;
-					let y = 0;
-					for (const ownerRect of ownerRects) {
-						if (ownerRect.bottom > textRect.top) {
-							x += textRect.x - ownerRect.x;
-							y = textRect.y - ownerRect.y;
-							break;
-						} else {
-							x += ownerRect.width;
-						}
-					}
-					boxInfo.boxes.push({
-						token: boxInfo.term.token,
-						x: Math.round(x),
-						y: Math.round(y),
-						width: Math.round(textRect.width),
-						height: Math.round(textRect.height),
-					});
-				}
-			});
-		});
+		elementPopulateBoxes(elementInfo.flows, ownerRects, range);
 		return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes));
 	};
 
-	export const styleRulesGetBoxesOwned = (owner: Element, element: Element, range: Range): Array<Paint.Box> =>
-		styleRulesCalculateBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
-			(child[Paint.ELEMENT_INFO] ? !(child[Paint.ELEMENT_INFO] as Paint.ElementInfo).isHighlightable : false)
-				? styleRulesGetBoxesOwned(owner, child, range) : []
-		))
+	const elementPopulateBoxes = (
+		elementFlows: Array<Flow>,
+		elementRects: Array<DOMRect>,
+		range = new Range(),
+	) =>
+		elementFlows.forEach(flow => flow.boxesInfo.forEach(boxInfo => {
+			boxInfo.boxes.splice(0, boxInfo.boxes.length);
+			range.setStart(boxInfo.node, boxInfo.start);
+			range.setEnd(boxInfo.node, boxInfo.end);
+			const textRects = range.getClientRects();
+			for (let i = 0; i < textRects.length; i++) {
+				const textRect = textRects.item(i) as DOMRect;
+				if (i !== 0
+					&& textRect.x === (textRects.item(i - 1) as DOMRect).x
+					&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
+					continue;
+				}
+				let x = 0;
+				let y = 0;
+				for (const ownerRect of elementRects) {
+					if (ownerRect.bottom > textRect.top) {
+						x += textRect.x - ownerRect.x;
+						y = textRect.y - ownerRect.y;
+						break;
+					} else {
+						x += ownerRect.width;
+					}
+				}
+				boxInfo.boxes.push({
+					token: boxInfo.term.token,
+					x: Math.round(x),
+					y: Math.round(y),
+					width: Math.round(textRect.width),
+					height: Math.round(textRect.height),
+				});
+			}
+		}))
 	;
 
 	export interface AbstractMethod {
+		highlightable: FlowMonitor.AbstractHighlightable
+
 		getMiscCSS: () => string
 
 		getTermHighlightsCSS: () => string
@@ -2757,25 +3099,13 @@ namespace Paint {
 
 		getHighlightedElements: () => NodeListOf<Element>
 
-		isElementHighlightable: (node: Node) => boolean
-
-		getAncestorHighlightable: <T extends Element>(element: T) => T
-
-		/**
-		 * From the element specified (included) to its highest ancestor element (not included),
-		 * mark each as _an element beneath a highlightable one_ (which could e.g. have a background that obscures highlights).
-		 * This allows them to be selected in CSS.
-		 * @param element The lowest descendant to be marked of the highlightable element.
-		 */
-		markElementsUpToHighlightable: (element: Element) => void
-
 		/**
 		 * Gets a CSS rule to style all elements as per the enabled PAINT variant.
 		 * @param highlightId The unique highlighting identifier of the element on which highlights should be painted.
 		 * @param boxes Details of the highlight boxes to be painted. May not be required depending on the PAINT variant in use.
 		 * @param terms Terms currently being highlighted. Some PAINT variants use this information at this point.
 		 */
-		constructHighlightStyleRule: (highlightId: string, boxes: Array<Paint.Box>, terms: MatchTerms) => string
+		constructHighlightStyleRule: (highlightId: string, boxes: Array<Box>, terms: MatchTerms) => string
 
 		tempReplaceContainers: (root: Element, recurse: boolean) => void
 
@@ -2783,20 +3113,20 @@ namespace Paint {
 	}
 
 	export class DummyMethod implements AbstractMethod {
+		highlightable = new FlowMonitor.StandardHighlightable();
 		getMiscCSS = () => "";
 		getTermHighlightsCSS = () => "";
 		getTermHighlightCSS = () => "";
 		getHighlightedElements = (): NodeListOf<Element> => document.querySelectorAll("#_");
 		endHighlighting = () => undefined;
-		isElementHighlightable = () => true;
-		getAncestorHighlightable = <T extends Element>(element: T) => element;
-		markElementsUpToHighlightable = () => undefined;
 		constructHighlightStyleRule = () => "";
 		tempReplaceContainers = () => undefined;
 		tempRemoveDrawElement = () => undefined;
 	}
 
 	export class PaintMethod implements AbstractMethod {
+		highlightable = new FlowMonitor.CSSPaintHighlightable();
+
 		static paintModuleAdded = false;
 
 		constructor () {
@@ -2843,31 +3173,7 @@ namespace Paint {
 
 		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
 
-		isElementHighlightable = (element: Element) => !element.closest("a");
-
-		getAncestorHighlightable <T extends Element>(element: T) {
-			let ancestor = element;
-			// eslint-disable-next-line no-constant-condition
-			while (true) {
-				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
-				const ancestorUnhighlightable = ancestor.closest("a") as T | null;
-				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
-					ancestor = ancestorUnhighlightable.parentElement as unknown as T;
-				} else {
-					break;
-				}
-			}
-			return ancestor;
-		}
-
-		markElementsUpToHighlightable (element: Element) {
-			if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
-				element.setAttribute("markmysearch-h_beneath", "");
-				this.markElementsUpToHighlightable(element.parentElement as Element);
-			}
-		}
-
-		constructHighlightStyleRule = (highlightId: string, boxes: Array<Paint.Box>) =>
+		constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>) =>
 			`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`;
 		
 		tempReplaceContainers = () => undefined;
@@ -2876,6 +3182,8 @@ namespace Paint {
 	}
 
 	export class ElementMethod implements AbstractMethod {
+		highlightable = new FlowMonitor.StandardHighlightable();
+
 		getMiscCSS () {
 			return `
 #${EleID.DRAW_CONTAINER} {
@@ -2903,7 +3211,7 @@ namespace Paint {
 
 		getTermHighlightsCSS = () => "";
 
-		getTermHighlightCSS (terms: MatchTerms, hues: number[], termIndex: number) {
+		getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
 			const term = terms[termIndex];
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
@@ -2918,12 +3226,6 @@ namespace Paint {
 
 		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
 
-		isElementHighlightable = () => true;
-
-		getAncestorHighlightable = <T extends Element>(element: T) => element;
-
-		markElementsUpToHighlightable = () => undefined;
-
 		getElementDrawId = (highlightId: string) => EleID.DRAW_ELEMENT + "-" + highlightId;
 
 		constructHighlightStyleRule = (highlightId: string) =>
@@ -2932,8 +3234,11 @@ namespace Paint {
 			}) !important; background-repeat: no-repeat !important; }`;
 
 		tempReplaceContainers (root: Element, recurse: boolean) {
+			// This whole operation is plagued with issues. Containers will almost never get deleted when they should
+			// (e.g. when all terms have been removed or highlighting is disabled), and removing an individual term does not
+			// result in the associated elements being deleted. TODO
 			const containers: Array<Element> = [];
-			this.collectElements(root, recurse, document.createRange(), containers);
+			this.collectElements(root, recurse, containers);
 			const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
 			containers.forEach(container => {
 				const containerExisting = document.getElementById(container.id);
@@ -2944,15 +3249,20 @@ namespace Paint {
 			});
 		}
 		
-		collectElements (element: Element, recurse: boolean, range: Range, containers: Array<Element>) {
-			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-			const boxes: Array<Paint.Box> = styleRulesGetBoxesOwned(element, element, range);
+		collectElements (
+			element: Element,
+			recurse: boolean,
+			containers: Array<Element>,
+			range = new Range(),
+		) {
+			const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
+			const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
 			if (boxes.length) {
 				const container = document.createElement("div");
 				container.id = this.getElementDrawId(elementInfo.id);
 				boxes.forEach(box => {
 					const element = document.createElement("div");
-					element.style.position = "absolute";
+					element.style.position = "absolute"; // Should it be "fixed"? Should it be applied in a stylesheet?
 					element.style.left = box.x.toString() + "px";
 					element.style.top = box.y.toString() + "px";
 					element.style.width = box.width.toString() + "px";
@@ -2970,19 +3280,21 @@ namespace Paint {
 				container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
 				containers.push(container);
 			}
-			if (recurse) Array.from(element.children).forEach(child => {
-				if (child[Paint.ELEMENT_INFO]) {
-					this.collectElements(child, recurse, range, containers);
+			if (recurse) {
+				for (const child of element.children) if (child[FlowMonitor.CACHE]) {
+					this.collectElements(child, recurse, containers, range);
 				}
-			});
+			}
 		}
 
 		tempRemoveDrawElement (element: Element) {
-			document.getElementById(this.getElementDrawId((element[Paint.ELEMENT_INFO] as Paint.ElementInfo).id))?.remove();
+			document.getElementById(this.getElementDrawId((element[FlowMonitor.CACHE] as Paint.TreeCache).id))?.remove();
 		}
 	}
 
 	export class UrlMethod implements AbstractMethod {
+		highlightable = new FlowMonitor.StandardHighlightable();
+
 		getMiscCSS = () => "";
 
 		getTermHighlightsCSS = () => "";
@@ -2993,18 +3305,12 @@ namespace Paint {
 
 		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
 
-		isElementHighlightable = () => true;
-
-		getAncestorHighlightable = <T extends Element>(element: T) => element;
-
-		markElementsUpToHighlightable = () => undefined;
-
-		constructHighlightStyleRule = (highlightId: string, boxes: Array<Paint.Box>, terms: MatchTerms) =>
+		constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>, terms: MatchTerms) =>
 			`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id="${highlightId}"] { background-image: ${
 				this.constructHighlightStyleRuleUrl(boxes, terms)
 			} !important; }`;
 
-		constructHighlightStyleRuleUrl = (boxes: Array<Paint.Box>, terms: MatchTerms) =>
+		constructHighlightStyleRuleUrl = (boxes: Array<Box>, terms: MatchTerms) =>
 			`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
 				boxes.map(box =>
 					`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(
@@ -3022,6 +3328,8 @@ namespace Paint {
 class PaintEngine implements AbstractEngine {
 	method: Paint.AbstractMethod = new Paint.DummyMethod();
 
+	flowMonitor: AbstractFlowMonitor = new DummyFlowMonitor();
+
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
 
@@ -3032,15 +3340,6 @@ class PaintEngine implements AbstractEngine {
 		shiftObserver: this.shiftObserver,
 		visibilityObserver: this.visibilityObserver,
 	}));
-
-	getHighlightingId = this.getHighlightingIdFn();
-
-	*getHighlightingIdFn (): Generator<string, never, unknown> {
-		let i = 0;
-		while (true) {
-			yield (i++).toString();
-		}
-	}
 
 	/**
 	 * 
@@ -3055,10 +3354,6 @@ class PaintEngine implements AbstractEngine {
 		termCountCheck: TermCountCheck,
 		methodPreference: PaintEngineMethod,
 	) {
-		this.mutationObserver = this.getMutationUpdatesObserver(terms, highlightTags, termCountCheck);
-		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
-		this.shiftObserver = shiftObserver;
-		this.visibilityObserver = visibilityObserver;
 		if (methodPreference === PaintEngineMethod.PAINT && compatibility.highlight.paintEngine.paintMethod) {
 			this.method = new Paint.PaintMethod();
 		} else if (methodPreference === PaintEngineMethod.ELEMENT && compatibility.highlight.paintEngine.elementMethod) {
@@ -3066,6 +3361,33 @@ class PaintEngine implements AbstractEngine {
 		} else {
 			this.method = new Paint.UrlMethod();
 		}
+		this.flowMonitor = new StandardFlowMonitor(this.method.highlightable, (ancestor, ancestorHighlightable) => {
+			this.styleUpdates.observe(ancestorHighlightable);
+			if ((ancestorHighlightable[FlowMonitor.CACHE] as Paint.TreeCache).id === "") {
+				const highlighting = ancestorHighlightable[FlowMonitor.CACHE] as Paint.TreeCache;
+				highlighting.id = highlightingId.next().value;
+				// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
+				ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
+			}
+			this.method.highlightable.markElementsUpTo(ancestor);
+		}, element => ({
+			id: highlightingId.next().value,
+			styleRuleIdx: -1,
+			isHighlightable: this.method.highlightable.checkElement(element),
+			flows: [],
+		}));
+		this.mutationObserver = this.flowMonitor.getMutationUpdatesObserver(terms, highlightTags, termCountCheck,
+			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
+		);
+		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
+		this.shiftObserver = shiftObserver;
+		this.visibilityObserver = visibilityObserver;
+		const highlightingId: Generator<string, never, unknown> = (function* () {
+			let i = 0;
+			while (true) {
+				yield (i++).toString();
+			}
+		})();
 		this.getMiscCSS = this.method.getMiscCSS;
 		this.getTermHighlightsCSS = this.method.getTermHighlightsCSS;
 		this.getTermHighlightCSS = this.method.getTermHighlightCSS;
@@ -3097,7 +3419,7 @@ class PaintEngine implements AbstractEngine {
 		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		let markersHtml = "";
 		this.method.getHighlightedElements().forEach((element: HTMLElement) => {
-			const terms = (element[Paint.ELEMENT_INFO] as Paint.ElementInfo | undefined)?.flows.flatMap(flow => flow.boxesInfo
+			const terms = (element[FlowMonitor.CACHE] as Paint.TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo
 				.map(boxInfo => boxInfo.term)
 				.filter(term => termsAllowed.has(term))
 			) ?? [];
@@ -3150,7 +3472,7 @@ class PaintEngine implements AbstractEngine {
 				: nodeSelected ?? nodeBegin
 			);
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element[Paint.ELEMENT_INFO] as Paint.ElementInfo | undefined)?.flows.some(flow =>
+			(element[FlowMonitor.CACHE] as Paint.TreeCache | undefined)?.flows.some(flow =>
 				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.token === term.token) : flow.boxesInfo.length
 			) && isVisible(element)
 				? NodeFilter.FILTER_ACCEPT
@@ -3172,7 +3494,7 @@ class PaintEngine implements AbstractEngine {
 			element.classList.add(EleClass.FOCUS_CONTAINER);
 		}
 		this.focusClosest(element, element =>
-			element[Paint.ELEMENT_INFO] && !!(element[Paint.ELEMENT_INFO] as Paint.ElementInfo).flows
+			element[FlowMonitor.CACHE] && !!(element[FlowMonitor.CACHE] as Paint.TreeCache).flows
 		);
 		selection.setBaseAndExtent(element, 0, element, 0);
 		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });
@@ -3181,6 +3503,7 @@ class PaintEngine implements AbstractEngine {
 
 	startHighlighting (
 		terms: MatchTerms,
+		termsToHighlight: MatchTerms,
 		termsToPurge: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
@@ -3190,15 +3513,11 @@ class PaintEngine implements AbstractEngine {
 		this.boxesInfoRemoveForTerms(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
 		this.cacheExtend(document.body, highlightTags); // Ensure the *whole* document is set up for highlight-caching.
-		this.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
+		this.flowMonitor.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
 		this.mutationUpdates.observe();
 		this.styleUpdate(Array.from(new Set(
-			Array.from(this.elementsVisible).map(element => this.method.getAncestorHighlightable(element))
+			Array.from(this.elementsVisible).map(element => this.method.highlightable.findAncestor(element))
 		)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms)));
-	}
-
-	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
-		this.boxesInfoRemoveForTerms(terms, root);
 	}
 
 	endHighlighting () {
@@ -3206,193 +3525,34 @@ class PaintEngine implements AbstractEngine {
 		this.styleUpdates.disconnectAll();
 		this.undoHighlights();
 		document.querySelectorAll("*").forEach(element => {
-			delete element[Paint.ELEMENT_INFO];
+			delete element[FlowMonitor.CACHE];
 		});
 		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
 			element.removeAttribute("markmysearch-h_id");
-			delete element["markmysearch-h_id"];
 		});
 		this.method.endHighlighting();
 	}
 
-	cacheExtend (element: Element, highlightTags: HighlightTags, cacheModify = (element: Element) => {
-		if (!element[Paint.ELEMENT_INFO]) {
-			element[Paint.ELEMENT_INFO] = {
+	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+		this.boxesInfoRemoveForTerms(terms, root);
+	}
+
+	// BOOKMARK
+	cacheExtend (element: Element, highlightTags: HighlightTags, cacheApply = (element: Element) => {
+		if (!element[FlowMonitor.CACHE]) {
+			(element[FlowMonitor.CACHE] as Paint.TreeCache) = {
 				id: "",
 				styleRuleIdx: -1,
-				isHighlightable: this.method.isElementHighlightable(element),
+				isHighlightable: this.method.highlightable.checkElement(element),
 				flows: [],
-			} as Paint.ElementInfo;
+			};
 		}
-	}) {
-		if (!highlightTags.reject.has(element.tagName)) {
-			cacheModify(element);
-			Array.from(element.children).forEach(child => this.cacheExtend(child, highlightTags));
+	}) { if (!highlightTags.reject.has(element.tagName)) {
+		cacheApply(element);
+		for (const child of element.children) {
+			this.cacheExtend(child, highlightTags);
 		}
-	}
-	
-	/**
-	 * Removes the flows cache from all descendant elements.
-	 * @param element The ancestor below which to forget flows.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 */
-	flowsRemove (element: Element, highlightTags: HighlightTags) {
-		if (highlightTags.reject.has(element.tagName)) {
-			return;
-		}
-		if (element[Paint.ELEMENT_INFO]) {
-			(element[Paint.ELEMENT_INFO] as Paint.ElementInfo).flows = [];
-		}
-		Array.from(element.children).forEach(child => this.flowsRemove(child, highlightTags));
-	}
-
-	/**
-	 * TODO document
-	 * @param terms Terms to find and highlight.
-	 * @param textFlow Consecutive text nodes to highlight inside.
-	 */
-	flowCacheWithBoxesInfo (terms: MatchTerms, textFlow: Array<Text>) {
-		const flow: Paint.Flow = {
-			text: textFlow.map(node => node.textContent).join(""),
-			boxesInfo: [],
-		};
-		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
-			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
-		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow[textFlow.length - 1]);
-		if (ancestor[Paint.ELEMENT_INFO]) {
-			(ancestor[Paint.ELEMENT_INFO] as Paint.ElementInfo).flows.push(flow);
-		} else {
-			// This condition should be impossible, but since in rare cases (typically when running before "document_idle")
-			// mutation observers may not always fire, it must be accounted for.
-			console.warn("Aborting highlight box-info caching: Element has no cache.", ancestor);
-			return;
-		}
-		for (const term of terms) {
-			let i = 0;
-			let node = textFlow[0];
-			let textStart = 0;
-			let textEnd = node.length;
-			for (const match of flow.text.matchAll(term.pattern)) {
-				const highlightStart = match.index as number;
-				const highlightEnd = highlightStart + match[0].length;
-				while (textEnd <= highlightStart) {
-					node = textFlow[++i];
-					textStart = textEnd;
-					textEnd += node.length;
-				}
-				const parent = node.parentElement as Element;
-				if (parent["markmysearch-h_id"]) { // Highlighting ID may already be set, but set it just in case.
-					parent.setAttribute("markmysearch-h_id", parent["markmysearch-h_id"]);
-				}
-				// eslint-disable-next-line no-constant-condition
-				while (true) {
-					// Register as much of this highlight that fits into this node.
-					flow.boxesInfo.push({
-						term,
-						node,
-						start: Math.max(0, highlightStart - textStart),
-						end: Math.min(highlightEnd - textStart, node.length),
-						boxes: [],
-					});
-					if (highlightEnd <= textEnd) {
-						break;
-					}
-					// The highlight extends beyond this node, so keep going; move onto the next node.
-					node = textFlow[++i];
-					textStart = textEnd;
-					textEnd += node.length;
-				}
-			}
-		}
-		if (flow.boxesInfo.length) {
-			const ancestorHighlightable = this.method.getAncestorHighlightable(ancestor);
-			this.styleUpdates.observe(ancestorHighlightable);
-			if ((ancestorHighlightable[Paint.ELEMENT_INFO] as Paint.ElementInfo).id === "") {
-				const highlighting = ancestorHighlightable[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-				highlighting.id = this.getHighlightingId.next().value;
-				ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
-				ancestorHighlightable["markmysearch-h_id"] = highlighting.id;
-			}
-			this.method.markElementsUpToHighlightable(ancestor);
-		}
-	}
-
-	boxesInfoCalculate (
-		terms: MatchTerms,
-		flowOwner: Element,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		if (!flowOwner.firstChild) {
-			return;
-		}
-		const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
-		const textFlows = getTextFlows(flowOwner.firstChild, highlightTags);
-		this.flowsRemove(flowOwner, highlightTags);
-		textFlows // The first flow is always before the first break, and the last after the last. Either may be empty.
-			.slice((breaksFlow && textFlows[0].length) ? 0 : 1, (breaksFlow && textFlows[textFlows.length - 1].length) ? undefined : -1)
-			.forEach(textFlow => this.flowCacheWithBoxesInfo(terms, textFlow));
-		termCountCheck(); // Major performance hit when using very small delay or small delay maximum for debounce.
-	}
-	
-	boxesInfoCalculateForFlowOwners (
-		terms: MatchTerms,
-		node: Node,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
-		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
-		const parent = node.parentElement;
-		if (!parent) {
-			return;
-		}
-		if (highlightTags.flow.has(parent.tagName)) {
-			// The parent may include non self-contained flows.
-			const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-			walker.currentNode = node;
-			let breakFirst: Element | null = walker.previousNode() as Element;
-			while (breakFirst && highlightTags.flow.has(breakFirst.tagName)) {
-				breakFirst = breakFirst !== parent ? walker.previousNode() as Element : null;
-			}
-			walker.currentNode = node.nextSibling ?? node;
-			let breakLast: Element | null = node.nextSibling ? walker.nextNode() as Element : null;
-			while (breakLast && highlightTags.flow.has(breakLast.tagName)) {
-				breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
-			}
-			if (breakFirst && breakLast) {
-				// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
-				// ALL flows of descendants are recalculated. See below.
-				this.boxesInfoCalculate(terms, parent, highlightTags, termCountCheck);
-			} else {
-				// The flow containing the node may leave the parent, which we assume disrupted the text flows of an ancestor.
-				this.boxesInfoCalculateForFlowOwners(terms, parent, highlightTags, termCountCheck);
-			}
-		} else {
-			// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
-			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin;
-			// example can be seen when loading DuckDuckGo results dynamically. Could be fixed by discarding text flows which start
-			// or end inside elements which do not contain and are not contained by a given element. Will not implement.
-			this.boxesInfoCalculate(terms, parent, highlightTags, termCountCheck);
-		}
-	}
-	
-	boxesInfoCalculateForFlowOwnersFromContent (
-		terms: MatchTerms,
-		element: Element,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
-		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
-		if (highlightTags.flow.has(element.tagName)) {
-			// The element may include non self-contained flows.
-			this.boxesInfoCalculateForFlowOwners(terms, element, highlightTags, termCountCheck);
-		} else {
-			// The element can only include self-contained flows, so flows need only be recalculated below the element.
-			this.boxesInfoCalculate(terms, element, highlightTags, termCountCheck);
-		}
-	}
+	} }
 	
 	/** TODO update documentation
 	 * FIXME this is a cut-down and adapted legacy function which may not function efficiently or fully correctly.
@@ -3404,13 +3564,13 @@ class PaintEngine implements AbstractEngine {
 		const editFlow: (flow: Paint.Flow) => void = terms
 			? flow => flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token))
 			: flow => flow.boxesInfo = [];
-		for (const element of Array.from(root.querySelectorAll("[markmysearch-h_id]"))) {
+		for (const element of root.querySelectorAll("[markmysearch-h_id]")) {
 			const filterBoxesInfo = (element: Element) => {
-				const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
+				const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
 				if (!elementInfo)
 					return;
 				elementInfo.flows.forEach(editFlow);
-				Array.from(element.children).forEach(child => filterBoxesInfo(child));
+				Array.from(element.children).forEach(filterBoxesInfo);
 			};
 			filterBoxesInfo(element);
 		}
@@ -3431,25 +3591,25 @@ class PaintEngine implements AbstractEngine {
 		styleRules: Array<Paint.StyleRuleInfo>,
 		terms: MatchTerms,
 	) {
-		const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
-		const boxes: Array<Paint.Box> = Paint.styleRulesGetBoxesOwned(element, element, range);
+		const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
+		const boxes: Array<Paint.Box> = Paint.styleRulesGetBoxesOwned(element);
 		if (boxes.length) {
 			styleRules.push({
 				rule: this.method.constructHighlightStyleRule(elementInfo.id, boxes, terms),
 				element,
 			});
 		}
-		(recurse ? Array.from(element.children) as Array<HTMLElement> : []).forEach(child => {
-			if (child[Paint.ELEMENT_INFO]) {
+		if (recurse) {
+			for (const child of element.children) if (child[FlowMonitor.CACHE]) {
 				this.collectStyleRules(child, recurse, range, styleRules, terms);
 			}
-		});
+		}
 	}
 	
 	styleUpdate (styleRules: Array<Paint.StyleRuleInfo>) {
 		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
 		styleRules.forEach(({ rule, element }) => {
-			const elementInfo = element[Paint.ELEMENT_INFO] as Paint.ElementInfo;
+			const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
 			if (elementInfo.styleRuleIdx === -1) {
 				elementInfo.styleRuleIdx = styleSheet.cssRules.length;
 			} else {
@@ -3464,7 +3624,7 @@ class PaintEngine implements AbstractEngine {
 
 	getTermOccurrenceCount (term: MatchTerm, checkExistsOnly = false) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
-			(Paint.ELEMENT_INFO in element) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
+			(FlowMonitor.CACHE in element) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
 		let count = 0;
 		let element: Element;
 		// eslint-disable-next-line no-cond-assign
@@ -3472,7 +3632,7 @@ class PaintEngine implements AbstractEngine {
 			if (!element) {
 				break;
 			}
-			(element[Paint.ELEMENT_INFO] as Paint.ElementInfo).flows.forEach(flow => {
+			(element[FlowMonitor.CACHE] as Paint.TreeCache).flows.forEach(flow => {
 				count += flow.boxesInfo.filter(boxInfo => boxInfo.term === term).length;
 			});
 			if (checkExistsOnly && count > 0) {
@@ -3482,45 +3642,10 @@ class PaintEngine implements AbstractEngine {
 		return count;
 	}
 
-	getMutationUpdatesObserver (terms: MatchTerms, highlightTags: HighlightTags, termCountCheck: TermCountCheck) {
-		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		return new MutationObserver(mutations => {
-			// TODO optimise as above
-			const elements: Set<HTMLElement> = new Set;
-			for (const mutation of mutations) {
-				const addedNodes = Array.from(mutation.addedNodes);
-				for (const node of addedNodes) {
-					if (node.parentElement && node.nodeType === Node.ELEMENT_NODE
-						&& canHighlightElement(rejectSelector, node as Element)) {
-						this.cacheExtend(node as Element, highlightTags);
-					}
-				}
-				if (mutation.type === "characterData"
-					&& mutation.target.parentElement && canHighlightElement(rejectSelector, mutation.target.parentElement)) {
-					elements.add(mutation.target.parentElement);
-				}
-				for (const node of addedNodes) if (node.parentElement) {
-					if (node.nodeType === Node.ELEMENT_NODE) {
-						if (canHighlightElement(rejectSelector, node as Element)) {
-							elements.add(node as HTMLElement);
-						}
-					} else if (node.nodeType === Node.TEXT_NODE
-						&& canHighlightElement(rejectSelector, node.parentElement)) {
-						// Previously used `boxesInfoCalculateForFlowOwners()` on `node`.
-						elements.add(node.parentElement);
-					}
-				}
-			}
-			for (const element of elements) {
-				this.boxesInfoCalculateForFlowOwnersFromContent(terms, element, highlightTags, termCountCheck);
-			}
-		});
-	}
-
 	getShiftAndVisibilityObservers (terms: MatchTerms) {
 		const shiftObserver = new ResizeObserver(entries => {
 			const styleRules: Array<Paint.StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(this.method.getAncestorHighlightable(entry.target), true, terms)
+				this.getStyleRules(this.method.highlightable.findAncestor(entry.target), true, terms)
 			);
 			if (styleRules.length) {
 				this.styleUpdate(styleRules);
@@ -3531,16 +3656,16 @@ class PaintEngine implements AbstractEngine {
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
 					//console.log(entry.target, "intersecting");
-					if (entry.target[Paint.ELEMENT_INFO]) {
+					if (entry.target[FlowMonitor.CACHE]) {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
-							this.getStyleRules(this.method.getAncestorHighlightable(entry.target), false, terms)
+							this.getStyleRules(this.method.highlightable.findAncestor(entry.target), false, terms)
 						);
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
-					if (entry.target[Paint.ELEMENT_INFO]) {
+					if (entry.target[FlowMonitor.CACHE]) {
 						this.method.tempRemoveDrawElement(entry.target);
 					}
 					this.elementsVisible.delete(entry.target);
@@ -3552,6 +3677,108 @@ class PaintEngine implements AbstractEngine {
 			}
 		}, { rootMargin: "400px" });
 		return { shiftObserver, visibilityObserver };
+	}
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace, @typescript-eslint/no-unused-vars
+namespace Highlt {
+}
+
+class HighlightEngine implements AbstractEngine {
+	highlights = (() => {
+		const highlights = CSS.highlights as HighlightRegistry;
+		const map: HighlightRegistry = new Map();
+		map.clear = () => {
+			for (const key of map.keys()) {
+				map.delete(key);
+			}
+		};
+		const set = map.set;
+		map.set = (key: string, value: Highlight) => {
+			highlights.set(key, value);
+			return set(key, value);
+		};
+		return map;
+	})();
+	
+	constructor () {
+		console.log("Now with added Highlight.");
+	}
+
+	getMiscCSS () {
+		return "";
+	}
+
+	getTermHighlightsCSS () {
+		return "";
+	}
+
+	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
+		const term = terms[termIndex];
+		const hue = hues[termIndex % hues.length];
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		const cycle = Math.floor(termIndex / hues.length);
+		return `
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${term.token}) {
+	background-color: hsl(${hue} 70% 60%);
+	/* text-decoration to indicate cycle */
+}`
+		;
+	}
+
+	getTermBackgroundStyle = TermCSS.getFlatStyle;
+
+	getRequestWaitDuration () {
+		return 50;
+	}
+
+	getRequestReschedulingDelayMax () {
+		return 500;
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	insertScrollMarkers (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
+		//
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
+		//
+	}
+
+	startHighlighting (
+		terms: MatchTerms,
+		termsToHighlight: MatchTerms,
+		termsToPurge: MatchTerms,
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		highlightTags: HighlightTags,
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		termCountCheck: TermCountCheck,
+	) {
+		// Clean up.
+		termsToPurge.forEach(term => this.highlights.delete(term.token));
+		// MAIN
+		termsToHighlight.forEach(term => this.highlights.set(term.token, new Highlight()));
+		
+	}
+
+	endHighlighting () {
+		this.highlights.clear();
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	undoHighlights (terms?: MatchTerms | undefined, root: HTMLElement | DocumentFragment = document.body) {
+		//
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	focusNextTerm (highlightTags: HighlightTags, reverse: boolean, stepNotJump: boolean, term?: MatchTerm) {
+		//
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	getTermOccurrenceCount (term: MatchTerm, checkExistsOnly = false) {
+		return 0;
 	}
 }
 
@@ -3738,7 +3965,8 @@ const getTermsFromSelection = () => {
 		// Give the interface a chance to redraw before performing [expensive] highlighting.
 		setTimeout(() => {
 			highlighter.current.startHighlighting(
-				termsToHighlight.length ? termsToHighlight : terms,
+				terms,
+				termsToHighlight,
 				termsToPurge,
 				highlightTags,
 				termCountCheck,
@@ -3968,7 +4196,7 @@ const getTermsFromSelection = () => {
 			if (message.setHighlighter !== undefined) {
 				highlighter.current.endHighlighting();
 				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
-					highlighter.current = new DummyEngine();
+					highlighter.current = new HighlightEngine();
 				} else if (message.setHighlighter.engine === Engine.PAINT) {
 					highlighter.current = new PaintEngine(terms, highlightTags, termCountCheck,
 						message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT);

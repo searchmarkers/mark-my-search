@@ -17,10 +17,11 @@ const compatibility = {
 	browser: Browser.UNKNOWN,
 	highlight: {
 		paintEngine: {
-			paintMethod: !!CSS.paintWorklet,
-			elementMethod: !!document["mozSetImageElement"], // `element()` might be defined anyway, could have false negatives.
+			paintMethod: !!this.CSS?.paintWorklet,
+			// `element()` might be defined anyway, could have false negatives.
+			elementMethod: !!(this.document ? this.document["mozSetImageElement"] : undefined),
 		},
-		highlightEngine: !!CSS.highlights,
+		highlightEngine: !!this.CSS?.highlights,
 	},
 };
 

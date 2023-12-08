@@ -12,7 +12,7 @@ registerPaint("markmysearch-highlights", class {
 		properties: StylePropertyMapReadOnly,
 	) {
 		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles")?.toString() || "{}") as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() || "[]") as Array<Paint.Box>;
+		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() || "[]") as Array<Matcher.Box>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.token];
 			if (!style) {
