@@ -657,13 +657,16 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				barLook: sync.barLook,
 				highlightMethod: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
-				setHighlighter: sync.highlightMethod.paintReplaceByElement ? {
-					engine: Engine.ELEMENT,
-				} : {
-					engine: Engine.PAINT,
-					paintEngineMethod: compatibility.highlight.paintEngine.paintMethod
-						? PaintEngineMethod.PAINT : PaintEngineMethod.ELEMENT,
+				setHighlighter: {
+					engine: Engine.HIGHLIGHT,
 				},
+				//setHighlighter: sync.highlightMethod.paintReplaceByElement ? {
+				//	engine: Engine.ELEMENT,
+				//} : {
+				//	engine: Engine.PAINT,
+				//	paintEngineMethod: compatibility.highlight.paintEngine.paintMethod
+				//		? PaintEngineMethod.PAINT : PaintEngineMethod.ELEMENT,
+				//},
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
 			};
 		} else {

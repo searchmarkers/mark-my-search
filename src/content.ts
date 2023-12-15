@@ -1694,7 +1694,6 @@ namespace Matcher {
 		term: MatchTerm
 		start: number
 		end: number
-		boxes: Array<Box>
 	} & (HasBoxes extends true ? { boxes: Array<Box> } : Record<never, never>)
 	& (NodeReference extends true ? { node: Text } : Record<never, never>)
 	export type BoxInfo<NodeReference extends boolean = true> = BaseBoxInfo<false, NodeReference>
@@ -1729,8 +1728,8 @@ namespace Matcher {
 						node,
 						start: Math.max(0, highlightStart - textStart),
 						end: Math.min(highlightEnd - textStart, node.length),
-						boxes: [],
-					});
+						boxes: [], // TODO do not add this property unless required
+					} as BoxInfo);
 					if (highlightEnd <= textEnd) {
 						break;
 					}
@@ -1829,14 +1828,18 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 
 	createElementCache: (element: Element) => FlowMonitor.TreeCache = () => ({ flows: [] });
 
+	onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
+
 	constructor (
 		highlightable: FlowMonitor.AbstractHighlightable,
 		onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void,
 		createElementCache: (element: Element) => FlowMonitor.TreeCache,
+		onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
 	) {
 		this.highlightable = highlightable;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
 		this.createElementCache = createElementCache;
+		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
 	}
 
 	getMutationUpdatesObserver (
@@ -1953,9 +1956,9 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	}
 
 	/**
-	 * TODO document
-	 * @param terms Terms to find and highlight.
-	 * @param textFlow Consecutive text nodes to highlight inside.
+	 * Removes the flows cache from all descendant elements.
+	 * @param element The ancestor below which to forget flows.
+	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 */
 	flowsRemove (element: Element, highlightTags: HighlightTags) {
 		if (highlightTags.reject.has(element.tagName)) {
@@ -1970,14 +1973,11 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	}
 
 	/**
-	 * Removes the flows cache from all descendant elements.
-	 * @param element The ancestor below which to forget flows.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
+	 * TODO document
+	 * @param terms Terms to find and highlight.
+	 * @param textFlow Consecutive text nodes to highlight inside.
 	 */
-	flowCacheWithBoxesInfo (
-		terms: MatchTerms,
-		textFlow: Array<Text>,
-	) {
+	flowCacheWithBoxesInfo (terms: MatchTerms, textFlow: Array<Text>) {
 		const text = textFlow.map(node => node.textContent).join("");
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
@@ -2002,6 +2002,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		if (!flow.boxesInfo.length) {
 			return;
 		}
+		(this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo));
 		const ancestorHighlightable = this.highlightable.findAncestor(ancestor);
 		this.onNewHighlightedAncestor(ancestor, ancestorHighlightable);
 	}
@@ -2082,7 +2083,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	}
 
 	getFlow (terms: MatchTerms, input: HTMLInputElement) {
-		const flow: Matcher.Flow<false> = {
+		const flow: Matcher.BaseFlow<true, false> = {
 			text: input.value,
 			boxesInfo: [],
 		};
@@ -3361,21 +3362,25 @@ class PaintEngine implements AbstractEngine {
 		} else {
 			this.method = new Paint.UrlMethod();
 		}
-		this.flowMonitor = new StandardFlowMonitor(this.method.highlightable, (ancestor, ancestorHighlightable) => {
-			this.styleUpdates.observe(ancestorHighlightable);
-			if ((ancestorHighlightable[FlowMonitor.CACHE] as Paint.TreeCache).id === "") {
+		this.flowMonitor = new StandardFlowMonitor(
+			this.method.highlightable,
+			(ancestor, ancestorHighlightable) => {
+				this.styleUpdates.observe(ancestorHighlightable);
 				const highlighting = ancestorHighlightable[FlowMonitor.CACHE] as Paint.TreeCache;
-				highlighting.id = highlightingId.next().value;
-				// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
-				ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
-			}
-			this.method.highlightable.markElementsUpTo(ancestor);
-		}, element => ({
-			id: highlightingId.next().value,
-			styleRuleIdx: -1,
-			isHighlightable: this.method.highlightable.checkElement(element),
-			flows: [],
-		}));
+				if (highlighting.id === "") {
+					highlighting.id = highlightingId.next().value;
+					// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
+					ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
+				}
+				this.method.highlightable.markElementsUpTo(ancestor);
+			},
+			(element): Paint.TreeCache => ({
+				id: highlightingId.next().value,
+				styleRuleIdx: -1,
+				isHighlightable: this.method.highlightable.checkElement(element),
+				flows: [],
+			}),
+		);
 		this.mutationObserver = this.flowMonitor.getMutationUpdatesObserver(terms, highlightTags, termCountCheck,
 			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
 		);
@@ -3537,7 +3542,6 @@ class PaintEngine implements AbstractEngine {
 		this.boxesInfoRemoveForTerms(terms, root);
 	}
 
-	// BOOKMARK
 	cacheExtend (element: Element, highlightTags: HighlightTags, cacheApply = (element: Element) => {
 		if (!element[FlowMonitor.CACHE]) {
 			(element[FlowMonitor.CACHE] as Paint.TreeCache) = {
@@ -3682,27 +3686,64 @@ class PaintEngine implements AbstractEngine {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace, @typescript-eslint/no-unused-vars
 namespace Highlt {
+	export const getName = (termToken: string) => "markmysearch-" + termToken;
 }
 
 class HighlightEngine implements AbstractEngine {
+	flowMonitor: AbstractFlowMonitor = new DummyFlowMonitor();
+
+	mutationObserver: MutationObserver | null;
+	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
+
 	highlights = (() => {
 		const highlights = CSS.highlights as HighlightRegistry;
 		const map: HighlightRegistry = new Map();
-		map.clear = () => {
-			for (const key of map.keys()) {
-				map.delete(key);
+		return {
+			set: (termToken: string, value: Highlight) => {
+				highlights.set(Highlt.getName(termToken), value);
+				return map.set(termToken, value);
+			},
+			get: (termToken: string) => map.get(termToken),
+			has: (termToken: string) => map.has(termToken),
+			delete: (termToken: string) => {
+				highlights.delete(Highlt.getName(termToken));
+				return map.delete(termToken);
+			},
+			clear: () => {
+				for (const termToken of map.keys()) {
+					highlights.delete(Highlt.getName(termToken));
+				}
+				return map.clear();
 			}
 		};
-		const set = map.set;
-		map.set = (key: string, value: Highlight) => {
-			highlights.set(key, value);
-			return set(key, value);
-		};
-		return map;
 	})();
 	
-	constructor () {
-		console.log("Now with added Highlight.");
+	constructor (
+		terms: MatchTerms,
+		highlightTags: HighlightTags,
+		termCountCheck: TermCountCheck,
+	) {
+		this.flowMonitor = new StandardFlowMonitor(
+			new FlowMonitor.StandardHighlightable(),
+			() => undefined,
+			() => ({ flows: [] }),
+			boxesInfo => {
+				for (const boxInfo of boxesInfo) {
+					const highlight = this.highlights.get(boxInfo.term.token);
+					if (!highlight)
+						continue;
+					highlight.add(new StaticRange({
+						startContainer: boxInfo.node,
+						startOffset: boxInfo.start,
+						endContainer: boxInfo.node,
+						endOffset: boxInfo.end,
+					}));
+				}
+			},
+		);
+		this.mutationObserver = this.flowMonitor.getMutationUpdatesObserver(terms, highlightTags, termCountCheck,
+			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
+		);
 	}
 
 	getMiscCSS () {
@@ -3719,8 +3760,9 @@ class HighlightEngine implements AbstractEngine {
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const cycle = Math.floor(termIndex / hues.length);
 		return `
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${term.token}) {
-	background-color: hsl(${hue} 70% 60%);
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${Highlt.getName(term.token)}) {
+	background-color: hsl(${hue} 70% 70%);
+	color: black;
 	/* text-decoration to indicate cycle */
 }`
 		;
@@ -3750,16 +3792,17 @@ class HighlightEngine implements AbstractEngine {
 		terms: MatchTerms,
 		termsToHighlight: MatchTerms,
 		termsToPurge: MatchTerms,
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		highlightTags: HighlightTags,
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		termCountCheck: TermCountCheck,
 	) {
 		// Clean up.
 		termsToPurge.forEach(term => this.highlights.delete(term.token));
+		this.mutationUpdates.disconnect();
 		// MAIN
-		termsToHighlight.forEach(term => this.highlights.set(term.token, new Highlight()));
-		
+		terms.forEach(term => this.highlights.set(term.token, new Highlight()));
+		this.cacheExtend(document.body, highlightTags); // Ensure the *whole* document is set up for highlight-caching.
+		this.flowMonitor.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
+		this.mutationUpdates.observe();
 	}
 
 	endHighlighting () {
@@ -3768,8 +3811,21 @@ class HighlightEngine implements AbstractEngine {
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	undoHighlights (terms?: MatchTerms | undefined, root: HTMLElement | DocumentFragment = document.body) {
-		//
+		terms?.forEach(term => this.highlights.delete(term.token));
 	}
+
+	cacheExtend (element: Element, highlightTags: HighlightTags, cacheApply = (element: Element) => {
+		if (!element[FlowMonitor.CACHE]) {
+			(element[FlowMonitor.CACHE] as FlowMonitor.TreeCache) = {
+				flows: [],
+			};
+		}
+	}) { if (!highlightTags.reject.has(element.tagName)) {
+		cacheApply(element);
+		for (const child of element.children) {
+			this.cacheExtend(child, highlightTags);
+		}
+	} }
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	focusNextTerm (highlightTags: HighlightTags, reverse: boolean, stepNotJump: boolean, term?: MatchTerm) {
@@ -4196,7 +4252,7 @@ const getTermsFromSelection = () => {
 			if (message.setHighlighter !== undefined) {
 				highlighter.current.endHighlighting();
 				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
-					highlighter.current = new HighlightEngine();
+					highlighter.current = new HighlightEngine(terms, highlightTags, termCountCheck);
 				} else if (message.setHighlighter.engine === Engine.PAINT) {
 					highlighter.current = new PaintEngine(terms, highlightTags, termCountCheck,
 						message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT);
