@@ -1684,27 +1684,21 @@ namespace TermCSS {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Matcher {
-	export type BaseFlow<HasBoxes extends boolean, NodeReference extends boolean> = {
+	type BoxInfoExt = Record<string | never, unknown>
+	export type BaseFlow<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
 		text: string
-		boxesInfo: Array<BaseBoxInfo<HasBoxes, NodeReference>>
+		boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExtension>>
 	}
-	export type Flow<NodeReference extends boolean = true> = BaseFlow<false, NodeReference>
 
-	export type BaseBoxInfo<HasBoxes extends boolean, NodeReference extends boolean> = {
+	export type Flow = BaseFlow<true>
+
+	export type BaseBoxInfo<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
 		term: MatchTerm
 		start: number
 		end: number
-	} & (HasBoxes extends true ? { boxes: Array<Box> } : Record<never, never>)
-	& (NodeReference extends true ? { node: Text } : Record<never, never>)
-	export type BoxInfo<NodeReference extends boolean = true> = BaseBoxInfo<false, NodeReference>
+	} & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExtension>
 
-	export type Box = {
-		token: string
-		x: number
-		y: number
-		width: number
-		height: number
-	}
+	export type BoxInfo = BaseBoxInfo<true>
 
 	export const flowPopulateBoxesInfo = (flow: Flow, textFlow: Array<Text>, terms: MatchTerms) => {
 		for (const term of terms) {
@@ -1728,8 +1722,7 @@ namespace Matcher {
 						node,
 						start: Math.max(0, highlightStart - textStart),
 						end: Math.min(highlightEnd - textStart, node.length),
-						boxes: [], // TODO do not add this property unless required
-					} as BoxInfo);
+					});
 					if (highlightEnd <= textEnd) {
 						break;
 					}
@@ -1747,7 +1740,7 @@ namespace Matcher {
 namespace FlowMonitor {
 	export const CACHE = "markmysearch__cache";
 
-	export type TreeCache<Flow = unknown> = {
+	export type TreeCache<Flow = Matcher.Flow> = {
 		flows: Array<Flow>
 	}
 	
@@ -1801,12 +1794,14 @@ namespace FlowMonitor {
 }
 
 interface AbstractFlowMonitor {
-	getMutationUpdatesObserver: (
+	mutationObserver: MutationObserver;
+
+	initMutationUpdatesObserver: (
 		terms: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
 		onElementsAdded: (elements: Set<Element>) => void,
-	) => MutationObserver
+	) => void
 
 	boxesInfoCalculate: (
 		terms: MatchTerms,
@@ -1817,11 +1812,14 @@ interface AbstractFlowMonitor {
 }
 
 class DummyFlowMonitor implements AbstractFlowMonitor {
-	getMutationUpdatesObserver = () => new MutationObserver(() => undefined);
+	mutationObserver = new MutationObserver(() => undefined);
+	initMutationUpdatesObserver = () => undefined;
 	boxesInfoCalculate = () => undefined;
 }
 
 class StandardFlowMonitor implements AbstractFlowMonitor {
+	mutationObserver = new MutationObserver(() => undefined);
+
 	highlightable: FlowMonitor.AbstractHighlightable;
 
 	onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void = () => undefined;
@@ -1829,27 +1827,30 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	createElementCache: (element: Element) => FlowMonitor.TreeCache = () => ({ flows: [] });
 
 	onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
+	onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
 
 	constructor (
 		highlightable: FlowMonitor.AbstractHighlightable,
 		onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void,
 		createElementCache: (element: Element) => FlowMonitor.TreeCache,
 		onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
+		onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
 	) {
 		this.highlightable = highlightable;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
 		this.createElementCache = createElementCache;
 		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
+		this.onBoxesInfoCleared = onBoxesInfoCleared;
 	}
 
-	getMutationUpdatesObserver (
+	initMutationUpdatesObserver (
 		terms: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
 		onElementsAdded: (elements: Set<Element>) => void,
 	) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		return new MutationObserver(mutations => {
+		this.mutationObserver = new MutationObserver(mutations => {
 			// TODO optimise as above
 			const elementsAffected: Set<Element> = new Set();
 			const elementsAdded: Set<Element> = new Set();
@@ -1871,6 +1872,9 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 					} break; }
 					}
 				}
+				(this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
+					(node[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
+				)));
 			}
 			onElementsAdded(elementsAdded);
 			for (const element of elementsAffected) {
@@ -1964,8 +1968,10 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		if (highlightTags.reject.has(element.tagName)) {
 			return;
 		}
-		if (element[FlowMonitor.CACHE]) {
-			(element[FlowMonitor.CACHE] as FlowMonitor.TreeCache).flows = [];
+		const highlighting = element[FlowMonitor.CACHE] as FlowMonitor.TreeCache;
+		if (highlighting) {
+			(this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo)));
+			highlighting.flows = [];
 		}
 		for (const child of element.children) {
 			this.flowsRemove(child, highlightTags);
@@ -1995,14 +2001,14 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 			ancestorHighlighting = this.createElementCache(ancestor);
 			ancestorHighlighting.flows.push(flow);
 			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
-			console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
+			//console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
 		}
 		// Match the terms inside the flow to produce highlighting box info.
 		Matcher.flowPopulateBoxesInfo(flow, textFlow, terms);
+		(this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo));
 		if (!flow.boxesInfo.length) {
 			return;
 		}
-		(this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo));
 		const ancestorHighlightable = this.highlightable.findAncestor(ancestor);
 		this.onNewHighlightedAncestor(ancestor, ancestorHighlightable);
 	}
@@ -2027,6 +2033,10 @@ class DummySpecialEngine implements AbstractSpecialEngine {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace PaintSpecial {
+	export type Flow = Matcher.BaseFlow<false, Paint.BoxInfoBoxes>
+
+	export type BoxInfo = Matcher.BaseBoxInfo<false, Paint.BoxInfoBoxes>
+
 	export const contextCSS = { hovered: ":hover", focused: ":focus" };
 
 	export type HighlightContext = keyof typeof contextCSS
@@ -2083,7 +2093,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	}
 
 	getFlow (terms: MatchTerms, input: HTMLInputElement) {
-		const flow: Matcher.BaseFlow<true, false> = {
+		const flow: PaintSpecial.Flow = {
 			text: input.value,
 			boxesInfo: [],
 		};
@@ -2999,11 +3009,19 @@ ${HIGHLIGHT_TAG} {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Paint {
-	export type Flow<NodeReference extends boolean = true> = Matcher.BaseFlow<true, NodeReference>
+	export type Flow = Matcher.BaseFlow<true, BoxInfoBoxes>
 
-	export type BoxInfo<NodeReference extends boolean = true> = Matcher.BaseBoxInfo<true, NodeReference>
+	export type BoxInfo = Matcher.BaseBoxInfo<true, BoxInfoBoxes>
 
-	export type Box = Matcher.Box
+	export type BoxInfoBoxes = { boxes: Array<Box> }
+
+	export type Box = {
+		token: string
+		x: number
+		y: number
+		width: number
+		height: number
+	}
 
 	export type TreeCache = {
 		id: string
@@ -3045,7 +3063,7 @@ namespace Paint {
 			ownerRects = [ owner.getBoundingClientRect() ];
 		}
 		elementPopulateBoxes(elementInfo.flows, ownerRects, range);
-		return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes));
+		return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
 	};
 
 	const elementPopulateBoxes = (
@@ -3054,7 +3072,7 @@ namespace Paint {
 		range = new Range(),
 	) =>
 		elementFlows.forEach(flow => flow.boxesInfo.forEach(boxInfo => {
-			boxInfo.boxes.splice(0, boxInfo.boxes.length);
+			boxInfo.boxes?.splice(0);
 			range.setStart(boxInfo.node, boxInfo.start);
 			range.setEnd(boxInfo.node, boxInfo.end);
 			const textRects = range.getClientRects();
@@ -3076,6 +3094,7 @@ namespace Paint {
 						x += ownerRect.width;
 					}
 				}
+				boxInfo.boxes ??= [];
 				boxInfo.boxes.push({
 					token: boxInfo.term.token,
 					x: Math.round(x),
@@ -3331,8 +3350,7 @@ class PaintEngine implements AbstractEngine {
 
 	flowMonitor: AbstractFlowMonitor = new DummyFlowMonitor();
 
-	mutationObserver: MutationObserver | null = null;
-	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
+	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
 
 	elementsVisible: Set<Element> = new Set;
 	shiftObserver: ResizeObserver | null = null;
@@ -3381,7 +3399,7 @@ class PaintEngine implements AbstractEngine {
 				flows: [],
 			}),
 		);
-		this.mutationObserver = this.flowMonitor.getMutationUpdatesObserver(terms, highlightTags, termCountCheck,
+		this.flowMonitor.initMutationUpdatesObserver(terms, highlightTags, termCountCheck,
 			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
 		);
 		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
@@ -3684,16 +3702,21 @@ class PaintEngine implements AbstractEngine {
 	}
 }
 
-// eslint-disable-next-line @typescript-eslint/no-namespace, @typescript-eslint/no-unused-vars
+// eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Highlt {
+	export type Flow = Matcher.BaseFlow<true, BoxInfoRange>
+
+	export type BoxInfo = Matcher.BaseBoxInfo<true, BoxInfoRange>
+
+	export type BoxInfoRange = { range: AbstractRange }
+
 	export const getName = (termToken: string) => "markmysearch-" + termToken;
 }
 
 class HighlightEngine implements AbstractEngine {
 	flowMonitor: AbstractFlowMonitor = new DummyFlowMonitor();
 
-	mutationObserver: MutationObserver | null;
-	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
+	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
 
 	highlights = (() => {
 		const highlights = CSS.highlights as HighlightRegistry;
@@ -3741,7 +3764,7 @@ class HighlightEngine implements AbstractEngine {
 				}
 			},
 		);
-		this.mutationObserver = this.flowMonitor.getMutationUpdatesObserver(terms, highlightTags, termCountCheck,
+		this.flowMonitor.initMutationUpdatesObserver(terms, highlightTags, termCountCheck,
 			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
 		);
 	}
