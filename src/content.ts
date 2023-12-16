@@ -2939,7 +2939,7 @@ ${HIGHLIGHT_TAG} {
 		termCountCheck: TermCountCheck,
 	) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		const elements: Set<HTMLElement> = new Set;
+		const elements: Set<HTMLElement> = new Set();
 		let periodDateLast = 0;
 		let periodHighlightCount = 0;
 		let throttling = false;
@@ -2973,7 +2973,7 @@ ${HIGHLIGHT_TAG} {
 		};
 		return new MutationObserver(mutations => {
 			//mutationUpdates.disconnect();
-			const elementsKnown: Set<HTMLElement> = new Set;
+			const elementsKnown: Set<HTMLElement> = new Set();
 			for (const mutation of mutations) {
 				const element = mutation.target.nodeType === Node.TEXT_NODE
 					? mutation.target.parentElement as HTMLElement
@@ -3352,7 +3352,7 @@ class PaintEngine implements AbstractEngine {
 
 	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
 
-	elementsVisible: Set<Element> = new Set;
+	elementsVisible: Set<Element> = new Set();
 	shiftObserver: ResizeObserver | null = null;
 	visibilityObserver: IntersectionObserver | null = null;
 	styleUpdates = getStyleUpdates(this.elementsVisible, () => ({
@@ -3602,7 +3602,7 @@ class PaintEngine implements AbstractEngine {
 		this.method.tempReplaceContainers(root, recurse);
 		const styleRules: Array<Paint.StyleRuleInfo> = [];
 		// 'root' must have [elementInfo].
-		this.collectStyleRules(root, recurse, document.createRange(), styleRules, terms);
+		this.collectStyleRules(root, recurse, new Range(), styleRules, terms);
 		return styleRules;
 	}
 
@@ -3903,7 +3903,7 @@ const getTermsFromSelection = () => {
 			.map(phrase => phrase.replace(/\p{Ps}|\p{Pe}|\p{Pi}|\p{Pf}/gu, ""))
 			// Open Punctuation | Close Punctuation | Initial Punctuation | Final Punctuation
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-		const termSelectors: Set<string> = new Set;
+		const termSelectors: Set<string> = new Set();
 		termsAll.forEach(term => {
 			if (!termSelectors.has(term.token)) {
 				termSelectors.add(term.token);

@@ -1087,7 +1087,7 @@ textarea
 		});
 		// TODO handle multiple tabs correctly
 		// TODO visual indication of letter
-		const lettersTaken: Set<string> = new Set;
+		const lettersTaken: Set<string> = new Set();
 		const info: Array<{ letter: string, checkboxInfo?: PageInteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
 			sectionInfo.interactions
 				.map(interactionInfo => {
