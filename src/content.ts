@@ -534,6 +534,15 @@ const getContainerBlockSelector = (highlightTags: HighlightTags) =>
 ;
 
 /**
+	 * Transforms an array of lowercase element tags into a set of lowercase and uppercase tags.
+	 * @param tagsLower An array of tag names in their lowercase form.
+	 * @returns The transformed set of tag names.
+	 */
+const getElementTagsSet = (tagsLower: Array<keyof HTMLElementTagNameMap>) =>
+	new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
+;
+
+/**
  * Gets the node at the end of an element, in layout terms; aka. the last item of a pre-order depth-first search traversal.
  * @param node A container node.
  * @returns The final node of the container.
@@ -1700,13 +1709,28 @@ namespace Matcher {
 
 	export type BoxInfo = BaseBoxInfo<true>
 
-	export const flowPopulateBoxesInfo = (flow: Flow, textFlow: Array<Text>, terms: MatchTerms) => {
+	export const matchInText = (terms: MatchTerms, text: string): Array<BaseBoxInfo<false>> => {
+		const boxesInfo: Array<Matcher.BaseBoxInfo<false>> = [];
+		for (const term of terms) {
+			for (const match of text.matchAll(term.pattern)) {
+				boxesInfo.push({
+					term,
+					start: match.index as number,
+					end: (match.index as number) + match[0].length,
+				});
+			}
+		}
+		return boxesInfo;
+	};
+
+	export const matchInTextFlow = (terms: MatchTerms, text: string, textFlow: Array<Text>): Array<BoxInfo> => {
+		const boxesInfo: Array<BoxInfo> = [];
 		for (const term of terms) {
 			let i = 0;
 			let node = textFlow[0];
 			let textStart = 0;
 			let textEnd = node.length;
-			for (const match of flow.text.matchAll(term.pattern)) {
+			for (const match of text.matchAll(term.pattern)) {
 				const highlightStart = match.index as number;
 				const highlightEnd = highlightStart + match[0].length;
 				while (textEnd <= highlightStart) {
@@ -1717,7 +1741,7 @@ namespace Matcher {
 				// eslint-disable-next-line no-constant-condition
 				while (true) {
 					// Register as much of this highlight that fits into this node.
-					flow.boxesInfo.push({
+					boxesInfo.push({
 						term,
 						node,
 						start: Math.max(0, highlightStart - textStart),
@@ -1733,6 +1757,7 @@ namespace Matcher {
 				}
 			}
 		}
+		return boxesInfo;
 	};
 }
 
@@ -1744,7 +1769,7 @@ namespace FlowMonitor {
 		flows: Array<Flow>
 	}
 	
-	export interface AbstractHighlightable {
+	export interface AbstractHighlightability {
 		checkElement: (node: Node) => boolean
 
 		findAncestor: <T extends Element>(element: T) => T
@@ -1758,7 +1783,7 @@ namespace FlowMonitor {
 		markElementsUpTo: (element: Element) => void
 	}
 
-	export class StandardHighlightable implements AbstractHighlightable {
+	export class StandardHighlightability implements AbstractHighlightability {
 		checkElement = () => true;
 
 		findAncestor = <T extends Element>(element: T) => element;
@@ -1766,7 +1791,7 @@ namespace FlowMonitor {
 		markElementsUpTo = () => undefined;
 	}
 
-	export class CSSPaintHighlightable implements AbstractHighlightable {
+	export class CSSPaintHighlightability implements AbstractHighlightability {
 		checkElement = (element: Element) => !element.closest("a");
 
 		findAncestor <T extends Element>(element: T) {
@@ -1820,9 +1845,7 @@ class DummyFlowMonitor implements AbstractFlowMonitor {
 class StandardFlowMonitor implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
 
-	highlightable: FlowMonitor.AbstractHighlightable;
-
-	onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void = () => undefined;
+	onNewHighlightedAncestor: (ancestor: Element) => void = () => undefined;
 
 	createElementCache: (element: Element) => FlowMonitor.TreeCache = () => ({ flows: [] });
 
@@ -1830,13 +1853,11 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
 
 	constructor (
-		highlightable: FlowMonitor.AbstractHighlightable,
-		onNewHighlightedAncestor: (ancestor: Element, ancestorHighlightable: Element) => void,
+		onNewHighlightedAncestor: (ancestor: Element) => void,
 		createElementCache: (element: Element) => FlowMonitor.TreeCache,
 		onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
 		onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
 	) {
-		this.highlightable = highlightable;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
 		this.createElementCache = createElementCache;
 		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
@@ -1847,13 +1868,13 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		terms: MatchTerms,
 		highlightTags: HighlightTags,
 		termCountCheck: TermCountCheck,
-		onElementsAdded: (elements: Set<Element>) => void,
+		onElementsAdded: (elements: Set<HTMLElement>) => void,
 	) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		this.mutationObserver = new MutationObserver(mutations => {
-			// TODO optimise as above
-			const elementsAffected: Set<Element> = new Set();
-			const elementsAdded: Set<Element> = new Set();
+			// TODO optimise
+			const elementsAffected: Set<HTMLElement> = new Set();
+			const elementsAdded: Set<HTMLElement> = new Set();
 			for (const mutation of mutations) {
 				if (mutation.type === "characterData"
 					&& mutation.target.parentElement
@@ -1863,14 +1884,20 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 				}
 				for (const node of mutation.addedNodes) if (node.parentElement) {
 					switch (node.nodeType) {
-					case Node.ELEMENT_NODE: { if (canHighlightElement(rejectSelector, node as Element)) {
-						elementsAdded.add(node as Element);
-						elementsAffected.add(node as Element);
-					} break; }
-					case Node.TEXT_NODE: { if (canHighlightElement(rejectSelector, node.parentElement)) {
-						elementsAffected.add(node.parentElement);
-					} break; }
+					case Node.ELEMENT_NODE: {
+						const element = node as HTMLElement;
+						if (canHighlightElement(rejectSelector, element)) {
+							elementsAdded.add(element);
+							elementsAffected.add(element);
+						}
+						break;
 					}
+					case Node.TEXT_NODE: {
+						if (canHighlightElement(rejectSelector, node.parentElement)) {
+							elementsAffected.add(node.parentElement);
+						}
+						break;
+					}}
 				}
 				(this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
 					(node[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
@@ -1991,7 +2018,8 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined;
 		const flow: Matcher.Flow = {
 			text,
-			boxesInfo: [],
+			// Match the terms inside the flow to produce highlighting box info.
+			boxesInfo: Matcher.matchInTextFlow(terms, text, textFlow),
 		};
 		if (ancestorHighlighting) {
 			ancestorHighlighting.flows.push(flow);
@@ -2003,14 +2031,10 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
 			//console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
 		}
-		// Match the terms inside the flow to produce highlighting box info.
-		Matcher.flowPopulateBoxesInfo(flow, textFlow, terms);
 		(this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo));
-		if (!flow.boxesInfo.length) {
-			return;
+		if (flow.boxesInfo.length > 0) {
+			this.onNewHighlightedAncestor(ancestor);
 		}
-		const ancestorHighlightable = this.highlightable.findAncestor(ancestor);
-		this.onNewHighlightedAncestor(ancestor, ancestorHighlightable);
 	}
 }
 
@@ -2019,16 +2043,13 @@ interface AbstractSpecialEngine {
 
 	endHighlighting: () => void
 
-	highlight: (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms) => void
-
-	unhighlight: (highlightCtx: PaintSpecial.HighlightContext) => void
+	handles: (element: Element) => boolean
 }
 
 class DummySpecialEngine implements AbstractSpecialEngine {
 	startHighlighting = () => undefined;
 	endHighlighting = () => undefined;
-	highlight = () => undefined;
-	unhighlight = () => undefined;
+	handles = () => false;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -2050,34 +2071,35 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	terms: MatchTerms = [];
 	styleRules: PaintSpecial.StyleRulesInfo = { hovered: "", focused: "" };
 
-	onFocusInListener: (event: FocusEvent) => void = () => undefined;
-	onHoverListener: (event: MouseEvent) => void = () => undefined;
-
-	constructor () {
-		// eslint-disable-next-line @typescript-eslint/no-this-alias
-		const objectThis = this;
-		this.onFocusInListener = event => objectThis.onFocusIn(event);
-		this.onHoverListener = event => objectThis.onHover(event);
-	}
+	elementsInfo: Map<Element, {
+		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
+	}> = new Map();
 
 	startHighlighting (terms: MatchTerms) {
 		// Clean up.
 		this.endHighlighting();
 		// MAIN
-		this.insertElements();
 		this.terms = terms;
-		window.addEventListener("focusin", this.onFocusInListener);
-		window.addEventListener("mouseover", this.onHoverListener);
+		this.insertHelperElements();
+		window.addEventListener("focusin", this.onFocusIn);
+		window.addEventListener("mouseover", this.onHover);
+		window.addEventListener("input", this.onInput);
 	}
 
 	endHighlighting () {
 		this.terms = [];
-		window.removeEventListener("focusin", this.onFocusInListener);
-		window.removeEventListener("mouseover", this.onHoverListener);
-		this.removeElements();
+		window.removeEventListener("focusin", this.onFocusIn);
+		window.removeEventListener("mouseover", this.onHover);
+		window.removeEventListener("input", this.onInput);
+		this.removeHelperElements();
 	}
 
-	insertElements () {
+	handledTags: Array<keyof HTMLElementTagNameMap> = [ "input", "textarea" ];
+	handledTagSelector = this.handledTags.join(", ");
+	handledTagSet = getElementTagsSet(this.handledTags); // Handle <select> elements in future?
+	handles = (element: Element) => this.handledTagSet.has(element.tagName);
+
+	insertHelperElements () {
 		const style = document.createElement("style");
 		style.id = EleID.STYLE_PAINT_SPECIAL;
 		document.head.appendChild(style);
@@ -2086,7 +2108,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		document.body.insertAdjacentElement("afterend", elementContainer);
 	}
 
-	removeElements () {
+	removeHelperElements () {
 		document.querySelectorAll(
 			`#${EleID.STYLE_PAINT_SPECIAL}, #${EleID.ELEMENT_CONTAINER_SPECIAL}`
 		).forEach(Element.prototype.remove);
@@ -2109,42 +2131,73 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		}
 	}
 
-	onFocusIn (event: FocusEvent) {
-		console.log("focus in", event.target, event.relatedTarget);
-		if ((event.target as HTMLElement | null)?.tagName === "INPUT") {
-			this.highlight("focused", this.terms);
-		} else if ((event.relatedTarget as HTMLElement | null)?.tagName === "INPUT") {
-			this.unhighlight("focused");
+	onFocusIn = (event: FocusEvent) => {
+		//console.log("focus in", event.target, event.relatedTarget);
+		if (event.target) {
+			if (this.handles(event.target as Element)) {
+				this.highlight("focused", this.terms);
+			}
+		} else if (event.relatedTarget) {
+			if (this.handles(event.relatedTarget as Element)) {
+				this.unhighlight("focused");
+			}
 		}
-	}
+	};
 
-	onHover (event: MouseEvent) {
-		console.log("mouse enter", event.target, event.relatedTarget);
-		if ((event.target as HTMLElement | null)?.tagName === "INPUT") {
-			this.highlight("hovered", this.terms);
-		} else if ((event.relatedTarget as HTMLElement | null)?.tagName === "INPUT") {
-			this.unhighlight("hovered");
+	onHover = (event: MouseEvent) => {
+		//console.log("mouse enter", event.target, event.relatedTarget);
+		if (event.target) {
+			if (this.handles(event.target as Element)) {
+				this.highlight("hovered", this.terms);
+			}
+		} else if (event.relatedTarget) {
+			if (this.handles(event.relatedTarget as Element)) {
+				this.unhighlight("hovered");
+			}
 		}
-	}
+	};
+
+	onInput = (event: InputEvent) => {
+		if (!event.target || !this.handles(event.target as Element)) {
+			return;
+		}
+		//const element = event.target as Element;
+		this.highlight("focused", this.terms);
+	};
 
 	highlight (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms) {
-		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(terms, highlightCtx) });
+		const element = document.querySelector(PaintSpecial.contextCSS[highlightCtx]);
+		const value = (element as HTMLInputElement | null)?.value;
+		if (value === undefined) {
+			return;
+		}
+		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(highlightCtx, terms, value) });
 	}
 
 	unhighlight (highlightCtx: PaintSpecial.HighlightContext) {
 		this.styleUpdate({ [highlightCtx]: "" });
 	}
 
-	constructHighlightStyleRule = (terms: MatchTerms, highlightCtx: PaintSpecial.HighlightContext) =>
-		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${PaintSpecial.contextCSS[highlightCtx]} { background-image: ${
-			this.constructHighlightStyleRuleUrl(terms)
-		} !important; }`;
+	constructHighlightStyleRule = (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms, text: string) =>
+		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${PaintSpecial.contextCSS[highlightCtx]
+		} { background-image: ${
+			this.constructHighlightStyleRuleUrl(terms, text)
+		} !important; background-repeat: no-repeat !important; }`;
 
-	constructHighlightStyleRuleUrl (terms: MatchTerms) {
+	constructHighlightStyleRuleUrl (terms: MatchTerms, text: string) {
 		if (!terms.length) {
 			return "url()";
 		}
-		return this.method.constructHighlightStyleRuleUrl([ { token: terms[0].token, x: 20, y: 0, width: 50, height: 16 } ], terms);
+		const boxes = Matcher.matchInText(terms, text).map((boxInfo): Paint.Box => {
+			return {
+				token: boxInfo.term.token,
+				x: boxInfo.start * 10,
+				y: 0,
+				width: (boxInfo.end - boxInfo.start) * 10,
+				height: 20,
+			};
+		});
+		return this.method.constructHighlightStyleRuleUrl(boxes, terms);
 	}
 
 	styleUpdate (styleRules: Partial<PaintSpecial.StyleRulesInfo>) {
@@ -2304,7 +2357,7 @@ const canHighlightElement = (rejectSelector: string, element: Element): boolean 
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Elem {
-	export const ELEMENT_IS_KNOWN = "markmysearch__known";
+	export const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
 
 	export interface FlowNodeListItem {
 		value: Text
@@ -2328,7 +2381,7 @@ namespace Elem {
 			}
 		}
 
-		insertAfter (itemBefore: FlowNodeListItem | null, value: Text): FlowNodeListItem {
+		insertItemAfter (itemBefore: FlowNodeListItem | null, value: Text): FlowNodeListItem {
 			if (itemBefore) {
 				itemBefore.next = { next: itemBefore.next, value };
 				return itemBefore.next;
@@ -2338,7 +2391,7 @@ namespace Elem {
 			}
 		}
 
-		remove (itemBefore: FlowNodeListItem | null) {
+		removeItemAfter (itemBefore: FlowNodeListItem | null) {
 			if (!itemBefore) {
 				this.first = this.first?.next ?? null;
 				return;
@@ -2377,6 +2430,7 @@ namespace Elem {
 class ElementEngine implements AbstractEngine {
 	mutationObserver: MutationObserver | null = null;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
+
 	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
 
 	constructor (
@@ -2385,6 +2439,7 @@ class ElementEngine implements AbstractEngine {
 		termCountCheck: TermCountCheck,
 	) {
 		this.mutationObserver = this.getMutationUpdatesObserver(terms, highlightTags, termCountCheck);
+		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
 	getMiscCSS () {
@@ -2553,7 +2608,7 @@ ${HIGHLIGHT_TAG} {
 		/**
 		 * Highlights a term matched in a text node.
 		 * @param term The term matched.
-		 * @param textAfterNode The text node to highlight inside.
+		 * @param node The text node to highlight inside.
 		 * @param start The first character index of the match within the text node.
 		 * @param end The last character index of the match within the text node.
 		 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
@@ -2562,33 +2617,41 @@ ${HIGHLIGHT_TAG} {
 		 */
 		const highlightInsideNode = (
 			term: MatchTerm,
-			textAfterNode: Node,
+			node: Text,
 			start: number,
 			end: number,
 			nodeItems: Elem.FlowNodeList,
 			nodeItemPrevious: Elem.FlowNodeListItem | null,
 		): Elem.FlowNodeListItem => {
 			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
-			const text = textAfterNode.textContent ?? "";
+			const text = node.textContent ?? "";
 			if (text.length === 0) {
-				textAfterNode.parentElement?.removeChild(textAfterNode);
+				node.remove();
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as Elem.FlowNodeListItem;
 			}
-			const parent = textAfterNode.parentNode as Node;
-			const textEndNode = document.createTextNode(text.substring(start, end));
+			const parent = node.parentElement as Element;
+			parent[Elem.ELEMENT_JUST_HIGHLIGHTED] = true;
+			// update: Text after Highlight Element
+			if (end < text.length) {
+				node.textContent = text.substring(end);
+			} else {
+				nodeItems.removeItemAfter(nodeItemPrevious);
+				node.remove();
+			}
+			// insert: Highlight Element
+			const textHighlightNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
 			highlight.classList.add(getTermClass(term.token));
-			highlight.appendChild(textEndNode);
-			textAfterNode.textContent = text.substring(end);
-			parent.insertBefore(highlight, textAfterNode);
-			parent[Elem.ELEMENT_IS_KNOWN] = true;
-			const textEndNodeItem = nodeItems.insertAfter(nodeItemPrevious, textEndNode);
+			highlight.appendChild(textHighlightNode);
+			parent.insertBefore(highlight, node);
+			const textHighlightNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textHighlightNode);
+			// insert if exists: Text before Highlight Element
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
 				parent.insertBefore(textStartNode, highlight);
-				nodeItems.insertAfter(nodeItemPrevious, textStartNode);
+				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
 			}
-			return textEndNodeItem;
+			return textHighlightNodeItem;
 		};
 
 		/**
@@ -2953,7 +3016,7 @@ ${HIGHLIGHT_TAG} {
 			periodHighlightCount += elements.size;
 			elements.clear();
 		};
-		const highlightElementsLimited = () => {
+		const highlightElementsThrottled = () => {
 			const periodInterval = Date.now() - periodDateLast;
 			if (periodInterval > 400) {
 				const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
@@ -2973,35 +3036,34 @@ ${HIGHLIGHT_TAG} {
 		};
 		return new MutationObserver(mutations => {
 			//mutationUpdates.disconnect();
-			const elementsKnown: Set<HTMLElement> = new Set();
+			const elementsJustHighlighted: Set<HTMLElement> = new Set();
 			for (const mutation of mutations) {
 				const element = mutation.target.nodeType === Node.TEXT_NODE
 					? mutation.target.parentElement as HTMLElement
 					: mutation.target as HTMLElement;
 				if (element) {
-					if (element[Elem.ELEMENT_IS_KNOWN]) {
-						elementsKnown.add(element);
-					} else if ((mutation.type === "childList" || !element.querySelector(HIGHLIGHT_TAG))
-						&& canHighlightElement(rejectSelector, element)) {
+					if (element[Elem.ELEMENT_JUST_HIGHLIGHTED]) {
+						elementsJustHighlighted.add(element);
+					} else if (canHighlightElement(rejectSelector, element)) {
 						elements.add(element);
 					}
 				}
 			}
-			for (const element of elementsKnown) {
-				delete element[Elem.ELEMENT_IS_KNOWN];
+			for (const element of elementsJustHighlighted) {
+				delete element[Elem.ELEMENT_JUST_HIGHLIGHTED];
 			}
-			if (elementsKnown.size) {
-				//mutationUpdates.observe();
-				return;
-			}
-			for (const element of elements) {
-				for (const elementOther of elements) {
-					if (elementOther !== element && element.contains(elementOther)) {
-						elements.delete(elementOther);
+			if (elements.size) {
+				// TODO improve this algorithm
+				for (const element of elements) {
+					for (const elementOther of elements) {
+						if (elementOther !== element && element.contains(elementOther)) {
+							// This may result in undefined behavior
+							elements.delete(elementOther);
+						}
 					}
 				}
+				highlightElementsThrottled();
 			}
-			highlightElementsLimited();
 			//mutationUpdates.observe();
 		});
 	}
@@ -3107,7 +3169,7 @@ namespace Paint {
 	;
 
 	export interface AbstractMethod {
-		highlightable: FlowMonitor.AbstractHighlightable
+		highlightables: FlowMonitor.AbstractHighlightability
 
 		getMiscCSS: () => string
 
@@ -3133,7 +3195,7 @@ namespace Paint {
 	}
 
 	export class DummyMethod implements AbstractMethod {
-		highlightable = new FlowMonitor.StandardHighlightable();
+		highlightables = new FlowMonitor.StandardHighlightability();
 		getMiscCSS = () => "";
 		getTermHighlightsCSS = () => "";
 		getTermHighlightCSS = () => "";
@@ -3145,7 +3207,7 @@ namespace Paint {
 	}
 
 	export class PaintMethod implements AbstractMethod {
-		highlightable = new FlowMonitor.CSSPaintHighlightable();
+		highlightables = new FlowMonitor.CSSPaintHighlightability();
 
 		static paintModuleAdded = false;
 
@@ -3202,7 +3264,7 @@ namespace Paint {
 	}
 
 	export class ElementMethod implements AbstractMethod {
-		highlightable = new FlowMonitor.StandardHighlightable();
+		highlightables = new FlowMonitor.StandardHighlightability();
 
 		getMiscCSS () {
 			return `
@@ -3313,7 +3375,7 @@ namespace Paint {
 	}
 
 	export class UrlMethod implements AbstractMethod {
-		highlightable = new FlowMonitor.StandardHighlightable();
+		highlightables = new FlowMonitor.StandardHighlightability();
 
 		getMiscCSS = () => "";
 
@@ -3328,7 +3390,7 @@ namespace Paint {
 		constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>, terms: MatchTerms) =>
 			`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id="${highlightId}"] { background-image: ${
 				this.constructHighlightStyleRuleUrl(boxes, terms)
-			} !important; }`;
+			} !important; background-repeat: no-repeat !important; }`;
 
 		constructHighlightStyleRuleUrl = (boxes: Array<Box>, terms: MatchTerms) =>
 			`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
@@ -3360,6 +3422,8 @@ class PaintEngine implements AbstractEngine {
 		visibilityObserver: this.visibilityObserver,
 	}));
 
+	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
+
 	/**
 	 * 
 	 * @param terms 
@@ -3381,8 +3445,8 @@ class PaintEngine implements AbstractEngine {
 			this.method = new Paint.UrlMethod();
 		}
 		this.flowMonitor = new StandardFlowMonitor(
-			this.method.highlightable,
-			(ancestor, ancestorHighlightable) => {
+			ancestor => {
+				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
 				this.styleUpdates.observe(ancestorHighlightable);
 				const highlighting = ancestorHighlightable[FlowMonitor.CACHE] as Paint.TreeCache;
 				if (highlighting.id === "") {
@@ -3390,12 +3454,12 @@ class PaintEngine implements AbstractEngine {
 					// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
 					ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
 				}
-				this.method.highlightable.markElementsUpTo(ancestor);
+				this.method.highlightables.markElementsUpTo(ancestor);
 			},
 			(element): Paint.TreeCache => ({
 				id: highlightingId.next().value,
 				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightable.checkElement(element),
+				isHighlightable: this.method.highlightables.checkElement(element),
 				flows: [],
 			}),
 		);
@@ -3414,6 +3478,7 @@ class PaintEngine implements AbstractEngine {
 		this.getMiscCSS = this.method.getMiscCSS;
 		this.getTermHighlightsCSS = this.method.getTermHighlightsCSS;
 		this.getTermHighlightCSS = this.method.getTermHighlightCSS;
+		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
 	// These are applied before construction, so we need to apply them in the constructor too.
@@ -3539,8 +3604,9 @@ class PaintEngine implements AbstractEngine {
 		this.flowMonitor.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
 		this.mutationUpdates.observe();
 		this.styleUpdate(Array.from(new Set(
-			Array.from(this.elementsVisible).map(element => this.method.highlightable.findAncestor(element))
+			Array.from(this.elementsVisible).map(element => this.method.highlightables.findAncestor(element))
 		)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms)));
+		this.specialHighlighter.startHighlighting(terms);
 	}
 
 	endHighlighting () {
@@ -3554,6 +3620,7 @@ class PaintEngine implements AbstractEngine {
 			element.removeAttribute("markmysearch-h_id");
 		});
 		this.method.endHighlighting();
+		this.specialHighlighter.endHighlighting();
 	}
 
 	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
@@ -3565,7 +3632,7 @@ class PaintEngine implements AbstractEngine {
 			(element[FlowMonitor.CACHE] as Paint.TreeCache) = {
 				id: "",
 				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightable.checkElement(element),
+				isHighlightable: this.method.highlightables.checkElement(element),
 				flows: [],
 			};
 		}
@@ -3667,7 +3734,7 @@ class PaintEngine implements AbstractEngine {
 	getShiftAndVisibilityObservers (terms: MatchTerms) {
 		const shiftObserver = new ResizeObserver(entries => {
 			const styleRules: Array<Paint.StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(this.method.highlightable.findAncestor(entry.target), true, terms)
+				this.getStyleRules(this.method.highlightables.findAncestor(entry.target), true, terms)
 			);
 			if (styleRules.length) {
 				this.styleUpdate(styleRules);
@@ -3682,7 +3749,7 @@ class PaintEngine implements AbstractEngine {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
-							this.getStyleRules(this.method.highlightable.findAncestor(entry.target), false, terms)
+							this.getStyleRules(this.method.highlightables.findAncestor(entry.target), false, terms)
 						);
 					}
 				} else {
@@ -3718,6 +3785,8 @@ class HighlightEngine implements AbstractEngine {
 
 	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
 
+	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
+
 	highlights = (() => {
 		const highlights = CSS.highlights as HighlightRegistry;
 		const map: HighlightRegistry = new Map();
@@ -3747,7 +3816,6 @@ class HighlightEngine implements AbstractEngine {
 		termCountCheck: TermCountCheck,
 	) {
 		this.flowMonitor = new StandardFlowMonitor(
-			new FlowMonitor.StandardHighlightable(),
 			() => undefined,
 			() => ({ flows: [] }),
 			boxesInfo => {
@@ -3767,6 +3835,7 @@ class HighlightEngine implements AbstractEngine {
 		this.flowMonitor.initMutationUpdatesObserver(terms, highlightTags, termCountCheck,
 			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
 		);
+		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
 	getMiscCSS () {
@@ -3826,10 +3895,12 @@ class HighlightEngine implements AbstractEngine {
 		this.cacheExtend(document.body, highlightTags); // Ensure the *whole* document is set up for highlight-caching.
 		this.flowMonitor.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
 		this.mutationUpdates.observe();
+		this.specialHighlighter.startHighlighting(terms);
 	}
 
 	endHighlighting () {
 		this.highlights.clear();
+		this.specialHighlighter.endHighlighting();
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -4184,15 +4255,6 @@ const getTermsFromSelection = () => {
 		}
 	};
 
-	/**
-	 * Gets a set of highlight tags in all forms reasonably required.
-	 * @param tagsLower An array of tag names in their lowercase form.
-	 * @returns The corresponding set of tag names in all forms necessary.
-	 */
-	const getHighlightTagsSet = (tagsLower: Array<keyof HTMLElementTagNameMap>) =>
-		new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
-	;
-
 	const onWindowMouseUp = () => {
 		if (document.activeElement && document.activeElement.classList.contains(EleClass.CONTROL_REVEAL)) {
 			(document.querySelector(`#${EleID.BAR} .${EleClass.WAS_FOCUSED}`) as HTMLElement | null)?.focus();
@@ -4235,8 +4297,8 @@ const getTermsFromSelection = () => {
 			},
 		};
 		const highlightTags: HighlightTags = {
-			reject: getHighlightTagsSet([ "meta", "style", "script", "noscript", "title", "textarea" ]),
-			flow: getHighlightTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
+			reject: getElementTagsSet([ "meta", "style", "script", "noscript", "title", "textarea" ]),
+			flow: getElementTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
 				HIGHLIGHT_TAG as keyof HTMLElementTagNameMap ]),
 			// break: any other class of element
 		};
