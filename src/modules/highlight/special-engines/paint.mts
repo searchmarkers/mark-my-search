@@ -1,22 +1,23 @@
-import * as SpecialEngine from "src/modules/highlight/special-engine.mjs";
-import * as Method from "src/modules/highlight/method.mjs";
-import * as UrlMethod from "src/modules/highlight/methods/url.mjs";
-import * as Matcher from "src/modules/highlight/matcher.mjs";
+import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
+import type { BoxInfoBoxes, Box } from "src/modules/highlight/method.mjs";
+const { UrlMethod } = await import("src/modules/highlight/methods/url.mjs");
+import type { BaseFlow, BaseBoxInfo } from "src/modules/highlight/matcher.mjs";
+const { matchInText } = await import("src/modules/highlight/matcher.mjs");
 const { EleID, EleClass, getElementTagsSet } = await import("src/modules/common.mjs");
 
-export type Flow = Matcher.BaseFlow<false, Method.BoxInfoBoxes>
+type Flow = BaseFlow<false, BoxInfoBoxes>
 
-export type BoxInfo = Matcher.BaseBoxInfo<false, Method.BoxInfoBoxes>
+type BoxInfo = BaseBoxInfo<false, BoxInfoBoxes>
 
-export const contextCSS = { hovered: ":hover", focused: ":focus" };
+const contextCSS = { hovered: ":hover", focused: ":focus" };
 
-export type HighlightContext = keyof typeof contextCSS
+type HighlightContext = keyof typeof contextCSS
 
-export type StyleRulesInfo = Record<HighlightContext, string>
+type StyleRulesInfo = Record<HighlightContext, string>
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-class PaintSpecialEngine implements SpecialEngine.AbstractSpecialEngine {
-	method = new UrlMethod.UrlMethod();
+class PaintSpecialEngine implements AbstractSpecialEngine {
+	method = new UrlMethod();
 	terms: MatchTerms = [];
 	styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
@@ -136,7 +137,7 @@ class PaintSpecialEngine implements SpecialEngine.AbstractSpecialEngine {
 		if (!terms.length) {
 			return "url()";
 		}
-		const boxes = Matcher.matchInText(terms, text).map((boxInfo): Method.Box => {
+		const boxes = matchInText(terms, text).map((boxInfo): Box => {
 			return {
 				token: boxInfo.term.token,
 				x: boxInfo.start * 10,

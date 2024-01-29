@@ -1,9 +1,9 @@
-import * as Method from "src/modules/highlight/method.mjs"
-import * as FlowMonitor from "src/modules/highlight/flow-monitor.mjs"
+import type { Box, AbstractMethod } from "src/modules/highlight/method.mjs"
+const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
 const { EleID, EleClass } = await import("src/modules/common.mjs");
 
-class UrlMethod implements Method.AbstractMethod {
-	highlightables = new FlowMonitor.StandardHighlightability();
+class UrlMethod implements AbstractMethod {
+	highlightables = new StandardHighlightability();
 
 	getMiscCSS = () => "";
 
@@ -15,12 +15,12 @@ class UrlMethod implements Method.AbstractMethod {
 
 	getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
 
-	constructHighlightStyleRule = (highlightId: string, boxes: Array<Method.Box>, terms: MatchTerms) =>
+	constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>, terms: MatchTerms) =>
 		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id="${highlightId}"] { background-image: ${
 			this.constructHighlightStyleRuleUrl(boxes, terms)
 		} !important; background-repeat: no-repeat !important; }`;
 
-	constructHighlightStyleRuleUrl = (boxes: Array<Method.Box>, terms: MatchTerms) =>
+	constructHighlightStyleRuleUrl = (boxes: Array<Box>, terms: MatchTerms) =>
 		`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
 			boxes.map(box =>
 				`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(

@@ -1,9 +1,13 @@
-import * as Method from "src/modules/highlight/method.mjs";
-import * as FlowMonitor from "src/modules/highlight/flow-monitor.mjs";
+import type { TreeCache, Box, AbstractMethod } from "src/modules/highlight/method.mjs";
+const {
+	getTermBackgroundStyle, styleRulesGetBoxesOwned,
+} = await import("src/modules/highlight/method.mjs");
+const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
+const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
 const { EleID, EleClass, getTermClass } = await import("src/modules/common.mjs");
 
-class ElementMethod implements Method.AbstractMethod {
-	highlightables = new FlowMonitor.StandardHighlightability();
+class ElementMethod implements AbstractMethod {
+	highlightables = new StandardHighlightability();
 
 	getMiscCSS () {
 		return `
@@ -39,7 +43,7 @@ border-radius: 2px;
 		const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
 			getTermClass(term.token)
 		}`;
-		const backgroundStyle = Method.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
+		const backgroundStyle = getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
 		return`${selector} { background: ${backgroundStyle}; }`;
 	}
 
@@ -76,8 +80,8 @@ border-radius: 2px;
 		containers: Array<Element>,
 		range = new Range(),
 	) {
-		const elementInfo = element[FlowMonitor.CACHE] as Method.TreeCache;
-		const boxes: Array<Method.Box> = Method.styleRulesGetBoxesOwned(element);
+		const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
+		const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
 		if (boxes.length) {
 			const container = document.createElement("div");
 			container.id = this.getElementDrawId(elementInfo.id);
@@ -109,7 +113,7 @@ border-radius: 2px;
 	}
 
 	tempRemoveDrawElement (element: Element) {
-		document.getElementById(this.getElementDrawId((element[FlowMonitor.CACHE] as Method.TreeCache).id))?.remove();
+		document.getElementById(this.getElementDrawId((element[FlowMonitor.CACHE] as TreeCache).id))?.remove();
 	}
 }
 

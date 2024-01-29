@@ -1,5 +1,5 @@
-import * as Method from "src/modules/highlight/method.mjs";
-import * as FlowMonitor from "src/modules/highlight/flow-monitor.mjs";
+import type { Box, AbstractMethod } from "src/modules/highlight/method.mjs"
+import type { AbstractHighlightability } from "src/modules/highlight/highlightability.mjs";
 const { EleID, EleClass } = await import("src/modules/common.mjs");
 
 type TermSelectorStyles = Record<string, {
@@ -7,8 +7,8 @@ type TermSelectorStyles = Record<string, {
 	cycle: number
 }>
 
-class PaintMethod implements Method.AbstractMethod {
-	highlightables = new FlowMonitor.CSSPaintHighlightability();
+class PaintMethod implements AbstractMethod {
+	highlightables = new CSSPaintHighlightability();
 
 	static paintModuleAdded = false;
 
@@ -56,12 +56,38 @@ class PaintMethod implements Method.AbstractMethod {
 
 	getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
 
-	constructHighlightStyleRule = (highlightId: string, boxes: Array<Method.Box>) =>
+	constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>) =>
 		`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`;
 	
 	tempReplaceContainers = () => undefined;
 
 	tempRemoveDrawElement = () => undefined;
+}
+
+class CSSPaintHighlightability implements AbstractHighlightability {
+	checkElement = (element: Element) => !element.closest("a");
+
+	findAncestor <T extends Element>(element: T) {
+		let ancestor = element;
+		// eslint-disable-next-line no-constant-condition
+		while (true) {
+			// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
+			const ancestorUnhighlightable = ancestor.closest("a") as T | null;
+			if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+				ancestor = ancestorUnhighlightable.parentElement as unknown as T;
+			} else {
+				break;
+			}
+		}
+		return ancestor;
+	}
+
+	markElementsUpTo (element: Element) {
+		if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
+			element.setAttribute("markmysearch-h_beneath", "");
+			this.markElementsUpTo(element.parentElement as Element);
+		}
+	}
 }
 
 export { PaintMethod }

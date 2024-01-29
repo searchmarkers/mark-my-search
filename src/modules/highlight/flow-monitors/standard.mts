@@ -1,22 +1,24 @@
-import * as FlowMonitor from "src/modules/highlight/flow-monitor.mjs";
+import type { TreeCache, AbstractFlowMonitor } from "src/modules/highlight/flow-monitor.mjs";
+const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
 const { highlightTags } = await import("src/modules/highlight/highlighting.mjs");
-import * as Matcher from "src/modules/highlight/matcher.mjs";
+import type { Flow, BoxInfo } from "src/modules/highlight/matcher.mjs";
+const { matchInTextFlow } = await import("src/modules/highlight/matcher.mjs");
 
-class StandardFlowMonitor implements FlowMonitor.AbstractFlowMonitor {
+class StandardFlowMonitor implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
 
 	onNewHighlightedAncestor: (ancestor: Element) => void = () => undefined;
 
-	createElementCache: (element: Element) => FlowMonitor.TreeCache = () => ({ flows: [] });
+	createElementCache: (element: Element) => TreeCache = () => ({ flows: [] });
 
-	onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
-	onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
+	onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void;
+	onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void;
 
 	constructor (
 		onNewHighlightedAncestor: (ancestor: Element) => void,
-		createElementCache: (element: Element) => FlowMonitor.TreeCache,
-		onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
-		onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
+		createElementCache: (element: Element) => TreeCache,
+		onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void,
+		onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void,
 	) {
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
 		this.createElementCache = createElementCache;
@@ -58,7 +60,7 @@ class StandardFlowMonitor implements FlowMonitor.AbstractFlowMonitor {
 					}}
 				}
 				(this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
-					(node[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
+					(node[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
 				)));
 			}
 			onElementsAdded(elementsAdded);
@@ -137,7 +139,7 @@ class StandardFlowMonitor implements FlowMonitor.AbstractFlowMonitor {
 		if (highlightTags.reject.has(element.tagName)) {
 			return;
 		}
-		const highlighting = element[FlowMonitor.CACHE] as FlowMonitor.TreeCache;
+		const highlighting = element[FlowMonitor.CACHE] as TreeCache;
 		if (highlighting) {
 			(this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo)));
 			highlighting.flows = [];
@@ -157,11 +159,11 @@ class StandardFlowMonitor implements FlowMonitor.AbstractFlowMonitor {
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
 		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow.at(-1) as Text);
-		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined;
-		const flow: Matcher.Flow = {
+		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as TreeCache | undefined;
+		const flow: Flow = {
 			text,
 			// Match the terms inside the flow to produce highlighting box info.
-			boxesInfo: Matcher.matchInTextFlow(terms, text, textFlow),
+			boxesInfo: matchInTextFlow(terms, text, textFlow),
 		};
 		if (ancestorHighlighting) {
 			ancestorHighlighting.flows.push(flow);

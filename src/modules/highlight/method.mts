@@ -1,16 +1,19 @@
-import * as FlowMonitor from "src/modules/highlight/flow-monitor.mjs"
-import * as Matcher from "src/modules/highlight/matcher.mjs";
-import * as TermCSS from "src/modules/highlight/term-css.mjs";
+import { AbstractHighlightability } from "src/modules/highlight/highlightability.mjs";
+const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
+import type * as FlowMonitorTypes from "src/modules/highlight/flow-monitor.mjs";
+const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
+import type { BaseFlow, BaseBoxInfo } from "src/modules/highlight/matcher.mjs";
+const TermCSS = await import("src/modules/highlight/term-css.mjs");
 
 type TreeCache = {
 	id: string
 	styleRuleIdx: number
 	isHighlightable: boolean
-} & FlowMonitor.TreeCache<Flow>
+} & FlowMonitorTypes.TreeCache<Flow>
 
-type Flow = Matcher.BaseFlow<true, BoxInfoBoxes>
+type Flow = BaseFlow<true, BoxInfoBoxes>
 
-type BoxInfo = Matcher.BaseBoxInfo<true, BoxInfoBoxes>
+type BoxInfo = BaseBoxInfo<true, BoxInfoBoxes>
 
 type BoxInfoBoxes = { boxes: Array<Box> }
 
@@ -23,7 +26,7 @@ type Box = {
 }
 
 interface AbstractMethod {
-	highlightables: FlowMonitor.AbstractHighlightability
+	highlightables: AbstractHighlightability
 
 	getMiscCSS: () => string
 
@@ -49,7 +52,7 @@ interface AbstractMethod {
 }
 
 class DummyMethod implements AbstractMethod {
-	highlightables = new FlowMonitor.StandardHighlightability();
+	highlightables = new StandardHighlightability();
 	getMiscCSS = () => "";
 	getTermHighlightsCSS = () => "";
 	getTermHighlightCSS = () => "";

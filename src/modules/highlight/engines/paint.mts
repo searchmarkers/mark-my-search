@@ -7,7 +7,10 @@ import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine
 const { DummySpecialEngine } = await import("src/modules/highlight/special-engine.mjs");
 const { PaintSpecialEngine } = await import("src/modules/highlight/special-engines/paint.mjs");
 import type { TreeCache, Flow, Box, AbstractMethod } from "src/modules/highlight/method.mjs";
-const { getTermBackgroundStyle, styleRulesGetBoxesOwned, DummyMethod } = await import("src/modules/highlight/method.mjs");
+const {
+	getTermBackgroundStyle, styleRulesGetBoxesOwned,
+	DummyMethod,
+} = await import("src/modules/highlight/method.mjs");
 const { PaintMethod } = await import("src/modules/highlight/methods/paint.mjs");
 const { ElementMethod } = await import("src/modules/highlight/methods/element.mjs");
 const { UrlMethod } = await import("src/modules/highlight/methods/url.mjs");
