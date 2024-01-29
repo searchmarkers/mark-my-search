@@ -65,17 +65,9 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
+				"/icons/*.svg",
 				"/dist/paint.js",
-				"/icons/mms.svg",
-				"/icons/arrow.svg",
-				"/icons/close.svg",
-				"/icons/search.svg",
-				"/icons/show.svg",
-				"/icons/refresh.svg",
-				"/icons/create.svg",
-				"/icons/delete.svg",
-				"/icons/edit.svg",
-				"/icons/reveal.svg"
+				"/dist/modules/*.mjs"
 			],
 			"matches": [ "*://*/*" ]
 		}

@@ -1,73 +1,12 @@
+import type { Highlighter, AbstractEngine } from "src/modules/highlight/engine.mjs"
+import type { TermHues } from "src/modules/common.mjs"
+const { EleID, EleClass, AtRuleID, getTermClass } = await import("src/modules/common.mjs");
+type EleIDItem = (typeof EleID)[keyof typeof EleID]
+type EleClassItem = (typeof EleClass)[keyof typeof EleClass]
+
 type BrowserCommands = Array<chrome.commands.Command>
-type HighlightTags = {
-	reject: ReadonlySet<string>,
-	flow: ReadonlySet<string>,
-}
-type TermHues = Array<number>
-type TermSelectorStyles = Record<string, {
-	hue: number
-	cycle: number
-}>
-type TermCountCheck = () => void
+
 type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
-
-enum AtRuleID {
-	FLASH = "markmysearch__flash",
-	MARKER_ON = "markmysearch__marker_on",
-	MARKER_OFF = "markmysearch__marker_off",
-}
-
-enum EleClass {
-	HIGHLIGHTS_SHOWN = "mms__highlights_shown",
-	BAR_HIDDEN = "mms__bar_hidden",
-	CONTROL = "mms__control",
-	CONTROL_PAD = "mms__control_pad",
-	CONTROL_INPUT = "mms__control_input",
-	CONTROL_CONTENT = "mms__control_content",
-	CONTROL_BUTTON = "mms__control_button",
-	CONTROL_REVEAL = "mms__control_reveal",
-	CONTROL_EDIT = "mms__control_edit",
-	OPTION_LIST = "mms__options",
-	OPTION = "mms__option",
-	TERM = "mms__term",
-	FOCUS = "mms__focus",
-	FOCUS_CONTAINER = "mms__focus_contain",
-	FOCUS_REVERT = "mms__focus_revert",
-	REMOVE = "mms__remove",
-	DISABLED = "mms__disabled",
-	WAS_FOCUSED = "mms__was_focused",
-	MENU_OPEN = "mms__menu_open",
-	MENU_JUST_CLOSED_BY_BUTTON = "mms__menu_just_closed",
-	OPENED_MENU = "mms__opened_menu",
-	COLLAPSED = "mms__collapsed",
-	UNCOLLAPSIBLE = "mms__collapsed_impossible",
-	MATCH_REGEX = "mms__match_regex",
-	MATCH_CASE = "mms__match_case",
-	MATCH_STEM = "mms__match_stem",
-	MATCH_WHOLE = "mms__match_whole",
-	MATCH_DIACRITICS = "mms__match_diacritics",
-	PRIMARY = "mms__primary",
-	SECONDARY = "mms__secondary",
-	BAR_CONTROLS = "mms__bar_controls",
-}
-
-enum EleID {
-	STYLE = "markmysearch__style",
-	STYLE_PAINT = "markmysearch__style_paint",
-	STYLE_PAINT_SPECIAL = "markmysearch__style_paint_special",
-	BAR = "markmysearch__bar",
-	BAR_LEFT = "markmysearch__bar_left",
-	BAR_TERMS = "markmysearch__bar_terms",
-	BAR_RIGHT = "markmysearch__bar_right",
-	MARKER_GUTTER = "markmysearch__markers",
-	DRAW_CONTAINER = "markmysearch__draw_container",
-	DRAW_ELEMENT = "markmysearch__draw",
-	ELEMENT_CONTAINER_SPECIAL = "markmysearch__element_container_special",
-	INPUT = "markmysearch__input",
-}
-
-const HIGHLIGHT_TAG = "mms-h";
-const HIGHLIGHT_TAG_UPPER = "MMS-H";
 
 enum TermChange {
 	REMOVE = -1,
@@ -132,10 +71,6 @@ const termsSet = async (terms: MatchTerms) => {
 	messageHandleHighlightGlobal({ terms: terms.slice() }, null, () => undefined);
 	await messageSendBackground({ terms });
 };
-
-const getTermClass = (termToken: string): string => EleClass.TERM + "-" + termToken;
-
-const getTermToken = (termClass: string) => termClass.slice(EleClass.TERM.length + 1);
 
 /**
  * Fills a CSS stylesheet element to style all UI elements we insert.
@@ -514,43 +449,6 @@ ${highlighter.current.getTermHighlightCSS(terms, hues, i)}
 	});
 };
 
-/**
- * Determines heuristically whether or not an element is visible. The element need not be currently scrolled into view.
- * @param element An element.
- * @returns `true` if visible, `false` otherwise.
- */
-const isVisible = (element: HTMLElement) => // TODO improve correctness
-	(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
-	&& getComputedStyle(element).visibility !== "hidden"
-;
-
-/**
- * Gets a selector string for the container block of an element.
- * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
- * @returns The container block selector corresponding to the highlight tags supplied.
- */
-const getContainerBlockSelector = (highlightTags: HighlightTags) =>
-	`:not(${Array.from(highlightTags.flow).join(", ")})`
-;
-
-/**
-	 * Transforms an array of lowercase element tags into a set of lowercase and uppercase tags.
-	 * @param tagsLower An array of tag names in their lowercase form.
-	 * @returns The transformed set of tag names.
-	 */
-const getElementTagsSet = (tagsLower: Array<keyof HTMLElementTagNameMap>) =>
-	new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
-;
-
-/**
- * Gets the node at the end of an element, in layout terms; aka. the last item of a pre-order depth-first search traversal.
- * @param node A container node.
- * @returns The final node of the container.
- */
-const getNodeFinal = (node: Node): Node =>
-	node.lastChild ? getNodeFinal(node.lastChild) : node
-;
-
 /*
 USER INTERFACE
 Methods for inserting, updating, or removing parts of the toolbar, as well as driving user interaction with the toolbar.
@@ -560,12 +458,12 @@ Methods for inserting, updating, or removing parts of the toolbar, as well as dr
 namespace Toolbar {
 	export type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
 	type ControlButtonInfo = {
-		controlClasses?: Array<EleClass>
-		buttonClasses?: Array<EleClass>
+		controlClasses?: Array<EleClassItem>
+		buttonClasses?: Array<EleClassItem>
 		path?: string
 		pathSecondary?: string
 		label?: string
-		containerId: EleID
+		containerId: EleIDItem
 		onClick?: () => void
 		setUp?: (container: HTMLElement) => void
 	}
@@ -894,12 +792,10 @@ namespace Toolbar {
 	 * Refreshes the control of a term to reflect its current state.
 	 * @param term A term with an existing control.
 	 * @param idx The index of the term.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 */
 	export const refreshTermControl = (
 		term: MatchTerm,
 		idx: number,
-		highlightTags: HighlightTags,
 		highlighter: Highlighter,
 	) => {
 		const control = getControl(undefined, idx) as HTMLElement;
@@ -909,7 +805,7 @@ namespace Toolbar {
 		updateTermControlMatchModeClassList(term.matchMode, control.classList);
 		const controlContent = control.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement;
 		controlContent.onclick = event => // Overrides previous event handler in case of new term.
-			highlighter.current.focusNextTerm(highlightTags, event.shiftKey, false, term);
+			highlighter.current.focusNextTerm(event.shiftKey, false, term);
 		controlContent.textContent = term.phrase;
 	};
 
@@ -1145,14 +1041,12 @@ namespace Toolbar {
 	 * @param command The string of a command to display as a shortcut hint for jumping to the next term.
 	 * @param commandReverse The string of a command to display as a shortcut hint for jumping to the previous term.
 	 * @param controlsInfo Details of controls inserted.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 */
 	export const insertTermControl = (
 		terms: MatchTerms,
 		idx: number,
 		command: string,
 		commandReverse: string,
-		highlightTags: HighlightTags,
 		controlsInfo: ControlsInfo,
 		highlighter: Highlighter,
 	) => {
@@ -1176,7 +1070,7 @@ namespace Toolbar {
 		controlContent.tabIndex = -1;
 		controlContent.textContent = term.phrase;
 		controlContent.onclick = () => { // Hack: event handler property used so that the listener is not duplicated.
-			highlighter.current.focusNextTerm(highlightTags, false, false, term);
+			highlighter.current.focusNextTerm(false, false, term);
 		};
 		controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
 			updateTermTooltip(term, highlighter);
@@ -1235,14 +1129,13 @@ namespace Toolbar {
 	 * @param terms Terms highlighted in the page to mark the scroll position of.
 	 * @param controlsInfo Details of controls to insert.
 	 * @param commands Browser commands to use in shortcut hints.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 * @param hues Color hues for term styles to cycle through.
 	 */
 	export const controlsInsert = (() => {
 		/**
 		 * Inserts a control.
 		 * @param terms Terms to be controlled and highlighted.
-		 * @param barControlName A standard name for the control.
+		 * @param controlName A standard name for the control.
 		 * @param hideWhenInactive Indicates whether to hide the control while not in interaction.
 		 * @param controlsInfo Details of controls to insert.
 		 */
@@ -1389,7 +1282,6 @@ namespace Toolbar {
 		return (
 			terms: MatchTerms,
 			commands: BrowserCommands,
-			highlightTags: HighlightTags,
 			hues: TermHues,
 			produceEffectOnCommand: ProduceEffectOnCommand,
 			controlsInfo: ControlsInfo,
@@ -1501,8 +1393,9 @@ namespace Toolbar {
 				controlInsert(terms, barControlName, !controlsInfo.barControlsShown[barControlName], controlsInfo);
 			});
 			const termCommands = getTermCommands(commands);
-			terms.forEach((term, i) => insertTermControl(terms, i, termCommands.down[i], termCommands.up[i], highlightTags,
-				controlsInfo, highlighter));
+			terms.forEach((term, i) =>
+				insertTermControl(terms, i, termCommands.down[i], termCommands.up[i], controlsInfo, highlighter)
+			);
 			const gutter = document.createElement("div");
 			gutter.id = EleID.MARKER_GUTTER;
 			document.body.insertAdjacentElement("afterend", gutter);
@@ -1529,16 +1422,14 @@ namespace Toolbar {
 	/**
 	 * Insert the toolbar and appropriate controls.
 	 * @param terms Terms to highlight and display in the toolbar.
-	 * @param controlsInfo Details of controls to insert.
 	 * @param commands Browser commands to use in shortcut hints.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 * @param hues Color hues for term styles to cycle through.
 	 * @param produceEffectOnCommand
+	 * @param controlsInfo Details of controls to insert.
 	 */
 	export const insertToolbar = (
 		terms: MatchTerms,
 		commands: BrowserCommands,
-		highlightTags: HighlightTags,
 		hues: TermHues,
 		produceEffectOnCommand: ProduceEffectOnCommand,
 		controlsInfo: ControlsInfo,
@@ -1547,7 +1438,7 @@ namespace Toolbar {
 		const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
 			&& document.activeElement.closest(`#${EleID.BAR}`);
 		controlsRemove();
-		controlsInsert(terms, commands, highlightTags, hues, produceEffectOnCommand, controlsInfo, highlighter);
+		controlsInsert(terms, commands, hues, produceEffectOnCommand, controlsInfo, highlighter);
 		if (focusingControlAppend) {
 			const input = (getControl() as HTMLElement).querySelector("input") as HTMLInputElement;
 			input.focus();
@@ -1592,712 +1483,9 @@ const focusReturnToDocument = (): boolean => {
 };
 
 /*
-HIGHLIGHTING - UTILITY
-Methods for general use in highlighting calculations.
+ADMINISTRATION
+Methods for managing the various content components of the highlighter and its UI.
 */
-
-/**
- * Gets the central y-position of the DOM rect of an element, relative to the document scroll container.
- * @param element An element
- * @returns The relative y-position.
- */
-const getElementYRelative = (element: HTMLElement) =>
-	(element.getBoundingClientRect().y + document.documentElement.scrollTop) / document.documentElement.scrollHeight
-;
-
-/**
- * Remove all uses of a class name in elements under a root node in the DOM tree.
- * @param className A class name to purge.
- * @param root A root node under which to purge the class (non-inclusive).
- * @param selectorPrefix A prefix for the selector of elements to purge from. The base selector is the class name supplied.
- * @param predicate A function called for each element, the condition of which must be met in order to purge from that element.
- */
-const elementsPurgeClass = (
-	className: string,
-	root: HTMLElement | DocumentFragment = document.body,
-	selectorPrefix = "",
-	predicate?: (classList: DOMTokenList) => boolean
-) =>
-	root.querySelectorAll(`${selectorPrefix}.${className}`).forEach(predicate
-		? element => predicate(element.classList) ? element.classList.remove(className) : undefined
-		: element => element.classList.remove(className) // Predicate not called when not supplied, for efficiency (bulk purges)
-	)
-;
-
-/**
- * Gets an array of all flows from the node provided to its last OR first sibling,
- * where a 'flow' is an array of text nodes considered to flow into each other in the document.
- * For example, a paragraph will _ideally_ be considered a flow, but in fact may not be heuristically detected as such.
- * @param node The node from which flows are collected, up to the last descendant of its last sibling.
- * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
- * @param textFlows __Only supplied in recursion.__ Holds the flows gathered so far.
- * @param textFlow __Only supplied in recursion.__ Points to the last flow in `textFlows`.
- */
-const getTextFlows = (
-	node: Node,
-	highlightTags: HighlightTags,
-	textFlows: Array<Array<Text>> = [ [] ],
-	textFlow: Array<Text> = textFlows[0],
-): Array<Array<Text>> => {
-	do {
-		if (node.nodeType === Node.TEXT_NODE) {
-			textFlow.push(node as Text);
-		} else if ((node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE)
-			&& !highlightTags.reject.has((node as Element).tagName)) {
-			const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
-			if (breaksFlow && (textFlow.length || textFlows.length === 1)) { // Ensure the first flow is always the one before a break.
-				textFlow = [];
-				textFlows.push(textFlow);
-			}
-			if (node.firstChild) {
-				getTextFlows(node.firstChild, highlightTags, textFlows, textFlow);
-				textFlow = textFlows[textFlows.length - 1];
-				if (breaksFlow && textFlow.length) {
-					textFlow = [];
-					textFlows.push(textFlow);
-				}
-			}
-		}
-		node = node.nextSibling as ChildNode; // May be null (checked by loop condition).
-	} while (node);
-	return textFlows;
-};
-
-/*
-HIGHLIGHTING - MAIN
-Types, methods, and classes for use in highlighting. Includes all available highlighting engines.
-*/
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace TermCSS {
-	export const getFlatStyle = (color: string) => color;
-
-	export const getDiagonalStyle = (colorA: string, colorB: string, cycle: number) => {
-		const isAboveStyleLevel = (level: number) => cycle >= level;
-		return isAboveStyleLevel(1)
-			? `repeating-linear-gradient(${
-				isAboveStyleLevel(3) ? isAboveStyleLevel(4) ? 0 : 90 : isAboveStyleLevel(2) ? 45 : -45
-			}deg, ${colorA}, ${colorA} 2px, ${colorB} 2px, ${colorB} 8px)`
-			: colorA;
-	};
-
-	export const getHorizontalStyle = (colorA: string, colorB: string, cycle: number) => {
-		const isAboveStyleLevel = (level: number) => cycle >= level;
-		return isAboveStyleLevel(1)
-			? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
-				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
-			)})`
-			: colorA;
-	};
-}
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace Matcher {
-	type BoxInfoExt = Record<string | never, unknown>
-	export type BaseFlow<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
-		text: string
-		boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExtension>>
-	}
-
-	export type Flow = BaseFlow<true>
-
-	export type BaseBoxInfo<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
-		term: MatchTerm
-		start: number
-		end: number
-	} & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExtension>
-
-	export type BoxInfo = BaseBoxInfo<true>
-
-	export const matchInText = (terms: MatchTerms, text: string): Array<BaseBoxInfo<false>> => {
-		const boxesInfo: Array<Matcher.BaseBoxInfo<false>> = [];
-		for (const term of terms) {
-			for (const match of text.matchAll(term.pattern)) {
-				boxesInfo.push({
-					term,
-					start: match.index as number,
-					end: (match.index as number) + match[0].length,
-				});
-			}
-		}
-		return boxesInfo;
-	};
-
-	export const matchInTextFlow = (terms: MatchTerms, text: string, textFlow: Array<Text>): Array<BoxInfo> => {
-		const boxesInfo: Array<BoxInfo> = [];
-		for (const term of terms) {
-			let i = 0;
-			let node = textFlow[0];
-			let textStart = 0;
-			let textEnd = node.length;
-			for (const match of text.matchAll(term.pattern)) {
-				const highlightStart = match.index as number;
-				const highlightEnd = highlightStart + match[0].length;
-				while (textEnd <= highlightStart) {
-					node = textFlow[++i];
-					textStart = textEnd;
-					textEnd += node.length;
-				}
-				// eslint-disable-next-line no-constant-condition
-				while (true) {
-					// Register as much of this highlight that fits into this node.
-					boxesInfo.push({
-						term,
-						node,
-						start: Math.max(0, highlightStart - textStart),
-						end: Math.min(highlightEnd - textStart, node.length),
-					});
-					if (highlightEnd <= textEnd) {
-						break;
-					}
-					// The highlight extends beyond this node, so keep going; move onto the next node.
-					node = textFlow[++i];
-					textStart = textEnd;
-					textEnd += node.length;
-				}
-			}
-		}
-		return boxesInfo;
-	};
-}
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace FlowMonitor {
-	export const CACHE = "markmysearch__cache";
-
-	export type TreeCache<Flow = Matcher.Flow> = {
-		flows: Array<Flow>
-	}
-	
-	export interface AbstractHighlightability {
-		checkElement: (node: Node) => boolean
-
-		findAncestor: <T extends Element>(element: T) => T
-
-		/**
-		 * From the element specified (included) to its highest ancestor element (not included),
-		 * mark each as _an element beneath a highlightable one_ (which could e.g. have a background that obscures highlights).
-		 * This allows them to be selected in CSS.
-		 * @param element The lowest descendant to be marked of the highlightable element.
-		 */
-		markElementsUpTo: (element: Element) => void
-	}
-
-	export class StandardHighlightability implements AbstractHighlightability {
-		checkElement = () => true;
-
-		findAncestor = <T extends Element>(element: T) => element;
-
-		markElementsUpTo = () => undefined;
-	}
-
-	export class CSSPaintHighlightability implements AbstractHighlightability {
-		checkElement = (element: Element) => !element.closest("a");
-
-		findAncestor <T extends Element>(element: T) {
-			let ancestor = element;
-			// eslint-disable-next-line no-constant-condition
-			while (true) {
-				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
-				const ancestorUnhighlightable = ancestor.closest("a") as T | null;
-				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
-					ancestor = ancestorUnhighlightable.parentElement as unknown as T;
-				} else {
-					break;
-				}
-			}
-			return ancestor;
-		}
-
-		markElementsUpTo (element: Element) {
-			if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
-				element.setAttribute("markmysearch-h_beneath", "");
-				this.markElementsUpTo(element.parentElement as Element);
-			}
-		}
-	}
-}
-
-interface AbstractFlowMonitor {
-	mutationObserver: MutationObserver;
-
-	initMutationUpdatesObserver: (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-		onElementsAdded: (elements: Set<Element>) => void,
-	) => void
-
-	boxesInfoCalculate: (
-		terms: MatchTerms,
-		flowOwner: Element,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) => void
-}
-
-class DummyFlowMonitor implements AbstractFlowMonitor {
-	mutationObserver = new MutationObserver(() => undefined);
-	initMutationUpdatesObserver = () => undefined;
-	boxesInfoCalculate = () => undefined;
-}
-
-class StandardFlowMonitor implements AbstractFlowMonitor {
-	mutationObserver = new MutationObserver(() => undefined);
-
-	onNewHighlightedAncestor: (ancestor: Element) => void = () => undefined;
-
-	createElementCache: (element: Element) => FlowMonitor.TreeCache = () => ({ flows: [] });
-
-	onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
-	onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void;
-
-	constructor (
-		onNewHighlightedAncestor: (ancestor: Element) => void,
-		createElementCache: (element: Element) => FlowMonitor.TreeCache,
-		onBoxesInfoPopulated?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
-		onBoxesInfoCleared?: (boxesInfo: Array<Matcher.BoxInfo>) => void,
-	) {
-		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
-		this.createElementCache = createElementCache;
-		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
-		this.onBoxesInfoCleared = onBoxesInfoCleared;
-	}
-
-	initMutationUpdatesObserver (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-		onElementsAdded: (elements: Set<HTMLElement>) => void,
-	) {
-		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		this.mutationObserver = new MutationObserver(mutations => {
-			// TODO optimise
-			const elementsAffected: Set<HTMLElement> = new Set();
-			const elementsAdded: Set<HTMLElement> = new Set();
-			for (const mutation of mutations) {
-				if (mutation.type === "characterData"
-					&& mutation.target.parentElement
-					&& canHighlightElement(rejectSelector, mutation.target.parentElement)
-				) {
-					elementsAffected.add(mutation.target.parentElement);
-				}
-				for (const node of mutation.addedNodes) if (node.parentElement) {
-					switch (node.nodeType) {
-					case Node.ELEMENT_NODE: {
-						const element = node as HTMLElement;
-						if (canHighlightElement(rejectSelector, element)) {
-							elementsAdded.add(element);
-							elementsAffected.add(element);
-						}
-						break;
-					}
-					case Node.TEXT_NODE: {
-						if (canHighlightElement(rejectSelector, node.parentElement)) {
-							elementsAffected.add(node.parentElement);
-						}
-						break;
-					}}
-				}
-				(this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
-					(node[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
-				)));
-			}
-			onElementsAdded(elementsAdded);
-			for (const element of elementsAffected) {
-				this.boxesInfoCalculateForFlowOwnersFromContent(terms, element, highlightTags, termCountCheck);
-			}
-		});
-	}
-
-	boxesInfoCalculateForFlowOwnersFromContent (
-		terms: MatchTerms,
-		element: Element,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
-		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
-		if (highlightTags.flow.has(element.tagName)) {
-			// The element may include non self-contained flows.
-			this.boxesInfoCalculateForFlowOwners(terms, element, highlightTags, termCountCheck);
-		} else {
-			// The element can only include self-contained flows, so flows need only be recalculated below the element.
-			this.boxesInfoCalculate(terms, element, highlightTags, termCountCheck);
-		}
-	}
-
-	boxesInfoCalculateForFlowOwners (
-		terms: MatchTerms,
-		node: Node,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
-		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
-		const parent = node.parentElement;
-		if (!parent) {
-			return;
-		}
-		if (highlightTags.flow.has(parent.tagName)) {
-			// The parent may include non self-contained flows.
-			const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-			walker.currentNode = node;
-			let breakFirst: Element | null = walker.previousNode() as Element;
-			while (breakFirst && highlightTags.flow.has(breakFirst.tagName)) {
-				breakFirst = breakFirst !== parent ? walker.previousNode() as Element : null;
-			}
-			walker.currentNode = node.nextSibling ?? node;
-			let breakLast: Element | null = node.nextSibling ? walker.nextNode() as Element : null;
-			while (breakLast && highlightTags.flow.has(breakLast.tagName)) {
-				breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
-			}
-			if (breakFirst && breakLast) {
-				// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
-				// ALL flows of descendants are recalculated. See below.
-				this.boxesInfoCalculate(terms, parent, highlightTags, termCountCheck);
-			} else {
-				// The flow containing the node may leave the parent, which we assume disrupted the text flows of an ancestor.
-				this.boxesInfoCalculateForFlowOwners(terms, parent, highlightTags, termCountCheck);
-			}
-		} else {
-			// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
-			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin;
-			// example can be seen when loading DuckDuckGo results dynamically. Could be fixed by discarding text flows which start
-			// or end inside elements which do not contain and are not contained by a given element. Will not implement.
-			this.boxesInfoCalculate(terms, parent, highlightTags, termCountCheck);
-		}
-	}
-
-	boxesInfoCalculate (
-		terms: MatchTerms,
-		flowOwner: Element,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		if (!flowOwner.firstChild)
-			return;
-		const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
-		const textFlows = getTextFlows(flowOwner.firstChild, highlightTags);
-		this.flowsRemove(flowOwner, highlightTags);
-		textFlows // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
-			.slice((breaksFlow && textFlows[0]?.length) ? 0 : 1, (breaksFlow && textFlows.at(-1)?.length) ? undefined : -1)
-			.forEach(textFlow => this.flowCacheWithBoxesInfo(terms, textFlow));
-		termCountCheck(); // Major performance hit when using very small delay or small delay maximum for debounce.
-	}
-
-	/**
-	 * Removes the flows cache from all descendant elements.
-	 * @param element The ancestor below which to forget flows.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 */
-	flowsRemove (element: Element, highlightTags: HighlightTags) {
-		if (highlightTags.reject.has(element.tagName)) {
-			return;
-		}
-		const highlighting = element[FlowMonitor.CACHE] as FlowMonitor.TreeCache;
-		if (highlighting) {
-			(this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo)));
-			highlighting.flows = [];
-		}
-		for (const child of element.children) {
-			this.flowsRemove(child, highlightTags);
-		}
-	}
-
-	/**
-	 * TODO document
-	 * @param terms Terms to find and highlight.
-	 * @param textFlow Consecutive text nodes to highlight inside.
-	 */
-	flowCacheWithBoxesInfo (terms: MatchTerms, textFlow: Array<Text>) {
-		const text = textFlow.map(node => node.textContent).join("");
-		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
-			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
-		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow.at(-1) as Text);
-		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as FlowMonitor.TreeCache | undefined;
-		const flow: Matcher.Flow = {
-			text,
-			// Match the terms inside the flow to produce highlighting box info.
-			boxesInfo: Matcher.matchInTextFlow(terms, text, textFlow),
-		};
-		if (ancestorHighlighting) {
-			ancestorHighlighting.flows.push(flow);
-		} else {
-			// This condition *should* be impossible, but since in rare cases (typically when running before "document_idle")
-			// mutation observers may not always fire, it must be accounted for.
-			ancestorHighlighting = this.createElementCache(ancestor);
-			ancestorHighlighting.flows.push(flow);
-			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
-			//console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
-		}
-		(this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo));
-		if (flow.boxesInfo.length > 0) {
-			this.onNewHighlightedAncestor(ancestor);
-		}
-	}
-}
-
-interface AbstractSpecialEngine {
-	startHighlighting: (terms: MatchTerms) => void
-
-	endHighlighting: () => void
-
-	handles: (element: Element) => boolean
-}
-
-class DummySpecialEngine implements AbstractSpecialEngine {
-	startHighlighting = () => undefined;
-	endHighlighting = () => undefined;
-	handles = () => false;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace PaintSpecial {
-	export type Flow = Matcher.BaseFlow<false, Paint.BoxInfoBoxes>
-
-	export type BoxInfo = Matcher.BaseBoxInfo<false, Paint.BoxInfoBoxes>
-
-	export const contextCSS = { hovered: ":hover", focused: ":focus" };
-
-	export type HighlightContext = keyof typeof contextCSS
-
-	export type StyleRulesInfo = Record<HighlightContext, string>
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-class PaintSpecialEngine implements AbstractSpecialEngine {
-	method = new Paint.UrlMethod();
-	terms: MatchTerms = [];
-	styleRules: PaintSpecial.StyleRulesInfo = { hovered: "", focused: "" };
-
-	elementsInfo: Map<Element, {
-		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
-	}> = new Map();
-
-	startHighlighting (terms: MatchTerms) {
-		// Clean up.
-		this.endHighlighting();
-		// MAIN
-		this.terms = terms;
-		this.insertHelperElements();
-		window.addEventListener("focusin", this.onFocusIn);
-		window.addEventListener("mouseover", this.onHover);
-		window.addEventListener("input", this.onInput);
-	}
-
-	endHighlighting () {
-		this.terms = [];
-		window.removeEventListener("focusin", this.onFocusIn);
-		window.removeEventListener("mouseover", this.onHover);
-		window.removeEventListener("input", this.onInput);
-		this.removeHelperElements();
-	}
-
-	handledTags: Array<keyof HTMLElementTagNameMap> = [ "input", "textarea" ];
-	handledTagSelector = this.handledTags.join(", ");
-	handledTagSet = getElementTagsSet(this.handledTags); // Handle <select> elements in future?
-	handles = (element: Element) => this.handledTagSet.has(element.tagName);
-
-	insertHelperElements () {
-		const style = document.createElement("style");
-		style.id = EleID.STYLE_PAINT_SPECIAL;
-		document.head.appendChild(style);
-		const elementContainer = document.createElement("div");
-		elementContainer.id = EleID.ELEMENT_CONTAINER_SPECIAL;
-		document.body.insertAdjacentElement("afterend", elementContainer);
-	}
-
-	removeHelperElements () {
-		document.querySelectorAll(
-			`#${EleID.STYLE_PAINT_SPECIAL}, #${EleID.ELEMENT_CONTAINER_SPECIAL}`
-		).forEach(Element.prototype.remove);
-	}
-
-	getFlow (terms: MatchTerms, input: HTMLInputElement) {
-		const flow: PaintSpecial.Flow = {
-			text: input.value,
-			boxesInfo: [],
-		};
-		for (const term of terms) {
-			for (const match of flow.text.matchAll(term.pattern)) {
-				flow.boxesInfo.push({
-					term,
-					start: match.index as number,
-					end: (match.index as number) + match[0].length,
-					boxes: [],
-				});
-			}
-		}
-	}
-
-	onFocusIn = (event: FocusEvent) => {
-		//console.log("focus in", event.target, event.relatedTarget);
-		if (event.target) {
-			if (this.handles(event.target as Element)) {
-				this.highlight("focused", this.terms);
-			}
-		} else if (event.relatedTarget) {
-			if (this.handles(event.relatedTarget as Element)) {
-				this.unhighlight("focused");
-			}
-		}
-	};
-
-	onHover = (event: MouseEvent) => {
-		//console.log("mouse enter", event.target, event.relatedTarget);
-		if (event.target) {
-			if (this.handles(event.target as Element)) {
-				this.highlight("hovered", this.terms);
-			}
-		} else if (event.relatedTarget) {
-			if (this.handles(event.relatedTarget as Element)) {
-				this.unhighlight("hovered");
-			}
-		}
-	};
-
-	onInput = (event: InputEvent) => {
-		if (!event.target || !this.handles(event.target as Element)) {
-			return;
-		}
-		//const element = event.target as Element;
-		this.highlight("focused", this.terms);
-	};
-
-	highlight (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms) {
-		const element = document.querySelector(PaintSpecial.contextCSS[highlightCtx]);
-		const value = (element as HTMLInputElement | null)?.value;
-		if (value === undefined) {
-			return;
-		}
-		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(highlightCtx, terms, value) });
-	}
-
-	unhighlight (highlightCtx: PaintSpecial.HighlightContext) {
-		this.styleUpdate({ [highlightCtx]: "" });
-	}
-
-	constructHighlightStyleRule = (highlightCtx: PaintSpecial.HighlightContext, terms: MatchTerms, text: string) =>
-		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${PaintSpecial.contextCSS[highlightCtx]
-		} { background-image: ${
-			this.constructHighlightStyleRuleUrl(terms, text)
-		} !important; background-repeat: no-repeat !important; }`;
-
-	constructHighlightStyleRuleUrl (terms: MatchTerms, text: string) {
-		if (!terms.length) {
-			return "url()";
-		}
-		const boxes = Matcher.matchInText(terms, text).map((boxInfo): Paint.Box => {
-			return {
-				token: boxInfo.term.token,
-				x: boxInfo.start * 10,
-				y: 0,
-				width: (boxInfo.end - boxInfo.start) * 10,
-				height: 20,
-			};
-		});
-		return this.method.constructHighlightStyleRuleUrl(boxes, terms);
-	}
-
-	styleUpdate (styleRules: Partial<PaintSpecial.StyleRulesInfo>) {
-		const style = document.getElementById(EleID.STYLE_PAINT_SPECIAL) as HTMLStyleElement;
-		Object.keys(PaintSpecial.contextCSS).forEach(highlightContext => {
-			const rule = styleRules[highlightContext];
-			if (rule !== undefined) {
-				this.styleRules[highlightContext] = rule;
-			}
-		});
-		const styleContent = Object.values(this.styleRules).join("\n");
-		if (styleContent !== style.textContent) {
-			style.textContent = styleContent;
-		}
-	}
-}
-
-enum HighlighterProcess {
-	REFRESH_TERM_CONTROLS,
-	REFRESH_INDICATORS,
-}
-
-interface AbstractEngine {
-	// TODO document each
-	getMiscCSS: () => string
-	getTermHighlightsCSS: () => string
-	getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
-
-	// TODO document
-	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
-
-	// TODO document
-	getRequestWaitDuration: (process: HighlighterProcess) => number
-
-	// TODO document
-	getRequestReschedulingDelayMax: (process: HighlighterProcess) => number
-
-	/**
-	 * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
-	 * @param terms Terms highlighted in the page to mark the scroll position of.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 * @param hues Color hues for term styles to cycle through.
-	 */
-	insertScrollMarkers: (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		hues: TermHues,
-	) => void
-
-	// TODO document
-	raiseScrollMarker: (
-		term: MatchTerm | undefined,
-		container: HTMLElement,
-	) => void
-
-	/**
-	 * Removes previous highlighting, then highlights the document using the terms supplied.
-	 * Disables then restarts continuous highlighting.
-	 * @param terms Terms to be continuously found and highlighted within the DOM.
-	 * @param termsToPurge Terms for which to remove previous highlights.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 * @param termCountCheck A function for requesting that term occurrence count indicators be regenerated.
-	 */
-	startHighlighting: (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) => void
-	
-	// TODO document
-	undoHighlights: (
-		terms?: MatchTerms | undefined,
-		root?: HTMLElement | DocumentFragment,
-	) => void
-
-	// TODO document
-	endHighlighting: () => void
-
-	// TODO document
-	focusNextTerm: (
-		highlightTags: HighlightTags,
-		reverse: boolean,
-		stepNotJump: boolean,
-		term?: MatchTerm,
-	) => void
-
-	/**
-	 * Gets the number of matches for a term in the document.
-	 * @param term A term to get the occurrence count for.
-	 * @returns The occurrence count for the term.
-	 */
-	getTermOccurrenceCount: (
-		term: MatchTerm,
-		checkExistsOnly?: boolean,
-	) => number
-}
-
-type Highlighter = { current: AbstractEngine }
 
 class DummyEngine implements AbstractEngine {
 	getMiscCSS = () => "";
@@ -2314,1628 +1502,6 @@ class DummyEngine implements AbstractEngine {
 	focusNextTerm = () => undefined;
 	getTermOccurrenceCount = () => 0;
 }
-
-/**
- * Gets the containing block of an element.
- * This is its closest ancestor which has no tag name counted as `flow` in a highlight tags object.
- * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
- * @param element An element to find the first container block of (inclusive).
- * @param selector If supplied, a container block selector.
- * Normally generated by the appropriate function using the highlight tags supplied. This may be used for efficiency.
- * @returns The closest container block above the element (inclusive).
- */
-const getContainerBlock = (element: HTMLElement, highlightTags: HighlightTags, selector = ""): HTMLElement =>
-	// Always returns an element since "body" is not a flow tag.
-	element.closest(selector ? selector : getContainerBlockSelector(highlightTags)) as HTMLElement
-;
-
-/**
- * Reverts the focusability of elements made temporarily focusable and marked as such using a class name.
- * Sets their `tabIndex` to -1.
- * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
- */
-const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = document.body) => {
-	if (!root.parentNode) {
-		return;
-	}
-	root.parentNode.querySelectorAll(`.${EleClass.FOCUS_REVERT}`)
-		.forEach((element: HTMLElement) => {
-			element.tabIndex = -1;
-			element.classList.remove(EleClass.FOCUS_REVERT);
-		});
-};
-
-/**
- * Determines whether or not the highlighting algorithm should be run on an element.
- * @param rejectSelector A selector string for ancestor tags to cause rejection.
- * @param element An element to test for highlighting viability.
- * @returns `true` if determined highlightable, `false` otherwise.
- */
-const canHighlightElement = (rejectSelector: string, element: Element): boolean =>
-	!element.closest(rejectSelector) && element.tagName !== HIGHLIGHT_TAG_UPPER
-;
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace Elem {
-	export const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
-
-	export interface FlowNodeListItem {
-		value: Text
-		next: FlowNodeListItem | null
-	}
-
-	/**
-	 * Singly linked list implementation for efficient highlight matching of DOM node 'flow' groups.
-	 */
-	export class FlowNodeList {
-		first: FlowNodeListItem | null;
-		last: FlowNodeListItem | null;
-
-		push (value: Text) {
-			if (this.last) {
-				this.last.next = { value, next: null };
-				this.last = this.last.next;
-			} else {
-				this.first = { value, next: null };
-				this.last = this.first;
-			}
-		}
-
-		insertItemAfter (itemBefore: FlowNodeListItem | null, value: Text): FlowNodeListItem {
-			if (itemBefore) {
-				itemBefore.next = { next: itemBefore.next, value };
-				return itemBefore.next;
-			} else {
-				this.first = { next: this.first, value };
-				return this.first;
-			}
-		}
-
-		removeItemAfter (itemBefore: FlowNodeListItem | null) {
-			if (!itemBefore) {
-				this.first = this.first?.next ?? null;
-				return;
-			}
-			if (this.last === itemBefore.next) {
-				this.last = itemBefore;
-			}
-			itemBefore.next = itemBefore.next?.next ?? null;
-		}
-
-		getText () {
-			let text = "";
-			let current = this.first;
-			do {
-				text += (current as FlowNodeListItem).value.textContent;
-			// eslint-disable-next-line no-cond-assign
-			} while (current = (current as FlowNodeListItem).next);
-			return text;
-		}
-
-		clear () {
-			this.first = null;
-			this.last = null;
-		}
-
-		*[Symbol.iterator] () {
-			let current = this.first;
-			do {
-				yield current as FlowNodeListItem;
-			// eslint-disable-next-line no-cond-assign
-			} while (current = (current as FlowNodeListItem).next);
-		}
-	}
-}
-
-class ElementEngine implements AbstractEngine {
-	mutationObserver: MutationObserver | null = null;
-	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
-
-	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
-
-	constructor (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		this.mutationObserver = this.getMutationUpdatesObserver(terms, highlightTags, termCountCheck);
-		this.specialHighlighter = new PaintSpecialEngine();
-	}
-
-	getMiscCSS () {
-		return "";
-	}
-
-	getTermHighlightsCSS () {
-		return `
-${HIGHLIGHT_TAG} {
-	font: inherit;
-	border-radius: 2px;
-	visibility: visible;
-}
-.${EleClass.FOCUS_CONTAINER} {
-	animation: ${AtRuleID.FLASH} 1s;
-}`
-		;
-	}
-
-	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
-		const term = terms[termIndex];
-		const hue = hues[termIndex % hues.length];
-		const cycle = Math.floor(termIndex / hues.length);
-		return `
-#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
-	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
-	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
-}`
-		;
-	}
-
-	getTermBackgroundStyle = TermCSS.getDiagonalStyle;
-
-	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 50;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 50;
-	} }
-
-	getRequestReschedulingDelayMax (process: HighlighterProcess) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 500;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 500;
-	} }
-
-	insertScrollMarkers (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
-		if (terms.length === 0) {
-			return; // No terms results in an empty selector, which is not allowed.
-		}
-		const regexMatchTermSelector = new RegExp(`\\b${EleClass.TERM}(?:-\\w+)+\\b`);
-		const containerBlockSelector = getContainerBlockSelector(highlightTags);
-		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
-		const containersInfo: Array<{
-			container: HTMLElement
-			termsAdded: Set<string>
-		}> = [];
-		let markersHtml = "";
-		document.body.querySelectorAll(terms
-			.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
-			.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term.token)}`)
-			.join(", ")
-		).forEach((highlight: HTMLElement) => {
-			const container = getContainerBlock(highlight, highlightTags, containerBlockSelector);
-			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
-			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
-			const yRelative = getElementYRelative(container);
-			let markerCss = `top: ${yRelative * 100}%;`;
-			if (containerIdx !== -1) {
-				if (containersInfo[containerIdx].container === container) {
-					if (containersInfo[containerIdx].termsAdded.has(getTermToken(className))) {
-						return;
-					} else {
-						const termsAddedCount = containersInfo[containerIdx].termsAdded.size;
-						markerCss += `padding-left: ${termsAddedCount * 5}px; z-index: ${termsAddedCount * -1}`;
-						containersInfo[containerIdx].termsAdded.add(getTermToken(className));
-					}
-				} else {
-					containersInfo.splice(containerIdx);
-					containersInfo.push({ container, termsAdded: new Set([ getTermToken(className) ]) });
-				}
-			} else {
-				containersInfo.push({ container, termsAdded: new Set([ getTermToken(className) ]) });
-			}
-			markersHtml += `<div class="${className}" top="${yRelative}" style="${markerCss}"></div>`;
-		});
-		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
-		gutter.innerHTML = markersHtml;
-	}
-
-	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
-		const scrollMarkerGutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
-		elementsPurgeClass(EleClass.FOCUS, scrollMarkerGutter);
-		[6, 5, 4, 3, 2].some(precisionFactor => {
-			const precision = 10**precisionFactor;
-			const scrollMarker = scrollMarkerGutter.querySelector(
-				`${term ? `.${getTermClass(term.token)}` : ""}[top^="${
-					Math.trunc(getElementYRelative(container) * precision) / precision
-				}"]`
-			) as HTMLElement | null;
-			if (scrollMarker) {
-				scrollMarker.classList.add(EleClass.FOCUS);
-				return true;
-			}
-			return false;
-		});
-	}
-
-	startHighlighting (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Clean up.
-		this.mutationUpdates.disconnect();
-		this.undoHighlights(termsToPurge);
-		// MAIN
-		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms,
-			document.body, highlightTags, termCountCheck);
-		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms);
-	}
-
-	endHighlighting () {
-		this.mutationUpdates.disconnect();
-		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
-	}
-
-	/**
-	 * Revert all direct DOM tree changes introduced by the extension, under a root node.
-	 * Circumstantial and non-direct alterations may remain.
-	 * @param terms The terms associated with the highlights to remove. If `undefined`, all highlights are removed.
-	 * @param root A root node under which to remove highlights.
-	 */
-	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
-		if (terms && !terms.length)
-			return; // Optimization for removing 0 terms
-		const classNames = terms?.map(term => getTermClass(term.token));
-		const highlights = Array.from(root.querySelectorAll(
-			classNames ? `${HIGHLIGHT_TAG}.${classNames.join(`, ${HIGHLIGHT_TAG}.`)}` : HIGHLIGHT_TAG
-		)).reverse();
-		// TODO attempt to join text nodes back together
-		for (const highlight of highlights) {
-			highlight.outerHTML = highlight.innerHTML;
-		}
-		if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-			root = (root as DocumentFragment).getRootNode() as HTMLElement;
-			if (root.nodeType === Node.TEXT_NODE) {
-				return;
-			}
-		}
-		elementsPurgeClass(EleClass.FOCUS_CONTAINER, root);
-		elementsPurgeClass(EleClass.FOCUS, root);
-		elementsReMakeUnfocusable(root);
-	}
-
-	/**
-	 * Finds and highlights occurrences of terms, then marks their positions in the scrollbar.
-	 * @param terms Terms to find, highlight, and mark.
-	 * @param rootNode A node under which to find and highlight term occurrences.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 * @param termCountCheck A function for requesting that term occurrence count indicators be regenerated.
-	 */
-	generateTermHighlightsUnderNode = (() => {
-		/**
-		 * Highlights a term matched in a text node.
-		 * @param term The term matched.
-		 * @param node The text node to highlight inside.
-		 * @param start The first character index of the match within the text node.
-		 * @param end The last character index of the match within the text node.
-		 * @param nodeItems The singly linked list of consecutive text nodes being internally highlighted.
-		 * @param nodeItemPrevious The previous item in the text node list.
-		 * @returns The new previous item (the item just highlighted).
-		 */
-		const highlightInsideNode = (
-			term: MatchTerm,
-			node: Text,
-			start: number,
-			end: number,
-			nodeItems: Elem.FlowNodeList,
-			nodeItemPrevious: Elem.FlowNodeListItem | null,
-		): Elem.FlowNodeListItem => {
-			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
-			const text = node.textContent ?? "";
-			if (text.length === 0) {
-				node.remove();
-				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as Elem.FlowNodeListItem;
-			}
-			const parent = node.parentElement as Element;
-			parent[Elem.ELEMENT_JUST_HIGHLIGHTED] = true;
-			// update: Text after Highlight Element
-			if (end < text.length) {
-				node.textContent = text.substring(end);
-			} else {
-				nodeItems.removeItemAfter(nodeItemPrevious);
-				node.remove();
-			}
-			// insert: Highlight Element
-			const textHighlightNode = document.createTextNode(text.substring(start, end));
-			const highlight = document.createElement(HIGHLIGHT_TAG);
-			highlight.classList.add(getTermClass(term.token));
-			highlight.appendChild(textHighlightNode);
-			parent.insertBefore(highlight, node);
-			const textHighlightNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textHighlightNode);
-			// insert if exists: Text before Highlight Element
-			if (start > 0) {
-				const textStartNode = document.createTextNode(text.substring(0, start));
-				parent.insertBefore(textStartNode, highlight);
-				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
-			}
-			return textHighlightNodeItem;
-		};
-
-		/**
-		 * Highlights terms in a block of consecutive text nodes.
-		 * @param terms Terms to find and highlight.
-		 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
-		 */
-		const highlightInBlock = (terms: MatchTerms, nodeItems: Elem.FlowNodeList) => {
-			const textFlow = nodeItems.getText();
-			for (const term of terms) {
-				let nodeItemPrevious: Elem.FlowNodeListItem | null = null;
-				let nodeItem: Elem.FlowNodeListItem | null = nodeItems.first as Elem.FlowNodeListItem;
-				let textStart = 0;
-				let textEnd = nodeItem.value.length;
-				for (const match of textFlow.matchAll(term.pattern)) {
-					let highlightStart = match.index as number;
-					const highlightEnd = highlightStart + match[0].length;
-					while (textEnd <= highlightStart) {
-						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next as Elem.FlowNodeListItem;
-						textStart = textEnd;
-						textEnd += nodeItem.value.length;
-					}
-					// eslint-disable-next-line no-constant-condition
-					while (true) {
-						// TODO join together nodes where possible
-						// TODO investigate why, under some circumstances, new empty highlight elements keep being produced
-						// - (to observe, remove the code that deletes empty nodes during restoration)
-						nodeItemPrevious = highlightInsideNode(
-							term,
-							nodeItem.value,
-							highlightStart - textStart,
-							Math.min(highlightEnd - textStart, textEnd),
-							nodeItems,
-							nodeItemPrevious,
-						);
-						highlightStart = textEnd;
-						textStart = highlightEnd;
-						if (highlightEnd <= textEnd) {
-							break;
-						}
-						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next as Elem.FlowNodeListItem;
-						textStart = textEnd;
-						textEnd += nodeItem.value.length;
-					}
-				}
-			}
-		};
-
-		/**
-		 * Highlights occurrences of terms in text nodes under a node in the DOM tree.
-		 * @param terms Terms to find and highlight.
-		 * @param node A root node under which to match terms and insert highlights.
-		 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-		 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
-		 * @param visitSiblings Whether to visit the siblings of the root node.
-		 */
-		const insertHighlights = (
-			terms: MatchTerms,
-			node: Node,
-			highlightTags: HighlightTags,
-			nodeItems: Elem.FlowNodeList,
-			visitSiblings = true,
-		) => {
-			// TODO support for <iframe>?
-			do {
-				switch (node.nodeType) {
-				case Node.ELEMENT_NODE:
-				case Node.DOCUMENT_FRAGMENT_NODE: {
-					if (highlightTags.reject.has((node as Element).tagName)) {
-						break;
-					}
-					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
-					if (breaksFlow && nodeItems.first) {
-						highlightInBlock(terms, nodeItems);
-						nodeItems.clear();
-					}
-					if (node.firstChild) {
-						insertHighlights(terms, node.firstChild, highlightTags, nodeItems);
-						if (breaksFlow && nodeItems.first) {
-							highlightInBlock(terms, nodeItems);
-							nodeItems.clear();
-						}
-					}
-					break;
-				} case Node.TEXT_NODE: {
-					nodeItems.push(node as Text);
-					break;
-				}}
-				node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
-			} while (node && visitSiblings);
-		};
-
-		return (
-			terms: MatchTerms,
-			rootNode: Node,
-			highlightTags: HighlightTags,
-			termCountCheck: TermCountCheck,
-		) => {
-			if (rootNode.nodeType === Node.TEXT_NODE) {
-				const nodeItems = new Elem.FlowNodeList();
-				nodeItems.push(rootNode as Text);
-				highlightInBlock(terms, nodeItems);
-			} else {
-				const nodeItems = new Elem.FlowNodeList();
-				insertHighlights(terms, rootNode, highlightTags, nodeItems, false);
-				if (nodeItems.first) {
-					highlightInBlock(terms, nodeItems);
-				}
-			}
-			termCountCheck();
-		};
-	})();
-
-	focusNextTerm (
-		highlightTags: HighlightTags,
-		reverse: boolean,
-		stepNotJump: boolean,
-		term: MatchTerm | undefined,
-	) {
-		if (stepNotJump) {
-			// Currently no support for specific terms.
-			this.focusNextTermStep(highlightTags, reverse);
-		} else {
-			this.focusNextTermJump(highlightTags, reverse, term);
-		}
-	}
-
-	/**
-	 * Focuses an element, preventing immediate scroll-into-view and forcing visible focus where supported.
-	 * @param element An element.
-	 */
-	focusElement (element: HTMLElement) {
-		element.focus({
-			preventScroll: true,
-			focusVisible: true, // Very sparse browser compatibility
-		} as FocusOptions);
-	}
-
-	// TODO document
-	selectNextElement (
-		reverse: boolean,
-		walker: TreeWalker,
-		walkSelectionFocusContainer: { accept: boolean },
-		highlightTags: HighlightTags,
-		elementToSelect?: HTMLElement,
-	): { elementSelected: HTMLElement | null, container: HTMLElement | null } {
-		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		let elementTerm = walker[nextNodeMethod]() as HTMLElement;
-		if (!elementTerm) {
-			let nodeToRemove: Node | null = null;
-			if (!document.body.lastChild || document.body.lastChild.nodeType !== Node.TEXT_NODE) {
-				nodeToRemove = document.createTextNode("");
-				document.body.appendChild(nodeToRemove);
-			}
-			walker.currentNode = (reverse && document.body.lastChild)
-				? document.body.lastChild
-				: document.body;
-			elementTerm = walker[nextNodeMethod]() as HTMLElement;
-			if (nodeToRemove) {
-				nodeToRemove.parentElement?.removeChild(nodeToRemove);
-			}
-			if (!elementTerm) {
-				walkSelectionFocusContainer.accept = true;
-				elementTerm = walker[nextNodeMethod]() as HTMLElement;
-				if (!elementTerm) {
-					return { elementSelected: null, container: null };
-				}
-			}
-		}
-		const container = getContainerBlock(elementTerm.parentElement as HTMLElement, highlightTags);
-		container.classList.add(EleClass.FOCUS_CONTAINER);
-		elementTerm.classList.add(EleClass.FOCUS);
-		elementToSelect = Array.from(container.getElementsByTagName(HIGHLIGHT_TAG))
-			.every(thisElement => getContainerBlock(thisElement.parentElement as HTMLElement, highlightTags) === container)
-			? container
-			: elementTerm;
-		if (elementToSelect.tabIndex === -1) {
-			elementToSelect.classList.add(EleClass.FOCUS_REVERT);
-			elementToSelect.tabIndex = 0;
-		}
-		this.focusElement(elementToSelect);
-		if (document.activeElement !== elementToSelect) {
-			const element = document.createElement("div");
-			element.tabIndex = 0;
-			element.classList.add(EleClass.REMOVE);
-			elementToSelect.insertAdjacentElement(reverse ? "afterbegin" : "beforeend", element);
-			elementToSelect = element;
-			this.focusElement(elementToSelect);
-		}
-		if (document.activeElement === elementToSelect) {
-			return { elementSelected: elementToSelect, container };
-		}
-		return this.selectNextElement(reverse, walker, walkSelectionFocusContainer, highlightTags, elementToSelect);
-	}
-
-	/**
-	 * Scrolls to and focuses the next block containing an occurrence of a term in the document, from the current selection position.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
-	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
-	 */
-	focusNextTermJump (highlightTags: HighlightTags, reverse: boolean, term?: MatchTerm) {
-		const termSelector = term ? getTermClass(term.token) : undefined;
-		const focusBase = document.body
-			.getElementsByClassName(EleClass.FOCUS)[0] as HTMLElement;
-		const focusContainer = document.body
-			.getElementsByClassName(EleClass.FOCUS_CONTAINER)[0] as HTMLElement;
-		const selection = document.getSelection();
-		const activeElement = document.activeElement;
-		if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${EleID.BAR}`)) {
-			(activeElement as HTMLInputElement).blur();
-		}
-		const selectionFocus = selection && (!activeElement
-			|| activeElement === document.body || !document.body.contains(activeElement)
-			|| activeElement === focusBase || activeElement.contains(focusContainer)
-		)
-			? selection.focusNode
-			: activeElement ?? document.body;
-		if (focusBase) {
-			focusBase.classList.remove(EleClass.FOCUS);
-			elementsPurgeClass(EleClass.FOCUS_CONTAINER);
-			elementsReMakeUnfocusable();
-		}
-		const selectionFocusContainer = selectionFocus
-			? getContainerBlock(
-				selectionFocus.nodeType === Node.ELEMENT_NODE || !selectionFocus.parentElement
-					? selectionFocus as HTMLElement
-					: selectionFocus.parentElement,
-				highlightTags)
-			: undefined;
-		const walkSelectionFocusContainer = { accept: false };
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element.tagName === HIGHLIGHT_TAG_UPPER
-			&& (termSelector ? element.classList.contains(termSelector) : true)
-			&& isVisible(element)
-			&& (getContainerBlock(element, highlightTags) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
-				? NodeFilter.FILTER_ACCEPT
-				: NodeFilter.FILTER_SKIP);
-		walker.currentNode = selectionFocus ? selectionFocus : document.body;
-		const { elementSelected, container } = this.selectNextElement(reverse, walker, walkSelectionFocusContainer, highlightTags);
-		if (!elementSelected || !container) {
-			return;
-		}
-		elementSelected.scrollIntoView({ behavior: "smooth", block: "center" });
-		if (selection) {
-			selection.setBaseAndExtent(elementSelected, 0, elementSelected, 0);
-		}
-		document.body.querySelectorAll(`.${EleClass.REMOVE}`).forEach((element: HTMLElement) => {
-			element.remove();
-		});
-		this.raiseScrollMarker(term, container);
-	}
-
-	getSiblingHighlightFinal (
-		highlight: HTMLElement,
-		node: Node,
-		nextSiblingMethod: "nextSibling" | "previousSibling"
-	) {
-		return node[nextSiblingMethod]
-			? (node[nextSiblingMethod] as Node).nodeType === Node.ELEMENT_NODE
-				? (node[nextSiblingMethod] as HTMLElement).tagName === HIGHLIGHT_TAG_UPPER
-					? this.getSiblingHighlightFinal(node[nextSiblingMethod] as HTMLElement, node[nextSiblingMethod] as HTMLElement,
-						nextSiblingMethod)
-					: highlight
-				: (node[nextSiblingMethod] as Node).nodeType === Node.TEXT_NODE
-					? (node[nextSiblingMethod] as Text).textContent === ""
-						? this.getSiblingHighlightFinal(highlight, node[nextSiblingMethod] as Text, nextSiblingMethod)
-						: highlight
-					: highlight
-			: highlight;
-	}
-
-	getTopLevelHighlight (element: Element) {
-		const closestHighlight = (element.parentElement as Element).closest(HIGHLIGHT_TAG);
-		return closestHighlight ? this.getTopLevelHighlight(closestHighlight) : element;
-	}
-
-	stepToElement (highlightTags: HighlightTags, element: HTMLElement) {
-		element = this.getTopLevelHighlight(element);
-		const elementFirst = this.getSiblingHighlightFinal(element, element, "previousSibling");
-		const elementLast = this.getSiblingHighlightFinal(element, element, "nextSibling");
-		(getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
-		element.scrollIntoView({ block: "center" });
-		this.raiseScrollMarker(undefined, getContainerBlock(element, highlightTags));
-	}
-
-	/**
-	 * Scrolls to and focuses the next occurrence of a term in the document, from the current selection position.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
-	 * @param nodeStart __Only supplied in recursion.__ Specifies a node at which to begin scanning.
-	 */
-	focusNextTermStep (highlightTags: HighlightTags, reverse: boolean, nodeStart?: Node) {
-		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
-		elementsPurgeClass(EleClass.FOCUS);
-		const selection = getSelection();
-		const bar = document.getElementById(EleID.BAR);
-		if (!selection || !bar) {
-			return;
-		}
-		if (document.activeElement && bar.contains(document.activeElement)) {
-			(document.activeElement as HTMLElement).blur();
-		}
-		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
-		const nodeSelected = reverse ? selection.anchorNode : selection.focusNode;
-		const nodeFocused = document.activeElement
-			? (document.activeElement === document.body || bar.contains(document.activeElement))
-				? null
-				: document.activeElement as HTMLElement
-			: null;
-		const nodeCurrent = nodeStart ?? (nodeSelected
-			? nodeSelected
-			: nodeFocused ?? nodeBegin);
-		if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
-		}
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element.parentElement as Element).closest(HIGHLIGHT_TAG)
-				? NodeFilter.FILTER_REJECT
-				: (element.tagName === HIGHLIGHT_TAG_UPPER && isVisible(element))
-					? NodeFilter.FILTER_ACCEPT
-					: NodeFilter.FILTER_SKIP
-		);
-		walker.currentNode = nodeCurrent;
-		const element = walker[reverse ? "previousNode" : "nextNode"]() as HTMLElement | null;
-		if (!element) {
-			if (!nodeStart) {
-				this.focusNextTermStep(highlightTags, reverse, nodeBegin);
-			}
-			return;
-		}
-		this.stepToElement(highlightTags, element);
-	}
-
-	// Increasingly inaccurate as highlights elements are more often split.
-	getTermOccurrenceCount (term: MatchTerm) {
-		const occurrences = document.body.getElementsByClassName(getTermClass(term.token));
-		//const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
-		//return matches ? matches.length : 0; // Works poorly in situations such as matching whole words.
-		return occurrences.length; // Poor and changeable heuristic, but so far the most reliable efficient method.
-	}
-
-	getMutationUpdatesObserver (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		const elements: Set<HTMLElement> = new Set();
-		let periodDateLast = 0;
-		let periodHighlightCount = 0;
-		let throttling = false;
-		let highlightIsPending = false;
-		const highlightElements = () => {
-			highlightIsPending = false;
-			for (const element of elements) {
-				this.undoHighlights(undefined, element);
-				this.generateTermHighlightsUnderNode(terms, element, highlightTags, termCountCheck);
-			}
-			periodHighlightCount += elements.size;
-			elements.clear();
-		};
-		const highlightElementsThrottled = () => {
-			const periodInterval = Date.now() - periodDateLast;
-			if (periodInterval > 400) {
-				const periodHighlightRate = periodHighlightCount / periodInterval; // Highlight calls per millisecond.
-				//console.log(periodHighlightCount, periodInterval, periodHighlightRate);
-				throttling = periodHighlightRate > 0.006;
-				periodDateLast = Date.now();
-				periodHighlightCount = 0;
-			}
-			if (throttling || highlightIsPending) {
-				if (!highlightIsPending) {
-					highlightIsPending = true;
-					setTimeout(highlightElements, 100);
-				}
-			} else {
-				highlightElements();
-			}
-		};
-		return new MutationObserver(mutations => {
-			//mutationUpdates.disconnect();
-			const elementsJustHighlighted: Set<HTMLElement> = new Set();
-			for (const mutation of mutations) {
-				const element = mutation.target.nodeType === Node.TEXT_NODE
-					? mutation.target.parentElement as HTMLElement
-					: mutation.target as HTMLElement;
-				if (element) {
-					if (element[Elem.ELEMENT_JUST_HIGHLIGHTED]) {
-						elementsJustHighlighted.add(element);
-					} else if (canHighlightElement(rejectSelector, element)) {
-						elements.add(element);
-					}
-				}
-			}
-			for (const element of elementsJustHighlighted) {
-				delete element[Elem.ELEMENT_JUST_HIGHLIGHTED];
-			}
-			if (elements.size) {
-				// TODO improve this algorithm
-				for (const element of elements) {
-					for (const elementOther of elements) {
-						if (elementOther !== element && element.contains(elementOther)) {
-							// This may result in undefined behavior
-							elements.delete(elementOther);
-						}
-					}
-				}
-				highlightElementsThrottled();
-			}
-			//mutationUpdates.observe();
-		});
-	}
-}
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace Paint {
-	export type Flow = Matcher.BaseFlow<true, BoxInfoBoxes>
-
-	export type BoxInfo = Matcher.BaseBoxInfo<true, BoxInfoBoxes>
-
-	export type BoxInfoBoxes = { boxes: Array<Box> }
-
-	export type Box = {
-		token: string
-		x: number
-		y: number
-		width: number
-		height: number
-	}
-
-	export type TreeCache = {
-		id: string
-		styleRuleIdx: number
-		isHighlightable: boolean
-	} & FlowMonitor.TreeCache<Flow>
-
-	export type StyleRuleInfo = {
-		rule: string
-		element: Element
-	}
-
-	export const getTermBackgroundStyle = TermCSS.getHorizontalStyle;
-
-	export const styleRulesGetBoxesOwned = (
-		owner: Element,
-		element?: Element,
-		range = new Range,
-	): Array<Box> => {
-		element ??= owner;
-		return getOwnedBoxes(owner, element, range).concat(Array.from(element.children).flatMap(child =>
-			(child[FlowMonitor.CACHE] ? !(child[FlowMonitor.CACHE] as Paint.TreeCache).isHighlightable : false)
-				? styleRulesGetBoxesOwned(owner, child, range) : []
-		));
-	};
-
-	const getOwnedBoxes = (
-		owner: Element,
-		element?: Element,
-		range = new Range(),
-	) => {
-		element ??= owner;
-		const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
-		if (!elementInfo || elementInfo.flows.every(flow => flow.boxesInfo.length === 0)) {
-			return [];
-		}
-		let ownerRects = Array.from(owner.getClientRects());
-		if (!ownerRects.length) {
-			ownerRects = [ owner.getBoundingClientRect() ];
-		}
-		elementPopulateBoxes(elementInfo.flows, ownerRects, range);
-		return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
-	};
-
-	const elementPopulateBoxes = (
-		elementFlows: Array<Flow>,
-		elementRects: Array<DOMRect>,
-		range = new Range(),
-	) =>
-		elementFlows.forEach(flow => flow.boxesInfo.forEach(boxInfo => {
-			boxInfo.boxes?.splice(0);
-			range.setStart(boxInfo.node, boxInfo.start);
-			range.setEnd(boxInfo.node, boxInfo.end);
-			const textRects = range.getClientRects();
-			for (let i = 0; i < textRects.length; i++) {
-				const textRect = textRects.item(i) as DOMRect;
-				if (i !== 0
-					&& textRect.x === (textRects.item(i - 1) as DOMRect).x
-					&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
-					continue;
-				}
-				let x = 0;
-				let y = 0;
-				for (const ownerRect of elementRects) {
-					if (ownerRect.bottom > textRect.top) {
-						x += textRect.x - ownerRect.x;
-						y = textRect.y - ownerRect.y;
-						break;
-					} else {
-						x += ownerRect.width;
-					}
-				}
-				boxInfo.boxes ??= [];
-				boxInfo.boxes.push({
-					token: boxInfo.term.token,
-					x: Math.round(x),
-					y: Math.round(y),
-					width: Math.round(textRect.width),
-					height: Math.round(textRect.height),
-				});
-			}
-		}))
-	;
-
-	export interface AbstractMethod {
-		highlightables: FlowMonitor.AbstractHighlightability
-
-		getMiscCSS: () => string
-
-		getTermHighlightsCSS: () => string
-
-		getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
-
-		endHighlighting: () => void
-
-		getHighlightedElements: () => NodeListOf<Element>
-
-		/**
-		 * Gets a CSS rule to style all elements as per the enabled PAINT variant.
-		 * @param highlightId The unique highlighting identifier of the element on which highlights should be painted.
-		 * @param boxes Details of the highlight boxes to be painted. May not be required depending on the PAINT variant in use.
-		 * @param terms Terms currently being highlighted. Some PAINT variants use this information at this point.
-		 */
-		constructHighlightStyleRule: (highlightId: string, boxes: Array<Box>, terms: MatchTerms) => string
-
-		tempReplaceContainers: (root: Element, recurse: boolean) => void
-
-		tempRemoveDrawElement: (element: Element) => void
-	}
-
-	export class DummyMethod implements AbstractMethod {
-		highlightables = new FlowMonitor.StandardHighlightability();
-		getMiscCSS = () => "";
-		getTermHighlightsCSS = () => "";
-		getTermHighlightCSS = () => "";
-		getHighlightedElements = (): NodeListOf<Element> => document.querySelectorAll("#_");
-		endHighlighting = () => undefined;
-		constructHighlightStyleRule = () => "";
-		tempReplaceContainers = () => undefined;
-		tempRemoveDrawElement = () => undefined;
-	}
-
-	export class PaintMethod implements AbstractMethod {
-		highlightables = new FlowMonitor.CSSPaintHighlightability();
-
-		static paintModuleAdded = false;
-
-		constructor () {
-			if (!PaintMethod.paintModuleAdded) {
-				CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
-				PaintMethod.paintModuleAdded = true;
-			}
-		}
-
-		getMiscCSS = () => "";
-
-		getTermHighlightsCSS = () => "";
-
-		getTermHighlightCSS (terms: MatchTerms, hues: number[]) {
-			const styles: TermSelectorStyles = {};
-			terms.forEach((term, i) => {
-				styles[term.token] = {
-					hue: hues[i % hues.length],
-					cycle: Math.floor(i / hues.length),
-				};
-			});
-			return `
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id] {
-	& [markmysearch-h_beneath] {
-		background-color: transparent;
-	}
-	& {
-		background-image: paint(markmysearch-highlights) !important;
-		--markmysearch-styles: ${JSON.stringify(styles)};
-	}
-	& > :not([markmysearch-h_id]) {
-		--markmysearch-styles: unset;
-		--markmysearch-boxes: unset;
-	}
-}`
-			;
-		}
-
-		endHighlighting () {
-			document.body.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
-				element.removeAttribute("markmysearch-h_beneath");
-			});
-		}
-
-		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
-
-		constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>) =>
-			`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`;
-		
-		tempReplaceContainers = () => undefined;
-
-		tempRemoveDrawElement = () => undefined;
-	}
-
-	export class ElementMethod implements AbstractMethod {
-		highlightables = new FlowMonitor.StandardHighlightability();
-
-		getMiscCSS () {
-			return `
-#${EleID.DRAW_CONTAINER} {
-	& {
-		position: fixed;
-		width: 100%;
-		height: 100%;
-		top: 100%;
-		z-index: ${Z_INDEX_MIN};
-	}
-	& > * {
-		position: fixed;
-		width: 100%;
-		height: 100%;
-	}
-}
-
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${EleClass.TERM} {
-	outline: 2px solid hsl(0 0% 0% / 0.1);
-	outline-offset: -2px;
-	border-radius: 2px;
-}`
-			;
-		}
-
-		getTermHighlightsCSS = () => "";
-
-		getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
-			const term = terms[termIndex];
-			const hue = hues[termIndex % hues.length];
-			const cycle = Math.floor(termIndex / hues.length);
-			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
-				getTermClass(term.token)
-			}`;
-			const backgroundStyle = getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
-			return`${selector} { background: ${backgroundStyle}; }`;
-		}
-
-		endHighlighting = () => undefined;
-
-		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
-
-		getElementDrawId = (highlightId: string) => EleID.DRAW_ELEMENT + "-" + highlightId;
-
-		constructHighlightStyleRule = (highlightId: string) =>
-			`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
-				this.getElementDrawId(highlightId)
-			}) !important; background-repeat: no-repeat !important; }`;
-
-		tempReplaceContainers (root: Element, recurse: boolean) {
-			// This whole operation is plagued with issues. Containers will almost never get deleted when they should
-			// (e.g. when all terms have been removed or highlighting is disabled), and removing an individual term does not
-			// result in the associated elements being deleted. TODO
-			const containers: Array<Element> = [];
-			this.collectElements(root, recurse, containers);
-			const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
-			containers.forEach(container => {
-				const containerExisting = document.getElementById(container.id);
-				if (containerExisting) {
-					containerExisting.remove();
-				}
-				parent.appendChild(container);
-			});
-		}
-		
-		collectElements (
-			element: Element,
-			recurse: boolean,
-			containers: Array<Element>,
-			range = new Range(),
-		) {
-			const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
-			const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
-			if (boxes.length) {
-				const container = document.createElement("div");
-				container.id = this.getElementDrawId(elementInfo.id);
-				boxes.forEach(box => {
-					const element = document.createElement("div");
-					element.style.position = "absolute"; // Should it be "fixed"? Should it be applied in a stylesheet?
-					element.style.left = box.x.toString() + "px";
-					element.style.top = box.y.toString() + "px";
-					element.style.width = box.width.toString() + "px";
-					element.style.height = box.height.toString() + "px";
-					element.classList.add(EleClass.TERM, getTermClass(box.token));
-					container.appendChild(element);
-				});
-				const boxRightmost = boxes.reduce((box, boxCurrent) =>
-					box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent
-				);
-				const boxDownmost = boxes.reduce((box, boxCurrent) =>
-					box && (box.y + box.height > boxCurrent.y + boxCurrent.height) ? box : boxCurrent
-				);
-				container.style.width = (boxRightmost.x + boxRightmost.width).toString() + "px";
-				container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
-				containers.push(container);
-			}
-			if (recurse) {
-				for (const child of element.children) if (child[FlowMonitor.CACHE]) {
-					this.collectElements(child, recurse, containers, range);
-				}
-			}
-		}
-
-		tempRemoveDrawElement (element: Element) {
-			document.getElementById(this.getElementDrawId((element[FlowMonitor.CACHE] as Paint.TreeCache).id))?.remove();
-		}
-	}
-
-	export class UrlMethod implements AbstractMethod {
-		highlightables = new FlowMonitor.StandardHighlightability();
-
-		getMiscCSS = () => "";
-
-		getTermHighlightsCSS = () => "";
-
-		getTermHighlightCSS = () => "";
-
-		endHighlighting = () => undefined;
-
-		getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
-
-		constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>, terms: MatchTerms) =>
-			`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id="${highlightId}"] { background-image: ${
-				this.constructHighlightStyleRuleUrl(boxes, terms)
-			} !important; background-repeat: no-repeat !important; }`;
-
-		constructHighlightStyleRuleUrl = (boxes: Array<Box>, terms: MatchTerms) =>
-			`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
-				boxes.map(box =>
-					`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(
-						terms.find(term => term.token === box.token) as MatchTerm).hue
-					} 100% 50% / 0.4)'/%3E`
-				).join("")
-			}%3C/svg%3E")`;
-
-		tempReplaceContainers = () => undefined;
-
-		tempRemoveDrawElement = () => undefined;
-	}
-}
-
-class PaintEngine implements AbstractEngine {
-	method: Paint.AbstractMethod = new Paint.DummyMethod();
-
-	flowMonitor: AbstractFlowMonitor = new DummyFlowMonitor();
-
-	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
-
-	elementsVisible: Set<Element> = new Set();
-	shiftObserver: ResizeObserver | null = null;
-	visibilityObserver: IntersectionObserver | null = null;
-	styleUpdates = getStyleUpdates(this.elementsVisible, () => ({
-		shiftObserver: this.shiftObserver,
-		visibilityObserver: this.visibilityObserver,
-	}));
-
-	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
-
-	/**
-	 * 
-	 * @param terms 
-	 * @param highlightTags 
-	 * @param termCountCheck 
-	 * @param useExperimental Whether experimental browser technologies (paint/element methods) should be used, if available.
-	 */
-	constructor (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-		methodPreference: PaintEngineMethod,
-	) {
-		if (methodPreference === PaintEngineMethod.PAINT && compatibility.highlight.paintEngine.paintMethod) {
-			this.method = new Paint.PaintMethod();
-		} else if (methodPreference === PaintEngineMethod.ELEMENT && compatibility.highlight.paintEngine.elementMethod) {
-			this.method = new Paint.ElementMethod();
-		} else {
-			this.method = new Paint.UrlMethod();
-		}
-		this.flowMonitor = new StandardFlowMonitor(
-			ancestor => {
-				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
-				this.styleUpdates.observe(ancestorHighlightable);
-				const highlighting = ancestorHighlightable[FlowMonitor.CACHE] as Paint.TreeCache;
-				if (highlighting.id === "") {
-					highlighting.id = highlightingId.next().value;
-					// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
-					ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
-				}
-				this.method.highlightables.markElementsUpTo(ancestor);
-			},
-			(element): Paint.TreeCache => ({
-				id: highlightingId.next().value,
-				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightables.checkElement(element),
-				flows: [],
-			}),
-		);
-		this.flowMonitor.initMutationUpdatesObserver(terms, highlightTags, termCountCheck,
-			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
-		);
-		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
-		this.shiftObserver = shiftObserver;
-		this.visibilityObserver = visibilityObserver;
-		const highlightingId: Generator<string, never, unknown> = (function* () {
-			let i = 0;
-			while (true) {
-				yield (i++).toString();
-			}
-		})();
-		this.getMiscCSS = this.method.getMiscCSS;
-		this.getTermHighlightsCSS = this.method.getTermHighlightsCSS;
-		this.getTermHighlightCSS = this.method.getTermHighlightCSS;
-		this.specialHighlighter = new PaintSpecialEngine();
-	}
-
-	// These are applied before construction, so we need to apply them in the constructor too.
-	getMiscCSS = this.method.getMiscCSS;
-	getTermHighlightsCSS = this.method.getTermHighlightsCSS;
-	getTermHighlightCSS = this.method.getTermHighlightCSS;
-
-	getTermBackgroundStyle = Paint.getTermBackgroundStyle;
-
-	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 200;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 50;
-	} }
-
-	getRequestReschedulingDelayMax (process: HighlighterProcess) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 2000;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 500;
-	} }
-	
-	insertScrollMarkers (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
-		if (terms.length === 0) {
-			return; // Efficient escape in case of no possible markers to be inserted.
-		}
-		// Markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms.
-		const termsAllowed = new Set(terms.slice(0, hues.length));
-		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
-		let markersHtml = "";
-		this.method.getHighlightedElements().forEach((element: HTMLElement) => {
-			const terms = (element[FlowMonitor.CACHE] as Paint.TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo
-				.map(boxInfo => boxInfo.term)
-				.filter(term => termsAllowed.has(term))
-			) ?? [];
-			const yRelative = getElementYRelative(element);
-			// TODO use single marker with custom style
-			markersHtml += terms.map((term, i) => `<div class="${
-				getTermClass(term.token)
-			}" top="${yRelative}" style="top: ${yRelative * 100}%; padding-left: ${i * 5}px; z-index: ${i * -1}"></div>`);
-		});
-		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
-		gutter.innerHTML = markersHtml;
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
-		// Depends on scroll markers refreshed Paint implementation (TODO)
-	}
-	
-	focusClosest (element: HTMLElement, filter: (element: HTMLElement) => boolean) {
-		element.focus({ preventScroll: true });
-		if (document.activeElement !== element) {
-			if (filter(element)) {
-				this.focusClosest(element.parentElement as HTMLElement, filter);
-			} else if (document.activeElement) {
-				(document.activeElement as HTMLElement).blur();
-			}
-		}
-	}
-
-	/**
-	 * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
-	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
-	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
-	 */
-	focusNextTerm (highlightTags: HighlightTags, reverse: boolean, stepNotJump: boolean, term?: MatchTerm, nodeStart?: Node) {
-		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
-		const selection = document.getSelection() as Selection;
-		const bar = document.getElementById(EleID.BAR) as HTMLElement;
-		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
-		const nodeSelected = selection ? selection.anchorNode : null;
-		const nodeFocused = document.activeElement
-			? (document.activeElement === document.body || bar.contains(document.activeElement))
-				? null
-				: document.activeElement as HTMLElement
-			: null;
-		const nodeCurrent = nodeStart
-			?? (nodeFocused
-				? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
-				: nodeSelected ?? nodeBegin
-			);
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element[FlowMonitor.CACHE] as Paint.TreeCache | undefined)?.flows.some(flow =>
-				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.token === term.token) : flow.boxesInfo.length
-			) && isVisible(element)
-				? NodeFilter.FILTER_ACCEPT
-				: NodeFilter.FILTER_SKIP
-		);
-		walker.currentNode = nodeCurrent;
-		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		if (nodeFocused) {
-			nodeFocused.blur();
-		}
-		const element = walker[nextNodeMethod]() as HTMLElement | null;
-		if (!element) {
-			if (!nodeStart) {
-				this.focusNextTerm(highlightTags, reverse, stepNotJump, term, nodeBegin);
-			}
-			return;
-		}
-		if (!stepNotJump) {
-			element.classList.add(EleClass.FOCUS_CONTAINER);
-		}
-		this.focusClosest(element, element =>
-			element[FlowMonitor.CACHE] && !!(element[FlowMonitor.CACHE] as Paint.TreeCache).flows
-		);
-		selection.setBaseAndExtent(element, 0, element, 0);
-		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });
-		this.raiseScrollMarker(term, element);
-	}
-
-	startHighlighting (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Clean up.
-		this.mutationUpdates.disconnect();
-		this.boxesInfoRemoveForTerms(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
-		// MAIN
-		this.cacheExtend(document.body, highlightTags); // Ensure the *whole* document is set up for highlight-caching.
-		this.flowMonitor.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
-		this.mutationUpdates.observe();
-		this.styleUpdate(Array.from(new Set(
-			Array.from(this.elementsVisible).map(element => this.method.highlightables.findAncestor(element))
-		)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms)));
-		this.specialHighlighter.startHighlighting(terms);
-	}
-
-	endHighlighting () {
-		this.mutationUpdates.disconnect();
-		this.styleUpdates.disconnectAll();
-		this.undoHighlights();
-		document.querySelectorAll("*").forEach(element => {
-			delete element[FlowMonitor.CACHE];
-		});
-		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
-			element.removeAttribute("markmysearch-h_id");
-		});
-		this.method.endHighlighting();
-		this.specialHighlighter.endHighlighting();
-	}
-
-	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
-		this.boxesInfoRemoveForTerms(terms, root);
-	}
-
-	cacheExtend (element: Element, highlightTags: HighlightTags, cacheApply = (element: Element) => {
-		if (!element[FlowMonitor.CACHE]) {
-			(element[FlowMonitor.CACHE] as Paint.TreeCache) = {
-				id: "",
-				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightables.checkElement(element),
-				flows: [],
-			};
-		}
-	}) { if (!highlightTags.reject.has(element.tagName)) {
-		cacheApply(element);
-		for (const child of element.children) {
-			this.cacheExtend(child, highlightTags);
-		}
-	} }
-	
-	/** TODO update documentation
-	 * FIXME this is a cut-down and adapted legacy function which may not function efficiently or fully correctly.
-	 * Remove highlights for matches of terms.
-	 * @param terms Terms for which to remove highlights. If left empty, all highlights are removed.
-	 * @param root A root node under which to remove highlights.
-	 */
-	boxesInfoRemoveForTerms (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
-		const editFlow: (flow: Paint.Flow) => void = terms
-			? flow => flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token))
-			: flow => flow.boxesInfo = [];
-		for (const element of root.querySelectorAll("[markmysearch-h_id]")) {
-			const filterBoxesInfo = (element: Element) => {
-				const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
-				if (!elementInfo)
-					return;
-				elementInfo.flows.forEach(editFlow);
-				Array.from(element.children).forEach(filterBoxesInfo);
-			};
-			filterBoxesInfo(element);
-		}
-	}
-
-	getStyleRules (root: Element, recurse: boolean, terms: MatchTerms) {
-		this.method.tempReplaceContainers(root, recurse);
-		const styleRules: Array<Paint.StyleRuleInfo> = [];
-		// 'root' must have [elementInfo].
-		this.collectStyleRules(root, recurse, new Range(), styleRules, terms);
-		return styleRules;
-	}
-
-	collectStyleRules (
-		element: Element,
-		recurse: boolean,
-		range: Range,
-		styleRules: Array<Paint.StyleRuleInfo>,
-		terms: MatchTerms,
-	) {
-		const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
-		const boxes: Array<Paint.Box> = Paint.styleRulesGetBoxesOwned(element);
-		if (boxes.length) {
-			styleRules.push({
-				rule: this.method.constructHighlightStyleRule(elementInfo.id, boxes, terms),
-				element,
-			});
-		}
-		if (recurse) {
-			for (const child of element.children) if (child[FlowMonitor.CACHE]) {
-				this.collectStyleRules(child, recurse, range, styleRules, terms);
-			}
-		}
-	}
-	
-	styleUpdate (styleRules: Array<Paint.StyleRuleInfo>) {
-		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
-		styleRules.forEach(({ rule, element }) => {
-			const elementInfo = element[FlowMonitor.CACHE] as Paint.TreeCache;
-			if (elementInfo.styleRuleIdx === -1) {
-				elementInfo.styleRuleIdx = styleSheet.cssRules.length;
-			} else {
-				if (styleSheet.cssRules.item(elementInfo.styleRuleIdx)?.cssText === rule) {
-					return;
-				}
-				styleSheet.deleteRule(elementInfo.styleRuleIdx);
-			}
-			styleSheet.insertRule(rule, elementInfo.styleRuleIdx);
-		});
-	}
-
-	getTermOccurrenceCount (term: MatchTerm, checkExistsOnly = false) {
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
-			(FlowMonitor.CACHE in element) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
-		let count = 0;
-		let element: Element;
-		// eslint-disable-next-line no-cond-assign
-		while (element = walker.nextNode() as Element) {
-			if (!element) {
-				break;
-			}
-			(element[FlowMonitor.CACHE] as Paint.TreeCache).flows.forEach(flow => {
-				count += flow.boxesInfo.filter(boxInfo => boxInfo.term === term).length;
-			});
-			if (checkExistsOnly && count > 0) {
-				return 1;
-			}
-		}
-		return count;
-	}
-
-	getShiftAndVisibilityObservers (terms: MatchTerms) {
-		const shiftObserver = new ResizeObserver(entries => {
-			const styleRules: Array<Paint.StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(this.method.highlightables.findAncestor(entry.target), true, terms)
-			);
-			if (styleRules.length) {
-				this.styleUpdate(styleRules);
-			}
-		});
-		const visibilityObserver = new IntersectionObserver(entries => {
-			let styleRules: Array<Paint.StyleRuleInfo> = [];
-			entries.forEach(entry => {
-				if (entry.isIntersecting) {
-					//console.log(entry.target, "intersecting");
-					if (entry.target[FlowMonitor.CACHE]) {
-						this.elementsVisible.add(entry.target);
-						shiftObserver.observe(entry.target);
-						styleRules = styleRules.concat(
-							this.getStyleRules(this.method.highlightables.findAncestor(entry.target), false, terms)
-						);
-					}
-				} else {
-					//console.log(entry.target, "not intersecting");
-					if (entry.target[FlowMonitor.CACHE]) {
-						this.method.tempRemoveDrawElement(entry.target);
-					}
-					this.elementsVisible.delete(entry.target);
-					shiftObserver.unobserve(entry.target);
-				}
-			});
-			if (styleRules.length) {
-				this.styleUpdate(styleRules);
-			}
-		}, { rootMargin: "400px" });
-		return { shiftObserver, visibilityObserver };
-	}
-}
-
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace Highlt {
-	export type Flow = Matcher.BaseFlow<true, BoxInfoRange>
-
-	export type BoxInfo = Matcher.BaseBoxInfo<true, BoxInfoRange>
-
-	export type BoxInfoRange = { range: AbstractRange }
-
-	export const getName = (termToken: string) => "markmysearch-" + termToken;
-}
-
-class HighlightEngine implements AbstractEngine {
-	flowMonitor: AbstractFlowMonitor = new DummyFlowMonitor();
-
-	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
-
-	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
-
-	highlights = (() => {
-		const highlights = CSS.highlights as HighlightRegistry;
-		const map: HighlightRegistry = new Map();
-		return {
-			set: (termToken: string, value: Highlight) => {
-				highlights.set(Highlt.getName(termToken), value);
-				return map.set(termToken, value);
-			},
-			get: (termToken: string) => map.get(termToken),
-			has: (termToken: string) => map.has(termToken),
-			delete: (termToken: string) => {
-				highlights.delete(Highlt.getName(termToken));
-				return map.delete(termToken);
-			},
-			clear: () => {
-				for (const termToken of map.keys()) {
-					highlights.delete(Highlt.getName(termToken));
-				}
-				return map.clear();
-			}
-		};
-	})();
-	
-	constructor (
-		terms: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		this.flowMonitor = new StandardFlowMonitor(
-			() => undefined,
-			() => ({ flows: [] }),
-			boxesInfo => {
-				for (const boxInfo of boxesInfo) {
-					const highlight = this.highlights.get(boxInfo.term.token);
-					if (!highlight)
-						continue;
-					highlight.add(new StaticRange({
-						startContainer: boxInfo.node,
-						startOffset: boxInfo.start,
-						endContainer: boxInfo.node,
-						endOffset: boxInfo.end,
-					}));
-				}
-			},
-		);
-		this.flowMonitor.initMutationUpdatesObserver(terms, highlightTags, termCountCheck,
-			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element, highlightTags))
-		);
-		this.specialHighlighter = new PaintSpecialEngine();
-	}
-
-	getMiscCSS () {
-		return "";
-	}
-
-	getTermHighlightsCSS () {
-		return "";
-	}
-
-	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
-		const term = terms[termIndex];
-		const hue = hues[termIndex % hues.length];
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		const cycle = Math.floor(termIndex / hues.length);
-		return `
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${Highlt.getName(term.token)}) {
-	background-color: hsl(${hue} 70% 70%);
-	color: black;
-	/* text-decoration to indicate cycle */
-}`
-		;
-	}
-
-	getTermBackgroundStyle = TermCSS.getFlatStyle;
-
-	getRequestWaitDuration () {
-		return 50;
-	}
-
-	getRequestReschedulingDelayMax () {
-		return 500;
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	insertScrollMarkers (terms: MatchTerms, highlightTags: HighlightTags, hues: TermHues) {
-		//
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
-		//
-	}
-
-	startHighlighting (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
-		highlightTags: HighlightTags,
-		termCountCheck: TermCountCheck,
-	) {
-		// Clean up.
-		termsToPurge.forEach(term => this.highlights.delete(term.token));
-		this.mutationUpdates.disconnect();
-		// MAIN
-		terms.forEach(term => this.highlights.set(term.token, new Highlight()));
-		this.cacheExtend(document.body, highlightTags); // Ensure the *whole* document is set up for highlight-caching.
-		this.flowMonitor.boxesInfoCalculate(terms, document.body, highlightTags, termCountCheck);
-		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms);
-	}
-
-	endHighlighting () {
-		this.highlights.clear();
-		this.specialHighlighter.endHighlighting();
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	undoHighlights (terms?: MatchTerms | undefined, root: HTMLElement | DocumentFragment = document.body) {
-		terms?.forEach(term => this.highlights.delete(term.token));
-	}
-
-	cacheExtend (element: Element, highlightTags: HighlightTags, cacheApply = (element: Element) => {
-		if (!element[FlowMonitor.CACHE]) {
-			(element[FlowMonitor.CACHE] as FlowMonitor.TreeCache) = {
-				flows: [],
-			};
-		}
-	}) { if (!highlightTags.reject.has(element.tagName)) {
-		cacheApply(element);
-		for (const child of element.children) {
-			this.cacheExtend(child, highlightTags);
-		}
-	} }
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	focusNextTerm (highlightTags: HighlightTags, reverse: boolean, stepNotJump: boolean, term?: MatchTerm) {
-		//
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	getTermOccurrenceCount (term: MatchTerm, checkExistsOnly = false) {
-		return 0;
-	}
-}
-
-/*
-ADMINISTRATION
-Methods for managing the various content components of the highlighter and its UI.
-*/
 
 /**
  * Gets an object for controlling whether document mutations are listened to (so responded to by performing partial highlighting).
@@ -3997,9 +1563,7 @@ const getTermsFromSelection = () => {
 		controlsInfo: ControlsInfo,
 		highlighter: Highlighter,
 		commands: BrowserCommands,
-		highlightTags: HighlightTags,
 		hues: TermHues,
-		termCountCheck: TermCountCheck,
 		produceEffectOnCommand: ProduceEffectOnCommand,
 		termsUpdate?: MatchTerms,
 	) => {
@@ -4060,8 +1624,7 @@ const getTermsFromSelection = () => {
 					terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
 					const termCommands = getTermCommands(commands);
 					const idx = terms.length - 1;
-					Toolbar.insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], highlightTags,
-						controlsInfo, highlighter);
+					Toolbar.insertTermControl(terms, idx, termCommands.down[idx], termCommands.up[idx], controlsInfo, highlighter);
 					termsToHighlight.push(terms[idx]);
 				} else {
 					const term = terms[termToUpdateIdx];
@@ -4069,7 +1632,7 @@ const getTermsFromSelection = () => {
 					term.matchMode = termUpdate.matchMode;
 					term.phrase = termUpdate.phrase;
 					term.compile();
-					Toolbar.refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlightTags, highlighter);
+					Toolbar.refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlighter);
 					termsToHighlight.push(term);
 				}
 			} else if (termsUpdate !== undefined) {
@@ -4082,7 +1645,7 @@ const getTermsFromSelection = () => {
 						highlighter.current.undoHighlights([ terms[termRemovedPreviousIdx] ]);
 						terms.splice(termRemovedPreviousIdx, 1);
 						fillStylesheetContent(terms, hues, controlsInfo, highlighter);
-						termCountCheck();
+						//termCountCheck();
 						return;
 					}
 				} else {
@@ -4091,7 +1654,7 @@ const getTermsFromSelection = () => {
 						terms.push(new MatchTerm(term.phrase, term.matchMode));
 					});
 					highlighter.current.undoHighlights();
-					Toolbar.insertToolbar(terms, commands, highlightTags, hues, produceEffectOnCommand, controlsInfo, highlighter);
+					Toolbar.insertToolbar(terms, commands, hues, produceEffectOnCommand, controlsInfo, highlighter);
 				}
 			} else {
 				return;
@@ -4102,7 +1665,7 @@ const getTermsFromSelection = () => {
 				terms.push(new MatchTerm(term.phrase, term.matchMode));
 			});
 			highlighter.current.undoHighlights();
-			Toolbar.insertToolbar(terms, commands, highlightTags, hues, produceEffectOnCommand, controlsInfo, highlighter);
+			Toolbar.insertToolbar(terms, commands, hues, produceEffectOnCommand, controlsInfo, highlighter);
 		} else {
 			return;
 		}
@@ -4118,8 +1681,6 @@ const getTermsFromSelection = () => {
 				terms,
 				termsToHighlight,
 				termsToPurge,
-				highlightTags,
-				termCountCheck,
 			);
 			terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter));
 		});
@@ -4161,11 +1722,10 @@ const getTermsFromSelection = () => {
 
 	/**
 	 * Returns a generator function to consume individual command objects and produce their desired effect.
-	 * @param highlightTags Element tags which are rejected from highlighting OR allow flows of text nodes to leave.
 	 * @param terms Terms being controlled, highlighted, and jumped to.
 	 */
 	const produceEffectOnCommandFn = function* (
-		terms: MatchTerms, highlightTags: HighlightTags, controlsInfo: ControlsInfo, highlighter: Highlighter
+		terms: MatchTerms, controlsInfo: ControlsInfo, highlighter: Highlighter
 	): ProduceEffectOnCommand {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
@@ -4195,12 +1755,12 @@ const getTermsFromSelection = () => {
 				if (focusReturnToDocument()) {
 					break;
 				}
-				highlighter.current.focusNextTerm(highlightTags, commandInfo.reversed ?? false, true);
+				highlighter.current.focusNextTerm(commandInfo.reversed ?? false, true);
 				break;
 			} case CommandType.ADVANCE_GLOBAL: {
 				focusReturnToDocument();
-				highlighter.current.focusNextTerm(highlightTags, commandInfo.reversed ?? false, false,
-					selectModeFocus ? terms[focusedIdx] : undefined);
+				const term = selectModeFocus ? terms[focusedIdx] : undefined;
+				highlighter.current.focusNextTerm(commandInfo.reversed ?? false, false, term);
 				break;
 			} case CommandType.FOCUS_TERM_INPUT: {
 				const control = Toolbar.getControl(undefined, commandInfo.termIdx);
@@ -4248,7 +1808,7 @@ const getTermsFromSelection = () => {
 				focusedIdx = getFocusedIdx(commandInfo.termIdx ?? -1);
 				barTerms.classList.add(Toolbar.getControlPadClass(focusedIdx));
 				if (!selectModeFocus) {
-					highlighter.current.focusNextTerm(highlightTags, !!commandInfo.reversed, false, terms[focusedIdx]);
+					highlighter.current.focusNextTerm(!!commandInfo.reversed, false, terms[focusedIdx]);
 				}
 				break;
 			}}
@@ -4296,30 +1856,24 @@ const getTermsFromSelection = () => {
 				diacritics: false,
 			},
 		};
-		const highlightTags: HighlightTags = {
-			reject: getElementTagsSet([ "meta", "style", "script", "noscript", "title", "textarea" ]),
-			flow: getElementTagsSet([ "b", "i", "u", "strong", "em", "cite", "span", "mark", "wbr", "code", "data", "dfn", "ins",
-				HIGHLIGHT_TAG as keyof HTMLElementTagNameMap ]),
-			// break: any other class of element
-		};
-		const termCountCheck = (() => {
-			const requestRefreshIndicators = requestCallFn(
-				() => highlighter.current.insertScrollMarkers(terms, highlightTags, hues),
-				() => highlighter.current.getRequestWaitDuration(HighlighterProcess.REFRESH_INDICATORS),
-				() => highlighter.current.getRequestReschedulingDelayMax(HighlighterProcess.REFRESH_INDICATORS),
-			);
-			const requestRefreshTermControls = requestCallFn(
-				() => terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter)),
-				() => highlighter.current.getRequestWaitDuration(HighlighterProcess.REFRESH_TERM_CONTROLS),
-				() => highlighter.current.getRequestReschedulingDelayMax(HighlighterProcess.REFRESH_TERM_CONTROLS),
-			);
-			return () => {
-				requestRefreshIndicators.next();
-				requestRefreshTermControls.next();
-			};
-		})();
+		//const termCountCheck: TermCountCheck = (() => {
+		//	const requestRefreshIndicators = requestCallFn(
+		//		() => highlighter.current.insertScrollMarkers(terms, hues),
+		//		() => highlighter.current.getRequestWaitDuration(HighlighterProcess.REFRESH_INDICATORS),
+		//		() => highlighter.current.getRequestReschedulingDelayMax(HighlighterProcess.REFRESH_INDICATORS),
+		//	);
+		//	const requestRefreshTermControls = requestCallFn(
+		//		() => terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter)),
+		//		() => highlighter.current.getRequestWaitDuration(HighlighterProcess.REFRESH_TERM_CONTROLS),
+		//		() => highlighter.current.getRequestReschedulingDelayMax(HighlighterProcess.REFRESH_TERM_CONTROLS),
+		//	);
+		//	return () => {
+		//		requestRefreshIndicators.next();
+		//		requestRefreshTermControls.next();
+		//	};
+		//})();
 		const highlighter: Highlighter = { current: new DummyEngine() };
-		const produceEffectOnCommand = produceEffectOnCommandFn(terms, highlightTags, controlsInfo, highlighter);
+		const produceEffectOnCommand = produceEffectOnCommandFn(terms, controlsInfo, highlighter);
 		produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 		const getDetails = (request: HighlightDetailsRequest) => ({
 			terms: request.termsFromSelection ? getTermsFromSelection() : undefined,
@@ -4337,12 +1891,18 @@ const getTermsFromSelection = () => {
 			if (message.setHighlighter !== undefined) {
 				highlighter.current.endHighlighting();
 				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
-					highlighter.current = new HighlightEngine(terms, highlightTags, termCountCheck);
+					import("src/modules/highlight/engines/highlight.mjs").then(({ HighlightEngine }) => {
+						highlighter.current = new HighlightEngine(terms);
+					});
 				} else if (message.setHighlighter.engine === Engine.PAINT) {
-					highlighter.current = new PaintEngine(terms, highlightTags, termCountCheck,
-						message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT);
+					const method = message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT;
+					import("src/modules/highlight/engines/paint.mjs").then(({ PaintEngine }) => {
+						highlighter.current = new PaintEngine(terms, method);
+					});
 				} else {
-					highlighter.current = new ElementEngine(terms, highlightTags, termCountCheck);
+					import("src/modules/highlight/engines/element.mjs").then(({ ElementEngine }) => {
+						highlighter.current = new ElementEngine(terms);
+					});
 				}
 			}
 			if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
@@ -4355,10 +1915,11 @@ const getTermsFromSelection = () => {
 				commands.splice(0);
 				message.extensionCommands.forEach(command => commands.push(command));
 			}
-			Object.entries(message.barControlsShown ?? {}).forEach(([ controlName, value ]: [ Toolbar.ControlButtonName, boolean ]) => {
-				controlsInfo.barControlsShown[controlName] = value;
-				Toolbar.controlVisibilityUpdate(controlName, controlsInfo, terms);
-			});
+			Object.entries(message.barControlsShown ?? {})
+				.forEach(([ controlName, value ]: [ Toolbar.ControlButtonName, boolean ]) => {
+					controlsInfo.barControlsShown[controlName] = value;
+					Toolbar.controlVisibilityUpdate(controlName, controlsInfo, terms);
+				});
 			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 				controlsInfo.barLook[key] = value;
 			});
@@ -4394,9 +1955,7 @@ const getTermsFromSelection = () => {
 					controlsInfo,
 					highlighter,
 					commands,
-					highlightTags,
 					hues,
-					termCountCheck,
 					produceEffectOnCommand,
 					message.terms,
 				);
