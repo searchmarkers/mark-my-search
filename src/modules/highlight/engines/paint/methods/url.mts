@@ -1,4 +1,4 @@
-import type { Box, AbstractMethod } from "src/modules/highlight/method.mjs"
+import type { Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs"
 const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
 const { EleID, EleClass } = await import("src/modules/common.mjs");
 

@@ -1,7 +1,7 @@
-import type { TreeCache, Box, AbstractMethod } from "src/modules/highlight/method.mjs";
+import type { TreeCache, Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs";
 const {
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
-} = await import("src/modules/highlight/method.mjs");
+} = await import("src/modules/highlight/engines/paint/method.mjs");
 const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
 const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
 const { EleID, EleClass, getTermClass } = await import("src/modules/common.mjs");

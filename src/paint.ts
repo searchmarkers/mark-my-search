@@ -1,3 +1,6 @@
+import type { Box } from "src/modules/highlight/engines/paint/method.mjs";
+import type { TermSelectorStyles } from "src/modules/highlight/engines/paint/methods/paint.mjs";
+
 registerPaint("markmysearch-highlights", class {
 	static get inputProperties () {
 		return [
@@ -12,7 +15,7 @@ registerPaint("markmysearch-highlights", class {
 		properties: StylePropertyMapReadOnly,
 	) {
 		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles")?.toString() || "{}") as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() || "[]") as Array<Paint.Box>;
+		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() || "[]") as Array<Box>;
 		boxes.forEach(box => {
 			const style = selectorStyles[box.token];
 			if (!style) {

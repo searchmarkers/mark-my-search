@@ -1,6 +1,6 @@
 import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
-import type { BoxInfoBoxes, Box } from "src/modules/highlight/method.mjs";
-const { UrlMethod } = await import("src/modules/highlight/methods/url.mjs");
+import type { BoxInfoBoxes, Box } from "src/modules/highlight/engines/paint/method.mjs";
+const { UrlMethod } = await import("src/modules/highlight/engines/paint/methods/url.mjs");
 import type { BaseFlow, BaseBoxInfo } from "src/modules/highlight/matcher.mjs";
 const { matchInText } = await import("src/modules/highlight/matcher.mjs");
 const { EleID, EleClass, getElementTagsSet } = await import("src/modules/common.mjs");

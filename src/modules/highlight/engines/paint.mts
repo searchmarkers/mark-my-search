@@ -6,14 +6,14 @@ const { highlightTags } = await import("src/modules/highlight/highlighting.mjs")
 import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
 const { DummySpecialEngine } = await import("src/modules/highlight/special-engine.mjs");
 const { PaintSpecialEngine } = await import("src/modules/highlight/special-engines/paint.mjs");
-import type { TreeCache, Flow, Box, AbstractMethod } from "src/modules/highlight/method.mjs";
+import type { TreeCache, Flow, Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs";
 const {
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
 	DummyMethod,
-} = await import("src/modules/highlight/method.mjs");
-const { PaintMethod } = await import("src/modules/highlight/methods/paint.mjs");
-const { ElementMethod } = await import("src/modules/highlight/methods/element.mjs");
-const { UrlMethod } = await import("src/modules/highlight/methods/url.mjs");
+} = await import("src/modules/highlight/engines/paint/method.mjs");
+const { PaintMethod } = await import("src/modules/highlight/engines/paint/methods/paint.mjs");
+const { ElementMethod } = await import("src/modules/highlight/engines/paint/methods/element.mjs");
+const { UrlMethod } = await import("src/modules/highlight/engines/paint/methods/url.mjs");
 import type { AbstractFlowMonitor } from "src/modules/highlight/flow-monitor.mjs";
 const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
 const { StandardFlowMonitor } = await import("src/modules/highlight/flow-monitors/standard.mjs");
