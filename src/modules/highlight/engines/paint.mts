@@ -1,28 +1,24 @@
-import type { AbstractEngine } from "src/modules/highlight/engine.mjs";
-const { HighlighterProcess } = await import("src/modules/highlight/engine.mjs");
-type HighlighterProcessItem = (typeof HighlighterProcess)[keyof typeof HighlighterProcess]
-const { getMutationUpdates, getStyleUpdates } = await import("src/modules/highlight/engine.mjs");
-const { highlightTags } = await import("src/modules/highlight/highlighting.mjs");
-import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
-const { DummySpecialEngine } = await import("src/modules/highlight/special-engine.mjs");
-const { PaintSpecialEngine } = await import("src/modules/highlight/special-engines/paint.mjs");
-import type { TreeCache, Flow, Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs";
-const {
+import {
+	type HighlighterProcess, type AbstractEngine, getMutationUpdates, getStyleUpdates,
+} from "/dist/modules/highlight/engine.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
+import {
+	type TreeCache, type Flow, type Box,
+	type AbstractMethod, DummyMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
-	DummyMethod,
-} = await import("src/modules/highlight/engines/paint/method.mjs");
-const { PaintMethod } = await import("src/modules/highlight/engines/paint/methods/paint.mjs");
-const { ElementMethod } = await import("src/modules/highlight/engines/paint/methods/element.mjs");
-const { UrlMethod } = await import("src/modules/highlight/engines/paint/methods/url.mjs");
-import type { AbstractFlowMonitor } from "src/modules/highlight/flow-monitor.mjs";
-const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
-const { StandardFlowMonitor } = await import("src/modules/highlight/flow-monitors/standard.mjs");
-import type { TermHues } from "src/modules/common.mjs"
-const {
+} from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { AbstractFlowMonitor } from "/dist/modules/highlight/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import { StandardFlowMonitor } from "/dist/modules/highlight/flow-monitors/standard.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { TermHues } from "/dist/modules/common.mjs";
+import {
 	EleID, EleClass,
 	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
 	getTermClass
-} = await import("src/modules/common.mjs");
+} from "/dist/modules/common.mjs";
 
 type StyleRuleInfo = {
 	rule: string
@@ -51,14 +47,8 @@ class PaintEngine implements AbstractEngine {
 	 * @param terms 
 	 * @param methodPreference 
 	 */
-	constructor (terms: MatchTerms, methodPreference: PaintEngineMethod) {
-		if (methodPreference === PaintEngineMethod.PAINT && compatibility.highlight.paintEngine.paintMethod) {
-			this.method = new PaintMethod();
-		} else if (methodPreference === PaintEngineMethod.ELEMENT && compatibility.highlight.paintEngine.elementMethod) {
-			this.method = new ElementMethod();
-		} else {
-			this.method = new UrlMethod();
-		}
+	constructor (terms: Array<MatchTerm>, method: AbstractMethod) {
+		this.method = method;
 		this.flowMonitor = new StandardFlowMonitor(
 			ancestor => {
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
@@ -103,17 +93,17 @@ class PaintEngine implements AbstractEngine {
 
 	getTermBackgroundStyle = getTermBackgroundStyle;
 
-	getRequestWaitDuration (process: HighlighterProcessItem) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 200;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 50;
+	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
+	case "refreshIndicators": return 200;
+	case "refreshTermControls": return 50;
 	} }
 
-	getRequestReschedulingDelayMax (process: HighlighterProcessItem) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 2000;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 500;
+	getRequestReschedulingDelayMax (process: HighlighterProcess) { switch (process) {
+	case "refreshIndicators": return 2000;
+	case "refreshTermControls": return 500;
 	} }
 	
-	insertScrollMarkers (terms: MatchTerms, hues: TermHues) {
+	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
 		if (terms.length === 0) {
 			return; // Efficient escape in case of no possible markers to be inserted.
 		}
@@ -204,9 +194,9 @@ class PaintEngine implements AbstractEngine {
 	}
 
 	startHighlighting (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
+		terms: Array<MatchTerm>,
+		termsToHighlight: Array<MatchTerm>,
+		termsToPurge: Array<MatchTerm>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
@@ -235,7 +225,7 @@ class PaintEngine implements AbstractEngine {
 		this.specialHighlighter.endHighlighting();
 	}
 
-	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+	undoHighlights (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
 		this.boxesInfoRemoveForTerms(terms, root);
 	}
 
@@ -261,7 +251,7 @@ class PaintEngine implements AbstractEngine {
 	 * @param terms Terms for which to remove highlights. If left empty, all highlights are removed.
 	 * @param root A root node under which to remove highlights.
 	 */
-	boxesInfoRemoveForTerms (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+	boxesInfoRemoveForTerms (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
 		const editFlow: (flow: Flow) => void = terms
 			? flow => flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token))
 			: flow => flow.boxesInfo = [];
@@ -277,7 +267,7 @@ class PaintEngine implements AbstractEngine {
 		}
 	}
 
-	getStyleRules (root: Element, recurse: boolean, terms: MatchTerms) {
+	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>) {
 		this.method.tempReplaceContainers(root, recurse);
 		const styleRules: Array<StyleRuleInfo> = [];
 		// 'root' must have [elementInfo].
@@ -290,7 +280,7 @@ class PaintEngine implements AbstractEngine {
 		recurse: boolean,
 		range: Range,
 		styleRules: Array<StyleRuleInfo>,
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 	) {
 		const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
 		const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
@@ -343,7 +333,7 @@ class PaintEngine implements AbstractEngine {
 		return count;
 	}
 
-	getShiftAndVisibilityObservers (terms: MatchTerms) {
+	getShiftAndVisibilityObservers (terms: Array<MatchTerm>) {
 		const shiftObserver = new ResizeObserver(entries => {
 			const styleRules: Array<StyleRuleInfo> = entries.flatMap(entry =>
 				this.getStyleRules(this.method.highlightables.findAncestor(entry.target), true, terms)

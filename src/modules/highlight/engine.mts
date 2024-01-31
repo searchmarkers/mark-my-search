@@ -1,18 +1,19 @@
-const { highlightTags } = await import("src/modules/highlight/highlighting.mjs");
-import type { TermHues } from "src/modules/common.mjs"
+import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs"
+import type { TermHues } from "/dist/modules/common.mjs"
 
 type Highlighter = { current: AbstractEngine }
 
-enum HighlighterProcess {
-	REFRESH_TERM_CONTROLS,
-	REFRESH_INDICATORS,
-}
+type HighlighterProcess =
+	| "refreshTermControls"
+	| "refreshIndicators"
+;
 
 interface AbstractEngine {
 	// TODO document each
 	getMiscCSS: () => string
 	getTermHighlightsCSS: () => string
-	getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
+	getTermHighlightCSS: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
 
 	// TODO document
 	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
@@ -29,7 +30,7 @@ interface AbstractEngine {
 	 * @param hues Color hues for term styles to cycle through.
 	 */
 	insertScrollMarkers: (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		hues: TermHues,
 	) => void
 
@@ -46,14 +47,14 @@ interface AbstractEngine {
 	 * @param termsToPurge Terms for which to remove previous highlights.
 	 */
 	startHighlighting: (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
+		terms: Array<MatchTerm>,
+		termsToHighlight: Array<MatchTerm>,
+		termsToPurge: Array<MatchTerm>,
 	) => void
 	
 	// TODO document
 	undoHighlights: (
-		terms?: MatchTerms | undefined,
+		terms?: Array<MatchTerm> | undefined,
 		root?: HTMLElement | DocumentFragment,
 	) => void
 
@@ -107,8 +108,8 @@ const getStyleUpdates = (
 });
 
 export {
-	Highlighter, HighlighterProcess,
-	AbstractEngine,
+	type Highlighter, type HighlighterProcess,
+	type AbstractEngine,
 	getMutationUpdates, getStyleUpdates,
 	containerBlockSelector,
 };

@@ -6,6 +6,10 @@
 		"declaration": true,
 		"alwaysStrict": true,
 		"strictNullChecks": true,
+		"verbatimModuleSyntax": true,
+		"paths": {
+			"/dist/*": [ "./src/*" ],
+		},
 	},
 	"include": [
 		"src/**/*",

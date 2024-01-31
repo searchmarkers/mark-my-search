@@ -1,6 +1,7 @@
-import type { Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs"
-const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
-const { EleID, EleClass } = await import("src/modules/common.mjs");
+import type { Box, AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs"
+import { StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { EleID, EleClass } from "/dist/modules/common.mjs";
 
 class UrlMethod implements AbstractMethod {
 	highlightables = new StandardHighlightability();
@@ -15,12 +16,12 @@ class UrlMethod implements AbstractMethod {
 
 	getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
 
-	constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>, terms: MatchTerms) =>
+	constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>, terms: Array<MatchTerm>) =>
 		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id="${highlightId}"] { background-image: ${
 			this.constructHighlightStyleRuleUrl(boxes, terms)
 		} !important; background-repeat: no-repeat !important; }`;
 
-	constructHighlightStyleRuleUrl = (boxes: Array<Box>, terms: MatchTerms) =>
+	constructHighlightStyleRuleUrl = (boxes: Array<Box>, terms: Array<MatchTerm>) =>
 		`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E${
 			boxes.map(box =>
 				`%3Crect width='${box.width}' height='${box.height}' x='${box.x}' y='${box.y}' fill='hsl(${(

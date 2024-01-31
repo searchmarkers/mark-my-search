@@ -1,4 +1,4 @@
-const { getElementTagsSet } = await import("src/modules/common.mjs");
+import { getElementTagsSet } from "/dist/modules/common.mjs";
 
 const HIGHLIGHT_TAG = "mms-h";
 const HIGHLIGHT_TAG_UPPER = "MMS-H";
@@ -16,6 +16,6 @@ const highlightTags: HighlightTags = {
 };
 
 export {
-	HighlightTags, highlightTags,
+	type HighlightTags, highlightTags,
 	HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER,
 }

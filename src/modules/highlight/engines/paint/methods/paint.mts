@@ -1,6 +1,7 @@
-import type { Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs"
-import type { AbstractHighlightability } from "src/modules/highlight/highlightability.mjs";
-const { EleID, EleClass } = await import("src/modules/common.mjs");
+import type { Box, AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs"
+import type { AbstractHighlightability } from "/dist/modules/highlight/highlightability.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { EleID, EleClass } from "/dist/modules/common.mjs";
 
 type TermSelectorStyles = Record<string, {
 	hue: number
@@ -23,7 +24,7 @@ class PaintMethod implements AbstractMethod {
 
 	getTermHighlightsCSS = () => "";
 
-	getTermHighlightCSS (terms: MatchTerms, hues: number[]) {
+	getTermHighlightCSS (terms: Array<MatchTerm>, hues: number[]) {
 		const styles: TermSelectorStyles = {};
 		terms.forEach((term, i) => {
 			styles[term.token] = {
@@ -37,7 +38,7 @@ class PaintMethod implements AbstractMethod {
 	background-color: transparent;
 }
 & {
-	background-image: paint(markmysearch-highlights) !important;
+	background-image: paint(markmysearch-highlights);
 	--markmysearch-styles: ${JSON.stringify(styles)};
 }
 & > :not([markmysearch-h_id]) {
@@ -90,4 +91,4 @@ class CSSPaintHighlightability implements AbstractHighlightability {
 	}
 }
 
-export { TermSelectorStyles, PaintMethod }
+export { type TermSelectorStyles, PaintMethod }

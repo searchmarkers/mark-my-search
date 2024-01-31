@@ -1,9 +1,9 @@
-import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
-import type { BoxInfoBoxes, Box } from "src/modules/highlight/engines/paint/method.mjs";
-const { UrlMethod } = await import("src/modules/highlight/engines/paint/methods/url.mjs");
-import type { BaseFlow, BaseBoxInfo } from "src/modules/highlight/matcher.mjs";
-const { matchInText } = await import("src/modules/highlight/matcher.mjs");
-const { EleID, EleClass, getElementTagsSet } = await import("src/modules/common.mjs");
+import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import type { BoxInfoBoxes, Box } from "/dist/modules/highlight/engines/paint/method.mjs";
+import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
+import { type BaseFlow, type BaseBoxInfo, matchInText } from "/dist/modules/highlight/matcher.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { EleID, EleClass, getElementTagsSet } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false, BoxInfoBoxes>
 
@@ -18,14 +18,14 @@ type StyleRulesInfo = Record<HighlightContext, string>
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class PaintSpecialEngine implements AbstractSpecialEngine {
 	method = new UrlMethod();
-	terms: MatchTerms = [];
+	terms: Array<MatchTerm> = [];
 	styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
 	elementsInfo: Map<Element, {
 		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
 	}> = new Map();
 
-	startHighlighting (terms: MatchTerms) {
+	startHighlighting (terms: Array<MatchTerm>) {
 		// Clean up.
 		this.endHighlighting();
 		// MAIN
@@ -64,7 +64,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		).forEach(Element.prototype.remove);
 	}
 
-	getFlow (terms: MatchTerms, input: HTMLInputElement) {
+	getFlow (terms: Array<MatchTerm>, input: HTMLInputElement) {
 		const flow: Flow = {
 			text: input.value,
 			boxesInfo: [],
@@ -115,7 +115,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		this.highlight("focused", this.terms);
 	};
 
-	highlight (highlightCtx: HighlightContext, terms: MatchTerms) {
+	highlight (highlightCtx: HighlightContext, terms: Array<MatchTerm>) {
 		const element = document.querySelector(contextCSS[highlightCtx]);
 		const value = (element as HTMLInputElement | null)?.value;
 		if (value === undefined) {
@@ -128,12 +128,12 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		this.styleUpdate({ [highlightCtx]: "" });
 	}
 
-	constructHighlightStyleRule = (highlightCtx: HighlightContext, terms: MatchTerms, text: string) =>
+	constructHighlightStyleRule = (highlightCtx: HighlightContext, terms: Array<MatchTerm>, text: string) =>
 		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${contextCSS[highlightCtx]} { background-image: ${
 			this.constructHighlightStyleRuleUrl(terms, text)
 		} !important; background-repeat: no-repeat !important; }`;
 
-	constructHighlightStyleRuleUrl (terms: MatchTerms, text: string) {
+	constructHighlightStyleRuleUrl (terms: Array<MatchTerm>, text: string) {
 		if (!terms.length) {
 			return "url()";
 		}

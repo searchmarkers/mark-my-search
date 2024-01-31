@@ -28,25 +28,14 @@
 	],
 
 	"background": {
-		"scripts": [
-			"/dist/include/utility.js",
-			"/dist/include/pattern-stem.js",
-			"/dist/include/pattern-diacritic.js",
-			"/dist/include/util-privileged.js",
-			"/dist/include/storage.js",
-			"/dist/background.js"
-		]
+		"type": "module",
+		"scripts": [ "/dist/background.js" ]
 	},
 
 	"content_scripts": [
 		{
 			"matches": [ "*://*/*" ],
-			"js": [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
-				"/dist/content.js"
-			],
+			"js": [ "/dist/content-entry.js" ],
 			"run_at": "document_start"
 		}
 	],
@@ -67,6 +56,7 @@
 			"resources": [
 				"/icons/*.svg",
 				"/dist/paint.js",
+				"/dist/content.mjs",
 				"/dist/modules/*.mjs"
 			],
 			"matches": [ "*://*/*" ]

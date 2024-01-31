@@ -1,9 +1,9 @@
-import { AbstractHighlightability } from "src/modules/highlight/highlightability.mjs";
-const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
-import type * as FlowMonitorTypes from "src/modules/highlight/flow-monitor.mjs";
-const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
-import type { BaseFlow, BaseBoxInfo } from "src/modules/highlight/matcher.mjs";
-const TermCSS = await import("src/modules/highlight/term-css.mjs");
+import { type AbstractHighlightability, StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
+import type * as FlowMonitorTypes from "/dist/modules/highlight/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
+import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 type TreeCache = {
 	id: string
@@ -32,7 +32,7 @@ interface AbstractMethod {
 
 	getTermHighlightsCSS: () => string
 
-	getTermHighlightCSS: (terms: MatchTerms, hues: Array<number>, termIndex: number) => string
+	getTermHighlightCSS: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
 
 	endHighlighting: () => void
 
@@ -44,7 +44,7 @@ interface AbstractMethod {
 	 * @param boxes Details of the highlight boxes to be painted. May not be required depending on the PAINT variant in use.
 	 * @param terms Terms currently being highlighted. Some PAINT variants use this information at this point.
 	 */
-	constructHighlightStyleRule: (highlightId: string, boxes: Array<Box>, terms: MatchTerms) => string
+	constructHighlightStyleRule: (highlightId: string, boxes: Array<Box>, terms: Array<MatchTerm>) => string
 
 	tempReplaceContainers: (root: Element, recurse: boolean) => void
 
@@ -136,7 +136,7 @@ const elementPopulateBoxes = (
 ;
 
 export {
-	TreeCache, Flow, BoxInfo, BoxInfoBoxes, Box,
-	AbstractMethod, DummyMethod,
+	type TreeCache, type Flow, type BoxInfo, type BoxInfoBoxes, type Box,
+	type AbstractMethod, DummyMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
 }

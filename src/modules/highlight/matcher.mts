@@ -1,3 +1,5 @@
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+
 type BoxInfoExt = Record<string | never, unknown>
 
 type BaseFlow<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
@@ -15,7 +17,7 @@ type BaseBoxInfo<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt =
 
 type BoxInfo = BaseBoxInfo<true>
 
-const matchInText = (terms: MatchTerms, text: string): Array<BaseBoxInfo<false>> => {
+const matchInText = (terms: Array<MatchTerm>, text: string): Array<BaseBoxInfo<false>> => {
 	const boxesInfo: Array<BaseBoxInfo<false>> = [];
 	for (const term of terms) {
 		for (const match of text.matchAll(term.pattern)) {
@@ -29,7 +31,7 @@ const matchInText = (terms: MatchTerms, text: string): Array<BaseBoxInfo<false>>
 	return boxesInfo;
 };
 
-const matchInTextFlow = (terms: MatchTerms, text: string, textFlow: Array<Text>): Array<BoxInfo> => {
+const matchInTextFlow = (terms: Array<MatchTerm>, text: string, textFlow: Array<Text>): Array<BoxInfo> => {
 	const boxesInfo: Array<BoxInfo> = [];
 	for (const term of terms) {
 		let i = 0;
@@ -66,4 +68,7 @@ const matchInTextFlow = (terms: MatchTerms, text: string, textFlow: Array<Text>)
 	return boxesInfo;
 };
 
-export { BaseFlow, Flow, BaseBoxInfo, BoxInfo, matchInText, matchInTextFlow };
+export {
+	type BaseFlow, type Flow, type BaseBoxInfo, type BoxInfo,
+	matchInText, matchInTextFlow,
+};

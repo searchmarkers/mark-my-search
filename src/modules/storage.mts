@@ -1,32 +1,42 @@
-chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chrome.storage;
+import type { MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
+import { SearchSite } from "/dist/modules/search-site.mjs";
+import { compatibility } from "/dist/modules/common.mjs";
+
+chrome.storage = compatibility.browser === "chromium"
+	? chrome.storage
+	: browser.storage as typeof chrome.storage;
 chrome.storage.session ??= chrome.storage.local;
 
-type ResearchInstances = Record<number, ResearchInstance>
-type Engines = Record<string, SearchSite>
-type StorageSessionValues = {
-	[StorageSession.RESEARCH_INSTANCES]: ResearchInstances
-	[StorageSession.ENGINES]: Engines
-}
-type StorageLocalValues = {
-	[StorageLocal.ENABLED]: boolean
-	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
-}
-type StorageSyncValues = {
-	[StorageSync.AUTO_FIND_OPTIONS]: {
+type SearchSites = Record<string, SearchSite>
+
+type EnforceRecord<K extends string | number | symbol, T extends Record<K, unknown>> = T
+
+type StorageSessionValues = EnforceRecord<StorageSession, {
+	researchInstances: Record<number, ResearchInstance>
+	engines: SearchSites
+}>
+
+type StorageLocalValues = EnforceRecord<StorageLocal, {
+	enabled: boolean
+	persistResearchInstances: boolean
+}>
+
+type StorageSyncValues = EnforceRecord<StorageSync, {
+	autoFindOptions: {
 		stoplist: Array<string>
 		searchParams: Array<string>
 	}
-	[StorageSync.MATCH_MODE_DEFAULTS]: MatchMode
-	[StorageSync.SHOW_HIGHLIGHTS]: {
+	matchModeDefaults: MatchMode
+	showHighlights: {
 		default: boolean
 		overrideSearchPages: boolean
 		overrideResearchPages: boolean
 	}
-	[StorageSync.BAR_COLLAPSE]: {
+	barCollapse: {
 		fromSearch: boolean
 		fromTermListAuto: boolean
 	}
-	[StorageSync.BAR_CONTROLS_SHOWN]: {
+	barControlsShown: {
 		toggleBarCollapsed: boolean
 		disableTabResearch: boolean
 		performSearch: boolean
@@ -34,7 +44,7 @@ type StorageSyncValues = {
 		appendTerm: boolean
 		replaceTerms: boolean
 	}
-	[StorageSync.BAR_LOOK]: {
+	barLook: {
 		showEditIcon: boolean
 		showRevealIcon: boolean
 		fontSize: string
@@ -42,17 +52,17 @@ type StorageSyncValues = {
 		opacityTerm: number
 		borderRadius: string
 	}
-	[StorageSync.HIGHLIGHT_METHOD]: {
+	highlightMethod: {
 		paintReplaceByElement: boolean
 		paintUseExperimental: boolean
 		hues: Array<number>
 	}
-	[StorageSync.URL_FILTERS]: {
+	urlFilters: {
 		noPageModify: URLFilter
 		nonSearch: URLFilter
 	}
-	[StorageSync.TERM_LISTS]: Array<TermList>
-}
+	termLists: Array<TermList>
+}>
 type URLFilter = Array<{
 	hostname: string,
 	pathname: string,
@@ -69,38 +79,38 @@ type StorageArea<Area extends StorageAreaName> =
 	Area extends "session" ? StorageSession :
 	Area extends "local" ? StorageLocal :
 	Area extends "sync" ? StorageSync :
-never;
+never
 
 type StorageAreaValues<Area extends StorageAreaName> =
 	Area extends "session" ? StorageSessionValues :
 	Area extends "local" ? StorageLocalValues :
 	Area extends "sync" ? StorageSyncValues :
-never;
+never
 
-enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
-	RESEARCH_INSTANCES = "researchInstances",
-	ENGINES = "engines",
-}
+type StorageSession = // Keys assumed to be unique across all storage areas (excluding 'managed')
+	| "researchInstances"
+	| "engines"
+;
 
-enum StorageLocal {
-	ENABLED = "enabled",
-	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
-}
+type StorageLocal =
+	| "enabled"
+	| "persistResearchInstances"
+;
 
-enum StorageSync {
-	AUTO_FIND_OPTIONS = "autoFindOptions",
-	MATCH_MODE_DEFAULTS = "matchModeDefaults",
-	SHOW_HIGHLIGHTS = "showHighlights",
-	BAR_COLLAPSE = "barCollapse",
-	BAR_CONTROLS_SHOWN = "barControlsShown",
-	BAR_LOOK = "barLook",
-	HIGHLIGHT_METHOD = "highlightMethod",
-	URL_FILTERS = "urlFilters",
-	TERM_LISTS = "termLists",
-}
+type StorageSync =
+	| "autoFindOptions"
+	| "matchModeDefaults"
+	| "showHighlights"
+	| "barCollapse"
+	| "barControlsShown"
+	| "barLook"
+	| "highlightMethod"
+	| "urlFilters"
+	| "termLists"
+;
 
 interface ResearchInstance {
-	terms: MatchTerms
+	terms: Array<MatchTerm>
 	highlightsShown: boolean
 	barCollapsed: boolean
 	enabled: boolean
@@ -193,7 +203,6 @@ const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> |
  * @param keys The keys corresponding to the entries to retrieve.
  * @returns A promise resolving to an object of storage entries.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
 	Promise<StorageAreaValues<Area>> =>
 {
@@ -203,7 +212,7 @@ const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array
 	const store = await chrome.storage[area].get(keys) as StorageAreaValues<Area>;
 	const storeAsSession = store as StorageAreaValues<"session">;
 	if (storeAsSession.engines) {
-		const engines = storeAsSession.engines as Engines;
+		const engines = storeAsSession.engines as SearchSites;
 		Object.keys(engines).forEach(id => engines[id] = Object.assign(new SearchSite(), engines[id]));
 	}
 	Object.entries(store).forEach(([ key, value ]) => {
@@ -227,7 +236,6 @@ const storageSet = async <Area extends StorageAreaName>(area: Area, store: Stora
 /**
  * Sets internal storage to its default working values.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const storageInitialize = async () => {
 	const local = await storageGet("local");
 	const localOld = { ...local };
@@ -296,7 +304,6 @@ const objectFixWithDefaults = (
 /**
  * Checks persistent options storage for unwanted or misconfigured values, then restores it to a normal state.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const optionsRepair = async () => {
 	const sync = await storageGet("sync");
 	const syncOld = { ...sync };
@@ -344,3 +351,14 @@ chrome.storage.onChanged.addListener(updateCache);
 		updateCache(areaChange, areaName);
 	});
 })();*/
+
+export {
+	type ResearchInstance,
+	type SearchSites,
+	type URLFilter,
+	type StorageSession, type StorageLocal, type StorageSync,
+	type StorageSessionValues, type StorageLocalValues, type StorageSyncValues,
+	storageGet, storageSet,
+	storageInitialize,
+	optionsRepair,
+}

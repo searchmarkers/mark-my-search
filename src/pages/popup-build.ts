@@ -17,11 +17,11 @@ const loadPopup = (() => {
 		},
 		checkbox: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
-				const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
+				const sync = await storageGet("sync", [ "termLists" ]);
 				setChecked(sync.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
 			onToggle: (checked, objectIndex, containerIndex) => {
-				storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+				storageGet("sync", [ "termLists" ]).then(sync => {
 					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
 					storageSet("sync", sync);
 				});
@@ -92,7 +92,7 @@ const loadPopup = (() => {
 							},
 							checkbox: {
 								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
+									const local = await storageGet("local", [ "enabled" ]);
 									setChecked(local.enabled);
 								},
 								onToggle: checked => {
@@ -107,7 +107,7 @@ const loadPopup = (() => {
 							label: {
 								text: "Restore keywords on reactivation",
 							},
-							checkbox: getStorageFieldCheckboxInfo("local", StorageLocal.PERSIST_RESEARCH_INSTANCES),
+							checkbox: getStorageFieldCheckboxInfo("local", "persistResearchInstances"),
 						},
 					],
 				},
@@ -128,12 +128,12 @@ const loadPopup = (() => {
 								},
 								onToggle: checked => {
 									if (checked) {
-										storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]).then(async session => {
+										storageGet("session", [ "researchInstances" ]).then(async session => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 											if (tab.id === undefined) {
 												return;
 											}
-											const local = await storageGet("local", [ StorageLocal.PERSIST_RESEARCH_INSTANCES ]);
+											const local = await storageGet("local", [ "persistResearchInstances" ]);
 											const researchInstance = session.researchInstances[tab.id];
 											if (researchInstance && local.persistResearchInstances) {
 												researchInstance.enabled = true;
@@ -162,14 +162,14 @@ const loadPopup = (() => {
 								onLoad: async setEnabled => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									setEnabled(tab.id === undefined ? false :
-										!!(await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ])).researchInstances[tab.id]);
+										!!(await storageGet("session", [ "researchInstances" ])).researchInstances[tab.id]);
 								},
 								onClick: async () => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									if (tab.id === undefined) {
 										return;
 									}
-									const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+									const session = await storageGet("session", [ "researchInstances" ]);
 									delete session.researchInstances[tab.id];
 									await storageSet("session", session);
 									messageSendBackground({
@@ -251,12 +251,12 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => //
+										storageGet("sync", [ "urlFilters" ]).then(sync => //
 											sync.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => {
+										storageGet("sync", [ "urlFilters" ]).then(sync => {
 											sync.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -285,12 +285,12 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => //
+										storageGet("sync", [ "urlFilters" ]).then(sync => //
 											sync.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										storageGet("sync", [ StorageSync.URL_FILTERS ]).then(sync => {
+										storageGet("sync", [ "urlFilters" ]).then(sync => {
 											sync.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -325,12 +325,12 @@ const loadPopup = (() => {
 							className: "temp-class",
 							list: {
 								getLength: () =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
+									storageGet("sync", [ "termLists" ]).then(sync =>
 										sync.termLists.length
 									)
 								,
 								pushWithName: name =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+									storageGet("sync", [ "termLists" ]).then(sync => {
 										sync.termLists.push({
 											name,
 											terms: [],
@@ -340,7 +340,7 @@ const loadPopup = (() => {
 									})
 								,
 								removeAt: index =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+									storageGet("sync", [ "termLists" ]).then(sync => {
 										sync.termLists.splice(index, 1);
 										storageSet("sync", sync);
 									})
@@ -349,12 +349,12 @@ const loadPopup = (() => {
 							label: {
 								text: "",
 								getText: index =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
+									storageGet("sync", [ "termLists" ]).then(sync =>
 										sync.termLists[index] ? sync.termLists[index].name : ""
 									)
 								,
 								setText: (text, index) =>
-									storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+									storageGet("sync", [ "termLists" ]).then(sync => {
 										sync.termLists[index].name = text;
 										storageSet("sync", sync);
 									})
@@ -367,12 +367,12 @@ const loadPopup = (() => {
 								className: "term",
 								list: {
 									getArray: index =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync =>
+										storageGet("sync", [ "termLists" ]).then(sync =>
 											sync.termLists[index].terms as unknown as Array<Record<string, unknown>>
 										)
 									,
 									setArray: (array, index) =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+										storageGet("sync", [ "termLists" ]).then(sync => {
 											sync.termLists[index].terms = array as unknown as typeof sync["termLists"][number]["terms"];
 											storageSet("sync", sync);
 										})
@@ -399,11 +399,11 @@ const loadPopup = (() => {
 													placeholder: "keyword",
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
-														const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
+														const sync = await storageGet("sync", [ "termLists" ]);
 														setText(sync.termLists[containerIndex].terms[objectIndex] ? sync.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
-														storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+														storageGet("sync", [ "termLists" ]).then(sync => {
 															sync.termLists[containerIndex].terms[objectIndex].phrase = text;
 															storageSet("sync", sync);
 														});
@@ -428,12 +428,12 @@ const loadPopup = (() => {
 								className: "temp-class",
 								list: {
 									getArray: index =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => //
+										storageGet("sync", [ "termLists" ]).then(sync => //
 											sync.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: (array, index) =>
-										storageGet("sync", [ StorageSync.TERM_LISTS ]).then(sync => {
+										storageGet("sync", [ "termLists" ]).then(sync => {
 											sync.termLists[index].urlFilter = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -456,8 +456,8 @@ const loadPopup = (() => {
 										if (tab.id === undefined) {
 											return;
 										}
-										const sync = await storageGet("sync", [ StorageSync.TERM_LISTS ]);
-										const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+										const sync = await storageGet("sync", [ "termLists" ]);
+										const session = await storageGet("session", [ "researchInstances" ]);
 										const researchInstance = session.researchInstances[tab.id];
 										if (researchInstance) {
 											researchInstance.enabled = true;

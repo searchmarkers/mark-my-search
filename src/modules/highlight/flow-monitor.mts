@@ -1,4 +1,5 @@
-import type * as Matcher from "src/modules/highlight/matcher.mjs";
+import type * as Matcher from "/dist/modules/highlight/matcher.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 const CACHE = "markmysearch__cache";
 
@@ -10,12 +11,12 @@ interface AbstractFlowMonitor {
 	mutationObserver: MutationObserver;
 
 	initMutationUpdatesObserver: (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		onElementsAdded: (elements: Set<Element>) => void,
 	) => void
 
 	boxesInfoCalculate: (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		flowOwner: Element,
 	) => void
 }
@@ -27,6 +28,6 @@ class DummyFlowMonitor implements AbstractFlowMonitor {
 }
 
 export {
-	CACHE, TreeCache,
-	AbstractFlowMonitor, DummyFlowMonitor,
+	CACHE, type TreeCache,
+	type AbstractFlowMonitor, DummyFlowMonitor,
 };

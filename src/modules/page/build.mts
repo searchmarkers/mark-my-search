@@ -1,3 +1,8 @@
+import { getName } from "/dist/modules/manifest.mjs";
+import { storageGet } from "/dist/modules/storage.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
+
 type PageInteractionObjectRowInfo = {
 	className: string
 	key: string
@@ -165,11 +170,10 @@ const sendEmail: (
 /**
  * Sends a problem report message to a dedicated inbox.
  * @param userMessage An optional message string to send as a comment.
-	*/
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+*/
 const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-	const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
+	const session = await storageGet("session", [ "researchInstances" ]);
 	const phrases = session.researchInstances[tab.id as number]
 		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
@@ -193,7 +197,6 @@ const sendProblemReport = async (userMessage = "", formFields: Array<FormField>)
 
 // TODO document functions
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const pageInsertWarning = (container: HTMLElement, text: string) => {
 	const warning = document.createElement("div");
 	warning.classList.add("warning");
@@ -211,7 +214,6 @@ const pageFocusScrollContainer = () =>
  * @param additionalStyleText 
  * @param shiftModifierIsRequired 
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const loadPage = (() => {
 	/**
 	 * Fills and inserts a CSS stylesheet element to style the page.
@@ -822,7 +824,7 @@ textarea
 			}
 			container.appendChild(button);
 			let getMessageText = () => "";
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
+			// eslint-disable-next-line @typescript-eslint/no-empty-function
 			let allowInputs = (allowed = true) => {};
 			button.addEventListener("click", () => {
 				button.disabled = true;
@@ -1125,7 +1127,7 @@ textarea
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
-		chrome.tabs.query = useChromeAPI()
+		chrome.tabs.query = (compatibility.browser === "chromium")
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
 		const viewportMeta = document.createElement("meta");
@@ -1137,3 +1139,9 @@ textarea
 		pageFocusScrollContainer();
 	};
 })();
+
+export {
+	sendProblemReport,
+	loadPage,
+	pageInsertWarning,
+};

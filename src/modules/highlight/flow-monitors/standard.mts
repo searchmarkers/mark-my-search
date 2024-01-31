@@ -1,8 +1,8 @@
-import type { TreeCache, AbstractFlowMonitor } from "src/modules/highlight/flow-monitor.mjs";
-const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
-const { highlightTags } = await import("src/modules/highlight/highlighting.mjs");
-import type { Flow, BoxInfo } from "src/modules/highlight/matcher.mjs";
-const { matchInTextFlow } = await import("src/modules/highlight/matcher.mjs");
+import type { TreeCache, AbstractFlowMonitor } from "/dist/modules/highlight/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { type Flow, type BoxInfo, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 class StandardFlowMonitor implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
@@ -27,7 +27,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	}
 
 	initMutationUpdatesObserver (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		onElementsAdded: (elements: Set<HTMLElement>) => void,
 	) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
@@ -70,7 +70,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		});
 	}
 
-	boxesInfoCalculateForFlowOwnersFromContent (terms: MatchTerms, element: Element) {
+	boxesInfoCalculateForFlowOwnersFromContent (terms: Array<MatchTerm>, element: Element) {
 		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		if (highlightTags.flow.has(element.tagName)) {
@@ -82,7 +82,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		}
 	}
 
-	boxesInfoCalculateForFlowOwners (terms: MatchTerms, node: Node) {
+	boxesInfoCalculateForFlowOwners (terms: Array<MatchTerm>, node: Node) {
 		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		const parent = node.parentElement;
@@ -119,7 +119,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		}
 	}
 
-	boxesInfoCalculate (terms: MatchTerms, flowOwner: Element) {
+	boxesInfoCalculate (terms: Array<MatchTerm>, flowOwner: Element) {
 		if (!flowOwner.firstChild)
 			return;
 		const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
@@ -154,7 +154,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	 * @param terms Terms to find and highlight.
 	 * @param textFlow Consecutive text nodes to highlight inside.
 	 */
-	flowCacheWithBoxesInfo (terms: MatchTerms, textFlow: Array<Text>) {
+	flowCacheWithBoxesInfo (terms: Array<MatchTerm>, textFlow: Array<Text>) {
 		const text = textFlow.map(node => node.textContent).join("");
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);

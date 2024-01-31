@@ -1,18 +1,17 @@
-import type { AbstractEngine } from "src/modules/highlight/engine.mjs";
-const { HighlighterProcess } = await import("src/modules/highlight/engine.mjs");
-type HighlighterProcessItem = (typeof HighlighterProcess)[keyof typeof HighlighterProcess]
-const { getMutationUpdates, containerBlockSelector } = await import("src/modules/highlight/engine.mjs");
-const { highlightTags, HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } = await import("src/modules/highlight/highlighting.mjs");
-import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
-const { DummySpecialEngine } = await import("src/modules/highlight/special-engine.mjs");
-const { PaintSpecialEngine } = await import("src/modules/highlight/special-engines/paint.mjs");
-const TermCSS = await import("src/modules/highlight/term-css.mjs");
-import type { TermHues } from "src/modules/common.mjs"
-const {
+import {
+	type AbstractEngine, type HighlighterProcess, getMutationUpdates, containerBlockSelector,
+} from "/dist/modules/highlight/engine.mjs";
+import { highlightTags, HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/highlighting.mjs";
+import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
+import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { TermHues } from "/dist/modules/common.mjs"
+import {
 	EleID, EleClass, AtRuleID,
 	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
 	getTermClass, getTermToken,
-} = await import("src/modules/common.mjs");
+} from "/dist/modules/common.mjs";
 
 /**
  * Determines whether or not the highlighting algorithm should be run on an element.
@@ -51,75 +50,72 @@ const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = docume
 		});
 };
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
-namespace Elem {
-	export const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
+const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
 
-	export interface FlowNodeListItem {
-		value: Text
-		next: FlowNodeListItem | null
+interface FlowNodeListItem {
+	value: Text
+	next: FlowNodeListItem | null
+}
+
+/**
+ * Singly linked list implementation for efficient highlight matching of DOM node 'flow' groups.
+ */
+class FlowNodeList {
+	first: FlowNodeListItem | null;
+	last: FlowNodeListItem | null;
+
+	push (value: Text) {
+		if (this.last) {
+			this.last.next = { value, next: null };
+			this.last = this.last.next;
+		} else {
+			this.first = { value, next: null };
+			this.last = this.first;
+		}
 	}
 
-	/**
-	 * Singly linked list implementation for efficient highlight matching of DOM node 'flow' groups.
-	 */
-	export class FlowNodeList {
-		first: FlowNodeListItem | null;
-		last: FlowNodeListItem | null;
-
-		push (value: Text) {
-			if (this.last) {
-				this.last.next = { value, next: null };
-				this.last = this.last.next;
-			} else {
-				this.first = { value, next: null };
-				this.last = this.first;
-			}
+	insertItemAfter (itemBefore: FlowNodeListItem | null, value: Text): FlowNodeListItem {
+		if (itemBefore) {
+			itemBefore.next = { next: itemBefore.next, value };
+			return itemBefore.next;
+		} else {
+			this.first = { next: this.first, value };
+			return this.first;
 		}
+	}
 
-		insertItemAfter (itemBefore: FlowNodeListItem | null, value: Text): FlowNodeListItem {
-			if (itemBefore) {
-				itemBefore.next = { next: itemBefore.next, value };
-				return itemBefore.next;
-			} else {
-				this.first = { next: this.first, value };
-				return this.first;
-			}
+	removeItemAfter (itemBefore: FlowNodeListItem | null) {
+		if (!itemBefore) {
+			this.first = this.first?.next ?? null;
+			return;
 		}
+		if (this.last === itemBefore.next) {
+			this.last = itemBefore;
+		}
+		itemBefore.next = itemBefore.next?.next ?? null;
+	}
 
-		removeItemAfter (itemBefore: FlowNodeListItem | null) {
-			if (!itemBefore) {
-				this.first = this.first?.next ?? null;
-				return;
-			}
-			if (this.last === itemBefore.next) {
-				this.last = itemBefore;
-			}
-			itemBefore.next = itemBefore.next?.next ?? null;
-		}
+	getText () {
+		let text = "";
+		let current = this.first;
+		do {
+			text += (current as FlowNodeListItem).value.textContent;
+		// eslint-disable-next-line no-cond-assign
+		} while (current = (current as FlowNodeListItem).next);
+		return text;
+	}
 
-		getText () {
-			let text = "";
-			let current = this.first;
-			do {
-				text += (current as FlowNodeListItem).value.textContent;
-			// eslint-disable-next-line no-cond-assign
-			} while (current = (current as FlowNodeListItem).next);
-			return text;
-		}
+	clear () {
+		this.first = null;
+		this.last = null;
+	}
 
-		clear () {
-			this.first = null;
-			this.last = null;
-		}
-
-		*[Symbol.iterator] () {
-			let current = this.first;
-			do {
-				yield current as FlowNodeListItem;
-			// eslint-disable-next-line no-cond-assign
-			} while (current = (current as FlowNodeListItem).next);
-		}
+	*[Symbol.iterator] () {
+		let current = this.first;
+		do {
+			yield current as FlowNodeListItem;
+		// eslint-disable-next-line no-cond-assign
+		} while (current = (current as FlowNodeListItem).next);
 	}
 }
 
@@ -129,7 +125,7 @@ class ElementEngine implements AbstractEngine {
 
 	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
 
-	constructor (terms: MatchTerms) {
+	constructor (terms: Array<MatchTerm>) {
 		this.mutationObserver = this.getMutationUpdatesObserver(terms);
 		this.specialHighlighter = new PaintSpecialEngine();
 	}
@@ -151,7 +147,7 @@ ${HIGHLIGHT_TAG} {
 		;
 	}
 
-	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
+	getTermHighlightCSS (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) {
 		const term = terms[termIndex];
 		const hue = hues[termIndex % hues.length];
 		const cycle = Math.floor(termIndex / hues.length);
@@ -166,17 +162,17 @@ ${HIGHLIGHT_TAG} {
 
 	getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
-	getRequestWaitDuration (process: HighlighterProcessItem) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 50;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 50;
+	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
+	case "refreshIndicators": return 50;
+	case "refreshTermControls": return 50;
 	} }
 
-	getRequestReschedulingDelayMax (process: HighlighterProcessItem) { switch (process) {
-	case HighlighterProcess.REFRESH_INDICATORS: return 500;
-	case HighlighterProcess.REFRESH_TERM_CONTROLS: return 500;
+	getRequestReschedulingDelayMax (process: HighlighterProcess) { switch (process) {
+	case "refreshIndicators": return 500;
+	case "refreshTermControls": return 500;
 	} }
 
-	insertScrollMarkers (terms: MatchTerms, hues: TermHues) {
+	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
 		if (terms.length === 0) {
 			return; // No terms results in an empty selector, which is not allowed.
 		}
@@ -238,9 +234,9 @@ ${HIGHLIGHT_TAG} {
 	}
 
 	startHighlighting (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
+		terms: Array<MatchTerm>,
+		termsToHighlight: Array<MatchTerm>,
+		termsToPurge: Array<MatchTerm>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
@@ -263,7 +259,7 @@ ${HIGHLIGHT_TAG} {
 	 * @param terms The terms associated with the highlights to remove. If `undefined`, all highlights are removed.
 	 * @param root A root node under which to remove highlights.
 	 */
-	undoHighlights (terms?: MatchTerms, root: HTMLElement | DocumentFragment = document.body) {
+	undoHighlights (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
 		if (terms && !terms.length)
 			return; // Optimization for removing 0 terms
 		const classNames = terms?.map(term => getTermClass(term.token));
@@ -301,28 +297,28 @@ ${HIGHLIGHT_TAG} {
 		 * @param nodeItemPrevious The previous item in the text node list.
 		 * @returns The new previous item (the item just highlighted).
 		 */
-		const highlightInsideNode = (
+		const _highlightInsideNode = ( // new but broken version of the function
 			term: MatchTerm,
 			node: Text,
 			start: number,
 			end: number,
-			nodeItems: Elem.FlowNodeList,
-			nodeItemPrevious: Elem.FlowNodeListItem | null,
-		): Elem.FlowNodeListItem => {
+			nodeItems: FlowNodeList,
+			nodeItemPrevious: FlowNodeListItem | null,
+		): FlowNodeListItem => {
 			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
 			const text = node.textContent ?? "";
 			if (text.length === 0) {
 				node.remove();
-				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as Elem.FlowNodeListItem;
+				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as FlowNodeListItem;
 			}
 			const parent = node.parentElement as Element;
-			parent[Elem.ELEMENT_JUST_HIGHLIGHTED] = true;
+			parent[ELEMENT_JUST_HIGHLIGHTED] = true;
 			// update: Text after Highlight Element
 			if (end < text.length) {
 				node.textContent = text.substring(end);
 			} else {
-				nodeItems.removeItemAfter(nodeItemPrevious);
-				node.remove();
+				//nodeItems.removeItemAfter(nodeItemPrevious);
+				//node.remove();
 			}
 			// insert: Highlight Element
 			const textHighlightNode = document.createTextNode(text.substring(start, end));
@@ -340,16 +336,47 @@ ${HIGHLIGHT_TAG} {
 			return textHighlightNodeItem;
 		};
 
+		const highlightInsideNode = (
+			term: MatchTerm,
+			textAfterNode: Node,
+			start: number,
+			end: number,
+			nodeItems: FlowNodeList,
+			nodeItemPrevious: FlowNodeListItem | null,
+		): FlowNodeListItem => {
+			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
+			const text = textAfterNode.textContent ?? "";
+			if (text.length === 0) {
+				textAfterNode.parentElement?.removeChild(textAfterNode);
+				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as FlowNodeListItem;
+			}
+			const parent = textAfterNode.parentNode as Node;
+			const textEndNode = document.createTextNode(text.substring(start, end));
+			const highlight = document.createElement(HIGHLIGHT_TAG);
+			highlight.classList.add(getTermClass(term.token));
+			highlight.appendChild(textEndNode);
+			textAfterNode.textContent = text.substring(end);
+			parent.insertBefore(highlight, textAfterNode);
+			parent[ELEMENT_JUST_HIGHLIGHTED] = true;
+			const textEndNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textEndNode);
+			if (start > 0) {
+				const textStartNode = document.createTextNode(text.substring(0, start));
+				parent.insertBefore(textStartNode, highlight);
+				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
+			}
+			return textEndNodeItem;
+		};
+
 		/**
 		 * Highlights terms in a block of consecutive text nodes.
 		 * @param terms Terms to find and highlight.
 		 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
 		 */
-		const highlightInBlock = (terms: MatchTerms, nodeItems: Elem.FlowNodeList) => {
+		const highlightInBlock = (terms: Array<MatchTerm>, nodeItems: FlowNodeList) => {
 			const textFlow = nodeItems.getText();
 			for (const term of terms) {
-				let nodeItemPrevious: Elem.FlowNodeListItem | null = null;
-				let nodeItem: Elem.FlowNodeListItem | null = nodeItems.first as Elem.FlowNodeListItem;
+				let nodeItemPrevious: FlowNodeListItem | null = null;
+				let nodeItem = nodeItems.first as FlowNodeListItem;
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
 				for (const match of textFlow.matchAll(term.pattern)) {
@@ -357,7 +384,7 @@ ${HIGHLIGHT_TAG} {
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next as Elem.FlowNodeListItem;
+						nodeItem = nodeItem.next as FlowNodeListItem;
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -380,7 +407,7 @@ ${HIGHLIGHT_TAG} {
 							break;
 						}
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next as Elem.FlowNodeListItem;
+						nodeItem = nodeItem.next as FlowNodeListItem;
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -396,9 +423,9 @@ ${HIGHLIGHT_TAG} {
 		 * @param visitSiblings Whether to visit the siblings of the root node.
 		 */
 		const insertHighlights = (
-			terms: MatchTerms,
+			terms: Array<MatchTerm>,
 			node: Node,
-			nodeItems: Elem.FlowNodeList,
+			nodeItems: FlowNodeList,
 			visitSiblings = true,
 		) => {
 			// TODO support for <iframe>?
@@ -430,13 +457,13 @@ ${HIGHLIGHT_TAG} {
 			} while (node && visitSiblings);
 		};
 
-		return (terms: MatchTerms, rootNode: Node) => {
+		return (terms: Array<MatchTerm>, rootNode: Node) => {
 			if (rootNode.nodeType === Node.TEXT_NODE) {
-				const nodeItems = new Elem.FlowNodeList();
+				const nodeItems = new FlowNodeList();
 				nodeItems.push(rootNode as Text);
 				highlightInBlock(terms, nodeItems);
 			} else {
-				const nodeItems = new Elem.FlowNodeList();
+				const nodeItems = new FlowNodeList();
 				insertHighlights(terms, rootNode, nodeItems, false);
 				if (nodeItems.first) {
 					highlightInBlock(terms, nodeItems);
@@ -670,7 +697,7 @@ ${HIGHLIGHT_TAG} {
 		return occurrences.length; // Poor and changeable heuristic, but so far the most reliable efficient method.
 	}
 
-	getMutationUpdatesObserver (terms: MatchTerms) {
+	getMutationUpdatesObserver (terms: Array<MatchTerm>) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		const elements: Set<HTMLElement> = new Set();
 		let periodDateLast = 0;
@@ -712,7 +739,7 @@ ${HIGHLIGHT_TAG} {
 					? mutation.target.parentElement as HTMLElement
 					: mutation.target as HTMLElement;
 				if (element) {
-					if (element[Elem.ELEMENT_JUST_HIGHLIGHTED]) {
+					if (element[ELEMENT_JUST_HIGHLIGHTED]) {
 						elementsJustHighlighted.add(element);
 					} else if (canHighlightElement(rejectSelector, element)) {
 						elements.add(element);
@@ -720,7 +747,7 @@ ${HIGHLIGHT_TAG} {
 				}
 			}
 			for (const element of elementsJustHighlighted) {
-				delete element[Elem.ELEMENT_JUST_HIGHLIGHTED];
+				delete element[ELEMENT_JUST_HIGHLIGHTED];
 			}
 			if (elements.size) {
 				// TODO improve this algorithm
@@ -739,4 +766,4 @@ ${HIGHLIGHT_TAG} {
 	}
 }
 
-export { Elem, ElementEngine };
+export { ElementEngine };

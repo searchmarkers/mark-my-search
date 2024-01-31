@@ -1,5 +1,7 @@
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+
 interface AbstractSpecialEngine {
-	startHighlighting: (terms: MatchTerms) => void
+	startHighlighting: (terms: Array<MatchTerm>) => void
 
 	endHighlighting: () => void
 
@@ -12,4 +14,4 @@ class DummySpecialEngine implements AbstractSpecialEngine {
 	handles = () => false;
 }
 
-export { AbstractSpecialEngine, DummySpecialEngine };
+export { type AbstractSpecialEngine, DummySpecialEngine };

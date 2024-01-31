@@ -69,7 +69,7 @@ You can always activate ${getName()} by opening its popup (from the 'extensions'
 							},
 							checkbox: {
 								onLoad: async setChecked => {
-									const local = await storageGet("local", [ StorageLocal.ENABLED ]);
+									const local = await storageGet("local", [ "enabled" ]);
 									setChecked(local.enabled);
 								},
 								onToggle: checked => {

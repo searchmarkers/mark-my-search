@@ -20,4 +20,4 @@ class StandardHighlightability implements AbstractHighlightability {
 	markElementsUpTo = () => undefined;
 }
 
-export { AbstractHighlightability, StandardHighlightability }
+export { type AbstractHighlightability, StandardHighlightability }

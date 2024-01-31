@@ -1,16 +1,14 @@
-import type { AbstractEngine } from "src/modules/highlight/engine.mjs";
-const { getMutationUpdates } = await import("src/modules/highlight/engine.mjs");
-const { highlightTags } = await import("src/modules/highlight/highlighting.mjs");
-import type { AbstractSpecialEngine } from "src/modules/highlight/special-engine.mjs";
-const { DummySpecialEngine } = await import("src/modules/highlight/special-engine.mjs");
-const { PaintSpecialEngine } = await import("src/modules/highlight/special-engines/paint.mjs");
-import type { AbstractFlowMonitor, TreeCache } from "src/modules/highlight/flow-monitor.mjs";
-const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
-const { StandardFlowMonitor } = await import("src/modules/highlight/flow-monitors/standard.mjs");
-import type { BaseFlow, BaseBoxInfo } from "src/modules/highlight/matcher.mjs";
-const TermCSS = await import("src/modules/highlight/term-css.mjs");
-import type { TermHues } from "src/modules/common.mjs";
-const { EleID, EleClass } = await import("src/modules/common.mjs");
+import { type AbstractEngine, getMutationUpdates } from "/dist/modules/highlight/engine.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
+import type { AbstractFlowMonitor, TreeCache } from "/dist/modules/highlight/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import { StandardFlowMonitor } from "/dist/modules/highlight/flow-monitors/standard.mjs";
+import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
+import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<true, BoxInfoRange>
 
@@ -50,7 +48,7 @@ class HighlightEngine implements AbstractEngine {
 		};
 	})();
 	
-	constructor (terms: MatchTerms) {
+	constructor (terms: Array<MatchTerm>) {
 		this.flowMonitor = new StandardFlowMonitor(
 			() => undefined,
 			() => ({ flows: [] }),
@@ -82,7 +80,7 @@ class HighlightEngine implements AbstractEngine {
 		return "";
 	}
 
-	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
+	getTermHighlightCSS (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) {
 		const term = terms[termIndex];
 		const hue = hues[termIndex % hues.length];
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -107,7 +105,7 @@ class HighlightEngine implements AbstractEngine {
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	insertScrollMarkers (terms: MatchTerms, hues: TermHues) {
+	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
 		//
 	}
 
@@ -117,9 +115,9 @@ class HighlightEngine implements AbstractEngine {
 	}
 
 	startHighlighting (
-		terms: MatchTerms,
-		termsToHighlight: MatchTerms,
-		termsToPurge: MatchTerms,
+		terms: Array<MatchTerm>,
+		termsToHighlight: Array<MatchTerm>,
+		termsToPurge: Array<MatchTerm>,
 	) {
 		// Clean up.
 		termsToPurge.forEach(term => this.highlights.delete(term.token));
@@ -138,7 +136,7 @@ class HighlightEngine implements AbstractEngine {
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	undoHighlights (terms?: MatchTerms | undefined, root: HTMLElement | DocumentFragment = document.body) {
+	undoHighlights (terms?: Array<MatchTerm> | undefined, root: HTMLElement | DocumentFragment = document.body) {
 		terms?.forEach(term => this.highlights.delete(term.token));
 	}
 
@@ -166,4 +164,4 @@ class HighlightEngine implements AbstractEngine {
 	}
 }
 
-export { Flow, BoxInfo, BoxInfoRange, HighlightEngine };
+export { HighlightEngine };

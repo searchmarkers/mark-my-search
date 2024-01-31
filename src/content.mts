@@ -1,25 +1,32 @@
-import type { Highlighter, AbstractEngine } from "src/modules/highlight/engine.mjs"
-import type { TermHues } from "src/modules/common.mjs"
-const { EleID, EleClass, AtRuleID, getTermClass } = await import("src/modules/common.mjs");
-type EleIDItem = (typeof EleID)[keyof typeof EleID]
-type EleClassItem = (typeof EleClass)[keyof typeof EleClass]
+import {
+	type HighlightDetailsRequest, type HighlightMessage, type HighlightMessageResponse, type CommandInfo,
+	messageSendBackground, parseCommand,
+} from "/dist/modules/message.mjs";
+import { type MatchMode, MatchTerm, termEquals } from "/dist/modules/match-term.mjs";
+import { type TermHues, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
+type EleIDItem = typeof EleID[keyof typeof EleID]
+type EleClassItem = typeof EleClass[keyof typeof EleClass]
+import type { StorageSyncValues } from "/dist/modules/storage.mjs";
+import type { Highlighter, AbstractEngine } from "/dist/modules/highlight/engine.mjs";
+import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
+import { assert, compatibility, Z_INDEX_MAX, getIdSequential, itemsMatch } from "/dist/modules/common.mjs";
 
 type BrowserCommands = Array<chrome.commands.Command>
 
 type ProduceEffectOnCommand = Generator<undefined, never, CommandInfo>
 
-enum TermChange {
-	REMOVE = -1,
-	CREATE = -2,
-}
+const TermChange = {
+	REMOVE: -1,
+	CREATE: -2,
+} as const;
 
 interface ControlsInfo {
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	barCollapsed: boolean
-	termsOnHold: MatchTerms
-	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
-	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
+	termsOnHold: Array<MatchTerm>
+	["barControlsShown"]: StorageSyncValues["barControlsShown"]
+	["barLook"]: StorageSyncValues["barLook"]
 	matchMode: MatchMode
 }
 
@@ -67,7 +74,7 @@ let messageHandleHighlightGlobal: (
 	sendResponse: (response: HighlightMessageResponse) => void,
 ) => void = () => undefined;
 
-const termsSet = async (terms: MatchTerms) => {
+const termsSet = async (terms: Array<MatchTerm>) => {
 	messageHandleHighlightGlobal({ terms: terms.slice() }, null, () => undefined);
 	await messageSendBackground({ terms });
 };
@@ -77,7 +84,7 @@ const termsSet = async (terms: MatchTerms) => {
  * @param terms Terms to account for and style.
  * @param hues Color hues for term styles to cycle through.
  */
-const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: ControlsInfo, highlighter: Highlighter) => {
+const fillStylesheetContent = (terms: Array<MatchTerm>, hues: TermHues, controlsInfo: ControlsInfo, highlighter: Highlighter) => {
 	const style = document.getElementById(EleID.STYLE) as HTMLStyleElement;
 	const makeImportant = (styleText: string): string =>
 		styleText.replace(/;/g, " !important;"); // Prevent websites from overriding rules with !important;
@@ -456,7 +463,7 @@ Methods for inserting, updating, or removing parts of the toolbar, as well as dr
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Toolbar {
-	export type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
+	export type ControlButtonName = keyof StorageSyncValues["barControlsShown"]
 	type ControlButtonInfo = {
 		controlClasses?: Array<EleClassItem>
 		buttonClasses?: Array<EleClassItem>
@@ -509,7 +516,7 @@ namespace Toolbar {
 		 * @param term A term to attempt committing the control input text of.
 		 * @param terms Terms being controlled and highlighted.
 		 */
-		const commit = (term: MatchTerm | undefined, terms: MatchTerms, inputValue?: string) => {
+		const commit = (term: MatchTerm | undefined, terms: Array<MatchTerm>, inputValue?: string) => {
 			const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 			const control = getControl(term);
 			if (!control)
@@ -528,9 +535,13 @@ namespace Toolbar {
 				const termChanged = new MatchTerm(inputValue, term.matchMode);
 				termsSet(terms.map((term, i) => i === idx ? termChanged : term));
 			} else if (!replaces && inputValue !== "") {
-				const termChanged = new MatchTerm(inputValue, getTermControlMatchModeFromClassList(control.classList), {
-					allowStemOverride: true,
-				});
+				const termChanged = new MatchTerm(
+					inputValue,
+					getTermControlMatchModeFromClassList(control.classList),
+					{
+						allowStemOverride: true,
+					},
+				);
 				termsSet(terms.concat(termChanged));
 			}
 		};
@@ -545,7 +556,7 @@ namespace Toolbar {
 		 * @param terms Terms being controlled and highlighted.
 		 */
 		const tryShiftTermFocus = (term: MatchTerm | undefined, idxTarget: number | undefined, shiftRight: boolean | undefined,
-			onBeforeShift: () => void, terms: MatchTerms) => {
+			onBeforeShift: () => void, terms: Array<MatchTerm>) => {
 			const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 			const control = getControl(term) as HTMLElement;
 			const termInput = control.querySelector("input") as HTMLInputElement;
@@ -568,7 +579,7 @@ namespace Toolbar {
 			}
 		};
 
-		return (terms: MatchTerms, controlPad: HTMLElement, idxCode: TermChange.CREATE | number,
+		return (terms: Array<MatchTerm>, controlPad: HTMLElement, idxCode: typeof TermChange["CREATE"] | number,
 			insertInput: (termInput: HTMLInputElement) => void) => {
 			const controlContent = controlPad
 				.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement ?? controlPad;
@@ -705,7 +716,10 @@ namespace Toolbar {
 	 * @param terms Terms to search in.
 	 * @returns The append term constant index if not found, the term's index otherwise.
 	 */
-	const getTermIndexFromArray = (term: MatchTerm | undefined, terms: MatchTerms): TermChange.CREATE | number =>
+	const getTermIndexFromArray = (
+		term: MatchTerm | undefined,
+		terms: Array<MatchTerm>,
+	): typeof TermChange["CREATE"] | number =>
 		term ? terms.indexOf(term) : TermChange.CREATE
 	;
 
@@ -1043,7 +1057,7 @@ namespace Toolbar {
 	 * @param controlsInfo Details of controls inserted.
 	 */
 	export const insertTermControl = (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		idx: number,
 		command: string,
 		commandReverse: string,
@@ -1109,7 +1123,7 @@ namespace Toolbar {
 	export const controlVisibilityUpdate = (
 		controlName: ControlButtonName,
 		controlsInfo: ControlsInfo,
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 	) => {
 		const control = document.querySelector(`#${EleID.BAR} .${controlGetClass(controlName)}`);
 		if (control) {
@@ -1203,7 +1217,7 @@ namespace Toolbar {
 				(document.getElementById(info.containerId) as HTMLElement).appendChild(control);
 			};
 
-			return (terms: MatchTerms, controlName: ControlButtonName, hideWhenInactive: boolean, controlsInfo: ControlsInfo) => {
+			return (terms: Array<MatchTerm>, controlName: ControlButtonName, hideWhenInactive: boolean, controlsInfo: ControlsInfo) => {
 				const info: Record<ControlButtonName, ControlButtonInfo> = {
 					toggleBarCollapsed: {
 						controlClasses: [ EleClass.UNCOLLAPSIBLE ],
@@ -1280,7 +1294,7 @@ namespace Toolbar {
 		})();
 
 		return (
-			terms: MatchTerms,
+			terms: Array<MatchTerm>,
 			commands: BrowserCommands,
 			hues: TermHues,
 			produceEffectOnCommand: ProduceEffectOnCommand,
@@ -1349,7 +1363,7 @@ namespace Toolbar {
 					if (control && !event.shiftKey && control === barTerms.lastElementChild) {
 						// Special case to specifically focus the term append input, in case the button is hidden.
 						event.preventDefault();
-						produceEffectOnCommand.next({ type: CommandType.FOCUS_TERM_INPUT });
+						produceEffectOnCommand.next({ type: "focusTermInput" });
 						return;
 					}
 					if (!control || !(event.shiftKey
@@ -1364,7 +1378,7 @@ namespace Toolbar {
 						controlInput.blur();
 						// Use focus-term-input command to ensure that focus+selection will later be restored.
 						// TODO ensure focus+selection is restored by a cleaner method
-						produceEffectOnCommand.next({ type: CommandType.FOCUS_TERM_INPUT });
+						produceEffectOnCommand.next({ type: "focusTermInput" });
 					} else {
 						// Ensure proper return of focus+selection.
 						controlInput.blur();
@@ -1428,7 +1442,7 @@ namespace Toolbar {
 	 * @param controlsInfo Details of controls to insert.
 	 */
 	export const insertToolbar = (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		commands: BrowserCommands,
 		hues: TermHues,
 		produceEffectOnCommand: ProduceEffectOnCommand,
@@ -1453,18 +1467,18 @@ namespace Toolbar {
  * @returns An object containing the extracted command shortcut strings.
  */
 const getTermCommands = (commands: BrowserCommands): { down: Array<string>, up: Array<string> } => {
-	const commandsDetail = commands.map(command => ({
-		info: command.name ? parseCommand(command.name) : { type: CommandType.NONE },
+	const commandsDetail = commands.map((command): { info: CommandInfo, shortcut: string } => ({
+		info: command.name ? parseCommand(command.name) : { type: "none" },
 		shortcut: command.shortcut ?? "",
 	}));
 	return {
 		down: commandsDetail
 			.filter(commandDetail =>
-				commandDetail.info.type === CommandType.SELECT_TERM && !commandDetail.info.reversed)
+				commandDetail.info.type === "selectTerm" && !commandDetail.info.reversed)
 			.map(commandDetail => commandDetail.shortcut),
 		up: commandsDetail
 			.filter(commandDetail =>
-				commandDetail.info.type === CommandType.SELECT_TERM && commandDetail.info.reversed)
+				commandDetail.info.type === "selectTerm" && commandDetail.info.reversed)
 			.map(commandDetail => commandDetail.shortcut),
 	};
 };
@@ -1533,7 +1547,7 @@ const getStyleUpdates = (
  */
 const getTermsFromSelection = () => {
 	const selection = getSelection();
-	const terms: MatchTerms = [];
+	const terms: Array<MatchTerm> = [];
 	if (selection && selection.anchorNode) {
 		const termsAll = selection.toString().split(/\r|\p{Zs}|\p{Po}|\p{Cc}/gu)
 			// (carriage return) | Space Separators | Other Punctuation | Control
@@ -1559,17 +1573,17 @@ const getTermsFromSelection = () => {
 	 * TODO document params
 	 */
 	const refreshTermControlsAndStartHighlighting = (
-		terms: MatchTerms,
+		terms: Array<MatchTerm>,
 		controlsInfo: ControlsInfo,
 		highlighter: Highlighter,
 		commands: BrowserCommands,
 		hues: TermHues,
 		produceEffectOnCommand: ProduceEffectOnCommand,
-		termsUpdate?: MatchTerms,
+		termsUpdate?: Array<MatchTerm>,
 	) => {
 		// TODO fix this abomination of a function
 		let termUpdate: MatchTerm | undefined = undefined;
-		let termToUpdateIdx: TermChange.CREATE | TermChange.REMOVE | number | undefined = undefined;
+		let termToUpdateIdx: keyof typeof TermChange | number | undefined = undefined;
 		if (termsUpdate) {
 			if (termsUpdate.length < terms.length
 				&& (terms.length === 1 || termEquals(termsUpdate[termsUpdate.length - 1], terms[terms.length - 2]))
@@ -1615,8 +1629,8 @@ const getTermsFromSelection = () => {
 				}
 			}
 		}
-		const termsToHighlight: MatchTerms = [];
-		const termsToPurge: MatchTerms = [];
+		const termsToHighlight: Array<MatchTerm> = [];
+		const termsToPurge: Array<MatchTerm> = [];
 		if (document.getElementById(EleID.BAR)) {
 			if (termsUpdate !== undefined && termToUpdateIdx !== undefined
 				&& termToUpdateIdx !== TermChange.REMOVE && termUpdate) {
@@ -1725,7 +1739,7 @@ const getTermsFromSelection = () => {
 	 * @param terms Terms being controlled, highlighted, and jumped to.
 	 */
 	const produceEffectOnCommandFn = function* (
-		terms: MatchTerms, controlsInfo: ControlsInfo, highlighter: Highlighter
+		terms: Array<MatchTerm>, controlsInfo: ControlsInfo, highlighter: Highlighter
 	): ProduceEffectOnCommand {
 		let selectModeFocus = false;
 		let focusedIdx = 0;
@@ -1741,28 +1755,28 @@ const getTermsFromSelection = () => {
 			const getFocusedIdx = (idx: number) => Math.min(terms.length - 1, idx);
 			focusedIdx = getFocusedIdx(focusedIdx);
 			switch (commandInfo.type) {
-			case CommandType.TOGGLE_BAR: {
+			case "toggleBar": {
 				const bar = document.getElementById(EleID.BAR) as HTMLElement;
 				bar.classList.toggle(EleClass.BAR_HIDDEN);
 				break;
-			} case CommandType.TOGGLE_SELECT: {
+			} case "toggleSelect": {
 				selectModeFocus = !selectModeFocus;
 				break;
-			} case CommandType.REPLACE_TERMS: {
+			} case "replaceTerms": {
 				termsSet(controlsInfo.termsOnHold);
 				break;
-			} case CommandType.STEP_GLOBAL: {
+			} case "stepGlobal": {
 				if (focusReturnToDocument()) {
 					break;
 				}
 				highlighter.current.focusNextTerm(commandInfo.reversed ?? false, true);
 				break;
-			} case CommandType.ADVANCE_GLOBAL: {
+			} case "advanceGlobal": {
 				focusReturnToDocument();
 				const term = selectModeFocus ? terms[focusedIdx] : undefined;
 				highlighter.current.focusNextTerm(commandInfo.reversed ?? false, false, term);
 				break;
-			} case CommandType.FOCUS_TERM_INPUT: {
+			} case "focusTermInput": {
 				const control = Toolbar.getControl(undefined, commandInfo.termIdx);
 				const input = control ? control.querySelector("input") : null;
 				if (!control || !input) {
@@ -1802,7 +1816,7 @@ const getTermsFromSelection = () => {
 				};
 				bar.addEventListener("focusout", returnSelection);
 				break;
-			} case CommandType.SELECT_TERM: {
+			} case "selectTerm": {
 				const barTerms = document.getElementById(EleID.BAR_TERMS) as HTMLElement;
 				barTerms.classList.remove(Toolbar.getControlPadClass(focusedIdx));
 				focusedIdx = getFocusedIdx(commandInfo.termIdx ?? -1);
@@ -1825,7 +1839,7 @@ const getTermsFromSelection = () => {
 		// Can't remove controls because a script may be left behind from the last install, and start producing unhandled errors. FIXME
 		//controlsRemove();
 		const commands: BrowserCommands = [];
-		const terms: MatchTerms = [];
+		const terms: Array<MatchTerm> = [];
 		const hues: TermHues = [];
 		const controlsInfo: ControlsInfo = { // Unless otherwise indicated, the values assigned here are arbitrary and to be overridden.
 			pageModifyEnabled: true, // Currently has an effect.
@@ -1879,30 +1893,40 @@ const getTermsFromSelection = () => {
 			terms: request.termsFromSelection ? getTermsFromSelection() : undefined,
 			highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
 		});
-		const messageHandleHighlight = (
+		type MessageHandler = (
 			message: HighlightMessage,
 			sender: chrome.runtime.MessageSender,
 			sendResponse: (response: HighlightMessageResponse) => void,
-		) => {
+		) => void
+		let queuingPromise: Promise<unknown> | undefined = undefined;
+		const messageHandleHighlight: MessageHandler = async (message, sender, sendResponse) => {
+			if (queuingPromise) {
+				await queuingPromise;
+			}
 			styleElementsInsert();
 			if (message.getDetails) {
 				sendResponse(getDetails(message.getDetails));
 			}
 			if (message.setHighlighter !== undefined) {
 				highlighter.current.endHighlighting();
-				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
-					import("src/modules/highlight/engines/highlight.mjs").then(({ HighlightEngine }) => {
-						highlighter.current = new HighlightEngine(terms);
-					});
-				} else if (message.setHighlighter.engine === Engine.PAINT) {
-					const method = message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT;
-					import("src/modules/highlight/engines/paint.mjs").then(({ PaintEngine }) => {
-						highlighter.current = new PaintEngine(terms, method);
-					});
+				if (message.setHighlighter.engine === "highlight" && compatibility.highlight.highlightEngine) {
+					const enginePromise = import("/dist/modules/highlight/engines/highlight.mjs");
+					queuingPromise = enginePromise;
+					const { HighlightEngine } = await enginePromise;
+					highlighter.current = new HighlightEngine(terms);
+				} else if (message.setHighlighter.engine === "paint") {
+					const enginePromise = import("/dist/modules/highlight/engines/paint.mjs");
+					const methodPromise = PaintMethodLoader.loadMethod(message.setHighlighter.paintEngineMethod ?? "paint")
+					queuingPromise = new Promise<void>(async resolve =>
+						{ await enginePromise; await methodPromise; resolve(); }
+					);
+					const { PaintEngine } = await enginePromise;
+					highlighter.current = new PaintEngine(terms, await methodPromise);
 				} else {
-					import("src/modules/highlight/engines/element.mjs").then(({ ElementEngine }) => {
-						highlighter.current = new ElementEngine(terms);
-					});
+					const enginePromise = import("/dist/modules/highlight/engines/element.mjs");
+					queuingPromise = enginePromise;
+					const { ElementEngine } = await enginePromise;
+					highlighter.current = new ElementEngine(terms);
 				}
 			}
 			if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
@@ -1976,7 +2000,7 @@ const getTermsFromSelection = () => {
 				sender: chrome.runtime.MessageSender,
 				sendResponse: (response: HighlightMessageResponse) => void,
 			}> = [];
-			const messageHandleHighlightUninitialized: typeof messageHandleHighlight = (message, sender, sendResponse) => {
+			const messageHandleHighlightUninitialized: MessageHandler = (message, sender, sendResponse) => {
 				if (message.getDetails) {
 					sendResponse(getDetails(message.getDetails));
 					delete message.getDetails;

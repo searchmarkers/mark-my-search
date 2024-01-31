@@ -1,10 +1,12 @@
-import type { TreeCache, Box, AbstractMethod } from "src/modules/highlight/engines/paint/method.mjs";
-const {
+import {
+	type TreeCache, type Box,
+	type AbstractMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
-} = await import("src/modules/highlight/engines/paint/method.mjs");
-const { StandardHighlightability } = await import("src/modules/highlight/highlightability.mjs");
-const FlowMonitor = await import("src/modules/highlight/flow-monitor.mjs");
-const { EleID, EleClass, getTermClass } = await import("src/modules/common.mjs");
+} from "/dist/modules/highlight/engines/paint/method.mjs";
+import { StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { Z_INDEX_MIN, EleID, EleClass, getTermClass } from "/dist/modules/common.mjs";
 
 class ElementMethod implements AbstractMethod {
 	highlightables = new StandardHighlightability();
@@ -36,7 +38,7 @@ border-radius: 2px;
 
 	getTermHighlightsCSS = () => "";
 
-	getTermHighlightCSS (terms: MatchTerms, hues: Array<number>, termIndex: number) {
+	getTermHighlightCSS (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) {
 		const term = terms[termIndex];
 		const hue = hues[termIndex % hues.length];
 		const cycle = Math.floor(termIndex / hues.length);
