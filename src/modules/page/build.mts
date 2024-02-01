@@ -1,171 +1,146 @@
-import { getName } from "/dist/modules/manifest.mjs";
+import * as Manifest from "/dist/modules/manifest.mjs";
 import { storageGet } from "/dist/modules/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
+import * as EmailJS from "/lib/email.min.js";
 
-type PageInteractionObjectRowInfo = {
-	className: string
-	key: string
-	label?: PageInteractionInfo["label"]
-	textbox?: PageInteractionInfo["textbox"]
-	checkbox?: PageInteractionInfo["checkbox"]
-}
-type PageInteractionObjectColumnInfo = {
-	className: string
-	rows: Array<PageInteractionObjectRowInfo>
-}
-type PageInteractionSubmitterLoad = (setEnabled: (enabled: boolean) => void) => void
-type PageInteractionSubmitterInfo = {
-	text: string
-	id?: string
-	onLoad?: PageInteractionSubmitterLoad
-	onClick: (
-		messageText: string,
-		formFields: Array<FormField>,
-		onSuccess: () => void,
-		onError: (error?: { status: number, text: string }) => void,
-		index: number,
-	) => void
-	formFields?: Array<PageInteractionInfo>
-	message?: {
-		singleline?: boolean
-		rows: number
-		placeholder: string
-		required?: boolean
-	}
-	alerts?: Record<PageAlertType, PageAlertInfo>
-}
-type PageInteractionCheckboxLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
-type PageInteractionCheckboxToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
-type PageInteractionCheckboxInfo = {
-	autoId?: string
-	onLoad?: PageInteractionCheckboxLoad
-	onToggle?: PageInteractionCheckboxToggle
-}
-type PageInteractionInfo = {
-	className: string
-	list?: {
-		getLength: () => Promise<number>
-		pushWithName: (name: string) => Promise<void>
-		removeAt: (index: number) => void
-	}
-	label?: {
-		text: string
-		getText?: (index: number) => Promise<string>
-		setText?: (text: string, index: number) => void
-		textbox?: {
-			placeholder: string
-		}
-	}
-	object?: {
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace Page {
+	export type InteractionInfo = {
 		className: string
-		list: {
-			getArray: (index: number) => Promise<Array<Record<string, unknown>>>
-			setArray: (array: Array<Record<string, unknown>>, index: number) => Promise<void>
-			getNew: (text: string) => Record<string, unknown>
+		list?: {
+			getLength: () => Promise<number>
+			pushWithName: (name: string) => Promise<void>
+			removeAt: (index: number) => void
 		}
-		name: {
+		label?: {
 			text: string
+			getText?: (index: number) => Promise<string>
+			setText?: (text: string, index: number) => void
 			textbox?: {
 				placeholder: string
 			}
 		}
-		columns: Array<PageInteractionObjectColumnInfo>
-	}
-	textbox?: {
-		className: string
-		list?: {
-			getArray: (index: number) => Promise<Array<string>>
-			setArray: (array: Array<string>, index: number) => void
+		object?: {
+			className: string
+			list: {
+				getArray: (index: number) => Promise<Array<Record<string, unknown>>>
+				setArray: (array: Array<Record<string, unknown>>, index: number) => Promise<void>
+				getNew: (text: string) => Record<string, unknown>
+			}
+			name: {
+				text: string
+				textbox?: {
+					placeholder: string
+				}
+			}
+			columns: Array<Interaction.ObjectColumnInfo>
 		}
-		placeholder: string
-		spellcheck: boolean
-		onLoad?: (setText: (text: string) => void, objectIndex: number, containerIndex: number) => Promise<void>
-		onChange?: (text: string, objectIndex: number, containerIndex: number) => void
+		textbox?: {
+			className: string
+			list?: {
+				getArray: (index: number) => Promise<Array<string>>
+				setArray: (array: Array<string>, index: number) => void
+			}
+			placeholder: string
+			spellcheck: boolean
+			onLoad?: (setText: (text: string) => void, objectIndex: number, containerIndex: number) => Promise<void>
+			onChange?: (text: string, objectIndex: number, containerIndex: number) => void
+		}
+		anchor?: {
+			url: string
+			text: string
+		}
+		submitters?: Array<Interaction.SubmitterInfo>
+		checkbox?: Interaction.CheckboxInfo
+		note?: {
+			text: string
+		}
 	}
-	anchor?: {
-		url: string
+	// eslint-disable-next-line @typescript-eslint/no-namespace
+	export namespace Interaction {
+		export type ObjectRowInfo = {
+			className: string
+			key: string
+			label?: InteractionInfo["label"]
+			textbox?: InteractionInfo["textbox"]
+			checkbox?: InteractionInfo["checkbox"]
+		}
+		export type ObjectColumnInfo = {
+			className: string
+			rows: Array<ObjectRowInfo>
+		}
+		export type SubmitterLoad = (setEnabled: (enabled: boolean) => void) => void
+		export type SubmitterInfo = {
+			text: string
+			id?: string
+			onLoad?: SubmitterLoad
+			onClick: (
+				messageText: string,
+				formFields: Array<FormField>,
+				onSuccess: () => void,
+				onError: (error?: { status: number, text: string }) => void,
+				index: number,
+			) => void
+			formFields?: Array<InteractionInfo>
+			message?: {
+				singleline?: boolean
+				rows: number
+				placeholder: string
+				required?: boolean
+			}
+			alerts?: Record<AlertType, AlertInfo>
+		}
+		export type CheckboxLoad = (
+			setChecked: (checked: boolean) => void,
+			objectIndex: number,
+			containerIndex: number,
+		) => Promise<void>
+		export type CheckboxToggle = (
+			checked: boolean,
+			objectIndex: number,
+			containerIndex: number,
+		) => void
+		export type CheckboxInfo = {
+			autoId?: string
+			onLoad?: CheckboxLoad
+			onToggle?: CheckboxToggle
+		}
+	}
+	export type SectionInfo = {
+		title?: {
+			text: string
+			expands?: boolean
+		}
+		interactions: Array<InteractionInfo>
+	}
+	export type PanelInfo = {
+		className: string
+		name: {
+			text: string
+		}
+		sections: Array<SectionInfo>
+	}
+	export type AlertInfo = {
 		text: string
+		timeout?: number
 	}
-	submitters?: Array<PageInteractionSubmitterInfo>
-	checkbox?: PageInteractionCheckboxInfo
-	note?: {
-		text: string
-	}
+	export type AlertType =
+		| "success"
+		| "failure"
+		| "pending"
+	;
 }
-type PageSectionInfo = {
-	title?: {
-		text: string
-		expands?: boolean
-	}
-	interactions: Array<PageInteractionInfo>
-}
-type PagePanelInfo = {
-	className: string
-	name: {
-		text: string
-	}
-	sections: Array<PageSectionInfo>
-}
-type PageAlertInfo = {
-	text: string
-	timeout?: number
-}
+
 type FormField = {
 	question: string
 	response: string
-}
-
-enum PageAlertType {
-	SUCCESS = "success",
-	FAILURE = "failure",
-	PENDING = "pending",
 }
 
 //enum PageButtonClass {
 //	TOGGLE = "toggle",
 //	ENABLED = "enabled",
 //}
-
-/**
- * An EmailJS library function which sends an email using the EmailJS service.
- * @param service The name of a service category for the email.
- * @param template The name of a template under the service for the email.
- * @param details Custom template field entries.
- * @param key The API key to use.
- */
-const sendEmail: (
-	service: string,
-	template: string,
-	details: {
-		addon_version?: string
-		url?: string
-		phrases?: string
-		user_message?: string
-		user_email?: string
-		item_0_question?: string
-		item_1_question?: string
-		item_2_question?: string
-		item_3_question?: string
-		item_4_question?: string
-		item_5_question?: string
-		item_6_question?: string
-		item_7_question?: string
-		item_8_question?: string
-		item_9_question?: string
-		item_0_response?: string
-		item_1_response?: string
-		item_2_response?: string
-		item_3_response?: string
-		item_4_response?: string
-		item_5_response?: string
-		item_6_response?: string
-		item_7_response?: string
-		item_8_response?: string
-		item_9_response?: string
-	},
-	key: string,
-) => Promise<void> = window["libSendEmail"];
 
 /**
  * Sends a problem report message to a dedicated inbox.
@@ -178,7 +153,7 @@ const sendProblemReport = async (userMessage = "", formFields: Array<FormField>)
 		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
 	const message = {
-		addon_version: chrome.runtime.getManifest().version,
+		addon_version: Manifest.getVersion(),
 		url: tab.url,
 		phrases,
 		user_message: userMessage,
@@ -187,7 +162,7 @@ const sendProblemReport = async (userMessage = "", formFields: Array<FormField>)
 		message[`item_${i}_question`] = formField.question;
 		message[`item_${i}_response`] = formField.response === "true" ? "yes" : "";
 	});
-	return sendEmail(
+	return EmailJS.sendEmail(
 		"service_mms_ux",
 		formFields.length ? "template_mms_ux_form" : "template_mms_ux_report",
 		message,
@@ -483,7 +458,7 @@ textarea
 		(getTabs()[0] as HTMLButtonElement).click();
 	};
 
-	const reload = (panelsInfo: Array<PagePanelInfo>) => {
+	const reload = (panelsInfo: Array<Page.PanelInfo>) => {
 		panelsInfo.forEach(panelInfo => {
 			panelInfo.sections.forEach(sectionInfo => {
 				sectionInfo.interactions.forEach(interactionInfo => {
@@ -504,7 +479,7 @@ textarea
 		});
 	};
 
-	const insertAlert = (alertType: PageAlertType, alertsInfo: Record<PageAlertType, PageAlertInfo> | undefined,
+	const insertAlert = (alertType: Page.AlertType, alertsInfo: Record<Page.AlertType, Page.AlertInfo> | undefined,
 		previousSibling: HTMLElement, timeoutDefault = -1, tooltip = "", formatText = (text: string) => text) => {
 		if (!alertsInfo) {
 			return;
@@ -540,7 +515,7 @@ textarea
 		}, 1000);
 	};
 
-	const clearAlerts = (parent: HTMLElement, classNames: Array<string> = []) =>
+	const clearAlerts = (parent: HTMLElement, classNames: Array<Page.AlertType> = []) =>
 		parent.querySelectorAll(classNames.length
 			? `.alert:is(${classNames.map(className => `.${className}`).join(", ")})`
 			: ".alert"
@@ -548,7 +523,7 @@ textarea
 	;
 
 	const createSection = (() => {
-		const insertLabel = (container: HTMLElement, labelInfo: PageInteractionInfo["label"], containerIndex: number) => {
+		const insertLabel = (container: HTMLElement, labelInfo: Page.InteractionInfo["label"], containerIndex: number) => {
 			if (!labelInfo) {
 				return;
 			}
@@ -586,7 +561,7 @@ textarea
 			return checkboxId;
 		};
 
-		const insertCheckbox = (container: HTMLElement, checkboxInfo: PageInteractionInfo["checkbox"], id = "",
+		const insertCheckbox = (container: HTMLElement, checkboxInfo: Page.InteractionInfo["checkbox"], id = "",
 			getObjectIndex: () => number, containerIndex: number) => {
 			if (!checkboxInfo) {
 				return;
@@ -608,7 +583,7 @@ textarea
 			return checkbox;
 		};
 
-		const insertTextbox = (container: HTMLElement, textboxInfo: PageInteractionInfo["textbox"],
+		const insertTextbox = (container: HTMLElement, textboxInfo: Page.InteractionInfo["textbox"],
 			getObjectIndex: () => number, containerIndex: number,
 			containerOverall?: HTMLElement): HTMLInputElement | HTMLDivElement | undefined => {
 			if (!textboxInfo) {
@@ -680,7 +655,7 @@ textarea
 			}
 		};
 
-		const insertObjectList = (container: HTMLElement, objectInfo: PageInteractionInfo["object"], containerIndex: number) => {
+		const insertObjectList = (container: HTMLElement, objectInfo: Page.InteractionInfo["object"], containerIndex: number) => {
 			if (!objectInfo) {
 				return;
 			}
@@ -692,7 +667,7 @@ textarea
 				objectElement.classList.add("term");
 				container.appendChild(objectElement);
 				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
-				const insertColumn = (columnInfo: PageInteractionObjectColumnInfo) => {
+				const insertColumn = (columnInfo: Page.Interaction.ObjectColumnInfo) => {
 					if (columnInfo.rows.length > 1) {
 						const checkboxId = `input-${getIdSequential.next().value}`;
 						const toggleCheckbox = document.createElement("input");
@@ -712,7 +687,7 @@ textarea
 					}
 					const column = document.createElement("div");
 					column.classList.add(columnInfo.className);
-					const insertRow = (rowInfo: PageInteractionObjectRowInfo) => {
+					const insertRow = (rowInfo: Page.Interaction.ObjectRowInfo) => {
 						const row = document.createElement("div");
 						row.classList.add(rowInfo.className);
 						insertTextbox(row, rowInfo.textbox, getObjectIndex, containerIndex, container);
@@ -777,7 +752,7 @@ textarea
 			container.appendChild(list);
 		};
 
-		const insertAnchor = (container: HTMLElement, anchorInfo: PageInteractionInfo["anchor"]) => {
+		const insertAnchor = (container: HTMLElement, anchorInfo: Page.InteractionInfo["anchor"]) => {
 			if (!anchorInfo) {
 				return;
 			}
@@ -789,7 +764,7 @@ textarea
 			container.appendChild(anchor);
 		};
 
-		const insertSubmitter = (container: HTMLElement, submitterInfo: PageInteractionSubmitterInfo | undefined,
+		const insertSubmitter = (container: HTMLElement, submitterInfo: Page.Interaction.SubmitterInfo | undefined,
 			getObjectIndex: () => number) => {
 			if (!submitterInfo) {
 				return;
@@ -824,23 +799,23 @@ textarea
 			}
 			container.appendChild(button);
 			let getMessageText = () => "";
-			// eslint-disable-next-line @typescript-eslint/no-empty-function
+			// eslint-disable-next-line @typescript-eslint/no-empty-function, @typescript-eslint/no-unused-vars
 			let allowInputs = (allowed = true) => {};
 			button.addEventListener("click", () => {
 				button.disabled = true;
 				allowInputs(false);
-				clearAlerts(container, [ PageAlertType.PENDING, PageAlertType.FAILURE ]);
+				clearAlerts(container, [ "pending", "failure" ]);
 				submitterInfo.onClick(
 					getMessageText(),
 					getFormFields(),
 					() => {
 						if (submitterInfo.alerts) {
-							clearAlerts(container, [ PageAlertType.PENDING ]);
+							clearAlerts(container, [ "pending" ]);
 							insertAlert(
-								PageAlertType.SUCCESS, //
-								submitterInfo.alerts, //
-								button, //
-								3000, //
+								"success",
+								submitterInfo.alerts,
+								button,
+								3000,
 							);
 						}
 						button.disabled = false;
@@ -848,15 +823,15 @@ textarea
 					},
 					error => {
 						if (submitterInfo.alerts) {
-							clearAlerts(container, [ PageAlertType.PENDING ]);
+							clearAlerts(container, [ "pending" ]);
 							const errorText = (error ? error.text : "") || "(no error message)";
 							insertAlert(
-								PageAlertType.FAILURE, //
-								submitterInfo.alerts, //
-								button, //
-								-1, //
-								errorText, //
-								text => text.replace("{status}", error ? error.status.toString() : "-1").replace("{text}", errorText), //
+								"failure",
+								submitterInfo.alerts,
+								button,
+								-1,
+								errorText,
+								text => text.replace("{status}", error ? error.status.toString() : "-1").replace("{text}", errorText),
 							);
 						}
 						button.disabled = false;
@@ -865,9 +840,9 @@ textarea
 					getObjectIndex(),
 				);
 				insertAlert(
-					PageAlertType.PENDING, //
-					submitterInfo.alerts, //
-					button, //
+					"pending",
+					submitterInfo.alerts,
+					button,
 				);
 			});
 			if (submitterInfo.message) {
@@ -906,7 +881,7 @@ textarea
 			}
 		};
 
-		const insertSubmitters = (container: HTMLElement, submittersInfo: PageInteractionInfo["submitters"],
+		const insertSubmitters = (container: HTMLElement, submittersInfo: Page.InteractionInfo["submitters"],
 			getObjectIndex: () => number) => {
 			if (!submittersInfo) {
 				return;
@@ -917,7 +892,7 @@ textarea
 			container.appendChild(list);
 		};
 
-		const insertNote = (container: HTMLElement, noteInfo: PageInteractionInfo["note"]) => {
+		const insertNote = (container: HTMLElement, noteInfo: Page.InteractionInfo["note"]) => {
 			if (!noteInfo) {
 				return;
 			}
@@ -927,7 +902,7 @@ textarea
 			container.appendChild(note);
 		};
 
-		const insertInteraction = (container: HTMLElement, interactionInfo: PageInteractionInfo) => {
+		const insertInteraction = (container: HTMLElement, interactionInfo: Page.InteractionInfo) => {
 			let index = container.childElementCount;
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction", interactionInfo.className);
@@ -986,7 +961,7 @@ textarea
 			return interaction;
 		};
 
-		return (sectionInfo: PageSectionInfo) => {
+		return (sectionInfo: Page.SectionInfo) => {
 			const section = document.createElement("div");
 			section.classList.add("section");
 			if (sectionInfo.title) {
@@ -1043,9 +1018,9 @@ textarea
 		const version = document.createElement("div");
 		const logo = document.createElement("img");
 		name.classList.add("name");
-		name.textContent = getName();
+		name.textContent = Manifest.getName();
 		version.classList.add("version");
-		version.textContent = `v${chrome.runtime.getManifest().version}`;
+		version.textContent = `v${Manifest.getVersion()}`;
 		logo.classList.add("logo");
 		logo.src = "/icons/mms.svg";
 		brand.classList.add("brand");
@@ -1070,7 +1045,7 @@ textarea
 		return frame;
 	};
 
-	const insertAndManageContent = (panelsInfo: Array<PagePanelInfo>, shiftModifierIsRequired = true) => {
+	const insertAndManageContent = (panelsInfo: Array<Page.PanelInfo>, shiftModifierIsRequired = true) => {
 		document.body.appendChild(createFrameStructure());
 		const panelContainer = document.querySelector(".container-panel") as HTMLElement;
 		const tabContainer = document.querySelector(".container-tab") as HTMLElement;
@@ -1090,7 +1065,7 @@ textarea
 		// TODO handle multiple tabs correctly
 		// TODO visual indication of letter
 		const lettersTaken: Set<string> = new Set();
-		const info: Array<{ letter: string, checkboxInfo?: PageInteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
+		const info: Array<{ letter: string, checkboxInfo?: Page.InteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
 			sectionInfo.interactions
 				.map(interactionInfo => {
 					if (interactionInfo.checkbox && interactionInfo.label) {
@@ -1126,7 +1101,7 @@ textarea
 		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
-	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
+	return (panelsInfo: Array<Page.PanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
 		chrome.tabs.query = (compatibility.browser === "chromium")
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
@@ -1141,7 +1116,8 @@ textarea
 })();
 
 export {
-	sendProblemReport,
+	type Page, type FormField,
 	loadPage,
 	pageInsertWarning,
+	sendProblemReport,
 };

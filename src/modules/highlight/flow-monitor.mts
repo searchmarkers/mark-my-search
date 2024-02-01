@@ -1,9 +1,9 @@
-import type * as Matcher from "/dist/modules/highlight/matcher.mjs";
+import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 const CACHE = "markmysearch__cache";
 
-type TreeCache<Flow = Matcher.Flow> = {
+type TreeCache<Flow = BaseFlow<false>> = {
 	flows: Array<Flow>
 }
 

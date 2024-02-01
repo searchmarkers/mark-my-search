@@ -1,16 +1,14 @@
-import {
-	type AbstractEngine, type HighlighterProcess, getMutationUpdates, containerBlockSelector,
-} from "/dist/modules/highlight/engine.mjs";
+import { type AbstractEngine, getMutationUpdates, containerBlockSelector } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags, HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/highlighting.mjs";
 import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import type { TermHues } from "/dist/modules/common.mjs"
+import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import {
 	EleID, EleClass, AtRuleID,
 	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
-	getTermClass, getTermToken,
+	type TermHues, getTermClass, getTermToken,
 } from "/dist/modules/common.mjs";
 
 /**
@@ -125,7 +123,9 @@ class ElementEngine implements AbstractEngine {
 
 	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
 
-	constructor (terms: Array<MatchTerm>) {
+	constructor (terms: Array<MatchTerm>, hues: TermHues, updateTermStatus: (term: MatchTerm) => void) {
+		this.requestRefreshIndicators = requestCallFn(() => this.insertScrollMarkers(terms, hues), 50, 500);
+		this.requestRefreshTermControls = requestCallFn(() => terms.forEach(term => updateTermStatus(term)), 50, 500);
 		this.mutationObserver = this.getMutationUpdatesObserver(terms);
 		this.specialHighlighter = new PaintSpecialEngine();
 	}
@@ -162,15 +162,13 @@ ${HIGHLIGHT_TAG} {
 
 	getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
-	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
-	case "refreshIndicators": return 50;
-	case "refreshTermControls": return 50;
-	} }
+	requestRefreshIndicators?: Generator;
+	requestRefreshTermControls?: Generator;
 
-	getRequestReschedulingDelayMax (process: HighlighterProcess) { switch (process) {
-	case "refreshIndicators": return 500;
-	case "refreshTermControls": return 500;
-	} }
+	countMatches () {
+		this.requestRefreshIndicators?.next();
+		this.requestRefreshTermControls?.next();
+	}
 
 	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
 		if (terms.length === 0) {
@@ -297,6 +295,7 @@ ${HIGHLIGHT_TAG} {
 		 * @param nodeItemPrevious The previous item in the text node list.
 		 * @returns The new previous item (the item just highlighted).
 		 */
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const _highlightInsideNode = ( // new but broken version of the function
 			term: MatchTerm,
 			node: Text,
@@ -469,7 +468,7 @@ ${HIGHLIGHT_TAG} {
 					highlightInBlock(terms, nodeItems);
 				}
 			}
-			//termCountCheck();
+			this.countMatches();
 		};
 	})();
 

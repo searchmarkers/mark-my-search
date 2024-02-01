@@ -8,6 +8,7 @@ import { StandardFlowMonitor } from "/dist/modules/highlight/flow-monitors/stand
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<true, BoxInfoRange>
@@ -48,8 +49,11 @@ class HighlightEngine implements AbstractEngine {
 		};
 	})();
 	
-	constructor (terms: Array<MatchTerm>) {
+	constructor (terms: Array<MatchTerm>, hues: TermHues, updateTermStatus: (term: MatchTerm) => void) {
+		this.requestRefreshIndicators = requestCallFn(() => this.insertScrollMarkers(terms, hues), 50, 500);
+		this.requestRefreshTermControls = requestCallFn(() => terms.forEach(term => updateTermStatus(term)), 50, 500);
 		this.flowMonitor = new StandardFlowMonitor(
+			() => this.countMatches(),
 			() => undefined,
 			() => ({ flows: [] }),
 			boxesInfo => {
@@ -102,6 +106,14 @@ class HighlightEngine implements AbstractEngine {
 
 	getRequestReschedulingDelayMax () {
 		return 500;
+	}
+
+	requestRefreshIndicators?: Generator;
+	requestRefreshTermControls?: Generator;
+
+	countMatches () {
+		this.requestRefreshIndicators?.next();
+		this.requestRefreshTermControls?.next();
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -164,4 +176,7 @@ class HighlightEngine implements AbstractEngine {
 	}
 }
 
-export { HighlightEngine };
+export {
+	type Flow, type BoxInfo,
+	HighlightEngine,
+};

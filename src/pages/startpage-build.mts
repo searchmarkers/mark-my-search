@@ -1,3 +1,10 @@
+import * as Manifest from "/dist/modules/manifest.mjs";
+import { type Page, loadPage } from "/dist/modules/page/build.mjs";
+import {
+	type StorageLocalValues,
+	storageGet, storageSet,
+} from "/dist/modules/storage.mjs";
+
 /**
  * Loads the startpage content into the page.
  * This presents the user with expandable onboarding information and functions, for use when the user has installed the extension.
@@ -6,7 +13,7 @@ const loadStartpage = (() => {
 	/**
 	 * Details of the page's panels and their various components.
 	 */
-	const panelsInfo: Array<PagePanelInfo> = [
+	const panelsInfo: Array<Page.PanelInfo> = [
 		{
 			className: "panel-general",
 			name: {
@@ -33,7 +40,7 @@ const loadStartpage = (() => {
 											: "about:addons, pressing the cog and selecting \"Manage Extension Shortcuts\""
 										}, \
 going to "Find in current tab", and assigning something like Alt+M. \
-You can always activate ${getName()} by opening its popup (from the 'extensions' icon) and clicking "Active".`;
+You can always activate ${Manifest.getName()} by opening its popup (from the 'extensions' icon) and clicking "Active".`;
 								},
 							},
 						},
@@ -277,7 +284,7 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 
 	return () => {
 		const title = document.createElement("title");
-		title.text = `${getName()} - Start`;
+		title.text = `${Manifest.getName()} - Start`;
 		document.head.appendChild(title);
 		loadPage(panelsInfo, `
 body

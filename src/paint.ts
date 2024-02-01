@@ -1,4 +1,4 @@
-import type { Box } from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { TermSelectorStyles } from "/dist/modules/highlight/engines/paint/methods/paint.mjs";
 
 registerPaint("markmysearch-highlights", class {

@@ -1,24 +1,43 @@
-import {
-	type HighlighterProcess, type AbstractEngine, getMutationUpdates, getStyleUpdates,
-} from "/dist/modules/highlight/engine.mjs";
+import { type AbstractEngine, getMutationUpdates, getStyleUpdates } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
 import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
+import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import {
-	type TreeCache, type Flow, type Box,
 	type AbstractMethod, DummyMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
 } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/flow-monitor.mjs";
+import type * as FlowMonitorTypes from "/dist/modules/highlight/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/flow-monitors/standard.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import type { TermHues } from "/dist/modules/common.mjs";
+import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import {
 	EleID, EleClass,
 	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
-	getTermClass
+	type TermHues, getTermClass,
 } from "/dist/modules/common.mjs";
+
+type TreeCache = {
+	id: string
+	styleRuleIdx: number
+	isHighlightable: boolean
+} & FlowMonitorTypes.TreeCache<Flow>
+
+type Flow = BaseFlow<true, BoxInfoBoxes>
+
+type BoxInfo = BaseBoxInfo<true, BoxInfoBoxes>
+
+type BoxInfoBoxes = { boxes: Array<Box> }
+
+type Box = {
+	token: string
+	x: number
+	y: number
+	width: number
+	height: number
+}
 
 type StyleRuleInfo = {
 	rule: string
@@ -47,9 +66,14 @@ class PaintEngine implements AbstractEngine {
 	 * @param terms 
 	 * @param methodPreference 
 	 */
-	constructor (terms: Array<MatchTerm>, method: AbstractMethod) {
+	constructor (
+		terms: Array<MatchTerm>, hues: TermHues, updateTermStatus: (term: MatchTerm) => void, method: AbstractMethod,
+	) {
+		this.requestRefreshIndicators = requestCallFn(() => this.insertScrollMarkers(terms, hues), 200, 2000);
+		this.requestRefreshTermControls = requestCallFn(() => terms.forEach(term => updateTermStatus(term)), 50, 500);
 		this.method = method;
 		this.flowMonitor = new StandardFlowMonitor(
+			() => this.countMatches(),
 			ancestor => {
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
 				this.styleUpdates.observe(ancestorHighlightable);
@@ -93,15 +117,13 @@ class PaintEngine implements AbstractEngine {
 
 	getTermBackgroundStyle = getTermBackgroundStyle;
 
-	getRequestWaitDuration (process: HighlighterProcess) { switch (process) {
-	case "refreshIndicators": return 200;
-	case "refreshTermControls": return 50;
-	} }
+	requestRefreshIndicators?: Generator;
+	requestRefreshTermControls?: Generator;
 
-	getRequestReschedulingDelayMax (process: HighlighterProcess) { switch (process) {
-	case "refreshIndicators": return 2000;
-	case "refreshTermControls": return 500;
-	} }
+	countMatches () {
+		this.requestRefreshIndicators?.next();
+		this.requestRefreshTermControls?.next();
+	}
 	
 	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
 		if (terms.length === 0) {
@@ -371,4 +393,7 @@ class PaintEngine implements AbstractEngine {
 	}
 }
 
-export { PaintEngine };
+export {
+	type TreeCache, type Flow, type BoxInfo, type BoxInfoBoxes, type Box,
+	PaintEngine,
+};

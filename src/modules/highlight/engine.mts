@@ -1,6 +1,6 @@
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs"
-import type { TermHues } from "/dist/modules/common.mjs"
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { TermHues } from "/dist/modules/common.mjs";
 
 type Highlighter = { current: AbstractEngine }
 
@@ -19,10 +19,7 @@ interface AbstractEngine {
 	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
 
 	// TODO document
-	getRequestWaitDuration: (process: HighlighterProcess) => number
-
-	// TODO document
-	getRequestReschedulingDelayMax: (process: HighlighterProcess) => number
+	countMatches: () => void
 
 	/**
 	 * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
@@ -79,6 +76,21 @@ interface AbstractEngine {
 	) => number
 }
 
+class DummyEngine implements AbstractEngine {
+	getMiscCSS = () => "";
+	getTermHighlightsCSS = () => "";
+	getTermHighlightCSS = () => "";
+	getTermBackgroundStyle = () => "";
+	countMatches = () => undefined;
+	insertScrollMarkers = () => undefined;
+	raiseScrollMarker = () => undefined;
+	startHighlighting = () => undefined;
+	undoHighlights = () => undefined;
+	endHighlighting = () => undefined;
+	focusNextTerm = () => undefined;
+	getTermOccurrenceCount = () => 0;
+}
+
 /**
  * A selector string for the container block of an element.
  */
@@ -109,7 +121,7 @@ const getStyleUpdates = (
 
 export {
 	type Highlighter, type HighlighterProcess,
-	type AbstractEngine,
+	type AbstractEngine, DummyEngine,
 	getMutationUpdates, getStyleUpdates,
 	containerBlockSelector,
 };

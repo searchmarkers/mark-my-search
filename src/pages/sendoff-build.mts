@@ -1,3 +1,6 @@
+import * as Manifest from "/dist/modules/manifest.mjs";
+import { type Page, loadPage, sendProblemReport } from "/dist/modules/page/build.mjs";
+
 /**
  * Loads the sendoff page content into the page.
  * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.
@@ -6,7 +9,7 @@ const loadSendoff = (() => {
 	/**
 	 * Details of the page's panels and their various components.
 	 */
-	const panelsInfo: Array<PagePanelInfo> = [
+	const panelsInfo: Array<Page.PanelInfo> = [
 		{
 			className: "panel-general",
 			name: {
@@ -92,14 +95,14 @@ const loadSendoff = (() => {
 									placeholder: "Details or support to help us out",
 								},
 								alerts: {
-									[PageAlertType.SUCCESS]: {
+									success: {
 										text: "Thank you, your feedback will be carefully considered!",
 										timeout: -1,
 									},
-									[PageAlertType.FAILURE]: {
+									failure: {
 										text: "Status {status}: {text}",
 									},
-									[PageAlertType.PENDING]: {
+									pending: {
 										text: "Pending, do not exit page",
 									},
 								},
@@ -127,7 +130,7 @@ const loadSendoff = (() => {
 
 	return () => {
 		const title = document.createElement("title");
-		title.text = `${getName()} - Uninstalled`;
+		title.text = `${Manifest.getName()} - Uninstalled`;
 		document.head.appendChild(title);
 		loadPage(panelsInfo, `
 body

@@ -1,8 +1,8 @@
 import {
-	type TreeCache, type Box,
 	type AbstractMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
 } from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { TreeCache, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
@@ -119,4 +119,4 @@ border-radius: 2px;
 	}
 }
 
-export { ElementMethod }
+export { ElementMethod };

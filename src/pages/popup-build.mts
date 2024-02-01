@@ -1,3 +1,13 @@
+import { type Page, loadPage, pageInsertWarning, sendProblemReport } from "/dist/modules/page/build.mjs";
+import {
+	type StorageAreaName, type StorageArea,
+	type StorageLocalValues,
+	storageGet, storageSet,
+} from "/dist/modules/storage.mjs";
+import { messageSendBackground } from "/dist/modules/message.mjs";
+import { isTabResearchPage } from "/dist/modules/tabs.mjs";
+import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
+
 /**
  * Loads the popup content into the page.
  * This presents the user with common options and actions (usually those needed while navigating), to be placed in a popup.
@@ -9,7 +19,7 @@ const loadPopup = (() => {
 	 * @param labelText Text to display in the checkbox label.
 	 * @returns The resulting info object.
 	 */
-	const getMatchModeInteractionInfo = (mode: keyof MatchMode, labelText: string): PageInteractionObjectRowInfo => ({
+	const getMatchModeInteractionInfo = (mode: keyof MatchMode, labelText: string): Page.Interaction.ObjectRowInfo => ({
 		className: "type",
 		key: `matchMode.${mode}`,
 		label: {
@@ -35,7 +45,7 @@ const loadPopup = (() => {
 	 * @param storageKey The key for the field within the storage area.
 	 * @returns The resulting info object.
 	 */
-	const getStorageFieldCheckboxInfo = (storageArea: StorageAreaName, storageKey: StorageArea<typeof storageArea>): PageInteractionCheckboxInfo => ({
+	const getStorageFieldCheckboxInfo = (storageArea: StorageAreaName, storageKey: StorageArea<typeof storageArea>): Page.Interaction.CheckboxInfo => ({
 		onLoad: async setChecked => {
 			const store = await storageGet(storageArea, [ storageKey ]);
 			setChecked(store[storageKey]);
@@ -50,7 +60,7 @@ const loadPopup = (() => {
 	/**
 	 * Details of the page's panels and their various components.
 	 */
-	const panelsInfo: Array<PagePanelInfo> = [
+	const panelsInfo: Array<Page.PanelInfo> = [
 		{
 			className: "panel-general",
 			name: {
@@ -201,13 +211,13 @@ const loadPopup = (() => {
 									required: true,
 								},
 								alerts: {
-									[PageAlertType.SUCCESS]: {
+									success: {
 										text: "Success",
 									},
-									[PageAlertType.FAILURE]: {
+									failure: {
 										text: "Status {status}: {text}",
 									},
-									[PageAlertType.PENDING]: {
+									pending: {
 										text: "Pending, do not close popup",
 									},
 								},

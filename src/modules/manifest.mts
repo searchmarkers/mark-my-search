@@ -1,3 +1,5 @@
+const getVersion = (): string => chrome.runtime.getManifest().version;
+
 const getName = (): string => {
 	const manifest = chrome.runtime.getManifest();
 	if (manifest.short_name) {
@@ -10,4 +12,4 @@ const getName = (): string => {
 
 const getNameFull = (): string => chrome.runtime.getManifest().name;
 
-export { getName, getNameFull };
+export { getVersion, getName, getNameFull };

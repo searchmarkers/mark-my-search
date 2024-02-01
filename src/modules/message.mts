@@ -146,8 +146,7 @@ const parseCommand = (commandString: string): CommandInfo => {
 // TODO document
 const messageSendHighlight = (tabId: number, message: HighlightMessage): Promise<HighlightMessageResponse> =>
 	chrome.tabs.sendMessage(tabId, message).catch(reason => {
-		console.warn(reason);
-		log("messaging fail", "scripts may not be injected");
+		log("messaging fail", "scripts may not be injected", { reason });
 	})
 ;
 
@@ -163,4 +162,4 @@ export {
 	type CommandInfo, type CommandType,
 	messageSendBackground,
 	parseCommand,
-}
+};

@@ -198,8 +198,8 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			const session = await storageGet("session", [ "engines" ]);
 			nodes.forEach(node =>
 				setEngines(session.engines, node => {
-					if (node.url) {
-						updateEngine(session.engines, node.id, node.url);
+					if (node.url) { // TODO should be able to make the assumption that engines is always an array
+						updateEngine(session.engines ?? [], node.id, node.url);
 					}
 				}, node)
 			);
@@ -217,7 +217,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 		browser.bookmarks.onCreated.addListener(async (id, createInfo) => {
 			if (createInfo.url) {
 				const session = await storageGet("session", [ "engines" ]);
-				updateEngine(session.engines, id, createInfo.url);
+				updateEngine(session.engines ?? [], id, createInfo.url);
 				storageSet("session", session);
 			}
 		});
@@ -225,7 +225,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 		browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
 			if (changeInfo.url) {
 				const session = await storageGet("session", [ "engines" ]);
-				updateEngine(session.engines, id, changeInfo.url);
+				updateEngine(session.engines ?? [], id, changeInfo.url);
 				storageSet("session", session);
 			}
 		});
@@ -668,16 +668,19 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				barLook: sync.barLook,
 				highlightMethod: sync.highlightMethod,
 				matchMode: sync.matchModeDefaults,
-				setHighlighter: {
-					engine: "highlight",
-				},
-				//setHighlighter: sync.highlightMethod.paintReplaceByElement ? {
-				//	engine: Engine.ELEMENT,
-				//} : {
-				//	engine: Engine.PAINT,
-				//	paintEngineMethod: compatibility.highlight.paintEngine.paintMethod
-				//		? PaintEngineMethod.PAINT : PaintEngineMethod.ELEMENT,
-				//},
+				// eslint-disable-next-line no-constant-condition
+				setHighlighter: true // Set to `true` to test HIGHLIGHT engine, or `false` for regular behaviour.
+					? {
+						engine: "highlight",
+					}
+					: (
+						sync.highlightMethod.paintReplaceByElement ? {
+							engine: "element",
+						} : {
+							engine: "paint",
+							paintEngineMethod: compatibility.highlight.paintEngine.paintMethod ? "paint" : "element",
+						}
+					),
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
 			};
 		} else {

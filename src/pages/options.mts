@@ -1,3 +1,6 @@
+import { type StorageSyncValues, storageGet, storageSet, optionsDefault } from "/dist/modules/storage.mjs";
+import { getIdSequential } from "/dist/modules/common.mjs";
+
 type OptionsInfo = Array<{
 	label: string
 	options: Partial<Record<keyof StorageSyncValues, {

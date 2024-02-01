@@ -9,9 +9,11 @@
 		"verbatimModuleSyntax": true,
 		"paths": {
 			"/dist/*": [ "./src/*" ],
+			"/lib/*": [ "./lib/*" ],
 		},
 	},
 	"include": [
 		"src/**/*",
+		"lib/*",
 	],
 }

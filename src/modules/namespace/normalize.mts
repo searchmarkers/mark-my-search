@@ -7,18 +7,18 @@ chrome.tabs.query = (compatibility.browser === "chromium")
 
 chrome.tabs.sendMessage = (compatibility.browser === "chromium")
 	? chrome.tabs.sendMessage
-	: browser.tabs.sendMessage as typeof chrome.tabs.sendMessage;
+	: browser.tabs.sendMessage as typeof chrome.tabs.sendMessage
 ;
 
 chrome.tabs.get = (compatibility.browser === "chromium")
 	? chrome.tabs.get
-	: browser.tabs.get as typeof chrome.tabs.get;
+	: browser.tabs.get as typeof chrome.tabs.get
 ;
 
 chrome.search["search"] = (compatibility.browser === "chromium")
 	? (options: { query: string, tabId: number }) =>
 		chrome.search["query"]({ text: options.query, tabId: options.tabId }, () => undefined)
-	: browser.search.search;
+	: browser.search.search
 ;
 
 chrome.commands.getAll = (compatibility.browser === "chromium")

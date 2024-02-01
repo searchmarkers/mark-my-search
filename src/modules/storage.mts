@@ -356,9 +356,11 @@ export {
 	type ResearchInstance,
 	type SearchSites,
 	type URLFilter,
+	type StorageAreaName, type StorageArea, type StorageAreaValues,
 	type StorageSession, type StorageLocal, type StorageSync,
 	type StorageSessionValues, type StorageLocalValues, type StorageSyncValues,
 	storageGet, storageSet,
 	storageInitialize,
 	optionsRepair,
-}
+	optionsDefault,
+};

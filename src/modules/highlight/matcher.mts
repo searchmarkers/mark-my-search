@@ -7,15 +7,11 @@ type BaseFlow<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Re
 	boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExtension>>
 }
 
-type Flow = BaseFlow<true>
-
 type BaseBoxInfo<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
 	term: MatchTerm
 	start: number
 	end: number
 } & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExtension>
-
-type BoxInfo = BaseBoxInfo<true>
 
 const matchInText = (terms: Array<MatchTerm>, text: string): Array<BaseBoxInfo<false>> => {
 	const boxesInfo: Array<BaseBoxInfo<false>> = [];
@@ -31,8 +27,8 @@ const matchInText = (terms: Array<MatchTerm>, text: string): Array<BaseBoxInfo<f
 	return boxesInfo;
 };
 
-const matchInTextFlow = (terms: Array<MatchTerm>, text: string, textFlow: Array<Text>): Array<BoxInfo> => {
-	const boxesInfo: Array<BoxInfo> = [];
+const matchInTextFlow = (terms: Array<MatchTerm>, text: string, textFlow: Array<Text>): Array<BaseBoxInfo<true>> => {
+	const boxesInfo: Array<BaseBoxInfo<true>> = [];
 	for (const term of terms) {
 		let i = 0;
 		let node = textFlow[0];
@@ -69,6 +65,6 @@ const matchInTextFlow = (terms: Array<MatchTerm>, text: string, textFlow: Array<
 };
 
 export {
-	type BaseFlow, type Flow, type BaseBoxInfo, type BoxInfo,
+	type BaseFlow, type BaseBoxInfo,
 	matchInText, matchInTextFlow,
 };

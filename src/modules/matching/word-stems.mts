@@ -3,7 +3,7 @@
  * @param chars A string.
  * @returns The reverse of the given string.
  */
- const reverse = (chars: string) => {
+const reverse = (chars: string) => {
 	for (let i = 0; i < chars.length; i += 2) {
 		chars = chars[i] + chars;
 	}

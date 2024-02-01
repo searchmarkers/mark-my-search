@@ -1,11 +1,17 @@
 import type { TreeCache, AbstractFlowMonitor } from "/dist/modules/highlight/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
-import { type Flow, type BoxInfo, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
+import { type BaseFlow, type BaseBoxInfo, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
+
+type Flow = BaseFlow<true>
+
+type BoxInfo = BaseBoxInfo<true>
 
 class StandardFlowMonitor implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
+
+	onHighlightingUpdated: () => void = () => undefined;
 
 	onNewHighlightedAncestor: (ancestor: Element) => void = () => undefined;
 
@@ -15,11 +21,13 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void;
 
 	constructor (
+		onHighlightingUpdated: () => void,
 		onNewHighlightedAncestor: (ancestor: Element) => void,
 		createElementCache: (element: Element) => TreeCache,
 		onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void,
 		onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void,
 	) {
+		this.onHighlightingUpdated = onHighlightingUpdated;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
 		this.createElementCache = createElementCache;
 		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
@@ -60,7 +68,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 					}}
 				}
 				(this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
-					(node[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
+					(node[FlowMonitor.CACHE] as TreeCache<Flow> | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
 				)));
 			}
 			onElementsAdded(elementsAdded);
@@ -128,7 +136,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		textFlows // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
 			.slice((breaksFlow && textFlows[0]?.length) ? 0 : 1, (breaksFlow && textFlows.at(-1)?.length) ? undefined : -1)
 			.forEach(textFlow => this.flowCacheWithBoxesInfo(terms, textFlow));
-		//termCountCheck(); // Major performance hit when using very small delay or small delay maximum for debounce.
+		this.onHighlightingUpdated();
 	}
 
 	/**
@@ -139,7 +147,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		if (highlightTags.reject.has(element.tagName)) {
 			return;
 		}
-		const highlighting = element[FlowMonitor.CACHE] as TreeCache;
+		const highlighting = element[FlowMonitor.CACHE] as TreeCache<Flow>;
 		if (highlighting) {
 			(this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo)));
 			highlighting.flows = [];
@@ -200,7 +208,7 @@ const canHighlightElement = (rejectSelector: string, element: Element): boolean 
  * @param textFlows __Only supplied in recursion.__ Holds the flows gathered so far.
  * @param textFlow __Only supplied in recursion.__ Points to the last flow in `textFlows`.
  */
- const getTextFlows = (
+const getTextFlows = (
 	node: Node,
 	textFlows: Array<Array<Text>> = [ [] ],
 	textFlow: Array<Text> = textFlows[0],

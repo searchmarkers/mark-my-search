@@ -256,4 +256,4 @@ export {
 	type TermHues, getTermClass, getTermToken,
 	getIdSequential,
 	itemsMatch, objectSetValue, objectGetValue,
-}
+};

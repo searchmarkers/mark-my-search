@@ -13,6 +13,6 @@ const loadMethod = async (methodPreference: PaintEngineMethod): Promise<Abstract
 		const { UrlMethod } = await import("/dist/modules/highlight/engines/paint/methods/url.mjs");
 		return new UrlMethod();
 	}
-}
+};
 
-export { loadMethod }
+export { loadMethod };

@@ -18,4 +18,4 @@ const highlightTags: HighlightTags = {
 export {
 	type HighlightTags, highlightTags,
 	HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER,
-}
+};

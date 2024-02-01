@@ -1,5 +1,5 @@
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import type { BoxInfoBoxes, Box } from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { BoxInfoBoxes, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
 import { type BaseFlow, type BaseBoxInfo, matchInText } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
@@ -61,7 +61,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	removeHelperElements () {
 		document.querySelectorAll(
 			`#${EleID.STYLE_PAINT_SPECIAL}, #${EleID.ELEMENT_CONTAINER_SPECIAL}`
-		).forEach(Element.prototype.remove);
+		).forEach(element => element.remove()); // Why can't I use Element.prototype.remove directly? ("does not implement" error)
 	}
 
 	getFlow (terms: Array<MatchTerm>, input: HTMLInputElement) {
@@ -164,4 +164,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	}
 }
 
-export { PaintSpecialEngine };
+export {
+	type Flow, type BoxInfo,
+	PaintSpecialEngine,
+};

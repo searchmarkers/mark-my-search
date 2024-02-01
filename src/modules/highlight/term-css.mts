@@ -18,4 +18,4 @@ const getHorizontalStyle = (colorA: string, colorB: string, cycle: number) => {
 		: colorA;
 };
 
-export { getFlatStyle, getDiagonalStyle, getHorizontalStyle }
+export { getFlatStyle, getDiagonalStyle, getHorizontalStyle };

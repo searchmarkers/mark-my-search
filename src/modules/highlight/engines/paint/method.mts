@@ -1,29 +1,8 @@
+import type { TreeCache, Flow, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { type AbstractHighlightability, StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
-import type * as FlowMonitorTypes from "/dist/modules/highlight/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
-import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-
-type TreeCache = {
-	id: string
-	styleRuleIdx: number
-	isHighlightable: boolean
-} & FlowMonitorTypes.TreeCache<Flow>
-
-type Flow = BaseFlow<true, BoxInfoBoxes>
-
-type BoxInfo = BaseBoxInfo<true, BoxInfoBoxes>
-
-type BoxInfoBoxes = { boxes: Array<Box> }
-
-type Box = {
-	token: string
-	x: number
-	y: number
-	width: number
-	height: number
-}
 
 interface AbstractMethod {
 	highlightables: AbstractHighlightability
@@ -136,7 +115,6 @@ const elementPopulateBoxes = (
 ;
 
 export {
-	type TreeCache, type Flow, type BoxInfo, type BoxInfoBoxes, type Box,
 	type AbstractMethod, DummyMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
-}
+};
