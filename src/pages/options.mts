@@ -1,4 +1,4 @@
-import { type StorageSyncValues, storageGet, storageSet, optionsDefault } from "/dist/modules/storage.mjs";
+import { type StorageSyncValues, storageGet, storageSet, optionsDefault } from "/dist/modules/privileged/storage.mjs";
 import { getIdSequential } from "/dist/modules/common.mjs";
 
 type OptionsInfo = Array<{

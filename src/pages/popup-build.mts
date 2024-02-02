@@ -3,9 +3,9 @@ import {
 	type StorageAreaName, type StorageArea,
 	type StorageLocalValues,
 	storageGet, storageSet,
-} from "/dist/modules/storage.mjs";
-import { messageSendBackground } from "/dist/modules/message.mjs";
-import { isTabResearchPage } from "/dist/modules/tabs.mjs";
+} from "/dist/modules/privileged/storage.mjs";
+import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
+import { isTabResearchPage } from "/dist/modules/privileged/tabs.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
 
 /**
@@ -148,7 +148,7 @@ const loadPopup = (() => {
 											if (researchInstance && local.persistResearchInstances) {
 												researchInstance.enabled = true;
 											}
-											messageSendBackground({
+											sendBackgroundMessage({
 												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
 												termsSend: true,
 												toggle: {
@@ -157,7 +157,7 @@ const loadPopup = (() => {
 											});
 										});
 									} else {
-										messageSendBackground({
+										sendBackgroundMessage({
 											deactivateTabResearch: true,
 										});
 									}
@@ -182,7 +182,7 @@ const loadPopup = (() => {
 									const session = await storageGet("session", [ "researchInstances" ]);
 									delete session.researchInstances[tab.id];
 									await storageSet("session", session);
-									messageSendBackground({
+									sendBackgroundMessage({
 										deactivateTabResearch: true,
 									});
 								},
@@ -473,7 +473,7 @@ const loadPopup = (() => {
 											researchInstance.enabled = true;
 											await storageSet("session", session);
 										}
-										messageSendBackground({
+										sendBackgroundMessage({
 											terms: researchInstance
 												? researchInstance.terms.concat(
 													sync.termLists[index].terms.filter(termFromList =>

@@ -1,5 +1,5 @@
 import { EleClass } from "/dist/modules/common.mjs";
-import type { ControlButtonName } from "/dist/modules/content/toolbar.mjs";
+import type { ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
 
 const controlGetClass = (controlName: ControlButtonName) =>
 	EleClass.CONTROL + "-" + controlName

@@ -1,17 +1,16 @@
-/* eslint-disable indent */
-import type { StorageSyncValues } from "/dist/modules/storage.mjs";
-import {
-	type HighlightDetailsRequest, type HighlightMessage, type HighlightMessageResponse, type CommandInfo,
-	messageSendBackground,
-} from "/dist/modules/message.mjs";
+/* eslint-disable indent */ // TODO remove
+import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
+import type { CommandInfo } from "/dist/modules/commands.mjs";
+import type * as Message from "/dist/modules/messaging.mjs";
+import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 import { type Highlighter, DummyEngine } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
-import * as Stylesheet from "/dist/modules/content/stylesheet.mjs";
-import * as TermsSetter from "/dist/modules/content/terms-setter-legacy.mjs";
-import * as Toolbar from "/dist/modules/content/toolbar.mjs";
-import * as ToolbarClasses from "/dist/modules/content/toolbar/classes.mjs";
+import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
+import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
+import * as Toolbar from "/dist/modules/interface/toolbar.mjs";
+import * as ToolbarClasses from "/dist/modules/interface/toolbar/classes.mjs";
 import { assert, compatibility, itemsMatch } from "/dist/modules/common.mjs";
 
 interface ControlsInfo {
@@ -330,14 +329,14 @@ const onWindowMouseUp = () => {
 	const updateTermStatus = (term: MatchTerm) => Toolbar.updateTermStatus(term, highlighter);
 	const produceEffectOnCommand = produceEffectOnCommandFn(terms, controlsInfo, highlighter);
 	produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
-	const getDetails = (request: HighlightDetailsRequest) => ({
+	const getDetails = (request: Message.TabDetailsRequest) => ({
 		terms: request.termsFromSelection ? getTermsFromSelection() : undefined,
 		highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
 	});
 	type MessageHandler = (
-		message: HighlightMessage,
+		message: Message.Tab,
 		sender: chrome.runtime.MessageSender,
-		sendResponse: (response: HighlightMessageResponse) => void,
+		sendResponse: (response: Message.TabResponse) => void,
 	) => void
 	let queuingPromise: Promise<unknown> | undefined = undefined;
 	const messageHandleHighlight: MessageHandler = (message, sender, sendResponse) => {
@@ -439,9 +438,9 @@ const onWindowMouseUp = () => {
 	};
 	(() => {
 		const messageQueue: Array<{
-			message: HighlightMessage,
+			message: Message.Tab,
 			sender: chrome.runtime.MessageSender,
-			sendResponse: (response: HighlightMessageResponse) => void,
+			sendResponse: (response: Message.TabResponse) => void,
 		}> = [];
 		const messageHandleHighlightUninitialized: MessageHandler = (message, sender, sendResponse) => {
 			if (message.getDetails) {
@@ -453,9 +452,7 @@ const onWindowMouseUp = () => {
 			}
 			messageQueue.unshift({ message, sender, sendResponse });
 			if (messageQueue.length === 1) {
-				messageSendBackground({
-					initializationGet: true,
-				}).then(message => {
+				sendBackgroundMessage({ initializationGet: true }).then(message => {
 					if (!message) {
 						assert(false, "not initialized, so highlighting remains inactive", "no init response was received");
 						return;

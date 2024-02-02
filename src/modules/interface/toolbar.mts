@@ -1,14 +1,15 @@
-import * as Classes from "/dist/modules/content/toolbar/classes.mjs";
-import { messageSendBackground, parseCommand, type CommandInfo } from "/dist/modules/message.mjs";
+import * as Classes from "/dist/modules/interface/toolbar/classes.mjs";
+import { type CommandInfo, parseCommand } from "/dist/modules/commands.mjs";
+import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass, getTermClass } from "/dist/modules/common.mjs";
 type EleIDItem = typeof EleID[keyof typeof EleID]
 type EleClassItem = typeof EleClass[keyof typeof EleClass]
-import type { StorageSyncValues } from "/dist/modules/storage.mjs";
+import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import * as Stylesheet from "/dist/modules/content/stylesheet.mjs";
+import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
 import { assert, getIdSequential } from "/dist/modules/common.mjs";
-import * as TermsSetter from "/dist/modules/content/terms-setter-legacy.mjs";
+import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
 
 export type BrowserCommands = Array<chrome.commands.Command>
@@ -845,7 +846,7 @@ export const controlsInsert = (() => {
 					containerId: EleID.BAR_LEFT,
 					onClick: () => {
 						controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
-						messageSendBackground({
+						sendBackgroundMessage({
 							toggle: {
 								barCollapsedOn: controlsInfo.barCollapsed,
 							},
@@ -857,21 +858,21 @@ export const controlsInsert = (() => {
 				disableTabResearch: {
 					path: "/icons/close.svg",
 					containerId: EleID.BAR_LEFT,	
-					onClick: () => messageSendBackground({
+					onClick: () => sendBackgroundMessage({
 						deactivateTabResearch: true,
 					}),
 				},
 				performSearch: {
 					path: "/icons/search.svg",
 					containerId: EleID.BAR_LEFT,
-					onClick: () => messageSendBackground({
+					onClick: () => sendBackgroundMessage({
 						performSearch: true,
 					}),
 				},
 				toggleHighlights: {
 					path: "/icons/show.svg",
 					containerId: EleID.BAR_LEFT,
-					onClick: () => messageSendBackground({
+					onClick: () => sendBackgroundMessage({
 						toggle: {
 							highlightsShownOn: !controlsInfo.highlightsShown,
 						},

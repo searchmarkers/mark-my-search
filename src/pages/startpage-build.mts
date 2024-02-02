@@ -3,7 +3,7 @@ import { type Page, loadPage } from "/dist/modules/page/build.mjs";
 import {
 	type StorageLocalValues,
 	storageGet, storageSet,
-} from "/dist/modules/storage.mjs";
+} from "/dist/modules/privileged/storage.mjs";
 
 /**
  * Loads the startpage content into the page.

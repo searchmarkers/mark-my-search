@@ -4,20 +4,14 @@ import {
 	type StorageSessionValues, type StorageLocalValues, type StorageSyncValues,
 	storageGet, storageSet,
 	storageInitialize, optionsRepair,
-} from "/dist/modules/storage.mjs";
-import {
-	type HighlightMessage,
-	messageSendHighlight,
-	type BackgroundMessage, type BackgroundMessageResponse,
-	parseCommand,
-} from "/dist/modules/message.mjs";
+} from "/dist/modules/privileged/storage.mjs";
+import { parseCommand } from "/dist/modules/commands.mjs";
+import type * as Message from "/dist/modules/messaging.mjs";
+import { sendTabMessage } from "/dist/modules/messaging/tab.mjs";
 import { MatchTerm, sanitizeForRegex } from "/dist/modules/match-term.mjs";
 import { SearchSite } from "/dist/modules/search-site.mjs";
-import * as Tabs from "/dist/modules/tabs.mjs";
-import {
-	log, assert,
-	compatibility,
-} from "/dist/modules/common.mjs";
+import * as Tabs from "/dist/modules/privileged/tabs.mjs";
+import { log, assert, compatibility } from "/dist/modules/common.mjs";
 
 // DEPRECATE
 /**
@@ -370,7 +364,7 @@ const updateActionIcon = (enabled?: boolean) =>
 			// Apply terms from term lists.
 			researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
 			if (isResearchPage) {
-				messageSendHighlight(tabId, {
+				sendTabMessage(tabId, {
 					termsOnHold: researchInstance.terms,
 				});
 			} else {
@@ -395,7 +389,7 @@ const updateActionIcon = (enabled?: boolean) =>
 				researchInstance.barCollapsed = sync.barCollapse.fromTermListAuto;
 			}
 			researchInstance.enabled = true;
-			highlightActivation = messageSendHighlight(tabId, {
+			highlightActivation = sendTabMessage(tabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
 			});
@@ -460,7 +454,7 @@ const updateActionIcon = (enabled?: boolean) =>
  */
 const getTermsSelectedInTab = async (tabId: number): Promise<Array<MatchTerm> | undefined> => {
 	log("selection-terms-retrieval start", "");
-	return messageSendHighlight(tabId, { getDetails: { termsFromSelection: true } }).then(response => {
+	return sendTabMessage(tabId, { getDetails: { termsFromSelection: true } }).then(response => {
 		log("selection-terms-retrieval finish", "", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
 		return response.terms ?? [];
 	}).catch(() => {
@@ -483,7 +477,7 @@ const activateResearchInTab = async (tabId: number, terms: Array<MatchTerm> = []
 	researchInstance.enabled = true;
 	session.researchInstances[tabId] = researchInstance;
 	storageSet("session", session);
-	await messageHandleBackground({
+	await handleMessage({
 		tabId,
 		terms: researchInstance.terms,
 		termsSend: true,
@@ -511,7 +505,7 @@ const deactivateResearchInTab = async (tabId: number) => {
 		}
 		storageSet("session", session);
 	}
-	await messageSendHighlight(tabId, { deactivate: true });
+	await sendTabMessage(tabId, { deactivate: true });
 	log("research-deactivation finish", "", { tabId });
 };
 
@@ -528,12 +522,12 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	const session = await storageGet("session", [ "researchInstances" ]);
 	const researchInstance = session.researchInstances[tabId];
 	researchInstance.highlightsShown = toggleHighlightsOn
-		?? !await messageSendHighlight(tabId, { getDetails: { highlightsShown: true } }).then(response =>
+		?? !await sendTabMessage(tabId, { getDetails: { highlightsShown: true } }).then(response =>
 			response.highlightsShown
 		).catch(() =>
 			researchInstance.highlightsShown
 		);
-	messageSendHighlight(tabId, {
+	sendTabMessage(tabId, {
 		toggleHighlightsOn: researchInstance.highlightsShown,
 		barControlsShown: sync.barControlsShown,
 	});
@@ -576,13 +570,13 @@ chrome.commands.onCommand.addListener(async commandString => {
 			return;
 		}
 		researchInstance.barCollapsed = !researchInstance.barCollapsed;
-		messageSendHighlight(tabId, {
+		sendTabMessage(tabId, {
 			toggleBarCollapsedOn: researchInstance.barCollapsed,
 		});
 		storageSet("session", session);
 		return;
 	}}
-	messageSendHighlight(tabId, { commands: [ commandInfo ] });
+	sendTabMessage(tabId, { commands: [ commandInfo ] });
 });
 
 // AUDITED BELOW
@@ -591,7 +585,7 @@ chrome.commands.onCommand.addListener(async commandString => {
  * Decodes a message involving backend extension management.
  * @param message A message intended for the background script.
  */
-const messageHandleBackground = async (message: BackgroundMessage<true>): Promise<BackgroundMessageResponse> => {
+const handleMessage = async (message: Message.Background<true>): Promise<Message.BackgroundResponse> => {
 	const tabId = message.tabId;
 	if (message.terms) {
 		const logMetadata = { tabId, terms: message.terms };
@@ -609,17 +603,17 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 			log("terms-assign finish", "terms assigned to existing research instance", logMetadata);
 		}
 	}
-	const highlightMessage: HighlightMessage = {
+	const tabMessage: Message.Tab = {
 		terms: message.termsSend
 			? (message.terms
 				?? (await storageGet("session", [ "researchInstances" ])).researchInstances[tabId]?.terms)
 			: undefined,
 		commands: message.highlightCommands,
 	};
-	if (Object.values(highlightMessage).some(value => value !== undefined)) {
-		const logMetadata = { tabId, message: highlightMessage };
+	if (Object.values(tabMessage).some(value => value !== undefined)) {
+		const logMetadata = { tabId, message: tabMessage };
 		log("message-send start", "", logMetadata);
-		await messageSendHighlight(tabId, highlightMessage);
+		await sendTabMessage(tabId, tabMessage);
 		log("message-send finish", "", logMetadata);
 	}
 	if (message.toggle) {
@@ -690,10 +684,10 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 	return null;
 };
 
-chrome.runtime.onMessage.addListener((message: BackgroundMessage, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: Message.Background, sender, sendResponse) => {
 	(async () => {
 		message.tabId ??= sender.tab?.id ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
-		messageHandleBackground(message as BackgroundMessage<true>).then(sendResponse);
+		handleMessage(message as Message.Background<true>).then(sendResponse);
 	})();
 	return true;
 });

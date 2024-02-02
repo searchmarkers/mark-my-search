@@ -1,4 +1,4 @@
-import { storageGet } from "/dist/modules/storage.mjs";
+import { storageGet } from "/dist/modules/privileged/storage.mjs";
 
 /**
  * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.

@@ -1,8 +1,8 @@
 import { MatchTerm } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import type * as Toolbar from "/dist/modules/content/toolbar.mjs";
-import * as ToolbarClasses from "/dist/modules/content/toolbar/classes.mjs";
+import type * as Toolbar from "/dist/modules/interface/toolbar.mjs";
+import * as ToolbarClasses from "/dist/modules/interface/toolbar/classes.mjs";
 import { Z_INDEX_MAX } from "/dist/modules/common.mjs";
 
 /**
