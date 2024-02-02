@@ -1,14 +1,18 @@
-import { type AbstractEngine, getMutationUpdates } from "/dist/modules/highlight/engine.mjs";
+import { type AbstractEngine, getContainerBlock, getMutationUpdates } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
 import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import type { AbstractFlowMonitor, TreeCache } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
+import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
+import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
+import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
+import type { UpdateTermStatus } from "/dist/content.mjs";
 import {
 	EleID, EleClass,
 	//getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
@@ -24,6 +28,10 @@ type BoxInfoRange = { range: AbstractRange }
 const getName = (termToken: string) => "markmysearch-" + termToken;
 
 class HighlightEngine implements AbstractEngine {
+	termOccurrences = new StandardTermCounter();
+	termWalker = new StandardTermWalker();
+	termMarkers = new StandardTermMarker();
+
 	flowMonitor: AbstractFlowMonitor = new FlowMonitor.DummyFlowMonitor();
 
 	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
@@ -53,9 +61,17 @@ class HighlightEngine implements AbstractEngine {
 		};
 	})();
 	
-	constructor (terms: Array<MatchTerm>, hues: TermHues, updateTermStatus: (term: MatchTerm) => void) {
-		this.requestRefreshIndicators = requestCallFn(() => this.insertScrollMarkers(terms, hues), 50, 500);
-		this.requestRefreshTermControls = requestCallFn(() => terms.forEach(term => updateTermStatus(term)), 50, 500);
+	constructor (
+		terms: Array<MatchTerm>,
+		hues: TermHues,
+		updateTermStatus: UpdateTermStatus,
+	) {
+		this.requestRefreshIndicators = requestCallFn(() => (
+			this.termMarkers.insert(terms, hues, [])
+		), 50, 500);
+		this.requestRefreshTermControls = requestCallFn(() => (
+			terms.forEach(term => updateTermStatus(term))
+		), 50, 500);
 		this.flowMonitor = new StandardFlowMonitor(
 			() => this.countMatches(),
 			() => undefined,
@@ -112,16 +128,6 @@ class HighlightEngine implements AbstractEngine {
 		this.requestRefreshTermControls?.next();
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
-		//
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
-		// Depends on scroll markers refreshed Paint implementation (TODO)
-	}
-
 	startHighlighting (
 		terms: Array<MatchTerm>,
 		termsToHighlight: Array<MatchTerm>,
@@ -139,13 +145,18 @@ class HighlightEngine implements AbstractEngine {
 	}
 
 	endHighlighting () {
-		this.highlights.clear();
+		this.mutationUpdates.disconnect();
+		this.undoHighlights();
 		this.specialHighlighter.endHighlighting();
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	undoHighlights (terms?: Array<MatchTerm> | undefined, root: HTMLElement | DocumentFragment = document.body) {
-		terms?.forEach(term => this.highlights.delete(term.token));
+	undoHighlights (terms?: Array<MatchTerm>) {
+		if (terms) {
+			terms.forEach(term => this.highlights.delete(term.token));
+		} else {
+			this.highlights.clear();
+		}
 	}
 
 	cacheExtend (element: Element, cacheApply = (element: Element) => {
@@ -161,14 +172,12 @@ class HighlightEngine implements AbstractEngine {
 		}
 	} }
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	focusNextTerm (reverse: boolean, stepNotJump: boolean, term?: MatchTerm, nodeStart?: Node) {
-		//
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	getTermOccurrenceCount (term: MatchTerm, checkExistsOnly = false) {
-		return 0;
+	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
+		const focus = this.termWalker.step(reverse, stepNotJump, term);
+		if (focus) {
+			this.termMarkers.raise(term, getContainerBlock(focus));
+		}
+		return focus;
 	}
 }
 

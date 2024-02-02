@@ -196,6 +196,17 @@ const elementsPurgeClass = (
 	)
 ;
 
+const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
+	element.focus({ preventScroll: true });
+	if (document.activeElement !== element) {
+		if (filter(element)) {
+			focusClosest(element.parentElement as HTMLElement, filter);
+		} else if (document.activeElement) {
+			(document.activeElement as HTMLElement).blur();
+		}
+	}
+};
+
 type TermHues = Array<number>
 
 const getTermClass = (termToken: string): string => EleClass.TERM + "-" + termToken;
@@ -252,7 +263,7 @@ export {
 	Z_INDEX_MIN, Z_INDEX_MAX,
 	EleID, EleClass, AtRuleID,
 	getElementTagsSet,
-	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
+	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass, focusClosest,
 	type TermHues, getTermClass, getTermToken,
 	getIdSequential,
 	itemsMatch, objectSetValue, objectGetValue,

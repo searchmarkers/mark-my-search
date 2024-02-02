@@ -13,6 +13,8 @@ import * as Toolbar from "/dist/modules/interface/toolbar.mjs";
 import * as ToolbarClasses from "/dist/modules/interface/toolbar/classes.mjs";
 import { assert, compatibility, itemsMatch } from "/dist/modules/common.mjs";
 
+type UpdateTermStatus = (term: MatchTerm) => void
+
 interface ControlsInfo {
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
@@ -189,7 +191,6 @@ const refreshTermControlsAndStartHighlighting = (
 			termsToHighlight,
 			termsToPurge,
 		);
-		//terms.forEach(term => Toolbar.updateTermOccurringStatus(term, highlighter));
 	});
 };
 
@@ -261,12 +262,12 @@ const produceEffectOnCommandFn = function* (
 			if (focusReturnToDocument()) {
 				break;
 			}
-			highlighter.current.focusNextTerm(commandInfo.reversed ?? false, true);
+			highlighter.current.stepToNextOccurrence(commandInfo.reversed ?? false, true);
 			break;
 		} case "advanceGlobal": {
 			focusReturnToDocument();
 			const term = selectModeFocus ? terms[focusedIdx] : undefined;
-			highlighter.current.focusNextTerm(commandInfo.reversed ?? false, false, term);
+			highlighter.current.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
 			Toolbar.focusTermInput(commandInfo.termIdx);
@@ -277,7 +278,7 @@ const produceEffectOnCommandFn = function* (
 			focusedIdx = getFocusedIdx(commandInfo.termIdx ?? -1);
 			barTerms.classList.add(ToolbarClasses.getControlPadClass(focusedIdx));
 			if (!selectModeFocus) {
-				highlighter.current.focusNextTerm(!!commandInfo.reversed, false, terms[focusedIdx]);
+				highlighter.current.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
 			break;
 		}}
@@ -484,4 +485,4 @@ const onWindowMouseUp = () => {
 	TermsSetter.registerMessageHandler(messageHandleHighlight);
 })();
 
-export type { ControlsInfo };
+export type { UpdateTermStatus, ControlsInfo };

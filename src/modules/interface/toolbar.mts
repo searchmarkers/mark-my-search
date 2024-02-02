@@ -8,9 +8,9 @@ type EleClassItem = typeof EleClass[keyof typeof EleClass]
 import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
-import { assert, getIdSequential } from "/dist/modules/common.mjs";
 import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
+import { assert, getIdSequential } from "/dist/modules/common.mjs";
 
 export type BrowserCommands = Array<chrome.commands.Command>
 
@@ -334,7 +334,7 @@ const getControlAppendTerm = (): Element | null =>
 export const updateTermStatus = (term: MatchTerm, highlighter: Highlighter) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
-	controlPad.classList.toggle(EleClass.DISABLED, !highlighter.current.getTermOccurrenceCount(term, true));
+	controlPad.classList.toggle(EleClass.DISABLED, !highlighter.current.termOccurrences.anyOf(term));
 };
 
 /**
@@ -346,7 +346,7 @@ const updateTermTooltip = (term: MatchTerm, highlighter: Highlighter) => {
 		.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
 	const controlContent = controlPad
 		.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement;
-	const occurrenceCount = highlighter.current.getTermOccurrenceCount(term);
+	const occurrenceCount = highlighter.current.termOccurrences.betterNumberOf(term);
 	controlContent.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
 		!occurrenceCount || !term.command ? ""
 			: occurrenceCount === 1 ? `\nJump to: ${term.command} or ${term.commandReverse}`
@@ -396,8 +396,9 @@ export const refreshTermControl = (
 	control.classList.add(EleClass.CONTROL, getTermClass(term.token));
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement;
-	controlContent.onclick = event => // Overrides previous event handler in case of new term.
-		highlighter.current.focusNextTerm(event.shiftKey, false, term);
+	controlContent.onclick = event => { // Overrides previous event handler in case of new term.
+		highlighter.current.stepToNextOccurrence(event.shiftKey, false, term);
+	};
 	controlContent.textContent = term.phrase;
 };
 
@@ -661,7 +662,7 @@ export const insertTermControl = (
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
 	controlContent.onclick = () => { // Hack: event handler property used so that the listener is not duplicated.
-		highlighter.current.focusNextTerm(false, false, term);
+		highlighter.current.stepToNextOccurrence(false, false, term);
 	};
 	controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
 		updateTermTooltip(term, highlighter);

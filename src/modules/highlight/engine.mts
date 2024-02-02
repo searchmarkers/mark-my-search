@@ -1,6 +1,8 @@
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { type AbstractTermCounter, DummyTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
+import { type AbstractTermWalker, DummyTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
+import { type AbstractTermMarker, DummyTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import type { TermHues } from "/dist/modules/common.mjs";
 
 type Highlighter = { current: AbstractEngine }
 
@@ -10,6 +12,10 @@ type HighlighterProcess =
 ;
 
 interface AbstractEngine {
+	termOccurrences: AbstractTermCounter
+	termWalker: AbstractTermWalker
+	termMarkers: AbstractTermMarker
+
 	// TODO document each
 	getMiscCSS: () => string
 	getTermHighlightsCSS: () => string
@@ -20,22 +26,6 @@ interface AbstractEngine {
 
 	// TODO document
 	countMatches: () => void
-
-	/**
-	 * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
-	 * @param terms Terms highlighted in the page to mark the scroll position of.
-	 * @param hues Color hues for term styles to cycle through.
-	 */
-	insertScrollMarkers: (
-		terms: Array<MatchTerm>,
-		hues: TermHues,
-	) => void
-
-	// TODO document
-	raiseScrollMarker: (
-		term: MatchTerm | undefined,
-		container: HTMLElement,
-	) => void
 
 	/**
 	 * Removes previous highlighting, then highlights the document using the terms supplied.
@@ -52,49 +42,57 @@ interface AbstractEngine {
 	// TODO document
 	undoHighlights: (
 		terms?: Array<MatchTerm> | undefined,
-		root?: HTMLElement | DocumentFragment,
 	) => void
 
 	// TODO document
 	endHighlighting: () => void
 
-	// TODO document
-	focusNextTerm: (
+	/**
+	 * Moves to the next (downwards) occurrence of a term in the document, beginning from the current selection position.
+	 * If an occurrence is successfully focused, the corresponding term marker in the scrollbar will be raised.
+	 * *Refer to the TermWalker and TermMarker interfaces for more details.*
+	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
+	 * @param stepNotJump 
+	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
+	 * @returns The element landed on by the function, if any.
+	 */
+	stepToNextOccurrence: (
 		reverse: boolean,
 		stepNotJump: boolean,
 		term?: MatchTerm,
-	) => void
-
-	/**
-	 * Gets the number of matches for a term in the document.
-	 * @param term A term to get the occurrence count for.
-	 * @returns The occurrence count for the term.
-	 */
-	getTermOccurrenceCount: (
-		term: MatchTerm,
-		checkExistsOnly?: boolean,
-	) => number
+	) => HTMLElement | null
 }
 
 class DummyEngine implements AbstractEngine {
+	termOccurrences = new DummyTermCounter();
+	termWalker = new DummyTermWalker();
+	termMarkers = new DummyTermMarker();
 	getMiscCSS = () => "";
 	getTermHighlightsCSS = () => "";
 	getTermHighlightCSS = () => "";
 	getTermBackgroundStyle = () => "";
 	countMatches = () => undefined;
-	insertScrollMarkers = () => undefined;
-	raiseScrollMarker = () => undefined;
 	startHighlighting = () => undefined;
 	undoHighlights = () => undefined;
 	endHighlighting = () => undefined;
-	focusNextTerm = () => undefined;
-	getTermOccurrenceCount = () => 0;
+	stepToNextOccurrence = () => null;
 }
 
 /**
  * A selector string for the container block of an element.
  */
 const containerBlockSelector = `:not(${Array.from(highlightTags.flow).join(", ")})`;
+
+/**
+ * Gets the containing block of an element.
+ * This is its **closest ancestor (inclusive)** which has no tag name counted as `flow` in a highlight tags object.
+ * @param element The element of which to find the first container block.
+ * @returns The closest container block ancestor.
+ */
+const getContainerBlock = (element: HTMLElement): HTMLElement =>
+	// Always returns an element since "body" is not a flow tag.
+	element.closest(containerBlockSelector) as HTMLElement
+;
 
 /**
  * Gets an object for controlling whether document mutations are listened to (so responded to by performing partial highlighting).
@@ -123,5 +121,5 @@ export {
 	type Highlighter, type HighlighterProcess,
 	type AbstractEngine, DummyEngine,
 	getMutationUpdates, getStyleUpdates,
-	containerBlockSelector,
+	containerBlockSelector, getContainerBlock,
 };

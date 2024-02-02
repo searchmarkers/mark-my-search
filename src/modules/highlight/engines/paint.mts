@@ -1,8 +1,9 @@
-import { type AbstractEngine, getMutationUpdates, getStyleUpdates } from "/dist/modules/highlight/engine.mjs";
+import {
+	type AbstractEngine, getContainerBlock, getMutationUpdates, getStyleUpdates,
+} from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
 import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import {
 	type AbstractMethod, DummyMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
@@ -11,13 +12,14 @@ import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-ca
 import type * as FlowMonitorTypes from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
+import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
+import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
+import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
+import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
-import {
-	EleID, EleClass,
-	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
-	type TermHues, getTermClass,
-} from "/dist/modules/common.mjs";
+import type { UpdateTermStatus } from "/dist/content.mjs";
+import { EleID, type TermHues } from "/dist/modules/common.mjs";
 
 type TreeCache = {
 	id: string
@@ -45,6 +47,10 @@ type StyleRuleInfo = {
 }
 
 class PaintEngine implements AbstractEngine {
+	termOccurrences = new StandardTermCounter();
+	termWalker = new StandardTermWalker();
+	termMarkers = new StandardTermMarker();
+
 	method: AbstractMethod = new DummyMethod();
 
 	flowMonitor: AbstractFlowMonitor = new FlowMonitor.DummyFlowMonitor();
@@ -67,10 +73,17 @@ class PaintEngine implements AbstractEngine {
 	 * @param methodPreference 
 	 */
 	constructor (
-		terms: Array<MatchTerm>, hues: TermHues, updateTermStatus: (term: MatchTerm) => void, method: AbstractMethod,
+		terms: Array<MatchTerm>,
+		hues: TermHues,
+		updateTermStatus: UpdateTermStatus,
+		method: AbstractMethod,
 	) {
-		this.requestRefreshIndicators = requestCallFn(() => this.insertScrollMarkers(terms, hues), 200, 2000);
-		this.requestRefreshTermControls = requestCallFn(() => terms.forEach(term => updateTermStatus(term)), 50, 500);
+		this.requestRefreshIndicators = requestCallFn(() => (
+			this.termMarkers.insert(terms, hues, Array.from(this.method.getHighlightedElements() as NodeListOf<HTMLElement>))
+		), 200, 2000);
+		this.requestRefreshTermControls = requestCallFn(() => (
+			terms.forEach(term => updateTermStatus(term))
+		), 50, 500);
 		this.method = method;
 		this.flowMonitor = new StandardFlowMonitor(
 			() => this.countMatches(),
@@ -124,85 +137,6 @@ class PaintEngine implements AbstractEngine {
 		this.requestRefreshIndicators?.next();
 		this.requestRefreshTermControls?.next();
 	}
-	
-	insertScrollMarkers (terms: Array<MatchTerm>, hues: TermHues) {
-		if (terms.length === 0) {
-			return; // Efficient escape in case of no possible markers to be inserted.
-		}
-		// Markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms.
-		const termsAllowed = new Set(terms.slice(0, hues.length));
-		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
-		let markersHtml = "";
-		this.method.getHighlightedElements().forEach((element: HTMLElement) => {
-			const terms = (element[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo
-				.map(boxInfo => boxInfo.term)
-				.filter(term => termsAllowed.has(term))
-			) ?? [];
-			const yRelative = getElementYRelative(element);
-			// TODO use single marker with custom style
-			markersHtml += terms.map((term, i) => `<div class="${
-				getTermClass(term.token)
-			}" top="${yRelative}" style="top: ${yRelative * 100}%; padding-left: ${i * 5}px; z-index: ${i * -1}"></div>`);
-		});
-		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
-		gutter.innerHTML = markersHtml;
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
-		// Depends on scroll markers refreshed Paint implementation (TODO)
-	}
-
-	/**
-	 * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
-	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
-	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
-	 */
-	focusNextTerm (reverse: boolean, stepNotJump: boolean, term?: MatchTerm, nodeStart?: Node) {
-		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
-		const selection = document.getSelection() as Selection;
-		const bar = document.getElementById(EleID.BAR) as HTMLElement;
-		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
-		const nodeSelected = selection ? selection.anchorNode : null;
-		const nodeFocused = document.activeElement
-			? (document.activeElement === document.body || bar.contains(document.activeElement))
-				? null
-				: document.activeElement as HTMLElement
-			: null;
-		const nodeCurrent = nodeStart
-			?? (nodeFocused
-				? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
-				: nodeSelected ?? nodeBegin
-			);
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.some(flow =>
-				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.token === term.token) : flow.boxesInfo.length
-			) && isVisible(element)
-				? NodeFilter.FILTER_ACCEPT
-				: NodeFilter.FILTER_SKIP
-		);
-		walker.currentNode = nodeCurrent;
-		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		if (nodeFocused) {
-			nodeFocused.blur();
-		}
-		const element = walker[nextNodeMethod]() as HTMLElement | null;
-		if (!element) {
-			if (!nodeStart) {
-				this.focusNextTerm(reverse, stepNotJump, term, nodeBegin);
-			}
-			return;
-		}
-		if (!stepNotJump) {
-			element.classList.add(EleClass.FOCUS_CONTAINER);
-		}
-		focusClosest(element, element =>
-			element[FlowMonitor.CACHE] && !!(element[FlowMonitor.CACHE] as TreeCache).flows
-		);
-		selection.setBaseAndExtent(element, 0, element, 0);
-		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });
-		this.raiseScrollMarker(term, element);
-	}
 
 	startHighlighting (
 		terms: Array<MatchTerm>,
@@ -236,8 +170,9 @@ class PaintEngine implements AbstractEngine {
 		this.specialHighlighter.endHighlighting();
 	}
 
-	undoHighlights (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
-		this.boxesInfoRemoveForTerms(terms, root);
+	undoHighlights (terms?: Array<MatchTerm>) {
+		this.boxesInfoRemoveForTerms(terms, document.body);
+		this.termWalker.cleanup();
 	}
 
 	cacheExtend (element: Element, cacheApply = (element: Element) => {
@@ -324,24 +259,12 @@ class PaintEngine implements AbstractEngine {
 		});
 	}
 
-	getTermOccurrenceCount (term: MatchTerm, checkExistsOnly = false) {
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
-			(FlowMonitor.CACHE in element) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT);
-		let count = 0;
-		let element: Element;
-		// eslint-disable-next-line no-cond-assign
-		while (element = walker.nextNode() as Element) {
-			if (!element) {
-				break;
-			}
-			(element[FlowMonitor.CACHE] as TreeCache).flows.forEach(flow => {
-				count += flow.boxesInfo.filter(boxInfo => boxInfo.term === term).length;
-			});
-			if (checkExistsOnly && count > 0) {
-				return 1;
-			}
+	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
+		const focus = this.termWalker.step(reverse, stepNotJump, term);
+		if (focus) {
+			this.termMarkers.raise(term, getContainerBlock(focus));
 		}
-		return count;
+		return focus;
 	}
 
 	getShiftAndVisibilityObservers (terms: Array<MatchTerm>) {
@@ -381,17 +304,6 @@ class PaintEngine implements AbstractEngine {
 		return { shiftObserver, visibilityObserver };
 	}
 }
-
-const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
-	element.focus({ preventScroll: true });
-	if (document.activeElement !== element) {
-		if (filter(element)) {
-			focusClosest(element.parentElement as HTMLElement, filter);
-		} else if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
-		}
-	}
-};
 
 export {
 	type TreeCache, type Flow, type BoxInfo, type BoxInfoBoxes, type Box,
