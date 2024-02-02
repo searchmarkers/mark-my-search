@@ -100,14 +100,6 @@ class HighlightEngine implements AbstractEngine {
 
 	getTermBackgroundStyle = TermCSS.getFlatStyle;
 
-	getRequestWaitDuration () {
-		return 50;
-	}
-
-	getRequestReschedulingDelayMax () {
-		return 500;
-	}
-
 	requestRefreshIndicators?: Generator;
 	requestRefreshTermControls?: Generator;
 
