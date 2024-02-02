@@ -1,5 +1,5 @@
-import type { TreeCache, AbstractFlowMonitor } from "/dist/modules/highlight/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import type { TreeCache, AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
 import { type BaseFlow, type BaseBoxInfo, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";

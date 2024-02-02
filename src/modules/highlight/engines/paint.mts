@@ -7,10 +7,10 @@ import {
 	type AbstractMethod, DummyMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
 } from "/dist/modules/highlight/engines/paint/method.mjs";
-import type { AbstractFlowMonitor } from "/dist/modules/highlight/flow-monitor.mjs";
-import type * as FlowMonitorTypes from "/dist/modules/highlight/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
-import { StandardFlowMonitor } from "/dist/modules/highlight/flow-monitors/standard.mjs";
+import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type * as FlowMonitorTypes from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import {
@@ -152,17 +152,6 @@ class PaintEngine implements AbstractEngine {
 	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
 		// Depends on scroll markers refreshed Paint implementation (TODO)
 	}
-	
-	focusClosest (element: HTMLElement, filter: (element: HTMLElement) => boolean) {
-		element.focus({ preventScroll: true });
-		if (document.activeElement !== element) {
-			if (filter(element)) {
-				this.focusClosest(element.parentElement as HTMLElement, filter);
-			} else if (document.activeElement) {
-				(document.activeElement as HTMLElement).blur();
-			}
-		}
-	}
 
 	/**
 	 * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
@@ -207,7 +196,7 @@ class PaintEngine implements AbstractEngine {
 		if (!stepNotJump) {
 			element.classList.add(EleClass.FOCUS_CONTAINER);
 		}
-		this.focusClosest(element, element =>
+		focusClosest(element, element =>
 			element[FlowMonitor.CACHE] && !!(element[FlowMonitor.CACHE] as TreeCache).flows
 		);
 		selection.setBaseAndExtent(element, 0, element, 0);
@@ -392,6 +381,17 @@ class PaintEngine implements AbstractEngine {
 		return { shiftObserver, visibilityObserver };
 	}
 }
+
+const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
+	element.focus({ preventScroll: true });
+	if (document.activeElement !== element) {
+		if (filter(element)) {
+			focusClosest(element.parentElement as HTMLElement, filter);
+		} else if (document.activeElement) {
+			(document.activeElement as HTMLElement).blur();
+		}
+	}
+};
 
 export {
 	type TreeCache, type Flow, type BoxInfo, type BoxInfoBoxes, type Box,

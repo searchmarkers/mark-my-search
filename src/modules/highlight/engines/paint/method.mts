@@ -1,6 +1,8 @@
 import type { TreeCache, Flow, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import { type AbstractHighlightability, StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
+import {
+	type AbstractHighlightability, StandardHighlightability
+} from "/dist/modules/highlight/engines/paint/highlightability.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 

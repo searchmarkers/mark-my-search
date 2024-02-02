@@ -1,6 +1,6 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import { StandardHighlightability } from "/dist/modules/highlight/highlightability.mjs";
+import { StandardHighlightability } from "/dist/modules/highlight/engines/paint/highlightability.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 

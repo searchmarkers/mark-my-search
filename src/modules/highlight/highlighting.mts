@@ -1,7 +1,7 @@
 import { getElementTagsSet } from "/dist/modules/common.mjs";
+import type { HighlightTagName } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 
-const HIGHLIGHT_TAG = "mms-h";
-const HIGHLIGHT_TAG_UPPER = "MMS-H";
+const HIGHLIGHT_TAG: HighlightTagName = "mms-h";
 
 type HighlightTags = {
 	reject: ReadonlySet<string>,
@@ -16,6 +16,6 @@ const highlightTags: HighlightTags = {
 };
 
 export {
-	type HighlightTags, highlightTags,
-	HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER,
+	type HighlightTags,
+	highlightTags,
 };

@@ -2,14 +2,18 @@ import { type AbstractEngine, getMutationUpdates } from "/dist/modules/highlight
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
 import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import type { AbstractFlowMonitor, TreeCache } from "/dist/modules/highlight/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/flow-monitor.mjs";
-import { StandardFlowMonitor } from "/dist/modules/highlight/flow-monitors/standard.mjs";
+import type { AbstractFlowMonitor, TreeCache } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
-import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
+import {
+	EleID, EleClass,
+	//getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
+	type TermHues, //getTermClass,
+} from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<true, BoxInfoRange>
 
@@ -115,7 +119,7 @@ class HighlightEngine implements AbstractEngine {
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	raiseScrollMarker (term: MatchTerm | undefined, container: HTMLElement) {
-		//
+		// Depends on scroll markers refreshed Paint implementation (TODO)
 	}
 
 	startHighlighting (
@@ -158,7 +162,7 @@ class HighlightEngine implements AbstractEngine {
 	} }
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-	focusNextTerm (reverse: boolean, stepNotJump: boolean, term?: MatchTerm) {
+	focusNextTerm (reverse: boolean, stepNotJump: boolean, term?: MatchTerm, nodeStart?: Node) {
 		//
 	}
 
