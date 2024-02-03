@@ -13,11 +13,7 @@ import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
-import {
-	EleID, EleClass,
-	//getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass,
-	type TermHues, //getTermClass,
-} from "/dist/modules/common.mjs";
+import { EleID, EleClass, type TermHues } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<true, BoxInfoRange>
 
@@ -68,25 +64,27 @@ class HighlightEngine implements AbstractEngine {
 	) {
 		this.requestRefreshIndicators = requestCallFn(() => (
 			this.termMarkers.insert(terms, hues, [])
-		), 50, 500);
+		), 200, 2000);
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
 		this.flowMonitor = new StandardFlowMonitor(
-			() => this.countMatches(),
-			() => undefined,
 			() => ({ flows: [] }),
+			() => this.countMatches(),
+			undefined,
 			boxesInfo => {
 				for (const boxInfo of boxesInfo) {
-					const highlight = this.highlights.get(boxInfo.term.token);
-					if (!highlight)
-						continue;
-					highlight.add(new StaticRange({
+					this.highlights.get(boxInfo.term.token)?.add(new StaticRange({
 						startContainer: boxInfo.node,
 						startOffset: boxInfo.start,
 						endContainer: boxInfo.node,
 						endOffset: boxInfo.end,
 					}));
+				}
+			},
+			boxesInfo => {
+				for (const boxInfo of boxesInfo) {
+					this.highlights.delete(boxInfo.term.token);
 				}
 			},
 		);

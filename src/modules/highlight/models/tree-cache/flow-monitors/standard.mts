@@ -11,25 +11,25 @@ type BoxInfo = BaseBoxInfo<true>
 class StandardFlowMonitor implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
 
+	createElementCache: (element: Element) => TreeCache = () => ({ flows: [] });
+
 	onHighlightingUpdated: () => void = () => undefined;
 
-	onNewHighlightedAncestor: (ancestor: Element) => void = () => undefined;
-
-	createElementCache: (element: Element) => TreeCache = () => ({ flows: [] });
+	onNewHighlightedAncestor?: (ancestor: Element) => void = () => undefined;
 
 	onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void;
 	onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void;
 
 	constructor (
-		onHighlightingUpdated: () => void,
-		onNewHighlightedAncestor: (ancestor: Element) => void,
 		createElementCache: (element: Element) => TreeCache,
+		onHighlightingUpdated: () => void,
+		onNewHighlightedAncestor?: (ancestor: Element) => void,
 		onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void,
 		onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void,
 	) {
+		this.createElementCache = createElementCache;
 		this.onHighlightingUpdated = onHighlightingUpdated;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
-		this.createElementCache = createElementCache;
 		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
 		this.onBoxesInfoCleared = onBoxesInfoCleared;
 	}
@@ -67,9 +67,9 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 						break;
 					}}
 				}
-				(this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
+				this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
 					(node[FlowMonitor.CACHE] as TreeCache<Flow> | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
-				)));
+				));
 			}
 			onElementsAdded(elementsAdded);
 			for (const element of elementsAffected) {
@@ -149,7 +149,7 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		}
 		const highlighting = element[FlowMonitor.CACHE] as TreeCache<Flow>;
 		if (highlighting) {
-			(this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo)));
+			this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo));
 			highlighting.flows = [];
 		}
 		for (const child of element.children) {
@@ -183,9 +183,9 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
 			//console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
 		}
-		(this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo));
+		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo);
 		if (flow.boxesInfo.length > 0) {
-			this.onNewHighlightedAncestor(ancestor);
+			this.onNewHighlightedAncestor && this.onNewHighlightedAncestor(ancestor);
 		}
 	}
 }

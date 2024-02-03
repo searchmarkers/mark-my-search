@@ -86,6 +86,12 @@ class PaintEngine implements AbstractEngine {
 		), 50, 500);
 		this.method = method;
 		this.flowMonitor = new StandardFlowMonitor(
+			(element): TreeCache => ({
+				id: highlightingId.next().value,
+				styleRuleIdx: -1,
+				isHighlightable: this.method.highlightables.checkElement(element),
+				flows: [],
+			}),
 			() => this.countMatches(),
 			ancestor => {
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
@@ -98,12 +104,6 @@ class PaintEngine implements AbstractEngine {
 				}
 				this.method.highlightables.markElementsUpTo(ancestor);
 			},
-			(element): TreeCache => ({
-				id: highlightingId.next().value,
-				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightables.checkElement(element),
-				flows: [],
-			}),
 		);
 		this.flowMonitor.initMutationUpdatesObserver(terms,
 			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element)),
