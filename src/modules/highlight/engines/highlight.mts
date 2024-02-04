@@ -23,6 +23,83 @@ type BoxInfoRange = { range: AbstractRange }
 
 const getName = (termToken: string) => "markmysearch-" + termToken;
 
+class ExtendedHighlight {
+	highlight: Highlight;
+	boxInfoRanges: Map<BoxInfo, AbstractRange> = new Map();
+
+	constructor (...initialRanges: Array<AbstractRange>) {
+		this.highlight = new Highlight(...initialRanges);
+	}
+
+	add (value: AbstractRange, boxInfo: BoxInfo) {
+		this.boxInfoRanges.set(boxInfo, value);
+		return this.highlight.add(value);
+	}
+
+	has (value: AbstractRange) {
+		return this.highlight.has(value);
+	}
+
+	delete (value: AbstractRange) {
+		const result = Array.from(this.boxInfoRanges.entries()).find(({ 1: range }) => range === value);
+		if (!result) {
+			return this.highlight.delete(value);
+		}
+		return this.boxInfoRanges.delete(result[0]);
+	}
+
+	getByBoxInfo (boxInfo: BoxInfo) {
+		return this.boxInfoRanges.get(boxInfo);
+	}
+
+	deleteByBoxInfo (boxInfo: BoxInfo) {
+		const range = this.boxInfoRanges.get(boxInfo);
+		if (!range) {
+			return false;
+		}
+		this.boxInfoRanges.delete(boxInfo);
+		return this.highlight.delete(range);
+	}
+
+	hasByBoxInfo (boxInfo: BoxInfo) {
+		return this.boxInfoRanges.has(boxInfo);
+	}
+}
+
+class ExtendedHighlightRegistry {
+	registry = CSS.highlights as HighlightRegistry;
+	map: Map<string, ExtendedHighlight> = new Map();
+
+	get size () {
+		return this.map.size;
+	}
+
+	set (termToken: string, value: ExtendedHighlight) {
+		this.map.set(termToken, value);
+		return this.registry.set(getName(termToken), value.highlight);
+	}
+
+	get (termToken: string) {
+		return this.map.get(termToken);
+	}
+
+	has (termToken: string) {
+		return this.map.has(termToken);
+	}
+
+	delete (termToken: string) {
+		this.registry.delete(getName(termToken));
+		return this.map.delete(termToken);
+	}
+
+	clear () {
+		for (const termToken of this.map.keys()) {
+			this.registry.delete(getName(termToken));
+		}
+		return this.map.clear();
+	}
+}
+
 class HighlightEngine implements AbstractEngine {
 	termOccurrences = new StandardTermCounter();
 	termWalker = new StandardTermWalker();
@@ -34,28 +111,7 @@ class HighlightEngine implements AbstractEngine {
 
 	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
 
-	highlights = (() => {
-		const highlights = CSS.highlights as HighlightRegistry;
-		const map: HighlightRegistry = new Map();
-		return {
-			set: (termToken: string, value: Highlight) => {
-				highlights.set(getName(termToken), value);
-				return map.set(termToken, value);
-			},
-			get: (termToken: string) => map.get(termToken),
-			has: (termToken: string) => map.has(termToken),
-			delete: (termToken: string) => {
-				highlights.delete(getName(termToken));
-				return map.delete(termToken);
-			},
-			clear: () => {
-				for (const termToken of map.keys()) {
-					highlights.delete(getName(termToken));
-				}
-				return map.clear();
-			}
-		};
-	})();
+	highlights = new ExtendedHighlightRegistry();
 	
 	constructor (
 		terms: Array<MatchTerm>,
@@ -79,12 +135,12 @@ class HighlightEngine implements AbstractEngine {
 						startOffset: boxInfo.start,
 						endContainer: boxInfo.node,
 						endOffset: boxInfo.end,
-					}));
+					}), boxInfo);
 				}
 			},
 			boxesInfo => {
 				for (const boxInfo of boxesInfo) {
-					this.highlights.delete(boxInfo.term.token);
+					this.highlights.get(boxInfo.term.token)?.deleteByBoxInfo(boxInfo);
 				}
 			},
 		);
@@ -109,7 +165,7 @@ class HighlightEngine implements AbstractEngine {
 		const cycle = Math.floor(termIndex / hues.length);
 		return `
 #${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(term.token)}) {
-	background-color: hsl(${hue} 70% 70%);
+	background-color: hsl(${hue} 70% 70% / 0.6);
 	color: black;
 	/* text-decoration to indicate cycle */
 }`
@@ -135,7 +191,7 @@ class HighlightEngine implements AbstractEngine {
 		termsToPurge.forEach(term => this.highlights.delete(term.token));
 		this.mutationUpdates.disconnect();
 		// MAIN
-		terms.forEach(term => this.highlights.set(term.token, new Highlight()));
+		terms.forEach(term => this.highlights.set(term.token, new ExtendedHighlight()));
 		this.cacheExtend(document.body); // Ensure the *whole* document is set up for highlight-caching.
 		this.flowMonitor.boxesInfoCalculate(terms, document.body);
 		this.mutationUpdates.observe();
