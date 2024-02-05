@@ -227,7 +227,7 @@ class StandardTermWalker implements AbstractTermWalker {
  * Sets their `tabIndex` to -1.
  * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
  */
- const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = document.body) => {
+const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = document.body) => {
 	if (!root.parentNode) {
 		return;
 	}

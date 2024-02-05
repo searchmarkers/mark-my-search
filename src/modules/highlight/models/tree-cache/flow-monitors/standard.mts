@@ -1,42 +1,38 @@
 import type { TreeCache, AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
-import { type BaseFlow, type BaseBoxInfo, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
+import { type BaseFlow, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
-type Flow = BaseFlow<true>
-
-type BoxInfo = BaseBoxInfo<true>
-
-class StandardFlowMonitor implements AbstractFlowMonitor {
+class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
 
-	createElementCache: (element: Element) => TreeCache = () => ({ flows: [] });
+	createElementCache: (element: Element) => TreeCache<Flow> = () => ({ flows: [] });
 
 	onHighlightingUpdated: () => void = () => undefined;
 
 	onNewHighlightedAncestor?: (ancestor: Element) => void = () => undefined;
 
-	onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void;
-	onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void;
+	onBoxesInfoPopulated?: (element: Element) => void;
+	onBoxesInfoRemoved?: (element: Element) => void;
 
 	constructor (
-		createElementCache: (element: Element) => TreeCache,
+		createElementCache: (element: Element) => TreeCache<Flow>,
 		onHighlightingUpdated: () => void,
 		onNewHighlightedAncestor?: (ancestor: Element) => void,
-		onBoxesInfoPopulated?: (boxesInfo: Array<BoxInfo>) => void,
-		onBoxesInfoCleared?: (boxesInfo: Array<BoxInfo>) => void,
+		onBoxesInfoPopulated?: (element: Element & { [FlowMonitor.CACHE]: TreeCache<Flow> }) => void,
+		onBoxesInfoRemoved?: (element: Element & { [FlowMonitor.CACHE]: TreeCache<Flow> }) => void,
 	) {
 		this.createElementCache = createElementCache;
 		this.onHighlightingUpdated = onHighlightingUpdated;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
 		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
-		this.onBoxesInfoCleared = onBoxesInfoCleared;
+		this.onBoxesInfoRemoved = onBoxesInfoRemoved;
 	}
 
 	initMutationUpdatesObserver (
 		terms: Array<MatchTerm>,
-		onElementsAdded: (elements: Set<HTMLElement>) => void,
+		onElementsAdded?: (elements: Set<HTMLElement>) => void,
 	) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		this.mutationObserver = new MutationObserver(mutations => {
@@ -67,11 +63,23 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 						break;
 					}}
 				}
-				this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
-					(node[FlowMonitor.CACHE] as TreeCache<Flow> | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
-				));
+				//this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
+				//	(node[FlowMonitor.CACHE] as TreeCache<Flow> | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
+				//));
+				//if (this.onBoxesInfoCleared) {
+				//	for (const node of mutation.removedNodes) {
+				//		if (node[FlowMonitor.CACHE]) {
+				//			this.onBoxesInfoCleared(node as Element);
+				//		}
+				//	}
+				//}
+				for (const node of mutation.removedNodes) {
+					if (node.nodeType === Node.ELEMENT_NODE) {
+						this.flowsRemove(node as Element);
+					}
+				}
 			}
-			onElementsAdded(elementsAdded);
+			onElementsAdded && onElementsAdded(elementsAdded);
 			for (const element of elementsAffected) {
 				this.boxesInfoCalculateForFlowOwnersFromContent(terms, element);
 			}
@@ -140,20 +148,27 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 	}
 
 	/**
-	 * Removes the flows cache from all descendant elements.
+	 * Removes the flows cache from all descendant elements (inclusive).
 	 * @param element The ancestor below which to forget flows.
 	 */
-	flowsRemove (element: Element) {
-		if (highlightTags.reject.has(element.tagName)) {
+	flowsRemove (ancestor: Element) {
+		if (highlightTags.reject.has(ancestor.tagName)) {
 			return;
 		}
-		const highlighting = element[FlowMonitor.CACHE] as TreeCache<Flow>;
-		if (highlighting) {
-			this.onBoxesInfoCleared && this.onBoxesInfoCleared(highlighting.flows.flatMap(flow => flow.boxesInfo));
-			highlighting.flows = [];
+		if (ancestor[FlowMonitor.CACHE]) {
+			this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(ancestor);
+			delete ancestor[FlowMonitor.CACHE];
 		}
-		for (const child of element.children) {
-			this.flowsRemove(child);
+		const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, (element: Element) =>
+			highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+		);
+		let element: Element;
+		// eslint-disable-next-line no-cond-assign
+		while (element = walker.nextNode() as Element) {
+			if (element[FlowMonitor.CACHE]) {
+				this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(element);
+				delete element[FlowMonitor.CACHE];
+			}
 		}
 	}
 
@@ -167,23 +182,21 @@ class StandardFlowMonitor implements AbstractFlowMonitor {
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
 		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow.at(-1) as Text);
-		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as TreeCache | undefined;
-		const flow: Flow = {
+		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as TreeCache<Flow> | undefined;
+		// TODO check that the types used make sense (Flow, BaseFlow, BoxInfo, BaseBoxInfo)
+		const flow: BaseFlow<true> = {
 			text,
 			// Match the terms inside the flow to produce highlighting box info.
 			boxesInfo: matchInTextFlow(terms, text, textFlow),
 		};
 		if (ancestorHighlighting) {
-			ancestorHighlighting.flows.push(flow);
+			ancestorHighlighting.flows.push(flow as Flow);
 		} else {
-			// This condition *should* be impossible, but since in rare cases (typically when running before "document_idle")
-			// mutation observers may not always fire, it must be accounted for.
 			ancestorHighlighting = this.createElementCache(ancestor);
-			ancestorHighlighting.flows.push(flow);
+			ancestorHighlighting.flows.push(flow as Flow);
 			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
-			//console.warn("Element missing cache unexpectedly, applied new cache.", ancestor, ancestorHighlighting);
 		}
-		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(flow.boxesInfo);
+		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(ancestor);
 		if (flow.boxesInfo.length > 0) {
 			this.onNewHighlightedAncestor && this.onNewHighlightedAncestor(ancestor);
 		}

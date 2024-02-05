@@ -1,8 +1,7 @@
 import { type AbstractEngine, getContainerBlock, getMutationUpdates } from "/dist/modules/highlight/engine.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
 import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import type { AbstractFlowMonitor, TreeCache } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
@@ -112,6 +111,7 @@ class HighlightEngine implements AbstractEngine {
 	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
 
 	highlights = new ExtendedHighlightRegistry();
+	highlightedElements: Set<HTMLElement> = new Set();
 	
 	constructor (
 		terms: Array<MatchTerm>,
@@ -119,34 +119,38 @@ class HighlightEngine implements AbstractEngine {
 		updateTermStatus: UpdateTermStatus,
 	) {
 		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, hues, [])
+			this.termMarkers.insert(terms, hues, Array.from(this.highlightedElements))
 		), 200, 2000);
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
-		this.flowMonitor = new StandardFlowMonitor(
+		this.flowMonitor = new StandardFlowMonitor<Flow>(
 			() => ({ flows: [] }),
 			() => this.countMatches(),
 			undefined,
-			boxesInfo => {
-				for (const boxInfo of boxesInfo) {
-					this.highlights.get(boxInfo.term.token)?.add(new StaticRange({
-						startContainer: boxInfo.node,
-						startOffset: boxInfo.start,
-						endContainer: boxInfo.node,
-						endOffset: boxInfo.end,
-					}), boxInfo);
+			element => {
+				this.highlightedElements.add(element as unknown as HTMLElement);
+				for (const flow of element[FlowMonitor.CACHE].flows) {
+					for (const boxInfo of flow.boxesInfo) {
+						this.highlights.get(boxInfo.term.token)?.add(new StaticRange({
+							startContainer: boxInfo.node,
+							startOffset: boxInfo.start,
+							endContainer: boxInfo.node,
+							endOffset: boxInfo.end,
+						}), boxInfo);
+					}
 				}
 			},
-			boxesInfo => {
-				for (const boxInfo of boxesInfo) {
-					this.highlights.get(boxInfo.term.token)?.deleteByBoxInfo(boxInfo);
+			element => {
+				this.highlightedElements.delete(element as unknown as HTMLElement);
+				for (const flow of element[FlowMonitor.CACHE].flows) {
+					for (const boxInfo of flow.boxesInfo) {
+						this.highlights.get(boxInfo.term.token)?.deleteByBoxInfo(boxInfo);
+					}
 				}
 			},
 		);
-		this.flowMonitor.initMutationUpdatesObserver(terms,
-			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element))
-		);
+		this.flowMonitor.initMutationUpdatesObserver(terms);
 		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
@@ -192,7 +196,6 @@ class HighlightEngine implements AbstractEngine {
 		this.mutationUpdates.disconnect();
 		// MAIN
 		terms.forEach(term => this.highlights.set(term.token, new ExtendedHighlight()));
-		this.cacheExtend(document.body); // Ensure the *whole* document is set up for highlight-caching.
 		this.flowMonitor.boxesInfoCalculate(terms, document.body);
 		this.mutationUpdates.observe();
 		this.specialHighlighter.startHighlighting(terms);
@@ -204,7 +207,6 @@ class HighlightEngine implements AbstractEngine {
 		this.specialHighlighter.endHighlighting();
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	undoHighlights (terms?: Array<MatchTerm>) {
 		if (terms) {
 			terms.forEach(term => this.highlights.delete(term.token));
@@ -212,19 +214,6 @@ class HighlightEngine implements AbstractEngine {
 			this.highlights.clear();
 		}
 	}
-
-	cacheExtend (element: Element, cacheApply = (element: Element) => {
-		if (!element[FlowMonitor.CACHE]) {
-			(element[FlowMonitor.CACHE] as TreeCache) = {
-				flows: [],
-			};
-		}
-	}) { if (!highlightTags.reject.has(element.tagName)) {
-		cacheApply(element);
-		for (const child of element.children) {
-			this.cacheExtend(child);
-		}
-	} }
 
 	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
 		const focus = this.termWalker.step(reverse, stepNotJump, term);

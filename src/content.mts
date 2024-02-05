@@ -356,7 +356,7 @@ const onWindowMouseUp = () => {
 				queuingPromise = enginePromise;
 				const { HighlightEngine } = await enginePromise;
 				highlighter.current = new HighlightEngine(terms, hues, updateTermStatus);
-			} else if (message.setHighlighter.engine === "paint") {
+			} else if (message.setHighlighter.engine === "paint" && compatibility.highlight.paintEngine) {
 				const enginePromise = import("/dist/modules/highlight/engines/paint.mjs");
 				const methodPromise = PaintMethodLoader.loadMethod(message.setHighlighter.paintEngineMethod ?? "paint");
 				queuingPromise = new Promise<void>(resolve =>

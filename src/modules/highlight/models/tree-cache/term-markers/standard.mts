@@ -14,13 +14,12 @@ class StandardTermMarker implements AbstractTermMarker {
 		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		let markersHtml = "";
 		for (const element of highlightedElements) {
-			const terms = (element[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.flatMap(flow => flow.boxesInfo
-				.map(boxInfo => boxInfo.term)
-				.filter(term => termsAllowed.has(term))
-			) ?? [];
+			const terms = new Set((element[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.flatMap(flow =>
+				flow.boxesInfo.filter(boxInfo => termsAllowed.has(boxInfo.term)).map(boxInfo => boxInfo.term)
+			) ?? []);
 			const yRelative = getElementYRelative(element);
 			// TODO use single marker with custom style
-			markersHtml += terms.map((term, i) => `<div class="${
+			markersHtml += Array.from(terms).map((term, i) => `<div class="${
 				getTermClass(term.token)
 			}" top="${yRelative}" style="top: ${yRelative * 100}%; padding-left: ${i * 5}px; z-index: ${i * -1}"></div>`);
 		}

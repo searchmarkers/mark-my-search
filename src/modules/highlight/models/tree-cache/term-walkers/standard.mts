@@ -21,8 +21,8 @@ class StandardTermWalker implements AbstractTermWalker {
 				? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
 				: nodeSelected ?? nodeBegin
 			);
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.some(flow =>
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement & { [FlowMonitor.CACHE]?: TreeCache }) =>
+			element[FlowMonitor.CACHE]?.flows.some(flow =>
 				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.token === term.token) : flow.boxesInfo.length
 			) && isVisible(element)
 				? NodeFilter.FILTER_ACCEPT
@@ -44,7 +44,7 @@ class StandardTermWalker implements AbstractTermWalker {
 			element.classList.add(EleClass.FOCUS_CONTAINER);
 		}
 		focusClosest(element, element =>
-			element[FlowMonitor.CACHE] && !!(element[FlowMonitor.CACHE] as TreeCache).flows
+			element[FlowMonitor.CACHE] && (element[FlowMonitor.CACHE] as TreeCache).flows.length > 0
 		);
 		selection.setBaseAndExtent(element, 0, element, 0);
 		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });

@@ -12,7 +12,7 @@ interface AbstractFlowMonitor {
 
 	initMutationUpdatesObserver: (
 		terms: Array<MatchTerm>,
-		onElementsAdded: (elements: Set<Element>) => void,
+		onElementsAdded?: (elements: Set<Element>) => void,
 	) => void
 
 	boxesInfoCalculate: (
