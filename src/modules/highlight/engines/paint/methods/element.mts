@@ -11,8 +11,9 @@ import { Z_INDEX_MIN, EleID, EleClass, getTermClass } from "/dist/modules/common
 class ElementMethod implements AbstractMethod {
 	highlightables = new StandardHighlightability();
 
-	getMiscCSS () {
-		return `
+	getCSS = {
+		misc: () => {
+			return (`
 #${EleID.DRAW_CONTAINER} {
 & {
 	position: fixed;
@@ -33,21 +34,20 @@ outline: 2px solid hsl(0 0% 0% / 0.1);
 outline-offset: -2px;
 border-radius: 2px;
 }`
-		;
-	}
-
-	getTermHighlightsCSS = () => "";
-
-	getTermHighlightCSS (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) {
-		const term = terms[termIndex];
-		const hue = hues[termIndex % hues.length];
-		const cycle = Math.floor(termIndex / hues.length);
-		const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
-			getTermClass(term.token)
-		}`;
-		const backgroundStyle = getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
-		return`${selector} { background: ${backgroundStyle}; }`;
-	}
+			);
+		},
+		termHighlights: () => "",
+		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
+			const term = terms[termIndex];
+			const hue = hues[termIndex % hues.length];
+			const cycle = Math.floor(termIndex / hues.length);
+			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
+				getTermClass(term.token)
+			}`;
+			const backgroundStyle = getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
+			return`${selector} { background: ${backgroundStyle}; }`;
+		},
+	};
 
 	endHighlighting = () => undefined;
 
@@ -55,10 +55,11 @@ border-radius: 2px;
 
 	getElementDrawId = (highlightId: string) => EleID.DRAW_ELEMENT + "-" + highlightId;
 
-	constructHighlightStyleRule = (highlightId: string) =>
+	constructHighlightStyleRule = (highlightId: string) => (
 		`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
 			this.getElementDrawId(highlightId)
-		}) !important; background-repeat: no-repeat !important; }`;
+		}) !important; background-repeat: no-repeat !important; }`
+	);
 
 	tempReplaceContainers (root: Element, recurse: boolean) {
 		// This whole operation is plagued with issues. Containers will almost never get deleted when they should

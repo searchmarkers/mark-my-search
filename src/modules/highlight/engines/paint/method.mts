@@ -1,19 +1,14 @@
 import type { TreeCache, Flow, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import {
-	type AbstractHighlightability, StandardHighlightability
-} from "/dist/modules/highlight/engines/paint/highlightability.mjs";
+import type { AbstractHighlightability } from "/dist/modules/highlight/engines/paint/highlightability.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractMethod {
 	highlightables: AbstractHighlightability
 
-	getMiscCSS: () => string
-
-	getTermHighlightsCSS: () => string
-
-	getTermHighlightCSS: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
+	getCSS: EngineCSS
 
 	endHighlighting: () => void
 
@@ -30,18 +25,6 @@ interface AbstractMethod {
 	tempReplaceContainers: (root: Element, recurse: boolean) => void
 
 	tempRemoveDrawElement: (element: Element) => void
-}
-
-class DummyMethod implements AbstractMethod {
-	highlightables = new StandardHighlightability();
-	getMiscCSS = () => "";
-	getTermHighlightsCSS = () => "";
-	getTermHighlightCSS = () => "";
-	getHighlightedElements = (): NodeListOf<Element> => document.querySelectorAll("#_");
-	endHighlighting = () => undefined;
-	constructHighlightStyleRule = () => "";
-	tempReplaceContainers = () => undefined;
-	tempRemoveDrawElement = () => undefined;
 }
 
 const getTermBackgroundStyle = TermCSS.getHorizontalStyle;
@@ -117,6 +100,6 @@ const elementPopulateBoxes = (
 ;
 
 export {
-	type AbstractMethod, DummyMethod,
+	type AbstractMethod,
 	getTermBackgroundStyle, styleRulesGetBoxesOwned,
 };

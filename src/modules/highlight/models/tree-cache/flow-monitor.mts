@@ -21,13 +21,7 @@ interface AbstractFlowMonitor {
 	) => void
 }
 
-class DummyFlowMonitor implements AbstractFlowMonitor {
-	mutationObserver = new MutationObserver(() => undefined);
-	initMutationUpdatesObserver = () => undefined;
-	boxesInfoCalculate = () => undefined;
-}
-
 export {
 	CACHE, type TreeCache,
-	type AbstractFlowMonitor, DummyFlowMonitor,
+	type AbstractFlowMonitor,
 };

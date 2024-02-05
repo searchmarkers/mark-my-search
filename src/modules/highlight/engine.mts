@@ -1,25 +1,28 @@
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
-import { type AbstractTermCounter, DummyTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
-import { type AbstractTermWalker, DummyTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import { type AbstractTermMarker, DummyTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
-type Highlighter = { current: AbstractEngine }
+type Highlighter = { current?: AbstractEngine }
 
 type HighlighterProcess =
 	| "refreshTermControls"
 	| "refreshIndicators"
 ;
 
-interface AbstractEngine {
-	termOccurrences: AbstractTermCounter
-	termWalker: AbstractTermWalker
-	termMarkers: AbstractTermMarker
+interface EngineCSS {
+	misc: () => string
+	termHighlights: () => string
+	termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
+}
 
-	// TODO document each
-	getMiscCSS: () => string
-	getTermHighlightsCSS: () => string
-	getTermHighlightCSS: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
+interface AbstractEngine {
+	termOccurrences?: AbstractTermCounter
+	termWalker?: AbstractTermWalker
+	termMarkers?: AbstractTermMarker
+
+	getCSS?: EngineCSS
 
 	// TODO document
 	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
@@ -63,21 +66,6 @@ interface AbstractEngine {
 	) => HTMLElement | null
 }
 
-class DummyEngine implements AbstractEngine {
-	termOccurrences = new DummyTermCounter();
-	termWalker = new DummyTermWalker();
-	termMarkers = new DummyTermMarker();
-	getMiscCSS = () => "";
-	getTermHighlightsCSS = () => "";
-	getTermHighlightCSS = () => "";
-	getTermBackgroundStyle = () => "";
-	countMatches = () => undefined;
-	startHighlighting = () => undefined;
-	undoHighlights = () => undefined;
-	endHighlighting = () => undefined;
-	stepToNextOccurrence = () => null;
-}
-
 /**
  * A selector string for the container block of an element.
  */
@@ -99,7 +87,7 @@ const getContainerBlock = (element: HTMLElement): HTMLElement =>
  * @param observer A highlighter-connected observer responsible for listening and responding to document mutations.
  * @returns The manager interface for the observer.
  */
-const getMutationUpdates = (observer: () => MutationObserver | null) => ({
+const getMutationUpdates = (observer: () => MutationObserver | undefined) => ({
 	observe: () => { observer()?.observe(document.body, { subtree: true, childList: true, characterData: true }); },
 	disconnect: () => { observer()?.disconnect(); },
 });
@@ -119,7 +107,7 @@ const getStyleUpdates = (
 
 export {
 	type Highlighter, type HighlighterProcess,
-	type AbstractEngine, DummyEngine,
+	type AbstractEngine, type EngineCSS,
 	getMutationUpdates, getStyleUpdates,
 	containerBlockSelector, getContainerBlock,
 };

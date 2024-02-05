@@ -5,7 +5,7 @@ import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
-import { type Highlighter, DummyEngine } from "/dist/modules/highlight/engine.mjs";
+import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
 import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
@@ -151,10 +151,10 @@ const refreshTermControlsAndStartHighlighting = (
 					termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
 				)) {
 					Toolbar.removeTermControl(termRemovedPreviousIdx);
-					highlighter.current.undoHighlights([ terms[termRemovedPreviousIdx] ]);
+					highlighter.current?.undoHighlights([ terms[termRemovedPreviousIdx] ]);
 					terms.splice(termRemovedPreviousIdx, 1);
 					Stylesheet.fillContent(terms, hues, controlsInfo.barLook, highlighter);
-					highlighter.current.countMatches();
+					highlighter.current?.countMatches();
 					return;
 				}
 			} else {
@@ -162,7 +162,7 @@ const refreshTermControlsAndStartHighlighting = (
 				termsUpdate.forEach(term => {
 					terms.push(new MatchTerm(term.phrase, term.matchMode));
 				});
-				highlighter.current.undoHighlights();
+				highlighter.current?.undoHighlights();
 				Toolbar.insertToolbar(terms, commands, hues, controlsInfo, highlighter);
 			}
 		} else {
@@ -173,7 +173,7 @@ const refreshTermControlsAndStartHighlighting = (
 		termsUpdate.forEach(term => {
 			terms.push(new MatchTerm(term.phrase, term.matchMode));
 		});
-		highlighter.current.undoHighlights();
+		highlighter.current?.undoHighlights();
 		Toolbar.insertToolbar(terms, commands, hues, controlsInfo, highlighter);
 	} else {
 		return;
@@ -186,7 +186,7 @@ const refreshTermControlsAndStartHighlighting = (
 	}
 	// Give the interface a chance to redraw before performing [expensive] highlighting.
 	setTimeout(() => {
-		highlighter.current.startHighlighting(
+		highlighter.current?.startHighlighting(
 			terms,
 			termsToHighlight,
 			termsToPurge,
@@ -262,12 +262,12 @@ const produceEffectOnCommandFn = function* (
 			if (focusReturnToDocument()) {
 				break;
 			}
-			highlighter.current.stepToNextOccurrence(commandInfo.reversed ?? false, true);
+			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, true);
 			break;
 		} case "advanceGlobal": {
 			focusReturnToDocument();
 			const term = selectModeFocus ? terms[focusedIdx] : undefined;
-			highlighter.current.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
+			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
 			Toolbar.focusTermInput(commandInfo.termIdx);
@@ -278,7 +278,7 @@ const produceEffectOnCommandFn = function* (
 			focusedIdx = getFocusedIdx(commandInfo.termIdx ?? -1);
 			barTerms.classList.add(ToolbarClasses.getControlPadClass(focusedIdx));
 			if (!selectModeFocus) {
-				highlighter.current.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
+				highlighter.current?.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
 			break;
 		}}
@@ -326,7 +326,7 @@ const onWindowMouseUp = () => {
 			diacritics: false,
 		},
 	};
-	const highlighter: Highlighter = { current: new DummyEngine() };
+	const highlighter: Highlighter = {};
 	const updateTermStatus = (term: MatchTerm) => Toolbar.updateTermStatus(term, highlighter);
 	const produceEffectOnCommand = produceEffectOnCommandFn(terms, controlsInfo, highlighter);
 	produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
@@ -350,7 +350,7 @@ const onWindowMouseUp = () => {
 		}
 		styleElementsInsert();
 		if (message.setHighlighter !== undefined) {
-			highlighter.current.endHighlighting();
+			highlighter.current?.endHighlighting();
 			if (message.setHighlighter.engine === "highlight" && compatibility.highlight.highlightEngine) {
 				const enginePromise = import("/dist/modules/highlight/engines/highlight.mjs");
 				queuingPromise = enginePromise;
@@ -375,7 +375,7 @@ const onWindowMouseUp = () => {
 		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 			controlsInfo.pageModifyEnabled = message.enablePageModify;
 			if (!controlsInfo.pageModifyEnabled) {
-				highlighter.current.endHighlighting();
+				highlighter.current?.endHighlighting();
 			}
 		}
 		if (message.extensionCommands) {
@@ -408,7 +408,7 @@ const onWindowMouseUp = () => {
 		}
 		if (message.deactivate) {
 			window.removeEventListener("mouseup", onWindowMouseUp);
-			highlighter.current.endHighlighting();
+			highlighter.current?.endHighlighting();
 			terms.splice(0);
 			Toolbar.controlsRemove();
 			styleElementsCleanup();

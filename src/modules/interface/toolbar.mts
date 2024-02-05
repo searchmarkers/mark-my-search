@@ -334,7 +334,7 @@ const getControlAppendTerm = (): Element | null =>
 export const updateTermStatus = (term: MatchTerm, highlighter: Highlighter) => {
 	const controlPad = (getControl(term) as HTMLElement)
 		.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
-	controlPad.classList.toggle(EleClass.DISABLED, !highlighter.current.termOccurrences.anyOf(term));
+	controlPad.classList.toggle(EleClass.DISABLED, !highlighter.current?.termOccurrences?.anyOf(term));
 };
 
 /**
@@ -346,7 +346,7 @@ const updateTermTooltip = (term: MatchTerm, highlighter: Highlighter) => {
 		.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
 	const controlContent = controlPad
 		.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement;
-	const occurrenceCount = highlighter.current.termOccurrences.betterNumberOf(term);
+	const occurrenceCount = highlighter.current?.termOccurrences?.betterNumberOf(term) ?? 0;
 	controlContent.title = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page${
 		!occurrenceCount || !term.command ? ""
 			: occurrenceCount === 1 ? `\nJump to: ${term.command} or ${term.commandReverse}`
@@ -397,7 +397,7 @@ export const refreshTermControl = (
 	updateTermControlMatchModeClassList(term.matchMode, control.classList);
 	const controlContent = control.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement;
 	controlContent.onclick = event => { // Overrides previous event handler in case of new term.
-		highlighter.current.stepToNextOccurrence(event.shiftKey, false, term);
+		highlighter.current?.stepToNextOccurrence(event.shiftKey, false, term);
 	};
 	controlContent.textContent = term.phrase;
 };
@@ -662,7 +662,7 @@ export const insertTermControl = (
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
 	controlContent.onclick = () => { // Hack: event handler property used so that the listener is not duplicated.
-		highlighter.current.stepToNextOccurrence(false, false, term);
+		highlighter.current?.stepToNextOccurrence(false, false, term);
 	};
 	controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
 		updateTermTooltip(term, highlighter);

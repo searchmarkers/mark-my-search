@@ -20,9 +20,4 @@ interface AbstractTermMarker {
 	) => void
 }
 
-class DummyTermMarker implements AbstractTermMarker {
-	insert = () => undefined;
-	raise = () => undefined;
-}
-
-export { type AbstractTermMarker, DummyTermMarker };
+export type { AbstractTermMarker };

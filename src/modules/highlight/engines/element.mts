@@ -1,6 +1,8 @@
-import { type AbstractEngine, getContainerBlock, getMutationUpdates } from "/dist/modules/highlight/engine.mjs";
+import {
+	type AbstractEngine, type EngineCSS, getContainerBlock, getMutationUpdates,
+} from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
-import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/standard.mjs";
 import { StandardTermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/standard.mjs";
@@ -96,10 +98,10 @@ class ElementEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
-	mutationObserver: MutationObserver | null = null;
+	mutationObserver?: MutationObserver;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
 
-	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
+	specialHighlighter?: AbstractSpecialEngine;
 
 	constructor (
 		terms: Array<MatchTerm>,
@@ -120,12 +122,10 @@ class ElementEngine implements AbstractEngine {
 		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
-	getMiscCSS () {
-		return "";
-	}
-
-	getTermHighlightsCSS () {
-		return `
+	getCSS: EngineCSS = {
+		misc: () => "",
+		termHighlights: () => {
+			return (`
 ${HIGHLIGHT_TAG} {
 	font: inherit;
 	border-radius: 2px;
@@ -134,21 +134,21 @@ ${HIGHLIGHT_TAG} {
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }`
-		;
-	}
-
-	getTermHighlightCSS (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) {
-		const term = terms[termIndex];
-		const hue = hues[termIndex % hues.length];
-		const cycle = Math.floor(termIndex / hues.length);
-		return `
+			);
+		},
+		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
+			const term = terms[termIndex];
+			const hue = hues[termIndex % hues.length];
+			const cycle = Math.floor(termIndex / hues.length);
+			return (`
 #${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
 #${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
 	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
 	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
 }`
-		;
-	}
+			);
+		},
+	};
 
 	getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
@@ -171,13 +171,13 @@ ${HIGHLIGHT_TAG} {
 		// MAIN
 		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms);
+		this.specialHighlighter?.startHighlighting(terms);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
+		this.specialHighlighter?.endHighlighting();
 	}
 
 	/**

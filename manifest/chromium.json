@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.14.2",
+	"version": "1.15.0",
 
 	"icons": {
 		"16": "/icons/dist/mms-16.png",
@@ -25,7 +25,7 @@
 
 	"background": {
 		"type": "module",
-		"service_worker": "/dist/background.js"
+		"service_worker": "/dist/background.mjs"
 	},
 
 	"content_scripts": [

@@ -15,7 +15,6 @@ type HighlightContext = keyof typeof contextCSS
 
 type StyleRulesInfo = Record<HighlightContext, string>
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class PaintSpecialEngine implements AbstractSpecialEngine {
 	method = new UrlMethod();
 	terms: Array<MatchTerm> = [];

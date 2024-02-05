@@ -21,19 +21,18 @@ class PaintMethod implements AbstractMethod {
 		}
 	}
 
-	getMiscCSS = () => "";
-
-	getTermHighlightsCSS = () => "";
-
-	getTermHighlightCSS (terms: Array<MatchTerm>, hues: number[]) {
-		const styles: TermSelectorStyles = {};
-		terms.forEach((term, i) => {
-			styles[term.token] = {
-				hue: hues[i % hues.length],
-				cycle: Math.floor(i / hues.length),
-			};
-		});
-		return `
+	getCSS = {
+		misc: () => "",
+		termHighlights: () => "",
+		termHighlight: (terms: Array<MatchTerm>, hues: number[]) => {
+			const styles: TermSelectorStyles = {};
+			terms.forEach((term, i) => {
+				styles[term.token] = {
+					hue: hues[i % hues.length],
+					cycle: Math.floor(i / hues.length),
+				};
+			});
+			return (`
 #${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id] {
 & [markmysearch-h_beneath] {
 	background-color: transparent;
@@ -47,8 +46,9 @@ class PaintMethod implements AbstractMethod {
 	--markmysearch-boxes: unset;
 }
 }`
-		;
-	}
+			);
+		},
+	};
 
 	endHighlighting () {
 		document.body.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {

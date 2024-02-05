@@ -17,9 +17,4 @@ interface AbstractTermWalker {
 	cleanup: () => void
 }
 
-class DummyTermWalker implements AbstractTermWalker {
-	step = () => null;
-	cleanup = () => undefined;
-}
-
-export { type AbstractTermWalker, DummyTermWalker };
+export type { AbstractTermWalker };

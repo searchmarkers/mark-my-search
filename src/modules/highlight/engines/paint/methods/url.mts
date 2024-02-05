@@ -7,11 +7,11 @@ import { EleID, EleClass } from "/dist/modules/common.mjs";
 class UrlMethod implements AbstractMethod {
 	highlightables = new StandardHighlightability();
 
-	getMiscCSS = () => "";
-
-	getTermHighlightsCSS = () => "";
-
-	getTermHighlightCSS = () => "";
+	getCSS = {
+		misc: () => "",
+		termHighlights: () => "",
+		termHighlight: () => "",
+	};
 
 	endHighlighting = () => undefined;
 

@@ -303,13 +303,13 @@ const fillContent = (terms: Array<MatchTerm>, hues: TermHues, barLook: Toolbar.B
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }
-${highlighter.current.getTermHighlightsCSS()}
+${highlighter.current?.getCSS?.termHighlights() ?? ""}
 
 /**/
 
 `) + `
 
-${highlighter.current.getMiscCSS()}
+${highlighter.current?.getCSS?.misc() ?? ""}
 
 /* || Transitions */
 
@@ -328,12 +328,12 @@ ${highlighter.current.getMiscCSS()}
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		const cycle = Math.floor(i / hues.length);
-		const getTermBackgroundStyle = highlighter.current.getTermBackgroundStyle;
+		const getTermBackgroundStyle = highlighter.current?.getTermBackgroundStyle ?? (() => "");
 		term.hue = hue;
 		style.textContent += makeImportant(`
 /* || Term Highlight */
 
-${highlighter.current.getTermHighlightCSS(terms, hues, i)}
+${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 
 /**/
 

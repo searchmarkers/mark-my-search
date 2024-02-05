@@ -1,7 +1,8 @@
-import { type AbstractEngine, getContainerBlock, getMutationUpdates } from "/dist/modules/highlight/engine.mjs";
-import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import {
+	type AbstractEngine, type EngineCSS, getContainerBlock, getMutationUpdates,
+} from "/dist/modules/highlight/engine.mjs";
+import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
@@ -104,11 +105,11 @@ class HighlightEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
-	flowMonitor: AbstractFlowMonitor = new FlowMonitor.DummyFlowMonitor();
+	flowMonitor?: FlowMonitor.AbstractFlowMonitor;
 
-	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
+	mutationUpdates = getMutationUpdates(() => this.flowMonitor?.mutationObserver);
 
-	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
+	specialHighlighter?: AbstractSpecialEngine;
 
 	highlights = new ExtendedHighlightRegistry();
 	highlightedElements: Set<HTMLElement> = new Set();
@@ -154,27 +155,23 @@ class HighlightEngine implements AbstractEngine {
 		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
-	getMiscCSS () {
-		return "";
-	}
-
-	getTermHighlightsCSS () {
-		return "";
-	}
-
-	getTermHighlightCSS (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) {
-		const term = terms[termIndex];
-		const hue = hues[termIndex % hues.length];
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		const cycle = Math.floor(termIndex / hues.length);
-		return `
+	getCSS: EngineCSS = {
+		misc: () => "",
+		termHighlights: () => "",
+		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
+			const term = terms[termIndex];
+			const hue = hues[termIndex % hues.length];
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			const cycle = Math.floor(termIndex / hues.length);
+			return (`
 #${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(term.token)}) {
-	background-color: hsl(${hue} 70% 70% / 0.6);
+	background-color: hsl(${hue} 70% 70% / 0.7);
 	color: black;
 	/* text-decoration to indicate cycle */
 }`
-		;
-	}
+			);
+		},
+	};
 
 	getTermBackgroundStyle = TermCSS.getFlatStyle;
 
@@ -196,15 +193,15 @@ class HighlightEngine implements AbstractEngine {
 		this.mutationUpdates.disconnect();
 		// MAIN
 		terms.forEach(term => this.highlights.set(term.token, new ExtendedHighlight()));
-		this.flowMonitor.boxesInfoCalculate(terms, document.body);
+		this.flowMonitor?.boxesInfoCalculate(terms, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms);
+		this.specialHighlighter?.startHighlighting(terms);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
+		this.specialHighlighter?.endHighlighting();
 	}
 
 	undoHighlights (terms?: Array<MatchTerm>) {

@@ -8,10 +8,4 @@ interface AbstractSpecialEngine {
 	handles: (element: Element) => boolean
 }
 
-class DummySpecialEngine implements AbstractSpecialEngine {
-	startHighlighting = () => undefined;
-	endHighlighting = () => undefined;
-	handles = () => false;
-}
-
-export { type AbstractSpecialEngine, DummySpecialEngine };
+export type { AbstractSpecialEngine };

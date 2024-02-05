@@ -1,12 +1,11 @@
 import {
-	type AbstractEngine, getContainerBlock, getMutationUpdates, getStyleUpdates,
+	type AbstractEngine, type EngineCSS, getContainerBlock, getMutationUpdates, getStyleUpdates,
 } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
-import { type AbstractSpecialEngine, DummySpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import {
-	type AbstractMethod, DummyMethod,
-	getTermBackgroundStyle, styleRulesGetBoxesOwned,
+	type AbstractMethod, getTermBackgroundStyle, styleRulesGetBoxesOwned,
 } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import type * as FlowMonitorTypes from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
@@ -51,11 +50,13 @@ class PaintEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
-	method: AbstractMethod = new DummyMethod();
+	set method (method: AbstractMethod | undefined) {
+		this.getCSS = method?.getCSS;
+	}
 
-	flowMonitor: AbstractFlowMonitor = new FlowMonitor.DummyFlowMonitor();
+	flowMonitor?: AbstractFlowMonitor;
 
-	mutationUpdates = getMutationUpdates(() => this.flowMonitor.mutationObserver);
+	mutationUpdates = getMutationUpdates(() => this.flowMonitor?.mutationObserver);
 
 	elementsVisible: Set<Element> = new Set();
 	shiftObserver: ResizeObserver | null = null;
@@ -65,7 +66,7 @@ class PaintEngine implements AbstractEngine {
 		visibilityObserver: this.visibilityObserver,
 	}));
 
-	specialHighlighter: AbstractSpecialEngine = new DummySpecialEngine();
+	specialHighlighter?: AbstractSpecialEngine;
 
 	/**
 	 * 
@@ -79,7 +80,9 @@ class PaintEngine implements AbstractEngine {
 		method: AbstractMethod,
 	) {
 		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, hues, Array.from(this.method.getHighlightedElements() as NodeListOf<HTMLElement>))
+			this.termMarkers.insert(terms, hues,
+				this.method ? Array.from(this.method.getHighlightedElements()) as Array<HTMLElement> : []
+			)
 		), 200, 2000);
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
@@ -89,11 +92,14 @@ class PaintEngine implements AbstractEngine {
 			(element): TreeCache => ({
 				id: highlightingId.next().value,
 				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightables.checkElement(element),
+				isHighlightable: this.method?.highlightables.checkElement(element) ?? false,
 				flows: [],
 			}),
 			() => this.countMatches(),
 			ancestor => {
+				if (!this.method) {
+					return;
+				}
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
 				this.styleUpdates.observe(ancestorHighlightable);
 				const highlighting = ancestorHighlightable[FlowMonitor.CACHE] as TreeCache;
@@ -117,16 +123,10 @@ class PaintEngine implements AbstractEngine {
 				yield (i++).toString();
 			}
 		})();
-		this.getMiscCSS = this.method.getMiscCSS;
-		this.getTermHighlightsCSS = this.method.getTermHighlightsCSS;
-		this.getTermHighlightCSS = this.method.getTermHighlightCSS;
 		this.specialHighlighter = new PaintSpecialEngine();
 	}
 
-	// These are applied before construction, so we need to apply them in the constructor too.
-	getMiscCSS = this.method.getMiscCSS;
-	getTermHighlightsCSS = this.method.getTermHighlightsCSS;
-	getTermHighlightCSS = this.method.getTermHighlightCSS;
+	getCSS?: EngineCSS;
 
 	getTermBackgroundStyle = getTermBackgroundStyle;
 
@@ -148,12 +148,18 @@ class PaintEngine implements AbstractEngine {
 		this.boxesInfoRemoveForTerms(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
 		this.cacheExtend(document.body); // Ensure the *whole* document is set up for highlight-caching.
-		this.flowMonitor.boxesInfoCalculate(terms, document.body);
+		this.flowMonitor?.boxesInfoCalculate(terms, document.body);
 		this.mutationUpdates.observe();
-		this.styleUpdate(Array.from(new Set(
-			Array.from(this.elementsVisible).map(element => this.method.highlightables.findAncestor(element))
-		)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms)));
-		this.specialHighlighter.startHighlighting(terms);
+		const method = this.method;
+		if (method) {
+			this.styleUpdate(
+				Array.from(new Set(
+					Array.from(this.elementsVisible)
+						.map(element => method.highlightables.findAncestor(element))
+				)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms))
+			);
+		}
+		this.specialHighlighter?.startHighlighting(terms);
 	}
 
 	endHighlighting () {
@@ -166,8 +172,8 @@ class PaintEngine implements AbstractEngine {
 		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
 			element.removeAttribute("markmysearch-h_id");
 		});
-		this.method.endHighlighting();
-		this.specialHighlighter.endHighlighting();
+		this.method?.endHighlighting();
+		this.specialHighlighter?.endHighlighting();
 	}
 
 	undoHighlights (terms?: Array<MatchTerm>) {
@@ -180,7 +186,7 @@ class PaintEngine implements AbstractEngine {
 			(element[FlowMonitor.CACHE] as TreeCache) = {
 				id: "",
 				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightables.checkElement(element),
+				isHighlightable: this.method?.highlightables.checkElement(element) ?? false,
 				flows: [],
 			};
 		}
@@ -214,7 +220,7 @@ class PaintEngine implements AbstractEngine {
 	}
 
 	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>) {
-		this.method.tempReplaceContainers(root, recurse);
+		this.method?.tempReplaceContainers(root, recurse);
 		const styleRules: Array<StyleRuleInfo> = [];
 		// 'root' must have [elementInfo].
 		this.collectStyleRules(root, recurse, new Range(), styleRules, terms);
@@ -228,11 +234,12 @@ class PaintEngine implements AbstractEngine {
 		styleRules: Array<StyleRuleInfo>,
 		terms: Array<MatchTerm>,
 	) {
+		// TODO use tree walker instead of recursion
 		const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
 		const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
 		if (boxes.length) {
 			styleRules.push({
-				rule: this.method.constructHighlightStyleRule(elementInfo.id, boxes, terms),
+				rule: this.method?.constructHighlightStyleRule(elementInfo.id, boxes, terms) ?? "",
 				element,
 			});
 		}
@@ -269,14 +276,22 @@ class PaintEngine implements AbstractEngine {
 
 	getShiftAndVisibilityObservers (terms: Array<MatchTerm>) {
 		const shiftObserver = new ResizeObserver(entries => {
+			const method = this.method;
+			if (!method) {
+				return;
+			}
 			const styleRules: Array<StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(this.method.highlightables.findAncestor(entry.target), true, terms)
+				this.getStyleRules(method.highlightables.findAncestor(entry.target), true, terms)
 			);
 			if (styleRules.length) {
 				this.styleUpdate(styleRules);
 			}
 		});
 		const visibilityObserver = new IntersectionObserver(entries => {
+			const method = this.method;
+			if (!method) {
+				return;
+			}
 			let styleRules: Array<StyleRuleInfo> = [];
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
@@ -285,13 +300,13 @@ class PaintEngine implements AbstractEngine {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
-							this.getStyleRules(this.method.highlightables.findAncestor(entry.target), false, terms)
+							this.getStyleRules(method.highlightables.findAncestor(entry.target), false, terms)
 						);
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
 					if (entry.target[FlowMonitor.CACHE]) {
-						this.method.tempRemoveDrawElement(entry.target);
+						method.tempRemoveDrawElement(entry.target);
 					}
 					this.elementsVisible.delete(entry.target);
 					shiftObserver.unobserve(entry.target);

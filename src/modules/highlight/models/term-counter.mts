@@ -21,10 +21,4 @@ interface AbstractTermCounter {
 	anyOf: (term: MatchTerm) => boolean;
 }
 
-class DummyTermCounter implements AbstractTermCounter {
-	betterNumberOf = () => 0;
-	fasterNumberOf = () => 0;
-	anyOf = () => false;
-}
-
-export { type AbstractTermCounter, DummyTermCounter };
+export type { AbstractTermCounter };
