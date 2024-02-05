@@ -1,5 +1,5 @@
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/engine.mjs";
+import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import {
 	EleID, EleClass,

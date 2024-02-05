@@ -1,4 +1,3 @@
-import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
@@ -66,48 +65,7 @@ interface AbstractEngine {
 	) => HTMLElement | null
 }
 
-/**
- * A selector string for the container block of an element.
- */
-const containerBlockSelector = `:not(${Array.from(highlightTags.flow).join(", ")})`;
-
-/**
- * Gets the containing block of an element.
- * This is its **closest ancestor (inclusive)** which has no tag name counted as `flow` in a highlight tags object.
- * @param element The element of which to find the first container block.
- * @returns The closest container block ancestor.
- */
-const getContainerBlock = (element: HTMLElement): HTMLElement =>
-	// Always returns an element since "body" is not a flow tag.
-	element.closest(containerBlockSelector) as HTMLElement
-;
-
-/**
- * Gets an object for controlling whether document mutations are listened to (so responded to by performing partial highlighting).
- * @param observer A highlighter-connected observer responsible for listening and responding to document mutations.
- * @returns The manager interface for the observer.
- */
-const getMutationUpdates = (observer: () => MutationObserver | undefined) => ({
-	observe: () => { observer()?.observe(document.body, { subtree: true, childList: true, characterData: true }); },
-	disconnect: () => { observer()?.disconnect(); },
-});
-
-// TODO document
-const getStyleUpdates = (
-	elementsVisible: Set<Element>,
-	getObservers: () => { shiftObserver: ResizeObserver | null, visibilityObserver: IntersectionObserver | null },
-) => ({
-	observe: (element: Element) => { getObservers().visibilityObserver?.observe(element); },
-	disconnectAll: () => {
-		elementsVisible.clear();
-		getObservers().shiftObserver?.disconnect();
-		getObservers().visibilityObserver?.disconnect();
-	},
-});
-
 export {
 	type Highlighter, type HighlighterProcess,
 	type AbstractEngine, type EngineCSS,
-	getMutationUpdates, getStyleUpdates,
-	containerBlockSelector, getContainerBlock,
 };

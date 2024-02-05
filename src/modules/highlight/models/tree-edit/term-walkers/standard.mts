@@ -1,5 +1,5 @@
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/engine.mjs";
+import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, getTermClass } from "/dist/modules/common.mjs";

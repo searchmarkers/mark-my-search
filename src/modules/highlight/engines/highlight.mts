@@ -1,6 +1,4 @@
-import {
-	type AbstractEngine, type EngineCSS, getContainerBlock, getMutationUpdates,
-} from "/dist/modules/highlight/engine.mjs";
+import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
@@ -10,6 +8,8 @@ import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/t
 import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
 import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
+import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
+import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
