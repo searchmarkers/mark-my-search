@@ -3,7 +3,8 @@ import {
 } from "/dist/modules/highlight/engine.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
 import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
@@ -105,7 +106,7 @@ class HighlightEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
-	flowMonitor?: FlowMonitor.AbstractFlowMonitor;
+	flowMonitor?: AbstractFlowMonitor;
 
 	mutationUpdates = getMutationUpdates(() => this.flowMonitor?.mutationObserver);
 
@@ -131,7 +132,7 @@ class HighlightEngine implements AbstractEngine {
 			undefined,
 			element => {
 				this.highlightedElements.add(element as unknown as HTMLElement);
-				for (const flow of element[FlowMonitor.CACHE].flows) {
+				for (const flow of element[CACHE].flows) {
 					for (const boxInfo of flow.boxesInfo) {
 						this.highlights.get(boxInfo.term.token)?.add(new StaticRange({
 							startContainer: boxInfo.node,
@@ -144,7 +145,7 @@ class HighlightEngine implements AbstractEngine {
 			},
 			element => {
 				this.highlightedElements.delete(element as unknown as HTMLElement);
-				for (const flow of element[FlowMonitor.CACHE].flows) {
+				for (const flow of element[CACHE].flows) {
 					for (const boxInfo of flow.boxesInfo) {
 						this.highlights.get(boxInfo.term.token)?.deleteByBoxInfo(boxInfo);
 					}

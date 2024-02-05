@@ -1,11 +1,15 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import { StandardHighlightability } from "/dist/modules/highlight/engines/paint/highlightability.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
 class UrlMethod implements AbstractMethod {
-	highlightables = new StandardHighlightability();
+	highlightables: Highlightables = {
+		checkElement: () => true,
+		findAncestor: <T extends Element> (element: T) => element,
+		markElementsUpTo: () => undefined,
+	};
 
 	getCSS = {
 		misc: () => "",

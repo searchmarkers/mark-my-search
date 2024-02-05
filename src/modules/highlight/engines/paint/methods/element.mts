@@ -1,15 +1,18 @@
-import {
-	type AbstractMethod,
-	getTermBackgroundStyle, styleRulesGetBoxesOwned,
-} from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
+import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { TreeCache, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import { StandardHighlightability } from "/dist/modules/highlight/engines/paint/highlightability.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { Z_INDEX_MIN, EleID, EleClass, getTermClass } from "/dist/modules/common.mjs";
 
 class ElementMethod implements AbstractMethod {
-	highlightables = new StandardHighlightability();
+	highlightables: Highlightables = {
+		checkElement: () => true,
+		findAncestor: <T extends Element> (element: T) => element,
+		markElementsUpTo: () => undefined,
+	};
 
 	getCSS = {
 		misc: () => {
@@ -44,7 +47,7 @@ border-radius: 2px;
 			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
 				getTermClass(term.token)
 			}`;
-			const backgroundStyle = getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
+			const backgroundStyle = TermCSS.getHorizontalStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
 			return`${selector} { background: ${backgroundStyle}; }`;
 		},
 	};
@@ -83,8 +86,8 @@ border-radius: 2px;
 		containers: Array<Element>,
 		range = new Range(),
 	) {
-		const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
-		const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
+		const elementInfo = element[CACHE] as TreeCache;
+		const boxes: Array<Box> = getBoxesOwned(element);
 		if (boxes.length) {
 			const container = document.createElement("div");
 			container.id = this.getElementDrawId(elementInfo.id);
@@ -109,14 +112,14 @@ border-radius: 2px;
 			containers.push(container);
 		}
 		if (recurse) {
-			for (const child of element.children) if (child[FlowMonitor.CACHE]) {
+			for (const child of element.children) if (child[CACHE]) {
 				this.collectElements(child, recurse, containers, range);
 			}
 		}
 	}
 
 	tempRemoveDrawElement (element: Element) {
-		document.getElementById(this.getElementDrawId((element[FlowMonitor.CACHE] as TreeCache).id))?.remove();
+		document.getElementById(this.getElementDrawId((element[CACHE] as TreeCache).id))?.remove();
 	}
 }
 

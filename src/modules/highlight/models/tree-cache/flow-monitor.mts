@@ -1,11 +1,4 @@
-import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-
-const CACHE = "markmysearch__cache";
-
-type TreeCache<Flow = BaseFlow<false>> = {
-	flows: Array<Flow>
-}
 
 interface AbstractFlowMonitor {
 	mutationObserver: MutationObserver;
@@ -21,7 +14,4 @@ interface AbstractFlowMonitor {
 	) => void
 }
 
-export {
-	CACHE, type TreeCache,
-	type AbstractFlowMonitor,
-};
+export type { AbstractFlowMonitor };

@@ -1,4 +1,4 @@
-import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";

@@ -1,6 +1,6 @@
-import type { TreeCache, AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { type BaseFlow, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
@@ -20,8 +20,8 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		createElementCache: (element: Element) => TreeCache<Flow>,
 		onHighlightingUpdated: () => void,
 		onNewHighlightedAncestor?: (ancestor: Element) => void,
-		onBoxesInfoPopulated?: (element: Element & { [FlowMonitor.CACHE]: TreeCache<Flow> }) => void,
-		onBoxesInfoRemoved?: (element: Element & { [FlowMonitor.CACHE]: TreeCache<Flow> }) => void,
+		onBoxesInfoPopulated?: (element: Element & { [CACHE]: TreeCache<Flow> }) => void,
+		onBoxesInfoRemoved?: (element: Element & { [CACHE]: TreeCache<Flow> }) => void,
 	) {
 		this.createElementCache = createElementCache;
 		this.onHighlightingUpdated = onHighlightingUpdated;
@@ -155,9 +155,9 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		if (highlightTags.reject.has(ancestor.tagName)) {
 			return;
 		}
-		if (ancestor[FlowMonitor.CACHE]) {
+		if (ancestor[CACHE]) {
 			this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(ancestor);
-			delete ancestor[FlowMonitor.CACHE];
+			delete ancestor[CACHE];
 		}
 		const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, (element: Element) =>
 			highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
@@ -165,9 +165,9 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		let element: Element;
 		// eslint-disable-next-line no-cond-assign
 		while (element = walker.nextNode() as Element) {
-			if (element[FlowMonitor.CACHE]) {
+			if (element[CACHE]) {
 				this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(element);
-				delete element[FlowMonitor.CACHE];
+				delete element[CACHE];
 			}
 		}
 	}
@@ -182,7 +182,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
 		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow.at(-1) as Text);
-		let ancestorHighlighting = ancestor[FlowMonitor.CACHE] as TreeCache<Flow> | undefined;
+		let ancestorHighlighting = ancestor[CACHE] as TreeCache<Flow> | undefined;
 		// TODO check that the types used make sense (Flow, BaseFlow, BoxInfo, BaseBoxInfo)
 		const flow: BaseFlow<true> = {
 			text,
@@ -194,7 +194,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		} else {
 			ancestorHighlighting = this.createElementCache(ancestor);
 			ancestorHighlighting.flows.push(flow as Flow);
-			ancestor[FlowMonitor.CACHE] = ancestorHighlighting;
+			ancestor[CACHE] = ancestorHighlighting;
 		}
 		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(ancestor);
 		if (flow.boxesInfo.length > 0) {

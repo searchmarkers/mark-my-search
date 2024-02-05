@@ -1,7 +1,7 @@
 import {
 	type AbstractEngine, type EngineCSS, getContainerBlock, getMutationUpdates,
 } from "/dist/modules/highlight/engine.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/standard.mjs";

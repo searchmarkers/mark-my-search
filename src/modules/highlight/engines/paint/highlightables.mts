@@ -1,4 +1,4 @@
-interface AbstractHighlightability {
+interface Highlightables {
 	checkElement: (node: Node) => boolean
 
 	findAncestor: <T extends Element>(element: T) => T
@@ -12,12 +12,4 @@ interface AbstractHighlightability {
 	markElementsUpTo: (element: Element) => void
 }
 
-class StandardHighlightability implements AbstractHighlightability {
-	checkElement = () => true;
-
-	findAncestor = <T extends Element>(element: T) => element;
-
-	markElementsUpTo = () => undefined;
-}
-
-export { type AbstractHighlightability, StandardHighlightability };
+export type { Highlightables };

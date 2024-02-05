@@ -1,6 +1,5 @@
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import type { TreeCache } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
 
@@ -21,8 +20,8 @@ class StandardTermWalker implements AbstractTermWalker {
 				? (nodeSelected ? (nodeFocused.contains(nodeSelected) ? nodeSelected : nodeFocused) : nodeFocused)
 				: nodeSelected ?? nodeBegin
 			);
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement & { [FlowMonitor.CACHE]?: TreeCache }) =>
-			element[FlowMonitor.CACHE]?.flows.some(flow =>
+		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement & { [CACHE]?: TreeCache }) =>
+			element[CACHE]?.flows.some(flow =>
 				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.token === term.token) : flow.boxesInfo.length
 			) && isVisible(element)
 				? NodeFilter.FILTER_ACCEPT
@@ -44,7 +43,7 @@ class StandardTermWalker implements AbstractTermWalker {
 			element.classList.add(EleClass.FOCUS_CONTAINER);
 		}
 		focusClosest(element, element =>
-			element[FlowMonitor.CACHE] && (element[FlowMonitor.CACHE] as TreeCache).flows.length > 0
+			element[CACHE] && (element[CACHE] as TreeCache).flows.length > 0
 		);
 		selection.setBaseAndExtent(element, 0, element, 0);
 		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });

@@ -1,6 +1,6 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { AbstractHighlightability } from "/dist/modules/highlight/engines/paint/highlightability.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
@@ -9,8 +9,32 @@ type TermSelectorStyles = Record<string, {
 	cycle: number
 }>
 
+const markElementsUpTo = (element: Element) => {
+	if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
+		element.setAttribute("markmysearch-h_beneath", "");
+		markElementsUpTo(element.parentElement as Element);
+	}
+};
+
 class PaintMethod implements AbstractMethod {
-	highlightables = new CSSPaintHighlightability();
+	highlightables: Highlightables = {
+		checkElement: (element: Element) => !element.closest("a"),
+		findAncestor: <T extends Element> (element: T) => {
+			let ancestor = element;
+			// eslint-disable-next-line no-constant-condition
+			while (true) {
+				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
+				const ancestorUnhighlightable = ancestor.closest("a") as T | null;
+				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+					ancestor = ancestorUnhighlightable.parentElement as unknown as T;
+				} else {
+					break;
+				}
+			}
+			return ancestor;
+		},
+		markElementsUpTo,
+	};
 
 	static paintModuleAdded = false;
 
@@ -64,32 +88,6 @@ class PaintMethod implements AbstractMethod {
 	tempReplaceContainers = () => undefined;
 
 	tempRemoveDrawElement = () => undefined;
-}
-
-class CSSPaintHighlightability implements AbstractHighlightability {
-	checkElement = (element: Element) => !element.closest("a");
-
-	findAncestor <T extends Element>(element: T) {
-		let ancestor = element;
-		// eslint-disable-next-line no-constant-condition
-		while (true) {
-			// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
-			const ancestorUnhighlightable = ancestor.closest("a") as T | null;
-			if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
-				ancestor = ancestorUnhighlightable.parentElement as unknown as T;
-			} else {
-				break;
-			}
-		}
-		return ancestor;
-	}
-
-	markElementsUpTo (element: Element) {
-		if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
-			element.setAttribute("markmysearch-h_beneath", "");
-			this.markElementsUpTo(element.parentElement as Element);
-		}
-	}
 }
 
 export { type TermSelectorStyles, PaintMethod };

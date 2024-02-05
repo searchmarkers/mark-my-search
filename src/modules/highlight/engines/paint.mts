@@ -1,19 +1,19 @@
 import {
 	type AbstractEngine, type EngineCSS, getContainerBlock, getMutationUpdates, getStyleUpdates,
 } from "/dist/modules/highlight/engine.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlighting.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import {
-	type AbstractMethod, getTermBackgroundStyle, styleRulesGetBoxesOwned,
-} from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
+import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
+import type * as Cache from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import type * as FlowMonitorTypes from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
 import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
 import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
+import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
@@ -24,7 +24,7 @@ type TreeCache = {
 	id: string
 	styleRuleIdx: number
 	isHighlightable: boolean
-} & FlowMonitorTypes.TreeCache<Flow>
+} & Cache.TreeCache<Flow>
 
 type Flow = BaseFlow<true, BoxInfoBoxes>
 
@@ -102,7 +102,7 @@ class PaintEngine implements AbstractEngine {
 				}
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
 				this.styleUpdates.observe(ancestorHighlightable);
-				const highlighting = ancestorHighlightable[FlowMonitor.CACHE] as TreeCache;
+				const highlighting = ancestorHighlightable[CACHE] as TreeCache;
 				if (highlighting.id === "") {
 					highlighting.id = highlightingId.next().value;
 					// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
@@ -128,7 +128,7 @@ class PaintEngine implements AbstractEngine {
 
 	getCSS?: EngineCSS;
 
-	getTermBackgroundStyle = getTermBackgroundStyle;
+	getTermBackgroundStyle = TermCSS.getHorizontalStyle;
 
 	requestRefreshIndicators?: Generator;
 	requestRefreshTermControls?: Generator;
@@ -167,7 +167,7 @@ class PaintEngine implements AbstractEngine {
 		this.styleUpdates.disconnectAll();
 		this.undoHighlights();
 		document.querySelectorAll("*").forEach(element => {
-			delete element[FlowMonitor.CACHE];
+			delete element[CACHE];
 		});
 		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
 			element.removeAttribute("markmysearch-h_id");
@@ -182,8 +182,8 @@ class PaintEngine implements AbstractEngine {
 	}
 
 	cacheExtend (element: Element, cacheApply = (element: Element) => {
-		if (!element[FlowMonitor.CACHE]) {
-			(element[FlowMonitor.CACHE] as TreeCache) = {
+		if (!element[CACHE]) {
+			(element[CACHE] as TreeCache) = {
 				id: "",
 				styleRuleIdx: -1,
 				isHighlightable: this.method?.highlightables.checkElement(element) ?? false,
@@ -209,7 +209,7 @@ class PaintEngine implements AbstractEngine {
 			: flow => flow.boxesInfo = [];
 		for (const element of root.querySelectorAll("[markmysearch-h_id]")) {
 			const filterBoxesInfo = (element: Element) => {
-				const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
+				const elementInfo = element[CACHE] as TreeCache;
 				if (!elementInfo)
 					return;
 				elementInfo.flows.forEach(editFlow);
@@ -228,24 +228,35 @@ class PaintEngine implements AbstractEngine {
 	}
 
 	collectStyleRules (
-		element: Element,
+		ancestor: Element,
 		recurse: boolean,
 		range: Range,
 		styleRules: Array<StyleRuleInfo>,
 		terms: Array<MatchTerm>,
 	) {
-		// TODO use tree walker instead of recursion
-		const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
-		const boxes: Array<Box> = styleRulesGetBoxesOwned(element);
-		if (boxes.length) {
+		const method = this.method;
+		if (!method) {
+			return;
+		}
+		if (ancestor) {
 			styleRules.push({
-				rule: this.method?.constructHighlightStyleRule(elementInfo.id, boxes, terms) ?? "",
-				element,
+				rule: method.constructHighlightStyleRule((ancestor[CACHE] as TreeCache).id, getBoxesOwned(ancestor), terms),
+				element: ancestor,
 			});
 		}
 		if (recurse) {
-			for (const child of element.children) if (child[FlowMonitor.CACHE]) {
-				this.collectStyleRules(child, recurse, range, styleRules, terms);
+			const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, (element: Element) =>
+				highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+			);
+			let child: Element;
+			// eslint-disable-next-line no-cond-assign
+			while (child = walker.nextNode() as Element) {
+				if (CACHE in child) {
+					styleRules.push({
+						rule: method.constructHighlightStyleRule((child[CACHE] as TreeCache).id, getBoxesOwned(child), terms),
+						element: child,
+					});
+				}
 			}
 		}
 	}
@@ -253,7 +264,7 @@ class PaintEngine implements AbstractEngine {
 	styleUpdate (styleRules: Array<StyleRuleInfo>) {
 		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
 		styleRules.forEach(({ rule, element }) => {
-			const elementInfo = element[FlowMonitor.CACHE] as TreeCache;
+			const elementInfo = element[CACHE] as TreeCache;
 			if (elementInfo.styleRuleIdx === -1) {
 				elementInfo.styleRuleIdx = styleSheet.cssRules.length;
 			} else {
@@ -296,7 +307,7 @@ class PaintEngine implements AbstractEngine {
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
 					//console.log(entry.target, "intersecting");
-					if (entry.target[FlowMonitor.CACHE]) {
+					if (entry.target[CACHE]) {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
@@ -305,7 +316,7 @@ class PaintEngine implements AbstractEngine {
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
-					if (entry.target[FlowMonitor.CACHE]) {
+					if (entry.target[CACHE]) {
 						method.tempRemoveDrawElement(entry.target);
 					}
 					this.elementsVisible.delete(entry.target);

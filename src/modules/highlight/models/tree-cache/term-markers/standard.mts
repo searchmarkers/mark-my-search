@@ -1,6 +1,5 @@
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import type { TreeCache } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import * as FlowMonitor from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, getElementYRelative, type TermHues, getTermClass } from "/dist/modules/common.mjs";
 
@@ -14,7 +13,7 @@ class StandardTermMarker implements AbstractTermMarker {
 		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		let markersHtml = "";
 		for (const element of highlightedElements) {
-			const terms = new Set((element[FlowMonitor.CACHE] as TreeCache | undefined)?.flows.flatMap(flow =>
+			const terms = new Set((element[CACHE] as TreeCache | undefined)?.flows.flatMap(flow =>
 				flow.boxesInfo.filter(boxInfo => termsAllowed.has(boxInfo.term)).map(boxInfo => boxInfo.term)
 			) ?? []);
 			const yRelative = getElementYRelative(element);
