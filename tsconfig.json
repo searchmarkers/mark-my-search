@@ -2,7 +2,18 @@
 	"compilerOptions": {
 		"outDir": "dist",
 		"target": "ES2022",
+		"module": "ES2022",
+		"declaration": true,
 		"alwaysStrict": true,
 		"strictNullChecks": true,
+		"verbatimModuleSyntax": true,
+		"paths": {
+			"/dist/*": [ "./src/*" ],
+			"/lib/*": [ "./lib/*" ],
+		},
 	},
+	"include": [
+		"src/**/*",
+		"lib/*",
+	],
 }
