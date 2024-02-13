@@ -202,6 +202,9 @@ class HighlightEngine implements AbstractEngine {
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
+		document.querySelectorAll("*").forEach(element => {
+			delete element[CACHE];
+		});
 		this.specialHighlighter?.endHighlighting();
 	}
 

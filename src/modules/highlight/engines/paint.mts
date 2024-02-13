@@ -50,8 +50,13 @@ class PaintEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
+	#method?: AbstractMethod;
 	set method (method: AbstractMethod | undefined) {
 		this.getCSS = method?.getCSS;
+		this.#method = method;
+	}
+	get method () {
+		return this.#method;
 	}
 
 	flowMonitor?: AbstractFlowMonitor;
@@ -79,6 +84,7 @@ class PaintEngine implements AbstractEngine {
 		updateTermStatus: UpdateTermStatus,
 		method: AbstractMethod,
 	) {
+		this.method = method;
 		this.requestRefreshIndicators = requestCallFn(() => (
 			this.termMarkers.insert(terms, hues,
 				this.method ? Array.from(this.method.getHighlightedElements()) as Array<HTMLElement> : []
@@ -87,10 +93,9 @@ class PaintEngine implements AbstractEngine {
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
-		this.method = method;
 		this.flowMonitor = new StandardFlowMonitor(
 			(element): TreeCache => ({
-				id: highlightingId.next().value,
+				id: "",
 				styleRuleIdx: -1,
 				isHighlightable: this.method?.highlightables.checkElement(element) ?? false,
 				flows: [],
@@ -102,18 +107,24 @@ class PaintEngine implements AbstractEngine {
 				}
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
 				this.styleUpdates.observe(ancestorHighlightable);
-				const highlighting = ancestorHighlightable[CACHE] as TreeCache;
+				const highlighting = ancestorHighlightable[CACHE] as TreeCache ?? {
+					id: "",
+					styleRuleIdx: -1,
+					isHighlightable: true,
+					flows: [],
+				};
+				ancestorHighlightable[CACHE] = highlighting;
+				//console.log(highlighting);
 				if (highlighting.id === "") {
 					highlighting.id = highlightingId.next().value;
 					// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
+					// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
 					ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
 				}
 				this.method.highlightables.markElementsUpTo(ancestor);
 			},
 		);
-		this.flowMonitor.initMutationUpdatesObserver(terms,
-			elementsAdded => elementsAdded.forEach(element => this.cacheExtend(element)),
-		);
+		this.flowMonitor.initMutationUpdatesObserver(terms);
 		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
 		this.shiftObserver = shiftObserver;
 		this.visibilityObserver = visibilityObserver;
@@ -147,7 +158,6 @@ class PaintEngine implements AbstractEngine {
 		this.mutationUpdates.disconnect();
 		this.boxesInfoRemoveForTerms(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
-		this.cacheExtend(document.body); // Ensure the *whole* document is set up for highlight-caching.
 		this.flowMonitor?.boxesInfoCalculate(terms, document.body);
 		this.mutationUpdates.observe();
 		const method = this.method;
@@ -180,22 +190,6 @@ class PaintEngine implements AbstractEngine {
 		this.boxesInfoRemoveForTerms(terms, document.body);
 		this.termWalker.cleanup();
 	}
-
-	cacheExtend (element: Element, cacheApply = (element: Element) => {
-		if (!element[CACHE]) {
-			(element[CACHE] as TreeCache) = {
-				id: "",
-				styleRuleIdx: -1,
-				isHighlightable: this.method?.highlightables.checkElement(element) ?? false,
-				flows: [],
-			};
-		}
-	}) { if (!highlightTags.reject.has(element.tagName)) {
-		cacheApply(element);
-		for (const child of element.children) {
-			this.cacheExtend(child);
-		}
-	} }
 	
 	/** TODO update documentation
 	 * FIXME this is a cut-down and adapted legacy function which may not function efficiently or fully correctly.
@@ -209,10 +203,11 @@ class PaintEngine implements AbstractEngine {
 			: flow => flow.boxesInfo = [];
 		for (const element of root.querySelectorAll("[markmysearch-h_id]")) {
 			const filterBoxesInfo = (element: Element) => {
-				const elementInfo = element[CACHE] as TreeCache;
-				if (!elementInfo)
+				const highlighting = element[CACHE] as TreeCache;
+				if (!highlighting) {
 					return;
-				elementInfo.flows.forEach(editFlow);
+				}
+				highlighting.flows.forEach(editFlow);
 				Array.from(element.children).forEach(filterBoxesInfo);
 			};
 			filterBoxesInfo(element);
@@ -238,7 +233,7 @@ class PaintEngine implements AbstractEngine {
 		if (!method) {
 			return;
 		}
-		if (ancestor) {
+		if (ancestor && CACHE in ancestor) {
 			styleRules.push({
 				rule: method.constructHighlightStyleRule((ancestor[CACHE] as TreeCache).id, getBoxesOwned(ancestor), terms),
 				element: ancestor,
@@ -264,16 +259,19 @@ class PaintEngine implements AbstractEngine {
 	styleUpdate (styleRules: Array<StyleRuleInfo>) {
 		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
 		styleRules.forEach(({ rule, element }) => {
-			const elementInfo = element[CACHE] as TreeCache;
-			if (elementInfo.styleRuleIdx === -1) {
-				elementInfo.styleRuleIdx = styleSheet.cssRules.length;
+			const highlighting = element[CACHE] as TreeCache | undefined;
+			if (!highlighting) {
+				return;
+			}
+			if (highlighting.styleRuleIdx === -1) {
+				highlighting.styleRuleIdx = styleSheet.cssRules.length;
 			} else {
-				if (styleSheet.cssRules.item(elementInfo.styleRuleIdx)?.cssText === rule) {
+				if (styleSheet.cssRules.item(highlighting.styleRuleIdx)?.cssText === rule) {
 					return;
 				}
-				styleSheet.deleteRule(elementInfo.styleRuleIdx);
+				styleSheet.deleteRule(highlighting.styleRuleIdx);
 			}
-			styleSheet.insertRule(rule, elementInfo.styleRuleIdx);
+			styleSheet.insertRule(rule, highlighting.styleRuleIdx);
 		});
 	}
 
@@ -307,7 +305,7 @@ class PaintEngine implements AbstractEngine {
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
 					//console.log(entry.target, "intersecting");
-					if (entry.target[CACHE]) {
+					if (CACHE in entry.target) {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
@@ -316,7 +314,7 @@ class PaintEngine implements AbstractEngine {
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
-					if (entry.target[CACHE]) {
+					if (CACHE in entry.target) {
 						method.tempRemoveDrawElement(entry.target);
 					}
 					this.elementsVisible.delete(entry.target);

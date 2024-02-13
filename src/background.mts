@@ -672,7 +672,7 @@ const handleMessage = async (message: Message.Background<true>): Promise<Message
 							engine: "element",
 						} : {
 							engine: "paint",
-							paintEngineMethod: compatibility.highlight.paintEngine.paintMethod ? "paint" : "element",
+							paintEngineMethod: globalThis.browser ? "element" : "paint", //compatibility.highlight.paintEngine.paintMethod ? "paint" : "element",
 						}
 					),
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),

@@ -197,7 +197,7 @@ const elementsPurgeClass = (
 ;
 
 const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
-	element.focus({ preventScroll: true });
+	element.focus({ preventScroll: true }); // TODO use focusElement function instead (rename the function too)
 	if (document.activeElement !== element) {
 		if (filter(element)) {
 			focusClosest(element.parentElement as HTMLElement, filter);

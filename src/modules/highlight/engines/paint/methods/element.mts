@@ -86,11 +86,11 @@ border-radius: 2px;
 		containers: Array<Element>,
 		range = new Range(),
 	) {
-		const elementInfo = element[CACHE] as TreeCache;
 		const boxes: Array<Box> = getBoxesOwned(element);
 		if (boxes.length) {
+			const highlighting = element[CACHE] as TreeCache;
 			const container = document.createElement("div");
-			container.id = this.getElementDrawId(elementInfo.id);
+			container.id = this.getElementDrawId(highlighting.id);
 			boxes.forEach(box => {
 				const element = document.createElement("div");
 				element.style.position = "absolute"; // Should it be "fixed"? Should it be applied in a stylesheet?
@@ -112,7 +112,7 @@ border-radius: 2px;
 			containers.push(container);
 		}
 		if (recurse) {
-			for (const child of element.children) if (child[CACHE]) {
+			for (const child of element.children) if (CACHE in child) {
 				this.collectElements(child, recurse, containers, range);
 			}
 		}

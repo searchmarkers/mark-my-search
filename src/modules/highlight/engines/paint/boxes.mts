@@ -26,16 +26,16 @@ const getBoxes = (
 	range = new Range(),
 ) => {
 	element ??= owner;
-	const elementInfo = element[CACHE] as TreeCache;
-	if (!elementInfo || elementInfo.flows.every(flow => flow.boxesInfo.length === 0)) {
+	const highlighting = element[CACHE] as TreeCache;
+	if (!highlighting || highlighting.flows.every(flow => flow.boxesInfo.length === 0)) {
 		return [];
 	}
 	let ownerRects = Array.from(owner.getClientRects());
 	if (!ownerRects.length) {
 		ownerRects = [ owner.getBoundingClientRect() ];
 	}
-	elementPopulateBoxes(elementInfo.flows, ownerRects, range);
-	return elementInfo.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
+	elementPopulateBoxes(highlighting.flows, ownerRects, range);
+	return highlighting.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
 };
 
 const elementPopulateBoxes = (

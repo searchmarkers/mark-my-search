@@ -30,10 +30,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		this.onBoxesInfoRemoved = onBoxesInfoRemoved;
 	}
 
-	initMutationUpdatesObserver (
-		terms: Array<MatchTerm>,
-		onElementsAdded?: (elements: Set<HTMLElement>) => void,
-	) {
+	initMutationUpdatesObserver (terms: Array<MatchTerm>) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		this.mutationObserver = new MutationObserver(mutations => {
 			// TODO optimise
@@ -63,23 +60,12 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 						break;
 					}}
 				}
-				//this.onBoxesInfoCleared && this.onBoxesInfoCleared(Array.from(mutation.removedNodes).flatMap(node =>
-				//	(node[FlowMonitor.CACHE] as TreeCache<Flow> | undefined)?.flows.flatMap(flow => flow.boxesInfo) ?? []
-				//));
-				//if (this.onBoxesInfoCleared) {
-				//	for (const node of mutation.removedNodes) {
-				//		if (node[FlowMonitor.CACHE]) {
-				//			this.onBoxesInfoCleared(node as Element);
-				//		}
-				//	}
-				//}
 				for (const node of mutation.removedNodes) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
 						this.flowsRemove(node as Element);
 					}
 				}
 			}
-			onElementsAdded && onElementsAdded(elementsAdded);
 			for (const element of elementsAffected) {
 				this.boxesInfoCalculateForFlowOwnersFromContent(terms, element);
 			}
@@ -155,7 +141,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		if (highlightTags.reject.has(ancestor.tagName)) {
 			return;
 		}
-		if (ancestor[CACHE]) {
+		if (CACHE in ancestor) {
 			this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(ancestor);
 			delete ancestor[CACHE];
 		}
@@ -165,7 +151,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		let element: Element;
 		// eslint-disable-next-line no-cond-assign
 		while (element = walker.nextNode() as Element) {
-			if (element[CACHE]) {
+			if (CACHE in element) {
 				this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(element);
 				delete element[CACHE];
 			}
