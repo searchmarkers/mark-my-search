@@ -7,9 +7,14 @@ interface AbstractFlowMonitor {
 		terms: Array<MatchTerm>,
 	) => void
 
-	boxesInfoCalculate: (
+	generateBoxesInfo: (
 		terms: Array<MatchTerm>,
 		flowOwner: Element,
+	) => void
+
+	removeBoxesInfo: (
+		terms?: Array<MatchTerm>,
+		root?: HTMLElement,
 	) => void
 }
 

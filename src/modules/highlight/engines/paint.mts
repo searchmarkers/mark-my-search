@@ -156,9 +156,9 @@ class PaintEngine implements AbstractEngine {
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
-		this.boxesInfoRemoveForTerms(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
+		this.flowMonitor?.removeBoxesInfo(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
-		this.flowMonitor?.boxesInfoCalculate(terms, document.body);
+		this.flowMonitor?.generateBoxesInfo(terms, document.body);
 		this.mutationUpdates.observe();
 		const method = this.method;
 		if (method) {
@@ -176,42 +176,17 @@ class PaintEngine implements AbstractEngine {
 		this.mutationUpdates.disconnect();
 		this.styleUpdates.disconnectAll();
 		this.undoHighlights();
-		document.querySelectorAll("*").forEach(element => {
-			delete element[CACHE];
-		});
+		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
 		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
 			element.removeAttribute("markmysearch-h_id");
 		});
 		this.method?.endHighlighting();
 		this.specialHighlighter?.endHighlighting();
+		this.termWalker.cleanup();
 	}
 
 	undoHighlights (terms?: Array<MatchTerm>) {
-		this.boxesInfoRemoveForTerms(terms, document.body);
-		this.termWalker.cleanup();
-	}
-	
-	/** TODO update documentation
-	 * FIXME this is a cut-down and adapted legacy function which may not function efficiently or fully correctly.
-	 * Remove highlights for matches of terms.
-	 * @param terms Terms for which to remove highlights. If left empty, all highlights are removed.
-	 * @param root A root node under which to remove highlights.
-	 */
-	boxesInfoRemoveForTerms (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
-		const editFlow: (flow: Flow) => void = terms
-			? flow => flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token))
-			: flow => flow.boxesInfo = [];
-		for (const element of root.querySelectorAll("[markmysearch-h_id]")) {
-			const filterBoxesInfo = (element: Element) => {
-				const highlighting = element[CACHE] as TreeCache;
-				if (!highlighting) {
-					return;
-				}
-				highlighting.flows.forEach(editFlow);
-				Array.from(element.children).forEach(filterBoxesInfo);
-			};
-			filterBoxesInfo(element);
-		}
+		this.flowMonitor?.removeBoxesInfo(terms);
 	}
 
 	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>) {

@@ -190,11 +190,11 @@ class HighlightEngine implements AbstractEngine {
 		termsToPurge: Array<MatchTerm>,
 	) {
 		// Clean up.
-		termsToPurge.forEach(term => this.highlights.delete(term.token));
 		this.mutationUpdates.disconnect();
+		this.undoHighlights(termsToPurge);
 		// MAIN
 		terms.forEach(term => this.highlights.set(term.token, new ExtendedHighlight()));
-		this.flowMonitor?.boxesInfoCalculate(terms, document.body);
+		this.flowMonitor?.generateBoxesInfo(terms, document.body);
 		this.mutationUpdates.observe();
 		this.specialHighlighter?.startHighlighting(terms);
 	}
@@ -202,13 +202,12 @@ class HighlightEngine implements AbstractEngine {
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		document.querySelectorAll("*").forEach(element => {
-			delete element[CACHE];
-		});
 		this.specialHighlighter?.endHighlighting();
+		this.termWalker.cleanup();
 	}
 
 	undoHighlights (terms?: Array<MatchTerm>) {
+		this.flowMonitor?.removeBoxesInfo(terms);
 		if (terms) {
 			terms.forEach(term => this.highlights.delete(term.token));
 		} else {
