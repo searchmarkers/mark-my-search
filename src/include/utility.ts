@@ -1,28 +1,30 @@
 type MatchTerms = Array<MatchTerm>
 
-/**
- * @deprecated Use `compatibility.browser` instead.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const useChromeAPI = () => !this.browser;
-
 enum Browser {
-	UNKNOWN,
 	FIREFOX,
 	CHROMIUM,
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const compatibility = {
-	browser: Browser.UNKNOWN,
+const compatibility = { // Some of this differs depending on the context the script runs in.
+	// We use a heuristic, since it's hard to find a better (synchronous) way of detecting the browser.
+	// See `runtime.getBrowserInfo()` (async, only supported in Firefox, no concept of the *underlying* browser).
+	browser: globalThis.browser ? Browser.FIREFOX : Browser.CHROMIUM,
 	highlight: {
 		paintEngine: {
-			paintMethod: !!CSS.paintWorklet,
-			elementMethod: !!document["mozSetImageElement"], // `element()` might be defined anyway, could have false negatives.
+			paintMethod: !!globalThis.CSS && !!CSS.paintWorklet,
+			// `element()` might be defined anyway, could have false negatives.
+			elementMethod: !!globalThis.document && !!document["mozSetImageElement"],
 		},
-		highlightEngine: !!CSS.highlights,
+		highlightEngine: !!globalThis.CSS && !!CSS.highlights,
 	},
 };
+
+/**
+ * @deprecated Use `compatibility.browser` instead.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const useChromeAPI = () => compatibility.browser === Browser.CHROMIUM;
 
 enum Engine {
 	ELEMENT,
