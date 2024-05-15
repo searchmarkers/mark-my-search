@@ -34,6 +34,7 @@ enum OptionClass {
 	PREFERENCE_ROW = "preference-row",
 	PREFERENCE_CELL_LABEL = "preference-cell",
 	PREFERENCE_INPUT = "preference-input",
+	PREFERENCE_DEFAULT = "preference-default",
 	PREFERENCE_REVERT = "preference-revert",
 }
 
@@ -115,6 +116,8 @@ body.${OptionClass.SAVE_PENDING} .${OptionClass.SAVE_BUTTON}::after
 	{ background-color: hsl(0 0% 87%); }
 input[type=text]
 	{ font-size: small; width: 110px; }
+.${OptionClass.PREFERENCE_DEFAULT}
+	{ display: none; }
 .${OptionClass.IS_DEFAULT} .${OptionClass.PREFERENCE_REVERT}
 	{ display: none; }
 .${OptionClass.PREFERENCE_REVERT}
@@ -128,7 +131,7 @@ input[type=text]
 label
 	{ color: hsl(0 0% 28%); }
 label[for]:hover
-	{ color: hsl(0 0% 18%); }
+	{ color: hsl(0 0% 6%); }
 		`;
 		document.head.appendChild(style);
 	};
@@ -280,6 +283,7 @@ label[for]:hover
 				preferenceLabel.title = preferenceInfo.tooltip ?? "";
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
+				inputDefault.classList.add(OptionClass.PREFERENCE_DEFAULT);
 				inputDefault.disabled = true;
 				const input = document.createElement("input");
 				input.type = inputDefault.type;
