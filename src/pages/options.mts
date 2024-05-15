@@ -1,5 +1,5 @@
 import { type StorageSyncValues, storageGet, storageSet, optionsDefault } from "/dist/modules/privileged/storage.mjs";
-import { getIdSequential } from "/dist/modules/common.mjs";
+import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
 
 type OptionsInfo = Array<{
 	label: string
@@ -23,15 +23,22 @@ type OptionsInfo = Array<{
 enum OptionClass {
 	ERRONEOUS = "erroneous",
 	MODIFIED = "modified",
+	IS_DEFAULT = "is-default",
 	TAB_BUTTON = "tab-button",
 	CONTAINER_TAB = "container-tab",
+	SAVE_PENDING = "save-pending",
+	TOOLBAR = "toolbar",
+	SAVE_BUTTON = "save-button",
+	DISCARD_BUTTON = "discard-button",
+	REVERT_ALL_BUTTON = "revert-all-button",
 	OPTION_SECTION = "option-section",
 	OPTION_LABEL = "option-label",
 	TABLE_PREFERENCES = "table-preferences",
 	PREFERENCE_ROW = "preference-row",
 	PREFERENCE_CELL_LABEL = "preference-cell",
-	EVEN = "even",
-	ODD = "odd",
+	PREFERENCE_INPUT = "preference-input",
+	PREFERENCE_DEFAULT = "preference-default",
+	PREFERENCE_REVERT = "preference-revert",
 }
 
 enum PreferenceType {
@@ -43,6 +50,11 @@ enum PreferenceType {
 	ARRAY_NUMBER,
 }
 
+type OptionsConfig = {
+	height?: number
+	width?: number
+}
+
 /**
  * Loads the options content into the page.
  * This presents the user with advanced options for customizing the extension.
@@ -52,44 +64,115 @@ const loadOptions = (() => {
 	/**
 	 * Fills and inserts a CSS stylesheet element to style all options and surrounding page structure.
 	 */
-	const fillAndInsertStylesheet = () => {
+	const fillAndInsertStylesheet = (config: OptionsConfig) => {
 		const style = document.createElement("style");
 		style.textContent = `
 body
-	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; user-select: none; }
+	{ padding-inline: 6px; padding-block: 2px; margin: 0; background: #bbb; user-select: none;
+	overflow-y: auto;
+	min-height: ${config.height ? `${config.height}px` : "unset"}; width: ${config.width ? `${config.width}px` : "unset"}; }
+*
+	{ font-family: sans; font-size: medium; }
 .${OptionClass.ERRONEOUS}
 	{ color: #e11; }
-.${OptionClass.MODIFIED}
-	{ font-weight: bold; }
+.${OptionClass.MODIFIED} label
+	{ text-decoration: underline; font-style: italic; }
 .${OptionClass.TAB_BUTTON}
 	{ border-radius: 0; display: none; }
-.${OptionClass.CONTAINER_TAB}
-	{ display: flex; flex-flow: column; }
+.${OptionClass.TOOLBAR} *
+	{ padding: 4px; }
+.${OptionClass.SAVE_BUTTON}[data-modification-count]::after
+	{ content: "Save Changes: " attr(data-modification-count); }
+.${OptionClass.SAVE_BUTTON}:disabled::after
+	{ content: "No Unsaved Changes"; }
+body.${OptionClass.SAVE_PENDING} .${OptionClass.SAVE_BUTTON}::after
+	{ content: "Saving..."; }
+.${OptionClass.DISCARD_BUTTON}
+	{ color: red; }
+.${OptionClass.DISCARD_BUTTON}:disabled
+	{ display: none; }
+.${OptionClass.DISCARD_BUTTON}::after
+	{ content: "Discard Changes"; }
+.${OptionClass.REVERT_ALL_BUTTON}
+	{ position: absolute; right: 0; }
+.${OptionClass.REVERT_ALL_BUTTON}::after
+	{ content: "Reset All"; }
+.${OptionClass.OPTION_SECTION}, .${OptionClass.TOOLBAR} *
+	{ border-radius: 6px; }
 .${OptionClass.OPTION_SECTION}
-	{ padding: 6px; margin-block: 4px; border-radius: 6px;
-	background-color: #eee; box-shadow: 2px 2px 4px hsla(0, 0%, 0%, 0.4); }
+	{ padding: 6px; margin-block: 8px; background-color: #eee; }
 .${OptionClass.OPTION_LABEL}
-	{ color: hsl(0 0% 6%); margin-bottom: 4px; }
+	{ margin-bottom: 4px; font-weight: bold; color: hsl(0 0% 40%); }
 .${OptionClass.TABLE_PREFERENCES}
-	{ display: flex; flex-flow: column; width: 100%; }
+	{ display: flex; flex-flow: column; }
+.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_ROW} > *
+	{ display: flex; align-items: center; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
-	{ flex: 1; display: flex; align-items: center; }
+	{ flex: 1; margin-block: 2px; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > ::after
 	{ content: ":" }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
 	{ flex: 1; }
-.${OptionClass.TABLE_PREFERENCES} input[type=text]
-	{ width: 110px; }
 .${OptionClass.PREFERENCE_ROW}
 	{ display: flex; color: hsl(0 0% 21%); }
-.${OptionClass.PREFERENCE_ROW}.${OptionClass.EVEN}
+.${OptionClass.PREFERENCE_ROW}:nth-child(even)
 	{ background-color: hsl(0 0% 87%); }
+input[type=text]
+	{ font-size: small; width: 110px; }
+.${OptionClass.PREFERENCE_DEFAULT}
+	{ display: none; }
+.${OptionClass.IS_DEFAULT} .${OptionClass.PREFERENCE_REVERT}
+	{ display: none; }
+.${OptionClass.PREFERENCE_REVERT}
+	{ border: none; padding: 0.2em; outline-offset: -0.2em; display: flex; align-items: center; background: none; }
+.${OptionClass.PREFERENCE_REVERT}:hover
+	{ background: #ccc; }
+.${OptionClass.PREFERENCE_REVERT}:active
+	{ background: #999; }
+.${OptionClass.PREFERENCE_REVERT} img
+	{ height: 1em; filter: invert() brightness(0.3); }
 label
 	{ color: hsl(0 0% 28%); }
 label[for]:hover
-	{ color: hsl(0 0% 18%); }
+	{ color: hsl(0 0% 6%); }
 		`;
 		document.head.appendChild(style);
+	};
+
+	const getPreferenceInputs = () =>
+		document.querySelectorAll(`.${OptionClass.PREFERENCE_INPUT}`) as NodeListOf<HTMLInputElement>
+	;
+
+	const createToolbar = (discardFns: Array<() => void>, revertFns: Array<() => void>) => {
+		const toolbar = document.createElement("div");
+		toolbar.classList.add(OptionClass.TOOLBAR);
+		const saveButton = document.createElement("button");
+		saveButton.type = "submit";
+		saveButton.classList.add(OptionClass.SAVE_BUTTON);
+		const discardButton = document.createElement("button");
+		discardButton.type = "button";
+		discardButton.classList.add(OptionClass.DISCARD_BUTTON);
+		discardButton.addEventListener("click", () => {
+			discardFns.forEach(discardFn => discardFn());
+		});
+		const revertAllButton = document.createElement("button");
+		revertAllButton.type = "button";
+		revertAllButton.classList.add(OptionClass.REVERT_ALL_BUTTON);
+		revertAllButton.addEventListener("click", () => {
+			revertFns.forEach(revertFn => revertFn());
+		});
+		const toolbarUpdate = () => {
+			const changeCount = document.querySelectorAll(`.${OptionClass.MODIFIED}`).length;
+			const changeActionsDisabled = changeCount === 0 || document.body.classList.contains(OptionClass.SAVE_PENDING);
+			saveButton.disabled = changeActionsDisabled;
+			saveButton.dataset.modificationCount = changeCount.toString();
+			if (changeCount === 0) {
+				delete saveButton.dataset.modificationCount;
+			}
+			discardButton.disabled = changeActionsDisabled;
+		};
+		toolbar.append(saveButton, discardButton, revertAllButton);
+		return { toolbar, toolbarUpdate };
 	};
 
 	/**
@@ -110,9 +193,24 @@ label[for]:hover
 		const container = document.createElement("div");
 		container.classList.add(OptionClass.CONTAINER_TAB);
 		form.appendChild(container);
-		const save = document.createElement("button");
-		save.textContent = "Save Changes";
-		form.appendChild(save);
+		const discardFns: Array<() => void> = [];
+		const revertFns: Array<() => void> = [];
+		const { toolbar: toolbarTop, toolbarUpdate: toolbarTopUpdate } = createToolbar(discardFns, revertFns);
+		const { toolbar: toolbarBottom, toolbarUpdate: toolbarBottomUpdate } = createToolbar(discardFns, revertFns);
+		form.insertAdjacentElement("afterbegin", toolbarTop);
+		form.appendChild(toolbarBottom);
+		const toolbarsUpdate = () => {
+			toolbarTopUpdate();
+			toolbarBottomUpdate();
+		};
+		toolbarsUpdate();
+		const setSavePending = (pending: boolean) => {
+			//document.body.classList.toggle(OptionClass.SAVE_PENDING, pending);
+			for (const input of getPreferenceInputs()) {
+				input.disabled = pending;
+			}
+			toolbarsUpdate();
+		};
 		const valuesCurrent = {};
 		// Collect all values from inputs and commit them to storage on user form submission.
 		form.addEventListener("submit", event => {
@@ -123,8 +221,9 @@ label[for]:hover
 				const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
 				Object.keys(preferences).forEach(preferenceKey => {
 					const preferenceInfo = preferences[preferenceKey];
-					const className = `${optionKey}-${preferenceKey}`;
-					const input = document.getElementsByClassName(className)[0];
+					const input = document.querySelector(
+						`.${OptionClass.PREFERENCE_INPUT}[data-key="${optionKey}-${preferenceKey}"]`
+					) as HTMLInputElement;
 					if (!input) {
 						return;
 					}
@@ -140,11 +239,15 @@ label[for]:hover
 						return valueEntered;
 					})(preferenceInfo.type);
 					valuesCurrent[optionKey][preferenceKey] = valueEntered;
-					Array.from(document.getElementsByClassName(OptionClass.MODIFIED))
-						.forEach((preferenceLabel: HTMLElement) => preferenceLabel.classList.remove(OptionClass.MODIFIED));
 				});
 			});
-			storageSet("sync", sync);
+			for (const rowModified of document.querySelectorAll(`.${OptionClass.MODIFIED}`)) {
+				rowModified.classList.remove(OptionClass.MODIFIED);
+			}
+			setSavePending(true);
+			storageSet("sync", sync).then(() => {
+				setSavePending(false);
+			});
 		});
 		// Construct and insert option elements from the option details.
 		Object.keys(tabInfo.options).forEach(optionKey => {
@@ -165,7 +268,7 @@ label[for]:hover
 				return;
 			}
 			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-			Object.keys(preferences).forEach((preferenceKey, i) => {
+			Object.keys(preferences).forEach((preferenceKey) => {
 				const preferenceInfo = preferences[preferenceKey];
 				const row = document.createElement("div");
 				const addCell = (node: Node, isInFirstColumn = false) => {
@@ -183,39 +286,70 @@ label[for]:hover
 				preferenceLabel.title = preferenceInfo.tooltip ?? "";
 				const inputDefault = document.createElement("input");
 				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
+				inputDefault.classList.add(OptionClass.PREFERENCE_DEFAULT);
 				inputDefault.disabled = true;
 				const input = document.createElement("input");
-				input.id = inputId;
 				input.type = inputDefault.type;
-				input.classList.add(`${optionKey}-${preferenceKey}`);
+				input.id = inputId;
+				input.classList.add(OptionClass.PREFERENCE_INPUT);
+				input.dataset.key = `${optionKey}-${preferenceKey}`;
+				const revertButton = document.createElement("button");
+				revertButton.type = "button";
+				revertButton.classList.add(OptionClass.PREFERENCE_REVERT);
+				const revertImage = document.createElement("img");
+				revertImage.src = chrome.runtime.getURL("/icons/refresh.svg");
+				revertImage.draggable = false;
+				revertButton.appendChild(revertImage);
 				addCell(preferenceLabel, true);
+				addCell(revertButton);
 				addCell(input);
 				addCell(inputDefault);
 				table.appendChild(row);
-				row.classList.add(OptionClass.PREFERENCE_ROW);
-				row.classList.add(i % 2 ? OptionClass.ODD : OptionClass.EVEN);
+				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
 				const valueDefault = optionsDefault[optionKey][preferenceKey];
 				const value = sync[optionKey][preferenceKey];
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
 					input.disabled = true;
 				} else {
-					const propertyKey = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
-					inputDefault[propertyKey as string] = valueDefault;
-					input[propertyKey as string] = value;
-					valuesCurrent[optionKey][preferenceKey] = input[propertyKey];
-					input.addEventListener("input", () =>
-						preferenceLabel.classList[
-							input[propertyKey] === valuesCurrent[optionKey][preferenceKey] ? "remove" : "add"
-						](OptionClass.MODIFIED)
-					);
+					const valueKey: string = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
+					inputDefault[valueKey] = valueDefault;
+					input[valueKey] = value;
+					valuesCurrent[optionKey][preferenceKey] = input[valueKey];
+					const rowUpdateClasses = () => {
+						row.classList.toggle(
+							OptionClass.MODIFIED,
+							input[valueKey] !== valuesCurrent[optionKey][preferenceKey],
+						);
+						row.classList.toggle(
+							OptionClass.IS_DEFAULT,
+							input[valueKey] === inputDefault[valueKey],
+						);
+						toolbarsUpdate();
+					};
+					input.addEventListener("input", rowUpdateClasses);
+					const discard = () => {
+						input[valueKey] = valuesCurrent[optionKey][preferenceKey];
+						rowUpdateClasses();
+					};
+					const revert = () => {
+						input[valueKey] = inputDefault[valueKey];
+						rowUpdateClasses();
+					};
+					revertButton.addEventListener("click", () => {
+						revert();
+						input.focus();
+					});
+					rowUpdateClasses();
+					discardFns.push(discard);
+					revertFns.push(revert);
 				}
 			});
 		});
 	};
 
-	return (optionsInfo: OptionsInfo) => {
-		fillAndInsertStylesheet();
+	return (optionsInfo: OptionsInfo, config: OptionsConfig) => {
+		fillAndInsertStylesheet(config);
 		loadTab(0, document.body, optionsInfo);
 	};
 })();
@@ -398,8 +532,13 @@ PAINT
 		},
 	];
 
+	const isWindowInFrame = () => true;
+
 	return () => {
 		// TODO use storage.onChanged to refresh rather than manually updating page
-		loadOptions(getOptionsInfo());
+		loadOptions(getOptionsInfo(), {
+			height: isWindowInFrame() ? 570 : undefined,
+			width: isWindowInFrame() && compatibility.browser === "chromium" ? 650 : undefined,
+		});
 	};
 })()();

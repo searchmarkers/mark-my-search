@@ -47,10 +47,17 @@ const getTermsFromSelection = () => {
 	const selection = getSelection();
 	const terms: Array<MatchTerm> = [];
 	if (selection && selection.anchorNode) {
-		const termsAll = selection.toString().split(/\r|\p{Zs}|\p{Po}|\p{Cc}/gu)
-			// (carriage return) | Space Separators | Other Punctuation | Control
-			.map(phrase => phrase.replace(/\p{Ps}|\p{Pe}|\p{Pi}|\p{Pf}/gu, ""))
-			// Open Punctuation | Close Punctuation | Initial Punctuation | Final Punctuation
+		const termsAll = (() => {
+			const string = selection.toString();
+			if (/\p{Open_Punctuation}|\p{Close_Punctuation}|\p{Initial_Punctuation}|\p{Final_Punctuation}/.test(string)) {
+				// If there are brackets or quotes, we just assume it's too complicated to sensibly split up for now.
+				// TODO make this behaviour smarter?
+				return [ string ];
+			} else {
+				return string.split(/\n+|\r+|\p{Other_Punctuation}\p{Space_Separator}+|\p{Space_Separator}+/gu);
+			}
+		})()
+			.map(phrase => phrase.replace(/\p{Other}/gu, ""))
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 		const termSelectors: Set<string> = new Set();
 		termsAll.forEach(term => {

@@ -65,7 +65,7 @@ const compatibility: {
 		paintEngine: {
 			paintMethod: !!globalThis.CSS?.paintWorklet,
 			// `element()` might be defined anyway, could have false negatives.
-			elementMethod: !!(globalThis.document ? globalThis.document["mozSetImageElement"] : undefined),
+			elementMethod: !!globalThis.document && !!globalThis.document["mozSetImageElement"],
 		},
 		highlightEngine: !!globalThis.CSS?.highlights,
 	},
