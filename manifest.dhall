@@ -5,7 +5,7 @@ let ManifestMMS = ./ManifestV3MMS.dhall
 --== Profile ==--
 
 let name = "Mark My Search"
-let version = Manifest.buildVersion [1,14,2]
+let version = Manifest.buildVersion [2,0,0]
 let description = "Highlight searched keywords. Find matches instantly."
 
 --== Icons ==--
