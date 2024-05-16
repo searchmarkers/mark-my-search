@@ -3,9 +3,9 @@
  */
 class SearchSite {
 	// All appropriate attributes must be compared in `this.equals`
-	hostname: string;
-	pathname: [ string, string ];
-	param: string;
+	readonly hostname: string;
+	readonly pathname: [ string, string ];
+	readonly param: string;
 
 	constructor (args?: { urlDynamicString: string }) {
 		if (!args)

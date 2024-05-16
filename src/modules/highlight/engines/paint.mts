@@ -8,9 +8,12 @@ import type * as Cache from "/dist/modules/highlight/models/tree-cache/tree-cach
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
-import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
-import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
-import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
+import { StandardTermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/standard.mjs";
+import { StandardTermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/standard.mjs";
+import { StandardTermMarker } from "/dist/modules/highlight/models/tree-edit/term-markers/standard.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates, getStyleUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
@@ -46,35 +49,25 @@ type StyleRuleInfo = {
 }
 
 class PaintEngine implements AbstractEngine {
-	termOccurrences = new StandardTermCounter();
-	termWalker = new StandardTermWalker();
-	termMarkers = new StandardTermMarker();
+	readonly termOccurrences: AbstractTermCounter = new StandardTermCounter();
+	readonly termWalker: AbstractTermWalker = new StandardTermWalker();
+	readonly termMarkers: AbstractTermMarker = new StandardTermMarker();
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
-	#method?: AbstractMethod;
-	set method (method: AbstractMethod | undefined) {
-		this.getCSS = method?.getCSS;
-		this.#method = method;
-	}
-	get method () {
-		return this.#method;
-	}
+	readonly method: AbstractMethod;
 
-	flowMonitor?: AbstractFlowMonitor;
+	readonly flowMonitor: AbstractFlowMonitor;
 
-	mutationUpdates = getMutationUpdates(() => this.flowMonitor?.mutationObserver);
+	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	elementsVisible: Set<Element> = new Set();
-	shiftObserver: ResizeObserver | null = null;
-	visibilityObserver: IntersectionObserver | null = null;
-	styleUpdates = getStyleUpdates(this.elementsVisible, () => ({
-		shiftObserver: this.shiftObserver,
-		visibilityObserver: this.visibilityObserver,
-	}));
+	readonly elementsVisible: Set<Element> = new Set();
+	readonly shiftObserver: ResizeObserver;
+	readonly visibilityObserver: IntersectionObserver;
+	readonly styleUpdates: ReturnType<typeof getStyleUpdates>;
 
-	specialHighlighter?: AbstractSpecialEngine;
+	readonly specialHighlighter: AbstractSpecialEngine;
 
 	/**
 	 * 
@@ -92,6 +85,7 @@ class PaintEngine implements AbstractEngine {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
 		this.method = method;
+		this.getCSS = method.getCSS;
 		this.requestRefreshIndicators = requestCallFn(() => (
 			this.termMarkers.insert(terms, termTokens, hues,
 				this.method ? Array.from(this.method.getHighlightedElements()) as Array<HTMLElement> : []
@@ -101,6 +95,8 @@ class PaintEngine implements AbstractEngine {
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
 		this.flowMonitor = new StandardFlowMonitor(
+			terms,
+			termPatterns,
 			(element): TreeCache => ({
 				id: "",
 				styleRuleIdx: -1,
@@ -131,10 +127,11 @@ class PaintEngine implements AbstractEngine {
 				this.method.highlightables.markElementsUpTo(ancestor);
 			},
 		);
-		this.flowMonitor.initMutationUpdatesObserver(terms, termPatterns);
+		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);
 		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms, hues);
 		this.shiftObserver = shiftObserver;
 		this.visibilityObserver = visibilityObserver;
+		this.styleUpdates = getStyleUpdates(this.elementsVisible, this.shiftObserver, this.visibilityObserver);
 		const highlightingId: Generator<string, never, unknown> = (function* () {
 			let i = 0;
 			while (true) {
@@ -144,16 +141,16 @@ class PaintEngine implements AbstractEngine {
 		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
-	getCSS?: EngineCSS;
+	readonly getCSS: EngineCSS;
 
-	getTermBackgroundStyle = TermCSS.getHorizontalStyle;
+	readonly getTermBackgroundStyle = TermCSS.getHorizontalStyle;
 
-	requestRefreshIndicators?: Generator;
-	requestRefreshTermControls?: Generator;
+	readonly requestRefreshIndicators: Generator;
+	readonly requestRefreshTermControls: Generator;
 
 	countMatches () {
-		this.requestRefreshIndicators?.next();
-		this.requestRefreshTermControls?.next();
+		this.requestRefreshIndicators.next();
+		this.requestRefreshTermControls.next();
 	}
 
 	startHighlighting (
@@ -164,9 +161,9 @@ class PaintEngine implements AbstractEngine {
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
-		this.flowMonitor?.removeBoxesInfo(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
+		this.flowMonitor.removeBoxesInfo(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
-		this.flowMonitor?.generateBoxesInfo(terms, this.termPatterns, document.body);
+		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
 		const method = this.method;
 		if (method) {
@@ -177,7 +174,7 @@ class PaintEngine implements AbstractEngine {
 				)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
 			);
 		}
-		this.specialHighlighter?.startHighlighting(terms, hues);
+		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
@@ -189,12 +186,12 @@ class PaintEngine implements AbstractEngine {
 			element.removeAttribute("markmysearch-h_id");
 		});
 		this.method?.endHighlighting();
-		this.specialHighlighter?.endHighlighting();
+		this.specialHighlighter.endHighlighting();
 		this.termWalker.cleanup();
 	}
 
 	undoHighlights (terms?: Array<MatchTerm>) {
-		this.flowMonitor?.removeBoxesInfo(terms);
+		this.flowMonitor.removeBoxesInfo(terms);
 	}
 
 	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>, hues: Array<number>) {

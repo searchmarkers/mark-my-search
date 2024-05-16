@@ -4,9 +4,12 @@ import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/pain
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
-import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
-import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
-import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
+import { StandardTermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/standard.mjs";
+import { StandardTermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/standard.mjs";
+import { StandardTermMarker } from "/dist/modules/highlight/models/tree-edit/term-markers/standard.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
@@ -25,8 +28,8 @@ type BoxInfoRange = { range: AbstractRange }
 const getName = (termToken: string) => "markmysearch-" + termToken;
 
 class ExtendedHighlight {
-	highlight: Highlight;
-	boxInfoRanges: Map<BoxInfo, AbstractRange> = new Map();
+	readonly highlight: Highlight;
+	readonly boxInfoRanges: Map<BoxInfo, AbstractRange> = new Map();
 
 	constructor (...initialRanges: Array<AbstractRange>) {
 		this.highlight = new Highlight(...initialRanges);
@@ -68,8 +71,8 @@ class ExtendedHighlight {
 }
 
 class ExtendedHighlightRegistry {
-	registry = CSS.highlights as HighlightRegistry;
-	map: Map<string, ExtendedHighlight> = new Map();
+	readonly registry = CSS.highlights as HighlightRegistry;
+	readonly map: Map<string, ExtendedHighlight> = new Map();
 
 	get size () {
 		return this.map.size;
@@ -102,21 +105,21 @@ class ExtendedHighlightRegistry {
 }
 
 class HighlightEngine implements AbstractEngine {
-	termOccurrences = new StandardTermCounter();
-	termWalker = new StandardTermWalker();
-	termMarkers = new StandardTermMarker();
+	readonly termOccurrences: AbstractTermCounter = new StandardTermCounter();
+	readonly termWalker: AbstractTermWalker = new StandardTermWalker();
+	readonly termMarkers: AbstractTermMarker = new StandardTermMarker();
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
-	flowMonitor?: AbstractFlowMonitor;
+	readonly flowMonitor: AbstractFlowMonitor;
 
-	mutationUpdates = getMutationUpdates(() => this.flowMonitor?.mutationObserver);
+	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	specialHighlighter?: AbstractSpecialEngine;
+	readonly specialHighlighter: AbstractSpecialEngine;
 
-	highlights = new ExtendedHighlightRegistry();
-	highlightedElements: Set<HTMLElement> = new Set();
+	readonly highlights = new ExtendedHighlightRegistry();
+	readonly highlightedElements: Set<HTMLElement> = new Set();
 
 	constructor (
 		terms: Array<MatchTerm>,
@@ -134,6 +137,8 @@ class HighlightEngine implements AbstractEngine {
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
 		this.flowMonitor = new StandardFlowMonitor<Flow>(
+			terms,
+			termPatterns,
 			() => ({ flows: [] }),
 			() => this.countMatches(),
 			undefined,
@@ -159,11 +164,11 @@ class HighlightEngine implements AbstractEngine {
 				}
 			},
 		);
-		this.flowMonitor.initMutationUpdatesObserver(terms, termPatterns);
+		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);
 		this.specialHighlighter = new PaintSpecialEngine(this.termTokens, this.termPatterns);
 	}
 
-	getCSS: EngineCSS = {
+	readonly getCSS: EngineCSS = {
 		misc: () => "",
 		termHighlights: () => "",
 		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
@@ -181,14 +186,14 @@ class HighlightEngine implements AbstractEngine {
 		},
 	};
 
-	getTermBackgroundStyle = TermCSS.getFlatStyle;
+	readonly getTermBackgroundStyle = TermCSS.getFlatStyle;
 
-	requestRefreshIndicators?: Generator;
-	requestRefreshTermControls?: Generator;
+	readonly requestRefreshIndicators: Generator;
+	readonly requestRefreshTermControls: Generator;
 
 	countMatches () {
-		this.requestRefreshIndicators?.next();
-		this.requestRefreshTermControls?.next();
+		this.requestRefreshIndicators.next();
+		this.requestRefreshTermControls.next();
 	}
 
 	startHighlighting (
@@ -202,20 +207,20 @@ class HighlightEngine implements AbstractEngine {
 		this.undoHighlights(termsToPurge);
 		// MAIN
 		terms.forEach(term => this.highlights.set(this.termTokens.get(term), new ExtendedHighlight()));
-		this.flowMonitor?.generateBoxesInfo(terms, this.termPatterns, document.body);
+		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter?.startHighlighting(terms, hues);
+		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter?.endHighlighting();
+		this.specialHighlighter.endHighlighting();
 		this.termWalker.cleanup();
 	}
 
 	undoHighlights (terms?: Array<MatchTerm>) {
-		this.flowMonitor?.removeBoxesInfo(terms);
+		this.flowMonitor.removeBoxesInfo(terms);
 		if (terms) {
 			terms.forEach(term => this.highlights.delete(this.termTokens.get(term)));
 		} else {

@@ -1,4 +1,4 @@
-interface Highlightables {
+type Highlightables = Readonly<{
 	checkElement: (node: Node) => boolean
 
 	findAncestor: <T extends Element>(element: T) => T
@@ -10,6 +10,6 @@ interface Highlightables {
 	 * @param element The lowest descendant to be marked of the highlightable element.
 	 */
 	markElementsUpTo: (element: Element) => void
-}
+}>
 
 export type { Highlightables };

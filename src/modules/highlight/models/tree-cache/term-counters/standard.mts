@@ -19,7 +19,7 @@ class StandardTermCounter implements AbstractTermCounter {
 		return count;
 	}
 
-	countFaster = this.countBetter;
+	readonly countFaster = this.countBetter;
 
 	exists (term: MatchTerm) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: Element) =>

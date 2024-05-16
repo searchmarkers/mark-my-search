@@ -10,11 +10,11 @@ type HighlighterProcess =
 	| "refreshIndicators"
 ;
 
-interface EngineCSS {
+type EngineCSS = Readonly<{
 	misc: () => string
 	termHighlights: () => string
 	termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
-}
+}>
 
 interface AbstractEngine {
 	termOccurrences?: AbstractTermCounter

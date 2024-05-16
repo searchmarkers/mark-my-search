@@ -2,6 +2,9 @@ import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.m
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
 import { StandardTermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/standard.mjs";
 import { StandardTermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/standard.mjs";
 import { StandardTermMarker } from "/dist/modules/highlight/models/tree-edit/term-markers/standard.mjs";
@@ -27,7 +30,7 @@ const canHighlightElement = (rejectSelector: string, element: Element): boolean 
 const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
 
 interface FlowNodeListItem {
-	value: Text
+	readonly value: Text
 	next: FlowNodeListItem | null
 }
 
@@ -94,17 +97,16 @@ class FlowNodeList {
 }
 
 class ElementEngine implements AbstractEngine {
-	termOccurrences = new StandardTermCounter();
-	termWalker = new StandardTermWalker();
-	termMarkers = new StandardTermMarker();
+	readonly termOccurrences: AbstractTermCounter = new StandardTermCounter();
+	readonly termWalker: AbstractTermWalker = new StandardTermWalker();
+	readonly termMarkers: AbstractTermMarker = new StandardTermMarker();
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
-	mutationObserver?: MutationObserver;
-	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
+	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	specialHighlighter?: AbstractSpecialEngine;
+	readonly specialHighlighter: AbstractSpecialEngine;
 
 	constructor (
 		terms: Array<MatchTerm>,
@@ -125,11 +127,11 @@ class ElementEngine implements AbstractEngine {
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
-		this.mutationObserver = this.getMutationUpdatesObserver(terms);
+		this.mutationUpdates = getMutationUpdates(this.getMutationUpdatesObserver(terms));
 		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
-	getCSS: EngineCSS = {
+	readonly getCSS: EngineCSS = {
 		misc: () => "",
 		termHighlights: () => {
 			return (`
@@ -157,14 +159,14 @@ ${HIGHLIGHT_TAG} {
 		},
 	};
 
-	getTermBackgroundStyle = TermCSS.getDiagonalStyle;
+	readonly getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
-	requestRefreshIndicators?: Generator;
-	requestRefreshTermControls?: Generator;
+	readonly requestRefreshIndicators: Generator;
+	readonly requestRefreshTermControls: Generator;
 
 	countMatches () {
-		this.requestRefreshIndicators?.next();
-		this.requestRefreshTermControls?.next();
+		this.requestRefreshIndicators.next();
+		this.requestRefreshTermControls.next();
 	}
 
 	startHighlighting (
@@ -179,13 +181,13 @@ ${HIGHLIGHT_TAG} {
 		// MAIN
 		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter?.startHighlighting(terms, hues);
+		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter?.endHighlighting();
+		this.specialHighlighter.endHighlighting();
 	}
 
 	/**
@@ -221,7 +223,7 @@ ${HIGHLIGHT_TAG} {
 	 * @param terms Terms to find, highlight, and mark.
 	 * @param rootNode A node under which to find and highlight term occurrences.
 	 */
-	generateTermHighlightsUnderNode = (() => {
+	readonly generateTermHighlightsUnderNode = (() => {
 		/**
 		 * Highlights a term matched in a text node.
 		 * @param term The term matched.

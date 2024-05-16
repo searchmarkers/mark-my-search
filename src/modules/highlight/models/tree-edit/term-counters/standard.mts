@@ -3,7 +3,7 @@ import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { getTermClass } from "/dist/modules/common.mjs";
 
 class StandardTermCounter implements AbstractTermCounter {
-	countBetter = this.countFaster;
+	readonly countBetter = this.countFaster;
 
 	countFaster (term: MatchTerm, termTokens: TermTokens) {
 		// This is an unstable heuristic: the more highlight elements are split, the more it overpredicts.

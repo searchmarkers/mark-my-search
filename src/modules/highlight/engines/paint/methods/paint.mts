@@ -1,6 +1,7 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
@@ -29,7 +30,7 @@ class PaintMethod implements AbstractMethod {
 		}
 	}
 
-	highlightables: Highlightables = {
+	readonly highlightables: Highlightables = {
 		checkElement: (element: Element) => !element.closest("a"),
 		findAncestor: <T extends Element> (element: T) => {
 			let ancestor = element;
@@ -48,7 +49,7 @@ class PaintMethod implements AbstractMethod {
 		markElementsUpTo,
 	};
 
-	getCSS = {
+	readonly getCSS: EngineCSS = {
 		misc: () => "",
 		termHighlights: () => "",
 		termHighlight: (terms: Array<MatchTerm>, hues: number[]) => {
@@ -83,14 +84,17 @@ class PaintMethod implements AbstractMethod {
 		});
 	}
 
-	getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
+	getHighlightedElements () {
+		return document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
+	}
 
-	constructHighlightStyleRule = (highlightId: string, boxes: Array<Box>) =>
-		`body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`;
+	constructHighlightStyleRule (highlightId: string, boxes: Array<Box>) {
+		return `body [markmysearch-h_id="${highlightId}"] { --markmysearch-boxes: ${JSON.stringify(boxes)}; }`;
+	}
 	
-	tempReplaceContainers = () => undefined;
+	tempReplaceContainers () {}
 
-	tempRemoveDrawElement = () => undefined;
+	tempRemoveDrawElement () {}
 }
 
 export { type TermSelectorStyles, PaintMethod };

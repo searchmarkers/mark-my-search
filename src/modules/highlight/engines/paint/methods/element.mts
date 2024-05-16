@@ -2,6 +2,7 @@ import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/metho
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { TreeCache, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
@@ -14,13 +15,13 @@ class ElementMethod implements AbstractMethod {
 		this.termTokens = termTokens;
 	}
 
-	highlightables: Highlightables = {
+	readonly highlightables: Highlightables = {
 		checkElement: () => true,
 		findAncestor: <T extends Element> (element: T) => element,
 		markElementsUpTo: () => undefined,
 	};
 
-	getCSS = {
+	readonly getCSS: EngineCSS = {
 		misc: () => {
 			return (`
 #${EleID.DRAW_CONTAINER} {
@@ -58,17 +59,21 @@ border-radius: 2px;
 		},
 	};
 
-	endHighlighting = () => undefined;
+	endHighlighting () {}
 
-	getHighlightedElements = () => document.body.querySelectorAll("[markmysearch-h_id]");
+	getHighlightedElements () {
+		return document.body.querySelectorAll("[markmysearch-h_id]");
+	}
 
-	getElementDrawId = (highlightId: string) => EleID.DRAW_ELEMENT + "-" + highlightId;
+	getElementDrawId (highlightId: string) {
+		return EleID.DRAW_ELEMENT + "-" + highlightId;
+	}
 
-	constructHighlightStyleRule = (highlightId: string) => (
-		`body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
+	constructHighlightStyleRule (highlightId: string) {
+		return `body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
 			this.getElementDrawId(highlightId)
-		}) !important; background-repeat: no-repeat !important; }`
-	);
+		}) !important; background-repeat: no-repeat !important; }`;
+	}
 
 	tempReplaceContainers (root: Element, recurse: boolean) {
 		// This whole operation is plagued with issues. Containers will almost never get deleted when they should

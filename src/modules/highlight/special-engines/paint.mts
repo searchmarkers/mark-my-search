@@ -19,12 +19,12 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
-	method: UrlMethod;
+	readonly method: UrlMethod;
 	terms: Array<MatchTerm> = [];
 	hues: Array<number> = [];
-	styleRules: StyleRulesInfo = { hovered: "", focused: "" };
+	readonly styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
-	elementsInfo: Map<Element, {
+	readonly elementsInfo: Map<Element, {
 		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
 	}> = new Map();
 

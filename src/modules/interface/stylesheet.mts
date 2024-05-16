@@ -334,7 +334,6 @@ ${highlighter.current?.getCSS?.misc() ?? ""}
 	terms.forEach((term, i) => {
 		const hue = hues[i % hues.length];
 		const cycle = Math.floor(i / hues.length);
-		const getTermBackgroundStyle = highlighter.current?.getTermBackgroundStyle ?? (() => "");
 		style.textContent += makeImportant(`
 /* || Term Highlight */
 
@@ -353,7 +352,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 /* || Term Control Buttons */
 
 #${EleID.BAR_TERMS} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
-	background: ${getTermBackgroundStyle(
+	background: ${highlighter.current?.getTermBackgroundStyle(
 		`hsl(${hue} 70% 70% / ${barLook.opacityTerm})`,
 		`hsl(${hue} 70% 88% / ${barLook.opacityTerm})`,
 		cycle,
@@ -361,7 +360,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 }
 
 #${EleID.BAR}.${EleClass.DISABLED} #${EleID.BAR_TERMS} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
-	background: ${getTermBackgroundStyle(
+	background: ${highlighter.current?.getTermBackgroundStyle(
 		`hsl(${hue} 70% 70% / min(${barLook.opacityTerm}, 0.4))`,
 		`hsl(${hue} 70% 88% / min(${barLook.opacityTerm}, 0.4))`,
 		cycle,

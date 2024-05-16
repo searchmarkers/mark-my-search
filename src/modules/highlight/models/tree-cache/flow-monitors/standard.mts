@@ -5,24 +5,27 @@ import { type BaseFlow, matchInTextFlow } from "/dist/modules/highlight/matcher.
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
 class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
-	mutationObserver = new MutationObserver(() => undefined);
+	readonly mutationObserver = new MutationObserver(() => undefined);
 
-	createElementCache: (element: Element) => TreeCache<Flow> = () => ({ flows: [] });
+	readonly createElementCache: (element: Element) => TreeCache<Flow> = () => ({ flows: [] });
 
-	onHighlightingUpdated: () => void = () => undefined;
+	readonly onHighlightingUpdated: () => void = () => undefined;
 
-	onNewHighlightedAncestor?: (ancestor: Element) => void = () => undefined;
+	readonly onNewHighlightedAncestor?: (ancestor: Element) => void = () => undefined;
 
-	onBoxesInfoPopulated?: (element: Element) => void;
-	onBoxesInfoRemoved?: (element: Element) => void;
+	readonly onBoxesInfoPopulated?: (element: Element) => void;
+	readonly onBoxesInfoRemoved?: (element: Element) => void;
 
 	constructor (
+		terms: Array<MatchTerm>,
+		termPatterns: TermPatterns,
 		createElementCache: (element: Element) => TreeCache<Flow>,
 		onHighlightingUpdated: () => void,
 		onNewHighlightedAncestor?: (ancestor: Element) => void,
 		onBoxesInfoPopulated?: (element: Element & { [CACHE]: TreeCache<Flow> }) => void,
 		onBoxesInfoRemoved?: (element: Element & { [CACHE]: TreeCache<Flow> }) => void,
 	) {
+		this.mutationObserver = this.getMutationUpdatesObserver(terms, termPatterns);
 		this.createElementCache = createElementCache;
 		this.onHighlightingUpdated = onHighlightingUpdated;
 		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
@@ -30,9 +33,9 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		this.onBoxesInfoRemoved = onBoxesInfoRemoved;
 	}
 
-	initMutationUpdatesObserver (terms: Array<MatchTerm>, termPatterns: TermPatterns) {
+	getMutationUpdatesObserver (terms: Array<MatchTerm>, termPatterns: TermPatterns) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		this.mutationObserver = new MutationObserver(mutations => {
+		return new MutationObserver(mutations => {
 			// TODO optimise
 			const elementsAffected: Set<HTMLElement> = new Set();
 			const elementsAdded: Set<HTMLElement> = new Set();
