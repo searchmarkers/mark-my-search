@@ -9,7 +9,7 @@ import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/mode
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
 import { EleID, EleClass, AtRuleID, elementsPurgeClass, type TermHues, getTermClass } from "/dist/modules/common.mjs";
@@ -98,6 +98,9 @@ class ElementEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
+	readonly termTokens: TermTokens;
+	readonly termPatterns: TermPatterns;
+
 	mutationObserver?: MutationObserver;
 	mutationUpdates = getMutationUpdates(() => this.mutationObserver);
 
@@ -107,11 +110,15 @@ class ElementEngine implements AbstractEngine {
 		terms: Array<MatchTerm>,
 		hues: TermHues,
 		updateTermStatus: UpdateTermStatus,
+		termTokens: TermTokens,
+		termPatterns: TermPatterns,
 	) {
+		this.termTokens = termTokens;
+		this.termPatterns = termPatterns;
 		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, hues, Array.from(document.body.querySelectorAll(terms
+			this.termMarkers.insert(terms, termTokens, hues, Array.from(document.body.querySelectorAll(terms
 				.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
-				.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term.token)}`)
+				.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, termTokens)}`)
 				.join(", ")
 			) as NodeListOf<HTMLElement>))
 		), 50, 500);
@@ -119,7 +126,7 @@ class ElementEngine implements AbstractEngine {
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
 		this.mutationObserver = this.getMutationUpdatesObserver(terms);
-		this.specialHighlighter = new PaintSpecialEngine();
+		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
 	getCSS: EngineCSS = {
@@ -141,8 +148,8 @@ ${HIGHLIGHT_TAG} {
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
 			return (`
-#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term.token)},
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term.token)} {
+#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term, this.termTokens)},
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term, this.termTokens)} {
 	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
 	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
 }`
@@ -164,6 +171,7 @@ ${HIGHLIGHT_TAG} {
 		terms: Array<MatchTerm>,
 		termsToHighlight: Array<MatchTerm>,
 		termsToPurge: Array<MatchTerm>,
+		hues: Array<number>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
@@ -171,7 +179,7 @@ ${HIGHLIGHT_TAG} {
 		// MAIN
 		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter?.startHighlighting(terms);
+		this.specialHighlighter?.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
@@ -189,7 +197,7 @@ ${HIGHLIGHT_TAG} {
 	undoHighlights (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
 		if (terms && !terms.length)
 			return; // Optimization for removing 0 terms
-		const classNames = terms?.map(term => getTermClass(term.token));
+		const classNames = terms?.map(term => getTermClass(term, this.termTokens));
 		const highlights = Array.from(root.querySelectorAll(
 			classNames ? `${HIGHLIGHT_TAG}.${classNames.join(`, ${HIGHLIGHT_TAG}.`)}` : HIGHLIGHT_TAG
 		)).reverse();
@@ -251,7 +259,7 @@ ${HIGHLIGHT_TAG} {
 			// insert: Highlight Element
 			const textHighlightNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
-			highlight.classList.add(getTermClass(term.token));
+			highlight.classList.add(getTermClass(term, this.termTokens));
 			highlight.appendChild(textHighlightNode);
 			parent.insertBefore(highlight, node);
 			const textHighlightNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textHighlightNode);
@@ -281,7 +289,7 @@ ${HIGHLIGHT_TAG} {
 			const parent = textAfterNode.parentNode as Node;
 			const textEndNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
-			highlight.classList.add(getTermClass(term.token));
+			highlight.classList.add(getTermClass(term, this.termTokens));
 			highlight.appendChild(textEndNode);
 			textAfterNode.textContent = text.substring(end);
 			parent.insertBefore(highlight, textAfterNode);
@@ -307,7 +315,7 @@ ${HIGHLIGHT_TAG} {
 				let nodeItem = nodeItems.first as FlowNodeListItem;
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
-				for (const match of textFlow.matchAll(term.pattern)) {
+				for (const match of textFlow.matchAll(this.termPatterns.get(term))) {
 					let highlightStart = match.index as number;
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {
@@ -401,10 +409,10 @@ ${HIGHLIGHT_TAG} {
 		};
 	})();
 
-	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
-		const focus = this.termWalker.step(reverse, stepNotJump, term);
+	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
+		const focus = this.termWalker.step(reverse, stepNotJump, term, this.termTokens);
 		if (focus) {
-			this.termMarkers.raise(term, getContainerBlock(focus));
+			this.termMarkers.raise(term, this.termTokens, getContainerBlock(focus));
 		}
 		return focus;
 	}

@@ -1,4 +1,4 @@
-import { MatchTerm } from "/dist/modules/match-term.mjs";
+import { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import type * as Toolbar from "/dist/modules/interface/toolbar.mjs";
@@ -10,7 +10,13 @@ import { Z_INDEX_MAX } from "/dist/modules/common.mjs";
  * @param terms Terms to account for and style.
  * @param hues Color hues for term styles to cycle through.
  */
-const fillContent = (terms: Array<MatchTerm>, hues: TermHues, barLook: Toolbar.BarLook, highlighter: Highlighter) => {
+const fillContent = (
+	terms: Array<MatchTerm>,
+	termTokens: TermTokens,
+	hues: TermHues,
+	barLook: Toolbar.BarLook,
+	highlighter: Highlighter,
+) => {
 	const style = document.getElementById(EleID.STYLE) as HTMLStyleElement;
 	const makeImportant = (styleText: string): string =>
 		styleText.replace(/;/g, " !important;"); // Prevent websites from overriding rules with !important;
@@ -329,7 +335,6 @@ ${highlighter.current?.getCSS?.misc() ?? ""}
 		const hue = hues[i % hues.length];
 		const cycle = Math.floor(i / hues.length);
 		const getTermBackgroundStyle = highlighter.current?.getTermBackgroundStyle ?? (() => "");
-		term.hue = hue;
 		style.textContent += makeImportant(`
 /* || Term Highlight */
 
@@ -339,7 +344,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 
 /* || Term Scroll Markers */
 
-#${EleID.MARKER_GUTTER} .${getTermClass(term.token)} {
+#${EleID.MARKER_GUTTER} .${getTermClass(term, termTokens)} {
 	background: hsl(${hue} 100% 44%);
 }
 
@@ -347,7 +352,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 
 /* || Term Control Buttons */
 
-#${EleID.BAR_TERMS} .${getTermClass(term.token)} .${EleClass.CONTROL_PAD} {
+#${EleID.BAR_TERMS} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
 	background: ${getTermBackgroundStyle(
 		`hsl(${hue} 70% 70% / ${barLook.opacityTerm})`,
 		`hsl(${hue} 70% 88% / ${barLook.opacityTerm})`,
@@ -355,7 +360,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 	)};
 }
 
-#${EleID.BAR}.${EleClass.DISABLED} #${EleID.BAR_TERMS} .${getTermClass(term.token)} .${EleClass.CONTROL_PAD} {
+#${EleID.BAR}.${EleClass.DISABLED} #${EleID.BAR_TERMS} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
 	background: ${getTermBackgroundStyle(
 		`hsl(${hue} 70% 70% / min(${barLook.opacityTerm}, 0.4))`,
 		`hsl(${hue} 70% 88% / min(${barLook.opacityTerm}, 0.4))`,
@@ -364,7 +369,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 }
 
 #${EleID.BAR_TERMS} {
-	& .${getTermClass(term.token)} .${EleClass.CONTROL_BUTTON}:not(:disabled) {
+	& .${getTermClass(term, termTokens)} .${EleClass.CONTROL_BUTTON}:not(:disabled) {
 		&:hover {
 			background: hsl(${hue} 70% 80%);
 		}
@@ -372,7 +377,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 			background: hsl(${hue} 70% 70%);
 		}
 	}
-	&.${ToolbarClasses.getControlPadClass(i)} .${getTermClass(term.token)} .${EleClass.CONTROL_PAD} {
+	&.${ToolbarClasses.getControlPadClass(i)} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
 		background: hsl(${hue} 100% 90%);
 	}
 }

@@ -1,16 +1,22 @@
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, getTermClass } from "/dist/modules/common.mjs";
+import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import { getTermClass } from "/dist/modules/common.mjs";
+import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass } from "/dist/modules/common.mjs";
 
 class StandardTermWalker implements AbstractTermWalker {
-	step (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
+	step (
+		reverse: boolean,
+		stepNotJump: boolean,
+		term: MatchTerm | null,
+		termTokens: TermTokens,
+	): HTMLElement | null {
 		if (stepNotJump) {
 			// Currently no support for specific terms.
 			return this.focusNextTermStep(reverse);
 		} else {
-			return this.focusNextTermJump(reverse, term);
+			return this.focusNextTermJump(reverse, termTokens, term);
 		}
 	}
 
@@ -90,8 +96,8 @@ class StandardTermWalker implements AbstractTermWalker {
 	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
 	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
 	 */
-	focusNextTermJump (reverse: boolean, term?: MatchTerm): HTMLElement | null {
-		const termSelector = term ? getTermClass(term.token) : undefined;
+	focusNextTermJump (reverse: boolean, termTokens: TermTokens, term: MatchTerm | null): HTMLElement | null {
+		const termSelector = term ? getTermClass(term, termTokens) : undefined;
 		const focusBase = document.body
 			.getElementsByClassName(EleClass.FOCUS)[0] as HTMLElement;
 		const focusContainer = document.body

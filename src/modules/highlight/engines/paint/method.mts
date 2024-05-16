@@ -18,7 +18,7 @@ interface AbstractMethod {
 	 * @param boxes Details of the highlight boxes to be painted. May not be required depending on the PAINT variant in use.
 	 * @param terms Terms currently being highlighted. Some PAINT variants use this information at this point.
 	 */
-	constructHighlightStyleRule: (highlightId: string, boxes: Array<Box>, terms: Array<MatchTerm>) => string
+	constructHighlightStyleRule: (highlightId: string, boxes: Array<Box>, terms: Array<MatchTerm>, hues: Array<number>) => string
 
 	tempReplaceContainers: (root: Element, recurse: boolean) => void
 

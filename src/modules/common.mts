@@ -1,3 +1,5 @@
+import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+
 /**
  * Logs a debug message as part of normal operation.
  * @param operation Description of the process started or completed, or the event encountered.
@@ -209,9 +211,11 @@ const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => bo
 
 type TermHues = Array<number>
 
-const getTermClass = (termToken: string): string => EleClass.TERM + "-" + termToken;
+const getTermClass = (term: MatchTerm, termTokens: TermTokens): string => EleClass.TERM + "-" + termTokens.get(term);
 
-const getTermToken = (termClass: string) => termClass.slice(EleClass.TERM.length + 1);
+const getTermTokenClass = (termToken: string): string => EleClass.TERM + "-" + termToken;
+
+const getTermClassToken = (termClass: string) => termClass.slice(EleClass.TERM.length + 1);
 
 const getIdSequential = (function* () {
 	let id = 0;
@@ -256,6 +260,17 @@ const { objectSetValue, objectGetValue } = (() => {
 	};
 })();
 
+/**
+ * Sanitizes a string for regex use by escaping all potential regex control characters.
+ * @param word A string.
+ * @param replacement The character pattern with which the sanitizer regex will replace potential control characters.
+ * Defaults to a pattern which evaluates to the backslash character plus the control character, hence escaping it.
+ * @returns The transformed string to be matched in exact form as a regex pattern.
+ */
+const sanitizeForRegex = (word: string, replacement = "\\$&") =>
+	word.replace(/[/\\^$*+?.()|[\]{}]/g, replacement)
+;
+
 export {
 	log, assert,
 	type Browser, compatibility,
@@ -264,7 +279,8 @@ export {
 	EleID, EleClass, AtRuleID,
 	getElementTagsSet,
 	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass, focusClosest,
-	type TermHues, getTermClass, getTermToken,
+	type TermHues, getTermClass, getTermTokenClass, getTermClassToken,
 	getIdSequential,
 	itemsMatch, objectSetValue, objectGetValue,
+	sanitizeForRegex,
 };

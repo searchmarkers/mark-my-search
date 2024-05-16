@@ -2,7 +2,7 @@ import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-ca
 import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { type BaseFlow, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
 class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 	mutationObserver = new MutationObserver(() => undefined);
@@ -30,7 +30,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		this.onBoxesInfoRemoved = onBoxesInfoRemoved;
 	}
 
-	initMutationUpdatesObserver (terms: Array<MatchTerm>) {
+	initMutationUpdatesObserver (terms: Array<MatchTerm>, termPatterns: TermPatterns) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		this.mutationObserver = new MutationObserver(mutations => {
 			// TODO optimise
@@ -67,24 +67,24 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 				}
 			}
 			for (const element of elementsAffected) {
-				this.generateBoxesInfoForFlowOwnersFromContent(terms, element);
+				this.generateBoxesInfoForFlowOwnersFromContent(terms, termPatterns, element);
 			}
 		});
 	}
 
-	generateBoxesInfoForFlowOwnersFromContent (terms: Array<MatchTerm>, element: Element) {
+	generateBoxesInfoForFlowOwnersFromContent (terms: Array<MatchTerm>, termPatterns: TermPatterns, element: Element) {
 		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		if (highlightTags.flow.has(element.tagName)) {
 			// The element may include non self-contained flows.
-			this.generateBoxesInfoForFlowOwners(terms, element);
+			this.generateBoxesInfoForFlowOwners(terms, termPatterns, element);
 		} else {
 			// The element can only include self-contained flows, so flows need only be recalculated below the element.
-			this.generateBoxesInfo(terms, element);
+			this.generateBoxesInfo(terms, termPatterns, element);
 		}
 	}
 
-	generateBoxesInfoForFlowOwners (terms: Array<MatchTerm>, node: Node) {
+	generateBoxesInfoForFlowOwners (terms: Array<MatchTerm>, termPatterns: TermPatterns, node: Node) {
 		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		const parent = node.parentElement;
@@ -107,21 +107,21 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 			if (breakFirst && breakLast) {
 				// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
 				// ALL flows of descendants are recalculated. See below.
-				this.generateBoxesInfo(terms, parent);
+				this.generateBoxesInfo(terms, termPatterns, parent);
 			} else {
 				// The flow containing the node may leave the parent, which we assume disrupted the text flows of an ancestor.
-				this.generateBoxesInfoForFlowOwners(terms, parent);
+				this.generateBoxesInfoForFlowOwners(terms, termPatterns, parent);
 			}
 		} else {
 			// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
 			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin;
 			// example can be seen when loading DuckDuckGo results dynamically. Could be fixed by discarding text flows which start
 			// or end inside elements which do not contain and are not contained by a given element. Will not implement.
-			this.generateBoxesInfo(terms, parent);
+			this.generateBoxesInfo(terms, termPatterns, parent);
 		}
 	}
 
-	generateBoxesInfo (terms: Array<MatchTerm>, flowOwner: Element) {
+	generateBoxesInfo (terms: Array<MatchTerm>, termPatterns: TermPatterns, flowOwner: Element) {
 		if (!flowOwner.firstChild)
 			return;
 		const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
@@ -129,7 +129,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		this.removeFlows(flowOwner);
 		textFlows // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
 			.slice((breaksFlow && textFlows[0]?.length) ? 0 : 1, (breaksFlow && textFlows.at(-1)?.length) ? undefined : -1)
-			.forEach(textFlow => this.flowCacheWithBoxesInfo(terms, textFlow));
+			.forEach(textFlow => this.flowCacheWithBoxesInfo(terms, termPatterns, textFlow));
 		this.onHighlightingUpdated();
 	}
 
@@ -174,7 +174,9 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 			// eslint-disable-next-line no-cond-assign
 			while (element = walker.nextNode() as HighlightingElement) {
 				element[CACHE].flows = element[CACHE].flows.filter(flow => {
-					flow.boxesInfo = flow.boxesInfo.filter(boxInfo => terms.every(term => term.token !== boxInfo.term.token));
+					flow.boxesInfo = flow.boxesInfo.filter(boxInfo =>
+						!terms.includes(boxInfo.term) // TODO-REMOVE this used to compare tokens
+					);
 					return flow.boxesInfo.length > 0;
 				});
 				if (element[CACHE].flows.length === 0) {
@@ -194,7 +196,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 	 * @param terms Terms to find and highlight.
 	 * @param textFlow Consecutive text nodes to highlight inside.
 	 */
-	flowCacheWithBoxesInfo (terms: Array<MatchTerm>, textFlow: Array<Text>) {
+	flowCacheWithBoxesInfo (terms: Array<MatchTerm>, termPatterns: TermPatterns, textFlow: Array<Text>) {
 		const text = textFlow.map(node => node.textContent).join("");
 		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
 			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
@@ -204,7 +206,7 @@ class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor 
 		const flow: BaseFlow<true> = {
 			text,
 			// Match the terms inside the flow to produce highlighting box info.
-			boxesInfo: matchInTextFlow(terms, text, textFlow),
+			boxesInfo: matchInTextFlow(terms, termPatterns, text, textFlow),
 		};
 		if (ancestorHighlighting) {
 			ancestorHighlighting.flows.push(flow as Flow);

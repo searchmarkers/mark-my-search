@@ -1,12 +1,14 @@
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { TreeCache, Flow, Box } from "/dist/modules/highlight/engines/paint.mjs";
+import type { TermTokens } from "/dist/modules/match-term.mjs";
 
 const getBoxesOwned = (
+	termTokens: TermTokens,
 	owner: Element,
 	range = new Range(),
 ): Array<Box> => {
-	let boxes = getBoxes(owner, owner, range);
+	let boxes = getBoxes(termTokens, owner, owner, range);
 	const walker = document.createTreeWalker(owner, NodeFilter.SHOW_ELEMENT, (element: Element) =>
 		highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 	);
@@ -14,13 +16,14 @@ const getBoxesOwned = (
 	// eslint-disable-next-line no-cond-assign
 	while (child = walker.nextNode() as Element) {
 		if (CACHE in child && !(child[CACHE] as TreeCache).isHighlightable) {
-			boxes = boxes.concat(getBoxes(owner, child, range));
+			boxes = boxes.concat(getBoxes(termTokens, owner, child, range));
 		}
 	}
 	return boxes;
 };
 
 const getBoxes = (
+	termTokens: TermTokens,
 	owner: Element,
 	element?: Element,
 	range = new Range(),
@@ -34,13 +37,14 @@ const getBoxes = (
 	if (!ownerRects.length) {
 		ownerRects = [ owner.getBoundingClientRect() ];
 	}
-	elementPopulateBoxes(highlighting.flows, ownerRects, range);
+	elementPopulateBoxes(highlighting.flows, ownerRects, termTokens, range);
 	return highlighting.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
 };
 
 const elementPopulateBoxes = (
 	elementFlows: Array<Flow>,
 	elementRects: Array<DOMRect>,
+	termTokens: TermTokens,
 	range = new Range(),
 ) =>
 	elementFlows.forEach(flow => flow.boxesInfo.forEach(boxInfo => {
@@ -68,7 +72,7 @@ const elementPopulateBoxes = (
 			}
 			boxInfo.boxes ??= [];
 			boxInfo.boxes.push({
-				token: boxInfo.term.token,
+				token: termTokens.get(boxInfo.term),
 				x: Math.round(x),
 				y: Math.round(y),
 				width: Math.round(textRect.width),

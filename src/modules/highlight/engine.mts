@@ -39,6 +39,7 @@ interface AbstractEngine {
 		terms: Array<MatchTerm>,
 		termsToHighlight: Array<MatchTerm>,
 		termsToPurge: Array<MatchTerm>,
+		hues: Array<number>,
 	) => void
 	
 	// TODO document
@@ -61,7 +62,7 @@ interface AbstractEngine {
 	stepToNextOccurrence: (
 		reverse: boolean,
 		stepNotJump: boolean,
-		term?: MatchTerm,
+		term: MatchTerm | null,
 	) => HTMLElement | null
 }
 

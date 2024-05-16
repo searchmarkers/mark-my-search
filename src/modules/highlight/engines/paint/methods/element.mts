@@ -4,10 +4,16 @@ import type { TreeCache, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import { Z_INDEX_MIN, EleID, EleClass, getTermClass } from "/dist/modules/common.mjs";
+import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import { Z_INDEX_MIN, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 
 class ElementMethod implements AbstractMethod {
+	readonly termTokens: TermTokens;
+
+	constructor (termTokens: TermTokens) {
+		this.termTokens = termTokens;
+	}
+
 	highlightables: Highlightables = {
 		checkElement: () => true,
 		findAncestor: <T extends Element> (element: T) => element,
@@ -45,7 +51,7 @@ border-radius: 2px;
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
 			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
-				getTermClass(term.token)
+				getTermClass(term, this.termTokens)
 			}`;
 			const backgroundStyle = TermCSS.getHorizontalStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
 			return`${selector} { background: ${backgroundStyle}; }`;
@@ -86,7 +92,7 @@ border-radius: 2px;
 		containers: Array<Element>,
 		range = new Range(),
 	) {
-		const boxes: Array<Box> = getBoxesOwned(element);
+		const boxes: Array<Box> = getBoxesOwned(this.termTokens, element);
 		if (boxes.length) {
 			const highlighting = element[CACHE] as TreeCache;
 			const container = document.createElement("div");
@@ -98,7 +104,7 @@ border-radius: 2px;
 				element.style.top = box.y.toString() + "px";
 				element.style.width = box.width.toString() + "px";
 				element.style.height = box.height.toString() + "px";
-				element.classList.add(EleClass.TERM, getTermClass(box.token));
+				element.classList.add(EleClass.TERM, getTermTokenClass(box.token));
 				container.appendChild(element);
 			});
 			const boxRightmost = boxes.reduce((box, boxCurrent) =>

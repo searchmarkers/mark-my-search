@@ -11,7 +11,7 @@ import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs"
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
 import { EleID, EleClass, type TermHues } from "/dist/modules/common.mjs";
@@ -106,6 +106,9 @@ class HighlightEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
+	readonly termTokens: TermTokens;
+	readonly termPatterns: TermPatterns;
+
 	flowMonitor?: AbstractFlowMonitor;
 
 	mutationUpdates = getMutationUpdates(() => this.flowMonitor?.mutationObserver);
@@ -114,14 +117,18 @@ class HighlightEngine implements AbstractEngine {
 
 	highlights = new ExtendedHighlightRegistry();
 	highlightedElements: Set<HTMLElement> = new Set();
-	
+
 	constructor (
 		terms: Array<MatchTerm>,
 		hues: TermHues,
 		updateTermStatus: UpdateTermStatus,
+		termTokens: TermTokens,
+		termPatterns: TermPatterns,
 	) {
+		this.termTokens = termTokens;
+		this.termPatterns = termPatterns;
 		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, hues, Array.from(this.highlightedElements))
+			this.termMarkers.insert(terms, termTokens, hues, Array.from(this.highlightedElements))
 		), 200, 2000);
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
@@ -134,7 +141,7 @@ class HighlightEngine implements AbstractEngine {
 				this.highlightedElements.add(element as unknown as HTMLElement);
 				for (const flow of element[CACHE].flows) {
 					for (const boxInfo of flow.boxesInfo) {
-						this.highlights.get(boxInfo.term.token)?.add(new StaticRange({
+						this.highlights.get(this.termTokens.get(boxInfo.term))?.add(new StaticRange({
 							startContainer: boxInfo.node,
 							startOffset: boxInfo.start,
 							endContainer: boxInfo.node,
@@ -147,13 +154,13 @@ class HighlightEngine implements AbstractEngine {
 				this.highlightedElements.delete(element as unknown as HTMLElement);
 				for (const flow of element[CACHE].flows) {
 					for (const boxInfo of flow.boxesInfo) {
-						this.highlights.get(boxInfo.term.token)?.deleteByBoxInfo(boxInfo);
+						this.highlights.get(this.termTokens.get(boxInfo.term))?.deleteByBoxInfo(boxInfo);
 					}
 				}
 			},
 		);
-		this.flowMonitor.initMutationUpdatesObserver(terms);
-		this.specialHighlighter = new PaintSpecialEngine();
+		this.flowMonitor.initMutationUpdatesObserver(terms, termPatterns);
+		this.specialHighlighter = new PaintSpecialEngine(this.termTokens, this.termPatterns);
 	}
 
 	getCSS: EngineCSS = {
@@ -165,7 +172,7 @@ class HighlightEngine implements AbstractEngine {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			const cycle = Math.floor(termIndex / hues.length);
 			return (`
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(term.token)}) {
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.termTokens.get(term))}) {
 	background-color: hsl(${hue} 70% 70% / 0.7);
 	color: black;
 	/* text-decoration to indicate cycle */
@@ -188,15 +195,16 @@ class HighlightEngine implements AbstractEngine {
 		terms: Array<MatchTerm>,
 		termsToHighlight: Array<MatchTerm>,
 		termsToPurge: Array<MatchTerm>,
+		hues: Array<number>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
 		this.undoHighlights(termsToPurge);
 		// MAIN
-		terms.forEach(term => this.highlights.set(term.token, new ExtendedHighlight()));
-		this.flowMonitor?.generateBoxesInfo(terms, document.body);
+		terms.forEach(term => this.highlights.set(this.termTokens.get(term), new ExtendedHighlight()));
+		this.flowMonitor?.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter?.startHighlighting(terms);
+		this.specialHighlighter?.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
@@ -209,16 +217,16 @@ class HighlightEngine implements AbstractEngine {
 	undoHighlights (terms?: Array<MatchTerm>) {
 		this.flowMonitor?.removeBoxesInfo(terms);
 		if (terms) {
-			terms.forEach(term => this.highlights.delete(term.token));
+			terms.forEach(term => this.highlights.delete(this.termTokens.get(term)));
 		} else {
 			this.highlights.clear();
 		}
 	}
 
-	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
-		const focus = this.termWalker.step(reverse, stepNotJump, term);
+	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
+		const focus = this.termWalker.step(reverse, stepNotJump, term, this.termTokens);
 		if (focus) {
-			this.termMarkers.raise(term, getContainerBlock(focus));
+			this.termMarkers.raise(term, this.termTokens, getContainerBlock(focus));
 		}
 		return focus;
 	}

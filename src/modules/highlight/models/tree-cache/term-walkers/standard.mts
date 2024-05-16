@@ -1,10 +1,16 @@
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
 
 class StandardTermWalker implements AbstractTermWalker {
-	step (reverse: boolean, stepNotJump: boolean, term?: MatchTerm, nodeStart?: Node): HTMLElement | null {
+	step (
+		reverse: boolean,
+		stepNotJump: boolean,
+		term: MatchTerm | null,
+		termTokens: TermTokens,
+		nodeStart?: Node,
+	): HTMLElement | null {
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
 		const selection = document.getSelection() as Selection;
 		const bar = document.getElementById(EleID.BAR) as HTMLElement;
@@ -22,7 +28,7 @@ class StandardTermWalker implements AbstractTermWalker {
 			);
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement & { [CACHE]?: TreeCache }) =>
 			element[CACHE]?.flows.some(flow =>
-				term ? flow.boxesInfo.some(boxInfo => boxInfo.term.token === term.token) : flow.boxesInfo.length
+				term ? flow.boxesInfo.some(boxInfo => boxInfo.term === term) : flow.boxesInfo.length
 			) && isVisible(element)
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP
@@ -35,7 +41,7 @@ class StandardTermWalker implements AbstractTermWalker {
 		const element = walker[nextNodeMethod]() as HTMLElement | null;
 		if (!element) {
 			if (!nodeStart) {
-				this.step(reverse, stepNotJump, term, nodeBegin);
+				this.step(reverse, stepNotJump, term, termTokens, nodeBegin);
 			}
 			return null;
 		}

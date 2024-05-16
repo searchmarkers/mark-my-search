@@ -2,7 +2,7 @@ import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engi
 import type { BoxInfoBoxes, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
 import { type BaseFlow, type BaseBoxInfo, matchInText } from "/dist/modules/highlight/matcher.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getElementTagsSet } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false, BoxInfoBoxes>
@@ -16,19 +16,30 @@ type HighlightContext = keyof typeof contextCSS
 type StyleRulesInfo = Record<HighlightContext, string>
 
 class PaintSpecialEngine implements AbstractSpecialEngine {
-	method = new UrlMethod();
+	readonly termTokens: TermTokens;
+	readonly termPatterns: TermPatterns;
+
+	method: UrlMethod;
 	terms: Array<MatchTerm> = [];
+	hues: Array<number> = [];
 	styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
 	elementsInfo: Map<Element, {
 		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
 	}> = new Map();
 
-	startHighlighting (terms: Array<MatchTerm>) {
+	constructor (termTokens: TermTokens, termPatterns: TermPatterns) {
+		this.termTokens = termTokens;
+		this.termPatterns = termPatterns;
+		this.method = new UrlMethod(termTokens);
+	}
+
+	startHighlighting (terms: Array<MatchTerm>, hues: Array<number>) {
 		// Clean up.
 		this.endHighlighting();
 		// MAIN
 		this.terms = terms;
+		this.hues = hues;
 		this.insertHelperElements();
 		window.addEventListener("focusin", this.onFocusIn);
 		window.addEventListener("mouseover", this.onHover);
@@ -69,7 +80,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 			boxesInfo: [],
 		};
 		for (const term of terms) {
-			for (const match of flow.text.matchAll(term.pattern)) {
+			for (const match of flow.text.matchAll(this.termPatterns.get(term))) {
 				flow.boxesInfo.push({
 					term,
 					start: match.index as number,
@@ -84,7 +95,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		//console.log("focus in", event.target, event.relatedTarget);
 		if (event.target) {
 			if (this.handles(event.target as Element)) {
-				this.highlight("focused", this.terms);
+				this.highlight("focused", this.terms, this.hues);
 			}
 		} else if (event.relatedTarget) {
 			if (this.handles(event.relatedTarget as Element)) {
@@ -97,7 +108,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		//console.log("mouse enter", event.target, event.relatedTarget);
 		if (event.target) {
 			if (this.handles(event.target as Element)) {
-				this.highlight("hovered", this.terms);
+				this.highlight("hovered", this.terms, this.hues);
 			}
 		} else if (event.relatedTarget) {
 			if (this.handles(event.relatedTarget as Element)) {
@@ -111,41 +122,42 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 			return;
 		}
 		//const element = event.target as Element;
-		this.highlight("focused", this.terms);
+		this.highlight("focused", this.terms, this.hues);
 	};
 
-	highlight (highlightCtx: HighlightContext, terms: Array<MatchTerm>) {
+	highlight (highlightCtx: HighlightContext, terms: Array<MatchTerm>, hues: Array<number>) {
 		const element = document.querySelector(contextCSS[highlightCtx]);
 		const value = (element as HTMLInputElement | null)?.value;
 		if (value === undefined) {
 			return;
 		}
-		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(highlightCtx, terms, value) });
+		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(highlightCtx, terms, hues, value) });
 	}
 
 	unhighlight (highlightCtx: HighlightContext) {
 		this.styleUpdate({ [highlightCtx]: "" });
 	}
 
-	constructHighlightStyleRule = (highlightCtx: HighlightContext, terms: Array<MatchTerm>, text: string) =>
+	constructHighlightStyleRule = (highlightCtx: HighlightContext, terms: Array<MatchTerm>, hues: Array<number>, text: string) => (
 		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${contextCSS[highlightCtx]} { background-image: ${
-			this.constructHighlightStyleRuleUrl(terms, text)
-		} !important; background-repeat: no-repeat !important; }`;
+			this.constructHighlightStyleRuleUrl(terms, hues, text)
+		} !important; background-repeat: no-repeat !important; }`
+	);
 
-	constructHighlightStyleRuleUrl (terms: Array<MatchTerm>, text: string) {
+	constructHighlightStyleRuleUrl (terms: Array<MatchTerm>, hues: Array<number>, text: string) {
 		if (!terms.length) {
 			return "url()";
 		}
-		const boxes = matchInText(terms, text).map((boxInfo): Box => {
+		const boxes = matchInText(terms, this.termPatterns, text).map((boxInfo): Box => {
 			return {
-				token: boxInfo.term.token,
+				token: this.termTokens.get(boxInfo.term),
 				x: boxInfo.start * 10,
 				y: 0,
 				width: (boxInfo.end - boxInfo.start) * 10,
 				height: 20,
 			};
 		});
-		return this.method.constructHighlightStyleRuleUrl(boxes, terms);
+		return this.method.constructHighlightStyleRuleUrl(boxes, terms, hues);
 	}
 
 	styleUpdate (styleRules: Partial<StyleRulesInfo>) {

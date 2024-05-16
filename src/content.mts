@@ -3,7 +3,7 @@ import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
 import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
-import { type MatchMode, MatchTerm, termEquals } from "/dist/modules/match-term.mjs";
+import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
@@ -43,7 +43,7 @@ const focusReturnToDocument = (): boolean => {
  * @returns The extracted terms, split at some separator and some punctuation characters,
  * with some other punctuation characters removed.
  */
-const getTermsFromSelection = () => {
+const getTermsFromSelection = (termTokens: TermTokens) => {
 	const selection = getSelection();
 	const terms: Array<MatchTerm> = [];
 	if (selection && selection.anchorNode) {
@@ -61,8 +61,9 @@ const getTermsFromSelection = () => {
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 		const termSelectors: Set<string> = new Set();
 		termsAll.forEach(term => {
-			if (!termSelectors.has(term.token)) {
-				termSelectors.add(term.token);
+			const token = termTokens.get(term);
+			if (!termSelectors.has(token)) {
+				termSelectors.add(token);
 				terms.push(term);
 			}
 		});
@@ -78,6 +79,7 @@ const getTermsFromSelection = () => {
  */
 const refreshTermControlsAndStartHighlighting = (
 	terms: Array<MatchTerm>,
+	termTokens: TermTokens,
 	controlsInfo: ControlsInfo,
 	highlighter: Highlighter,
 	commands: Toolbar.BrowserCommands,
@@ -140,15 +142,14 @@ const refreshTermControlsAndStartHighlighting = (
 			if (termToUpdateIdx === Toolbar.TermChange.CREATE) {
 				terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
 				const idx = terms.length - 1;
-				Toolbar.insertTermControl(terms, idx, commands, controlsInfo, highlighter);
+				Toolbar.insertTermControl(terms, idx, termTokens, commands, controlsInfo, highlighter);
 				termsToHighlight.push(terms[idx]);
 			} else {
-				const term = terms[termToUpdateIdx];
-				termsToPurge.push(Object.assign({}, term));
-				term.matchMode = termUpdate.matchMode;
-				term.phrase = termUpdate.phrase;
-				term.compile();
-				Toolbar.refreshTermControl(terms[termToUpdateIdx], termToUpdateIdx, highlighter);
+				const termOld = terms[termToUpdateIdx];
+				termsToPurge.push(new MatchTerm(termOld.phrase, termOld.matchMode));
+				const term = new MatchTerm(termUpdate.phrase, termUpdate.matchMode);
+				terms[termToUpdateIdx] = term;
+				Toolbar.refreshTermControl(term, termToUpdateIdx, termTokens, highlighter);
 				termsToHighlight.push(term);
 			}
 		} else if (termsUpdate !== undefined) {
@@ -160,7 +161,7 @@ const refreshTermControlsAndStartHighlighting = (
 					Toolbar.removeTermControl(termRemovedPreviousIdx);
 					highlighter.current?.undoHighlights([ terms[termRemovedPreviousIdx] ]);
 					terms.splice(termRemovedPreviousIdx, 1);
-					Stylesheet.fillContent(terms, hues, controlsInfo.barLook, highlighter);
+					Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
 					highlighter.current?.countMatches();
 					return;
 				}
@@ -170,7 +171,7 @@ const refreshTermControlsAndStartHighlighting = (
 					terms.push(new MatchTerm(term.phrase, term.matchMode));
 				});
 				highlighter.current?.undoHighlights();
-				Toolbar.insertToolbar(terms, commands, hues, controlsInfo, highlighter);
+				Toolbar.insertToolbar(terms, termTokens, commands, hues, controlsInfo, highlighter);
 			}
 		} else {
 			return;
@@ -181,11 +182,11 @@ const refreshTermControlsAndStartHighlighting = (
 			terms.push(new MatchTerm(term.phrase, term.matchMode));
 		});
 		highlighter.current?.undoHighlights();
-		Toolbar.insertToolbar(terms, commands, hues, controlsInfo, highlighter);
+		Toolbar.insertToolbar(terms, termTokens, commands, hues, controlsInfo, highlighter);
 	} else {
 		return;
 	}
-	Stylesheet.fillContent(terms, hues, controlsInfo.barLook, highlighter);
+	Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
 	if (!controlsInfo.pageModifyEnabled) {
 		const bar = document.getElementById(EleID.BAR) as Element;
 		bar.classList.add(EleClass.DISABLED);
@@ -197,6 +198,7 @@ const refreshTermControlsAndStartHighlighting = (
 			terms,
 			termsToHighlight,
 			termsToPurge,
+			hues,
 		);
 	});
 };
@@ -269,11 +271,11 @@ const produceEffectOnCommandFn = function* (
 			if (focusReturnToDocument()) {
 				break;
 			}
-			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, true);
+			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, true, null);
 			break;
 		} case "advanceGlobal": {
 			focusReturnToDocument();
-			const term = selectModeFocus ? terms[focusedIdx] : undefined;
+			const term = selectModeFocus ? terms[focusedIdx] : null;
 			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
@@ -304,6 +306,8 @@ const onWindowMouseUp = () => {
 	const commands: Toolbar.BrowserCommands = [];
 	const terms: Array<MatchTerm> = [];
 	const hues: TermHues = [];
+	const termTokens = new TermTokens();
+	const termPatterns = new TermPatterns();
 	const controlsInfo: ControlsInfo = { // Unless otherwise indicated, the values assigned here are arbitrary and to be overridden.
 		pageModifyEnabled: true, // Currently has an effect.
 		highlightsShown: false,
@@ -334,11 +338,11 @@ const onWindowMouseUp = () => {
 		},
 	};
 	const highlighter: Highlighter = {};
-	const updateTermStatus = (term: MatchTerm) => Toolbar.updateTermStatus(term, highlighter);
+	const updateTermStatus = (term: MatchTerm) => Toolbar.updateTermStatus(term, termTokens, highlighter);
 	const produceEffectOnCommand = produceEffectOnCommandFn(terms, controlsInfo, highlighter);
 	produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 	const getDetails = (request: Message.TabDetailsRequest) => ({
-		terms: request.termsFromSelection ? getTermsFromSelection() : undefined,
+		terms: request.termsFromSelection ? getTermsFromSelection(termTokens) : undefined,
 		highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
 	});
 	type MessageHandler = (
@@ -362,20 +366,42 @@ const onWindowMouseUp = () => {
 				const enginePromise = import("/dist/modules/highlight/engines/highlight.mjs");
 				queuingPromise = enginePromise;
 				const { HighlightEngine } = await enginePromise;
-				highlighter.current = new HighlightEngine(terms, hues, updateTermStatus);
+				highlighter.current = new HighlightEngine(
+					terms,
+					hues,
+					updateTermStatus,
+					termTokens,
+					termPatterns,
+				);
 			} else if (message.setHighlighter.engine === "paint" && compatibility.highlight.paintEngine) {
 				const enginePromise = import("/dist/modules/highlight/engines/paint.mjs");
-				const methodPromise = PaintMethodLoader.loadMethod(message.setHighlighter.paintEngineMethod ?? "paint");
+				const methodPromise = PaintMethodLoader.loadMethod(
+					message.setHighlighter.paintEngineMethod ?? "paint",
+					termTokens,
+				);
 				queuingPromise = new Promise<void>(resolve =>
 					enginePromise.then(() => methodPromise.then(() => resolve()))
 				);
 				const { PaintEngine } = await enginePromise;
-				highlighter.current = new PaintEngine(terms, hues, updateTermStatus, await methodPromise);
+				highlighter.current = new PaintEngine(
+					terms,
+					hues,
+					updateTermStatus,
+					await methodPromise,
+					termTokens,
+					termPatterns,
+				);
 			} else {
 				const enginePromise = import("/dist/modules/highlight/engines/element.mjs");
 				queuingPromise = enginePromise;
 				const { ElementEngine } = await enginePromise;
-				highlighter.current = new ElementEngine(terms, hues, updateTermStatus);
+				highlighter.current = new ElementEngine(
+					terms,
+					hues,
+					updateTermStatus,
+					termTokens,
+					termPatterns,
+				);
 			}
 			queuingPromise = undefined;
 		}
@@ -426,6 +452,7 @@ const onWindowMouseUp = () => {
 			window.addEventListener("mouseup", onWindowMouseUp);
 			refreshTermControlsAndStartHighlighting(
 				terms,
+				termTokens,
 				controlsInfo,
 				highlighter,
 				commands,

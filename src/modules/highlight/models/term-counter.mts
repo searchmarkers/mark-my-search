@@ -1,4 +1,4 @@
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 
 interface AbstractTermCounter {
 	/**
@@ -7,7 +7,7 @@ interface AbstractTermCounter {
 	 * @param term A term to get the occurrence count for.
 	 * @returns The **more accurate** occurrence count for the term.
 	 */
-	betterNumberOf: (term: MatchTerm) => number;
+	countBetter: (term: MatchTerm, termTokens: TermTokens) => number;
 
 	/**
 	 * Gets the number of matches for a term in the document.
@@ -15,10 +15,10 @@ interface AbstractTermCounter {
 	 * @param term A term to get the occurrence count for.
 	 * @returns The **less accurate** occurrence count for the term.
 	 */
-	fasterNumberOf: (term: MatchTerm) => number;
+	countFaster: (term: MatchTerm, termTokens: TermTokens) => number;
 
 	// TODO document
-	anyOf: (term: MatchTerm) => boolean;
+	exists: (term: MatchTerm, termTokens: TermTokens) => boolean;
 }
 
 export type { AbstractTermCounter };

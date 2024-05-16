@@ -32,7 +32,11 @@ const loadPopup = (() => {
 			},
 			onToggle: (checked, objectIndex, containerIndex) => {
 				storageGet("sync", [ "termLists" ]).then(sync => {
-					sync.termLists[containerIndex].terms[objectIndex].matchMode[mode] = checked;
+					const termOld = sync.termLists[containerIndex].terms[objectIndex];
+					const matchMode = Object.assign({}, termOld.matchMode) as MatchMode;
+					matchMode[mode] = checked;
+					const term = new MatchTerm(termOld.phrase, Object.assign({}, matchMode));
+					sync.termLists[containerIndex].terms[objectIndex] = term;
 					storageSet("sync", sync);
 				});
 			},
@@ -414,7 +418,9 @@ const loadPopup = (() => {
 													},
 													onChange: (text, objectIndex, containerIndex) => {
 														storageGet("sync", [ "termLists" ]).then(sync => {
-															sync.termLists[containerIndex].terms[objectIndex].phrase = text;
+															const termOld = sync.termLists[containerIndex].terms[objectIndex];
+															const term = new MatchTerm(text, termOld.matchMode);
+															sync.termLists[containerIndex].terms[objectIndex] = term;
 															storageSet("sync", sync);
 														});
 													},

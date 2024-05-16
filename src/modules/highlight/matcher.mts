@@ -1,4 +1,4 @@
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
 type BoxInfoExt = Record<string | never, unknown>
 
@@ -13,10 +13,14 @@ type BaseBoxInfo<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt =
 	end: number
 } & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExtension>
 
-const matchInText = (terms: Array<MatchTerm>, text: string): Array<BaseBoxInfo<false>> => {
+const matchInText = (
+	terms: Array<MatchTerm>,
+	termPatterns: TermPatterns,
+	text: string,
+): Array<BaseBoxInfo<false>> => {
 	const boxesInfo: Array<BaseBoxInfo<false>> = [];
 	for (const term of terms) {
-		for (const match of text.matchAll(term.pattern)) {
+		for (const match of text.matchAll(termPatterns.get(term))) {
 			boxesInfo.push({
 				term,
 				start: match.index as number,
@@ -27,14 +31,19 @@ const matchInText = (terms: Array<MatchTerm>, text: string): Array<BaseBoxInfo<f
 	return boxesInfo;
 };
 
-const matchInTextFlow = (terms: Array<MatchTerm>, text: string, textFlow: Array<Text>): Array<BaseBoxInfo<true>> => {
+const matchInTextFlow = (
+	terms: Array<MatchTerm>,
+	termPatterns: TermPatterns,
+	text: string,
+	textFlow: Array<Text>,
+): Array<BaseBoxInfo<true>> => {
 	const boxesInfo: Array<BaseBoxInfo<true>> = [];
 	for (const term of terms) {
 		let i = 0;
 		let node = textFlow[0];
 		let textStart = 0;
 		let textEnd = node.length;
-		for (const match of text.matchAll(term.pattern)) {
+		for (const match of text.matchAll(termPatterns.get(term))) {
 			const highlightStart = match.index as number;
 			const highlightEnd = highlightStart + match[0].length;
 			while (textEnd <= highlightStart) {

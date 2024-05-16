@@ -15,7 +15,7 @@ import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs"
 import { getMutationUpdates, getStyleUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
 import { EleID, type TermHues } from "/dist/modules/common.mjs";
@@ -50,6 +50,9 @@ class PaintEngine implements AbstractEngine {
 	termWalker = new StandardTermWalker();
 	termMarkers = new StandardTermMarker();
 
+	readonly termTokens: TermTokens;
+	readonly termPatterns: TermPatterns;
+
 	#method?: AbstractMethod;
 	set method (method: AbstractMethod | undefined) {
 		this.getCSS = method?.getCSS;
@@ -83,10 +86,14 @@ class PaintEngine implements AbstractEngine {
 		hues: TermHues,
 		updateTermStatus: UpdateTermStatus,
 		method: AbstractMethod,
+		termTokens: TermTokens,
+		termPatterns: TermPatterns,
 	) {
+		this.termTokens = termTokens;
+		this.termPatterns = termPatterns;
 		this.method = method;
 		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, hues,
+			this.termMarkers.insert(terms, termTokens, hues,
 				this.method ? Array.from(this.method.getHighlightedElements()) as Array<HTMLElement> : []
 			)
 		), 200, 2000);
@@ -124,8 +131,8 @@ class PaintEngine implements AbstractEngine {
 				this.method.highlightables.markElementsUpTo(ancestor);
 			},
 		);
-		this.flowMonitor.initMutationUpdatesObserver(terms);
-		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms);
+		this.flowMonitor.initMutationUpdatesObserver(terms, termPatterns);
+		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms, hues);
 		this.shiftObserver = shiftObserver;
 		this.visibilityObserver = visibilityObserver;
 		const highlightingId: Generator<string, never, unknown> = (function* () {
@@ -134,7 +141,7 @@ class PaintEngine implements AbstractEngine {
 				yield (i++).toString();
 			}
 		})();
-		this.specialHighlighter = new PaintSpecialEngine();
+		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
 	getCSS?: EngineCSS;
@@ -153,12 +160,13 @@ class PaintEngine implements AbstractEngine {
 		terms: Array<MatchTerm>,
 		termsToHighlight: Array<MatchTerm>,
 		termsToPurge: Array<MatchTerm>,
+		hues: Array<number>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
 		this.flowMonitor?.removeBoxesInfo(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
-		this.flowMonitor?.generateBoxesInfo(terms, document.body);
+		this.flowMonitor?.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
 		const method = this.method;
 		if (method) {
@@ -166,10 +174,10 @@ class PaintEngine implements AbstractEngine {
 				Array.from(new Set(
 					Array.from(this.elementsVisible)
 						.map(element => method.highlightables.findAncestor(element))
-				)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms))
+				)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
 			);
 		}
-		this.specialHighlighter?.startHighlighting(terms);
+		this.specialHighlighter?.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
@@ -189,11 +197,11 @@ class PaintEngine implements AbstractEngine {
 		this.flowMonitor?.removeBoxesInfo(terms);
 	}
 
-	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>) {
+	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>, hues: Array<number>) {
 		this.method?.tempReplaceContainers(root, recurse);
 		const styleRules: Array<StyleRuleInfo> = [];
 		// 'root' must have [elementInfo].
-		this.collectStyleRules(root, recurse, new Range(), styleRules, terms);
+		this.collectStyleRules(root, recurse, new Range(), styleRules, terms, hues);
 		return styleRules;
 	}
 
@@ -203,6 +211,7 @@ class PaintEngine implements AbstractEngine {
 		range: Range,
 		styleRules: Array<StyleRuleInfo>,
 		terms: Array<MatchTerm>,
+		hues: Array<number>,
 	) {
 		const method = this.method;
 		if (!method) {
@@ -210,7 +219,12 @@ class PaintEngine implements AbstractEngine {
 		}
 		if (ancestor && CACHE in ancestor) {
 			styleRules.push({
-				rule: method.constructHighlightStyleRule((ancestor[CACHE] as TreeCache).id, getBoxesOwned(ancestor), terms),
+				rule: method.constructHighlightStyleRule(
+					(ancestor[CACHE] as TreeCache).id,
+					getBoxesOwned(this.termTokens, ancestor),
+					terms,
+					hues,
+				),
 				element: ancestor,
 			});
 		}
@@ -223,7 +237,12 @@ class PaintEngine implements AbstractEngine {
 			while (child = walker.nextNode() as Element) {
 				if (CACHE in child) {
 					styleRules.push({
-						rule: method.constructHighlightStyleRule((child[CACHE] as TreeCache).id, getBoxesOwned(child), terms),
+						rule: method.constructHighlightStyleRule(
+							(child[CACHE] as TreeCache).id,
+							getBoxesOwned(this.termTokens, child),
+							terms,
+							hues,
+						),
 						element: child,
 					});
 				}
@@ -250,22 +269,22 @@ class PaintEngine implements AbstractEngine {
 		});
 	}
 
-	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term?: MatchTerm | undefined): HTMLElement | null {
-		const focus = this.termWalker.step(reverse, stepNotJump, term);
+	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
+		const focus = this.termWalker.step(reverse, stepNotJump, term, this.termTokens);
 		if (focus) {
-			this.termMarkers.raise(term, getContainerBlock(focus));
+			this.termMarkers.raise(term, this.termTokens, getContainerBlock(focus));
 		}
 		return focus;
 	}
 
-	getShiftAndVisibilityObservers (terms: Array<MatchTerm>) {
+	getShiftAndVisibilityObservers (terms: Array<MatchTerm>, hues: Array<number>) {
 		const shiftObserver = new ResizeObserver(entries => {
 			const method = this.method;
 			if (!method) {
 				return;
 			}
 			const styleRules: Array<StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(method.highlightables.findAncestor(entry.target), true, terms)
+				this.getStyleRules(method.highlightables.findAncestor(entry.target), true, terms, hues)
 			);
 			if (styleRules.length) {
 				this.styleUpdate(styleRules);
@@ -284,7 +303,7 @@ class PaintEngine implements AbstractEngine {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
-							this.getStyleRules(method.highlightables.findAncestor(entry.target), false, terms)
+							this.getStyleRules(method.highlightables.findAncestor(entry.target), false, terms, hues)
 						);
 					}
 				} else {

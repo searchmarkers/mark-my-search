@@ -4,7 +4,7 @@ import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 class StandardTermCounter implements AbstractTermCounter {
-	betterNumberOf (term: MatchTerm) {
+	countBetter (term: MatchTerm) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: Element) =>
 			highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 		);
@@ -19,9 +19,9 @@ class StandardTermCounter implements AbstractTermCounter {
 		return count;
 	}
 
-	fasterNumberOf = this.betterNumberOf;
+	countFaster = this.countBetter;
 
-	anyOf (term: MatchTerm) {
+	exists (term: MatchTerm) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: Element) =>
 			highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 		);

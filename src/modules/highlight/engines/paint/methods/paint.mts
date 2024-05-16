@@ -1,7 +1,7 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
-import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
 type TermSelectorStyles = Record<string, {
@@ -17,6 +17,18 @@ const markElementsUpTo = (element: Element) => {
 };
 
 class PaintMethod implements AbstractMethod {
+	readonly termTokens: TermTokens;
+
+	static paintModuleAdded = false;
+
+	constructor (termTokens: TermTokens) {
+		this.termTokens = termTokens;
+		if (!PaintMethod.paintModuleAdded) {
+			CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
+			PaintMethod.paintModuleAdded = true;
+		}
+	}
+
 	highlightables: Highlightables = {
 		checkElement: (element: Element) => !element.closest("a"),
 		findAncestor: <T extends Element> (element: T) => {
@@ -36,22 +48,13 @@ class PaintMethod implements AbstractMethod {
 		markElementsUpTo,
 	};
 
-	static paintModuleAdded = false;
-
-	constructor () {
-		if (!PaintMethod.paintModuleAdded) {
-			CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
-			PaintMethod.paintModuleAdded = true;
-		}
-	}
-
 	getCSS = {
 		misc: () => "",
 		termHighlights: () => "",
 		termHighlight: (terms: Array<MatchTerm>, hues: number[]) => {
 			const styles: TermSelectorStyles = {};
 			terms.forEach((term, i) => {
-				styles[term.token] = {
+				styles[this.termTokens.get(term)] = {
 					hue: hues[i % hues.length],
 					cycle: Math.floor(i / hues.length),
 				};

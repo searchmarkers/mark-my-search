@@ -8,10 +8,10 @@ import {
 import { parseCommand } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendTabMessage } from "/dist/modules/messaging/tab.mjs";
-import { MatchTerm, sanitizeForRegex } from "/dist/modules/match-term.mjs";
+import { MatchTerm } from "/dist/modules/match-term.mjs";
 import { SearchSite } from "/dist/modules/search-site.mjs";
 import * as Tabs from "/dist/modules/privileged/tabs.mjs";
-import { log, assert, compatibility } from "/dist/modules/common.mjs";
+import { log, assert, compatibility, sanitizeForRegex } from "/dist/modules/common.mjs";
 
 // DEPRECATE
 /**
