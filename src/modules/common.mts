@@ -87,60 +87,69 @@ type PaintEngineMethod =
 
 const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
 
-const EleID = {
-	STYLE: "markmysearch__style",
-	STYLE_PAINT: "markmysearch__style_paint",
-	STYLE_PAINT_SPECIAL: "markmysearch__style_paint_special",
-	BAR: "markmysearch__bar",
-	BAR_LEFT: "markmysearch__bar_left",
-	BAR_TERMS: "markmysearch__bar_terms",
-	BAR_RIGHT: "markmysearch__bar_right",
-	MARKER_GUTTER: "markmysearch__markers",
-	DRAW_CONTAINER: "markmysearch__draw_container",
-	DRAW_ELEMENT: "markmysearch__draw",
-	ELEMENT_CONTAINER_SPECIAL: "markmysearch__element_container_special",
-	INPUT: "markmysearch__input",
-} as const;
+const EleID = (() => {
+	const wrap = (name: string) => "markmysearch--" + name;
+	return {
+		STYLE: wrap("style"),
+		STYLE_PAINT: wrap("style-paint"),
+		STYLE_PAINT_SPECIAL: wrap("style-paint-special"),
+		BAR: wrap("bar"),
+		BAR_LEFT: wrap("bar-left"),
+		BAR_TERMS: wrap("bar-terms"),
+		BAR_RIGHT: wrap("bar-right"),
+		MARKER_GUTTER: wrap("markers"),
+		DRAW_CONTAINER: wrap("draw-container"),
+		DRAW_ELEMENT: wrap("draw"),
+		ELEMENT_CONTAINER_SPECIAL: wrap("element-container-special"),
+		INPUT: wrap("input"),
+	} as const;
+})();
 
-const EleClass = {
-	HIGHLIGHTS_SHOWN: "mms__highlights_shown",
-	BAR_HIDDEN: "mms__bar_hidden",
-	CONTROL: "mms__control",
-	CONTROL_PAD: "mms__control_pad",
-	CONTROL_INPUT: "mms__control_input",
-	CONTROL_CONTENT: "mms__control_content",
-	CONTROL_BUTTON: "mms__control_button",
-	CONTROL_REVEAL: "mms__control_reveal",
-	CONTROL_EDIT: "mms__control_edit",
-	OPTION_LIST: "mms__options",
-	OPTION: "mms__option",
-	TERM: "mms__term",
-	FOCUS: "mms__focus",
-	FOCUS_CONTAINER: "mms__focus_contain",
-	FOCUS_REVERT: "mms__focus_revert",
-	REMOVE: "mms__remove",
-	DISABLED: "mms__disabled",
-	WAS_FOCUSED: "mms__was_focused",
-	MENU_OPEN: "mms__menu_open",
-	MENU_JUST_CLOSED_BY_BUTTON: "mms__menu_just_closed",
-	OPENED_MENU: "mms__opened_menu",
-	COLLAPSED: "mms__collapsed",
-	UNCOLLAPSIBLE: "mms__collapsed_impossible",
-	MATCH_REGEX: "mms__match_regex",
-	MATCH_CASE: "mms__match_case",
-	MATCH_STEM: "mms__match_stem",
-	MATCH_WHOLE: "mms__match_whole",
-	MATCH_DIACRITICS: "mms__match_diacritics",
-	PRIMARY: "mms__primary",
-	SECONDARY: "mms__secondary",
-	BAR_CONTROLS: "mms__bar_controls",
-} as const;
+const EleClass = (() => {
+	const wrap = (name: string) => "mms--" + name;
+	return {
+		HIGHLIGHTS_SHOWN: wrap("highlights-shown"),
+		BAR_HIDDEN: wrap("bar-hidden"),
+		CONTROL: wrap("control"),
+		CONTROL_PAD: wrap("control-pad"),
+		CONTROL_INPUT: wrap("control-input"),
+		CONTROL_CONTENT: wrap("control-content"),
+		CONTROL_BUTTON: wrap("control-button"),
+		CONTROL_REVEAL: wrap("control-reveal"),
+		CONTROL_EDIT: wrap("control-edit"),
+		OPTION_LIST: wrap("options"),
+		OPTION: wrap("option"),
+		TERM: wrap("term"),
+		FOCUS: wrap("focus"),
+		FOCUS_CONTAINER: wrap("focus-contain"),
+		FOCUS_REVERT: wrap("focus-revert"),
+		REMOVE: wrap("remove"),
+		DISABLED: wrap("disabled"),
+		WAS_FOCUSED: wrap("was-focused"),
+		MENU_OPEN: wrap("menu-open"),
+		MENU_JUST_CLOSED_BY_BUTTON: wrap("menu-just-closed"),
+		OPENED_MENU: wrap("opened-menu"),
+		COLLAPSED: wrap("collapsed"),
+		UNCOLLAPSIBLE: wrap("collapsed-impossible"),
+		MATCH_REGEX: wrap("match-regex"),
+		MATCH_CASE: wrap("match-case"),
+		MATCH_STEM: wrap("match-stem"),
+		MATCH_WHOLE: wrap("match-whole"),
+		MATCH_DIACRITICS: wrap("match-diacritics"),
+		PRIMARY: wrap("primary"),
+		SECONDARY: wrap("secondary"),
+		BAR_CONTROLS: wrap("bar-controls"),
+	} as const;
+})();
 
-const AtRuleID = {
-	FLASH: "markmysearch__flash",
-	MARKER_ON: "markmysearch__marker_on",
-	MARKER_OFF: "markmysearch__marker_off",
-} as const;
+const AtRuleID = (() => {
+	const wrap = (name: string) => "markmysearch--" + name;
+	return {
+		FLASH: wrap("flash"),
+		MARKER_ON: wrap("marker-on"),
+		MARKER_OFF: wrap("marker-off"),
+	} as const;
+})();
 
 /**
  * Transforms an array of lowercase element tags into a set of lowercase and uppercase tags.
