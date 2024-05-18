@@ -510,11 +510,11 @@ const loadPage = (() => {
 		};
 		style.textContent =
 `:root {
-	--hue: ${configDefault.theme.hue.value};
-	--contrast: ${configDefault.theme.contrast.value};
-	--lightness: ${configDefault.theme.lightness.value};
-	--saturation: ${configDefault.theme.saturation.value};
-	--font-scale: ${configDefault.theme.fontScale.value};
+	--hue: ${configGetDefault({ theme: [ "hue" ] })};
+	--contrast: ${configGetDefault({ theme: [ "contrast" ] })};
+	--lightness: ${configGetDefault({ theme: [ "lightness" ] })};
+	--saturation: ${configGetDefault({ theme: [ "saturation" ] })};
+	--font-scale: ${configGetDefault({ theme: [ "fontScale" ] })};
 }
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;

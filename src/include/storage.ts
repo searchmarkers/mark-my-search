@@ -412,6 +412,34 @@ const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 	})
 ;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const configGetDefault = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>>
+	(keyObject: KeyObject): ConfigPartial<ConfigK, KeyObject> => {
+	const config = {} as ConfigPartial<ConfigK, KeyObject>;
+	const keyObjectEntries = Object.entries(keyObject) as Array<[ ConfigK, Array<string> | true ]>;
+	for (const [ configKey, groupInfo ] of keyObjectEntries) {
+		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+		for (const groupKey of groupKeys) {
+			(config[configKey] as unknown) ??= {} as ConfigGroup;
+			const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
+			type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
+			type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
+			if ((valueDefault as StorageV).value !== undefined) {
+				(config[configKey][groupKey] as StorageValue<unknown>)
+					= (valueDefault as StorageV).value;
+			} else if ((valueDefault as StorageListV).listBase !== undefined) {
+				(config[configKey][groupKey] as StorageListValue<unknown>)
+					= {
+						listBase: (valueDefault as StorageListV).listBase,
+						listIn: [],
+						listOut: [],
+					};
+			}
+		}
+	}
+	return config;
+};
+
 /**
  * Makes an object conform to an object of defaults.
  * Missing default items are assigned, and items with no corresponding default are removed. Items within arrays are ignored.
