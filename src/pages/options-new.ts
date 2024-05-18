@@ -29,7 +29,7 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 			onLoad: async setValue => {
 				const config = await configGet({ [configKey]: [ key ] });
 				const value = config[configKey][key];
-				setValue(((typeof value === "object" && value !== null && "w_listIn" in value) ? value["w_listIn"] : value) as boolean);
+				setValue(((typeof value === "object" && value !== null && "listIn" in value) ? value["listIn"] : value) as boolean);
 			},
 			onChange: async (value, objectIndex, containerIndex, store) => {
 				if (store) {
@@ -40,8 +40,8 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 							? parseFloat(value as unknown as string)
 							: value;
 					if (typeof config[configKey][key] === "object" && config[configKey][key] !== null
-						&& "w_listIn" in (config[configKey][key] as Record<string, unknown>)) {
-						(config[configKey][key]["w_listIn"] as unknown) = valueTransformed;
+						&& "listIn" in (config[configKey][key] as Record<string, unknown>)) {
+						(config[configKey][key]["listIn"] as unknown) = valueTransformed;
 					} else {
 						(config[configKey][key] as unknown) = valueTransformed;
 					}
@@ -169,12 +169,12 @@ const loadOptionsNew = (() => {
 								list: {
 									getArray: () =>
 										configGet({ urlFilters: [ "noPageModify" ] }).then(sync => //
-											sync.urlFilters.noPageModify.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
+											sync.urlFilters.noPageModify.listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet({ urlFilters: [ "noPageModify" ] }).then(sync => {
-											sync.urlFilters.noPageModify.w_listIn = array.map(value => {
+											sync.urlFilters.noPageModify.listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
@@ -439,12 +439,12 @@ const loadOptionsNew = (() => {
 								list: {
 									getArray: () =>
 										configGet({ urlFilters: [ "nonSearch" ] }).then(sync => //
-											sync.urlFilters.nonSearch.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
+											sync.urlFilters.nonSearch.listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet({ urlFilters: [ "nonSearch" ] }).then(sync => {
-											sync.urlFilters.nonSearch.w_listIn = array.map(value => {
+											sync.urlFilters.nonSearch.listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),

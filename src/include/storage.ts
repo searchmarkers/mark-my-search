@@ -13,22 +13,20 @@ type BankValues = {
 	[BankKey.ENGINES]: Engines
 }
 type StorageValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
-	w_value: T
+	value: T
 	useDefault?: true
 	sync?: true
-}> : Context extends StorageContext.STORE ? {
-	w_value: T
-} : T
+}> : Context extends StorageContext.STORE ? T : T
 type StorageListValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
 	listBase: ReadonlyArray<T>
 	sync?: true
 }> : Context extends StorageContext.STORE ? {
-	w_listIn: Array<T>
-	w_listOut: Array<T>
+	listIn: Array<T>
+	listOut: Array<T>
 } : {
 	listBase: ReadonlyArray<T>
-	w_listIn: Array<T>
-	w_listOut: Array<T>
+	listIn: Array<T>
+	listOut: Array<T>
 }
 type ConfigBarControlsShown<Context = StorageContext.INTERFACE> = {
 	toggleBarCollapsed: StorageValue<boolean, Context>
@@ -133,7 +131,7 @@ interface ResearchInstance {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configResolveList = <T>(listValue: StorageListValue<T, StorageContext.INTERFACE>): Array<T> =>
-	listValue.listBase.filter(value => !listValue.w_listOut.includes(value)).concat(listValue.w_listIn)
+	listValue.listBase.filter(value => !listValue.listOut.includes(value)).concat(listValue.listIn)
 ;
 
 /**
@@ -142,19 +140,19 @@ const configResolveList = <T>(listValue: StorageListValue<T, StorageContext.INTE
  */
 const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 	theme: {
-		edition: { w_value: ThemeEdition.CLASSIC },
-		variant: { w_value: ThemeVariant.DARK },
-		hue: { w_value: 284, useDefault: true },
-		contrast: { w_value: 1 },
-		lightness: { w_value: 1 },
-		saturation: { w_value: 1 },
-		fontScale: { w_value: 1 },
+		edition: { value: ThemeEdition.CLASSIC },
+		variant: { value: ThemeVariant.DARK },
+		hue: { value: 284, useDefault: true },
+		contrast: { value: 1 },
+		lightness: { value: 1 },
+		saturation: { value: 1 },
+		fontScale: { value: 1 },
 	},
 	researchInstanceOptions: {
-		restoreLastInTab: { w_value: true },
+		restoreLastInTab: { value: true },
 	},
 	autoFindOptions: {
-		enabled: { w_value: true },
+		enabled: { value: true },
 		// TODO allow specifying mappings of params to URL filters and whether the filter should be inverted?
 		searchParams: {
 			listBase: [ // Order of specificity, as only the first match will be used.
@@ -185,7 +183,7 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 	},
 	matchingDefaults: {
 		matchMode: {
-			w_value: {
+			value: {
 				regex: false,
 				case: false,
 				stem: true,
@@ -196,35 +194,35 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 		},
 	},
 	showHighlights: {
-		default: { w_value: true, sync: true },
-		overrideSearchPages: { w_value: false, sync: true },
-		overrideResearchPages: { w_value: false, sync: true },
+		default: { value: true, sync: true },
+		overrideSearchPages: { value: false, sync: true },
+		overrideResearchPages: { value: false, sync: true },
 	},
 	barCollapse: {
-		fromSearch: { w_value: false, sync: true },
-		fromTermListAuto: { w_value: false, sync: true },
+		fromSearch: { value: false, sync: true },
+		fromTermListAuto: { value: false, sync: true },
 	},
 	barControlsShown: {
-		toggleBarCollapsed: { w_value: true, sync: true },
-		disableTabResearch: { w_value: true, sync: true },
-		performSearch: { w_value: false, sync: true },
-		toggleHighlights: { w_value: true, sync: true },
-		appendTerm: { w_value: true, sync: true },
-		replaceTerms: { w_value: true, sync: true },
+		toggleBarCollapsed: { value: true, sync: true },
+		disableTabResearch: { value: true, sync: true },
+		performSearch: { value: false, sync: true },
+		toggleHighlights: { value: true, sync: true },
+		appendTerm: { value: true, sync: true },
+		replaceTerms: { value: true, sync: true },
 	},
 	barLook: {
-		showEditIcon: { w_value: true, sync: true },
-		showRevealIcon: { w_value: true, sync: true },
-		fontSize: { w_value: "14.6px", useDefault: true, sync: true },
-		opacityControl: { w_value: 0.8, useDefault: true, sync: true },
-		opacityTerm: { w_value: 0.86, useDefault: true, sync: true },
-		borderRadius: { w_value: "4px", useDefault: true, sync: true },
+		showEditIcon: { value: true, sync: true },
+		showRevealIcon: { value: true, sync: true },
+		fontSize: { value: "14.6px", useDefault: true, sync: true },
+		opacityControl: { value: 0.8, useDefault: true, sync: true },
+		opacityTerm: { value: 0.86, useDefault: true, sync: true },
+		borderRadius: { value: "4px", useDefault: true, sync: true },
 	},
 	highlightMethod: {
-		paintReplaceByElement: { w_value: true },
-		paintUseExperimental: { w_value: false, useDefault: true },
+		paintReplaceByElement: { value: true },
+		paintUseExperimental: { value: false, useDefault: true },
 		hues: {
-			w_value: [ 300, 60, 110, 220, 30, 190, 0 ],
+			value: [ 300, 60, 110, 220, 30, 190, 0 ],
 			useDefault: true,
 			sync: true,
 		},
@@ -241,7 +239,7 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 	},
 	termListOptions: {
 		termLists: {
-			w_value: [],
+			value: [],
 			sync: true,
 		},
 	},
@@ -319,16 +317,14 @@ const configSet = async <Config extends Partial<Partial2<ConfigValues>>>(config:
 			const valueDefault = configDefault[configKey][groupKey];
 			const storageValues = valueDefault.sync ? storageAreaValues.sync : storageAreaValues.local;
 			const key = configKey + "." + groupKey;
-			if ((valueDefault as StorageValue<unknown, StorageContext.SCHEMA>).w_value !== undefined) {
+			if ((valueDefault as StorageValue<unknown, StorageContext.SCHEMA>).value !== undefined) {
 				(storageValues[key] as StorageValue<unknown, StorageContext.STORE>)
-					= {
-						w_value: value as StorageValue<unknown>,
-					};
+					= value as StorageValue<unknown>;
 			} else if ((valueDefault as StorageListValue<unknown, StorageContext.SCHEMA>).listBase !== undefined) {
 				(storageValues[key] as StorageListValue<unknown, StorageContext.STORE>)
 					= {
-						w_listIn: (value as StorageListValue<unknown>).w_listIn,
-						w_listOut: (value as StorageListValue<unknown>).w_listOut,
+						listIn: (value as StorageListValue<unknown>).listIn,
+						listOut: (value as StorageListValue<unknown>).listOut,
 					};
 			}
 		}
@@ -382,30 +378,30 @@ const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 				const value = (await (valueDefault.sync ? storageAreaPromises.sync : storageAreaPromises.local))[key];
 				type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
 				type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
-				if ((valueDefault as StorageV).w_value !== undefined) {
+				if ((valueDefault as StorageV).value !== undefined) {
 					if (value === undefined) {
 						(config[configKey][groupKey] as StorageValue<unknown>)
-							= (valueDefault as StorageV).w_value;
+							= (valueDefault as StorageV).value;
 					} else {
 						// TODO validate
 						(config[configKey][groupKey] as StorageValue<unknown>)
-							= (value as StorageValue<unknown, StorageContext.STORE>).w_value;
+							= value as StorageValue<unknown, StorageContext.STORE>;
 					}
 				} else if ((valueDefault as StorageListV).listBase !== undefined) {
 					if (value === undefined) {
 						(config[configKey][groupKey] as StorageListValue<unknown>)
 							= {
 								listBase: (valueDefault as StorageListV).listBase,
-								w_listIn: [],
-								w_listOut: [],
+								listIn: [],
+								listOut: [],
 							};
 					} else {
 						// TODO validate
 						(config[configKey][groupKey] as StorageListValue<unknown>)
 							= {
 								listBase: (valueDefault as StorageListV).listBase,
-								w_listIn: (value as StorageListValue<unknown, StorageContext.STORE>).w_listIn,
-								w_listOut: (value as StorageListValue<unknown, StorageContext.STORE>).w_listOut,
+								listIn: (value as StorageListValue<unknown, StorageContext.STORE>).listIn,
+								listOut: (value as StorageListValue<unknown, StorageContext.STORE>).listOut,
 							};
 					}
 				}

@@ -233,14 +233,14 @@ label[for]:hover
 					if (!input) {
 						return;
 					}
-					const valueEnteredString = input["value"] as string;
-					const valueEnteredBool = input["checked"] as boolean;
+					const valueEnteredString = input.value;
+					const valueEnteredBool = input.checked;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
 					const valueDefault = configDefault[optionKey][preferenceKey];
 					type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
 					type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
 					const type: PreferenceType = preferenceInfo.type;
-					if ((valueDefault as StorageV).w_value) {
+					if ((valueDefault as StorageV).value) {
 						(config[optionKey][preferenceKey] as StorageValue<unknown>) =
 							(type === PreferenceType.INTEGER || type === PreferenceType.FLOAT)
 								? Number(valueEnteredString)
@@ -248,7 +248,7 @@ label[for]:hover
 									? valueEnteredString.split(",")
 									: (type === PreferenceType.ARRAY_NUMBER)
 										? valueEnteredString.split(",").map(item => Number(item))
-										: valueEnteredString;
+										: valueEntered;
 					} else if ((valueDefault as StorageListV).listBase) {
 						const list: Array<unknown> = (type === PreferenceType.ARRAY_NUMBER)
 							? valueEnteredString.split(",").map(item => Number(item))
@@ -256,8 +256,8 @@ label[for]:hover
 						const listBase = (valueDefault as StorageListV).listBase;
 						(config[optionKey][preferenceKey] as StorageListValue<unknown>) = {
 							listBase,
-							w_listIn: list.filter(item => !listBase.includes(item)),
-							w_listOut: listBase.filter(item => !list.includes(item)),
+							listIn: list.filter(item => !listBase.includes(item)),
+							listOut: listBase.filter(item => !list.includes(item)),
 						};
 					}
 					valuesCurrent[optionKey][preferenceKey] = valueEntered;
@@ -334,11 +334,11 @@ label[for]:hover
 				const isList = (valueDefaultObject as StorageListV).listBase;
 				const valueDefault = isList
 					? (valueDefaultObject as StorageListV).listBase
-					: (valueDefaultObject as StorageV).w_value;
+					: (valueDefaultObject as StorageV).value;
 				const value = isList
 					? (() => {
 						const value = config[optionKey][preferenceKey] as StorageListValue<unknown>;
-						return value.listBase.filter(item => !value.w_listOut.includes(item)).concat(value.w_listIn);
+						return value.listBase.filter(item => !value.listOut.includes(item)).concat(value.listIn);
 					})() : (config[optionKey][preferenceKey] as StorageValue<unknown>);
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
