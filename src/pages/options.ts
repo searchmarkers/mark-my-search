@@ -1,57 +1,59 @@
-const getControlOptionTemp = (
+const getControlOptionTemp = <ConfigK extends ConfigKey>(
 	labelInfo: { text: string, tooltip?: string },
-	configKey: ConfigKey,
-	key: string,
+	configKey: ConfigK,
+	key: keyof ConfigValues[ConfigK],
 	inputType: InputType,
 	details?: {
 		onChange?: () => unknown
 		command?: { name?: string, shortcut?: string }
 	}
 ): PageInteractionInfo => ({
-	className: "option",
-	label: {
-		text: labelInfo.text,
-		tooltip: labelInfo.tooltip,
-	},
-	note: {
-		text: details?.command?.shortcut,
-		getText: details?.command?.name
-			? async () => getOrderedShortcut(
-				(await chrome.commands.getAll())
-					.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
-			).join("+") : undefined,
-		forInput: details?.command?.name && (chrome.commands["update"] || (this["browser"] && browser.commands.update))
-			? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
-			: undefined,
-	},
-	input: {
-		getType: () => inputType,
-		onLoad: async setValue => {
-			const config = await configGet([ configKey ]);
-			const value = config[configKey][key];
-			setValue(((typeof value === "object" && "w_listIn" in value) ? value.w_listIn : value));
+		className: "option",
+		label: {
+			text: labelInfo.text,
+			tooltip: labelInfo.tooltip,
 		},
-		onChange: async (value, objectIndex, containerIndex, store) => {
-			if (store) {
-				const config = await configGet([ configKey ]);
-				const valueTransformed = (inputType === InputType.TEXT_ARRAY)
-					? (value as unknown as string).split(",")
-					: inputType === InputType.TEXT_NUMBER
-						? parseFloat(value as unknown as string)
-						: value;
-				if (typeof config[configKey][key] === "object" && "w_listIn" in config[configKey][key]) {
-					config[configKey][key].w_listIn = valueTransformed;
-				} else {
-					config[configKey][key] = valueTransformed;
+		note: {
+			text: details?.command?.shortcut,
+			getText: details?.command?.name
+				? async () => getOrderedShortcut(
+					(await chrome.commands.getAll())
+						.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
+				).join("+") : undefined,
+			forInput: details?.command?.name && (chrome.commands["update"] || (this["browser"] && browser.commands["update"]))
+				? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
+				: undefined,
+		},
+		input: {
+			getType: () => inputType,
+			onLoad: async setValue => {
+				const config = await configGet({ [configKey]: [ key ] });
+				const value = config[configKey][key];
+				setValue(((typeof value === "object" && value !== null && "w_listIn" in value) ? value["w_listIn"] : value) as boolean);
+			},
+			onChange: async (value, objectIndex, containerIndex, store) => {
+				if (store) {
+					const config = await configGet({ [configKey]: [ key ] });
+					const valueTransformed = (inputType === InputType.TEXT_ARRAY)
+						? (value as unknown as string).split(",")
+						: inputType === InputType.TEXT_NUMBER
+							? parseFloat(value as unknown as string)
+							: value;
+					if (typeof config[configKey][key] === "object" && config[configKey][key] !== null
+						&& "w_listIn" in (config[configKey][key] as Record<string, unknown>)) {
+						(config[configKey][key]["w_listIn"] as unknown) = valueTransformed;
+					} else {
+						(config[configKey][key] as unknown) = valueTransformed;
+					}
+					await configSet(config);
 				}
-				await configSet(config);
-			}
-			if (details?.onChange) {
-				details.onChange();
-			}
+				if (details?.onChange) {
+					details.onChange();
+				}
+			},
 		},
-	},
-});
+	})
+;
 
 /**
  * Loads the sendoff page content into the page.
@@ -75,7 +77,7 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Color hues to cycle through" },
-							ConfigKey.HIGHLIGHT_METHOD,
+							"highlightMethod",
 							"hues",
 							InputType.TEXT_ARRAY,
 						),
@@ -137,19 +139,19 @@ const loadOptions = (() => {
 • when a Keyword List applies to the page`
 								,
 							},
-							ConfigKey.SHOW_HIGHLIGHTS,
+							"showHighlights",
 							"default",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Always show on search pages" },
-							ConfigKey.SHOW_HIGHLIGHTS,
+							"showHighlights",
 							"overrideSearchPages",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Always show on other pages" },
-							ConfigKey.SHOW_HIGHLIGHTS,
+							"showHighlights",
 							"overrideResearchPages",
 							InputType.CHECKBOX,
 						),
@@ -166,12 +168,12 @@ const loadOptions = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+										configGet({ urlFilters: [ "noPageModify" ] }).then(sync => //
 											sync.urlFilters.noPageModify.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+										configGet({ urlFilters: [ "noPageModify" ] }).then(sync => {
 											sync.urlFilters.noPageModify.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -216,14 +218,14 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Edition" },
-							ConfigKey.THEME,
+							"theme",
 							"edition",
 							InputType.TEXT,
 							{ onChange: pageReload },
 						),
 						getControlOptionTemp(
 							{ text: "Variant" },
-							ConfigKey.THEME,
+							"theme",
 							"variant",
 							InputType.TEXT,
 							{ onChange: pageReload },
@@ -237,28 +239,28 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Hue" },
-							ConfigKey.THEME,
+							"theme",
 							"hue",
 							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Contrast" },
-							ConfigKey.THEME,
+							"theme",
 							"contrast",
 							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Lightness" },
-							ConfigKey.THEME,
+							"theme",
 							"lightness",
 							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Saturation" },
-							ConfigKey.THEME,
+							"theme",
 							"saturation",
 							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
@@ -272,7 +274,7 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Font scale" },
-							ConfigKey.THEME,
+							"theme",
 							"fontScale",
 							InputType.TEXT_NUMBER,
 							{ onChange: pageThemeUpdate },
@@ -294,25 +296,25 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Font size" },
-							ConfigKey.BAR_LOOK,
+							"barLook",
 							"fontSize",
 							InputType.TEXT_NUMBER,
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of keyword buttons" },
-							ConfigKey.BAR_LOOK,
+							"barLook",
 							"opacityTerm",
 							InputType.TEXT_NUMBER,
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of control buttons" },
-							ConfigKey.BAR_LOOK,
+							"barLook",
 							"opacityControl",
 							InputType.TEXT_NUMBER,
 						),
 						getControlOptionTemp(
 							{ text: "Rounded corners" },
-							ConfigKey.BAR_LOOK,
+							"barLook",
 							"borderRadius",
 							InputType.TEXT_NUMBER,
 						),
@@ -325,34 +327,34 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "\"Deactivate in the current tab\"" },
-							ConfigKey.BAR_CONTROLS_SHOWN,
+							"barControlsShown",
 							"disableTabResearch",
 							InputType.CHECKBOX,
 							{ command: { name: "toggle-research-tab" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Web Search with these keywords\"" },
-							ConfigKey.BAR_CONTROLS_SHOWN,
+							"barControlsShown",
 							"performSearch",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "\"Show/hide highlights\"" },
-							ConfigKey.BAR_CONTROLS_SHOWN,
+							"barControlsShown",
 							"toggleHighlights",
 							InputType.CHECKBOX,
 							{ command: { name: "toggle-highlights" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Add a new keyword\"" },
-							ConfigKey.BAR_CONTROLS_SHOWN,
+							"barControlsShown",
 							"appendTerm",
 							InputType.CHECKBOX,
 							{ command: { name: "focus-term-append" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Replace keywords with detected search\"" },
-							ConfigKey.BAR_CONTROLS_SHOWN,
+							"barControlsShown",
 							"replaceTerms",
 							InputType.CHECKBOX,
 							{ command: { name: "terms-replace" } },
@@ -366,13 +368,13 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Show edit pen" },
-							ConfigKey.BAR_LOOK,
+							"barLook",
 							"showEditIcon",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Show options button" },
-							ConfigKey.BAR_LOOK,
+							"barLook",
 							"showRevealIcon",
 							InputType.CHECKBOX,
 							{ command: { shortcut: "Shift+Space" } }, // Hardcoded in the content script.
@@ -386,13 +388,13 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Collapse when a search is detected" },
-							ConfigKey.BAR_COLLAPSE,
+							"barCollapse",
 							"fromSearch",
 							InputType.CHECKBOX,
 						),
 						getControlOptionTemp(
 							{ text: "Collapse when a Keyword List applies to the page" },
-							ConfigKey.BAR_COLLAPSE,
+							"barCollapse",
 							"fromTermListAuto",
 							InputType.CHECKBOX,
 						),
@@ -413,13 +415,13 @@ const loadOptions = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "URL parameters containing keywords" },
-							ConfigKey.AUTO_FIND_OPTIONS,
+							"autoFindOptions",
 							"searchParams",
 							InputType.TEXT_ARRAY,
 						),
 						getControlOptionTemp(
 							{ text: "Keywords to exclude" },
-							ConfigKey.AUTO_FIND_OPTIONS,
+							"autoFindOptions",
 							"stoplist",
 							InputType.TEXT_ARRAY,
 						),
@@ -436,12 +438,12 @@ const loadOptions = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										configGet([ ConfigKey.URL_FILTERS ]).then(sync => //
+										configGet({ urlFilters: [ "nonSearch" ] }).then(sync => //
 											sync.urlFilters.nonSearch.w_listIn.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										configGet([ ConfigKey.URL_FILTERS ]).then(sync => {
+										configGet({ urlFilters: [ "nonSearch" ] }).then(sync => {
 											sync.urlFilters.nonSearch.w_listIn = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -522,7 +524,7 @@ PAINT
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
 								,
 							},
-							ConfigKey.HIGHLIGHT_METHOD,
+							"highlightMethod",
 							"paintReplaceByClassic",
 							InputType.CHECKBOX,
 						),
@@ -541,7 +543,7 @@ PAINT
 • Chromium: The CSS [Houdini] Painting API is used instead of SVG rendering.`
 								,
 							},
-							ConfigKey.HIGHLIGHT_METHOD,
+							"highlightMethod",
 							"paintUseExperimental",
 							InputType.CHECKBOX,
 						),*/
@@ -552,36 +554,36 @@ PAINT
 						text: "Matching Options for New Keywords",
 					},
 					interactions: [
-						getControlOptionTemp(
-							{ text: "Case sensitivity" },
-							ConfigKey.MATCHING_DEFAULTS,
-							"case",
-							InputType.CHECKBOX,
-						),
-						getControlOptionTemp(
-							{ text: "Word stemming" },
-							ConfigKey.MATCHING_DEFAULTS,
-							"stem",
-							InputType.CHECKBOX,
-						),
-						getControlOptionTemp(
-							{ text: "Whole word matching" },
-							ConfigKey.MATCHING_DEFAULTS,
-							"whole",
-							InputType.CHECKBOX,
-						),
-						getControlOptionTemp(
-							{ text: "Diacritics sensitivity" },
-							ConfigKey.MATCHING_DEFAULTS,
-							"diacritics",
-							InputType.CHECKBOX,
-						),
-						getControlOptionTemp(
-							{ text: "Custom regular expression (regex)" },
-							ConfigKey.MATCHING_DEFAULTS,
-							"regex",
-							InputType.CHECKBOX,
-						),
+						//getControlOptionTemp(
+						//	{ text: "Case sensitivity" },
+						//	"matchingDefaults",
+						//	"case",
+						//	InputType.CHECKBOX,
+						//),
+						//getControlOptionTemp(
+						//	{ text: "Word stemming" },
+						//	"matchingDefaults",
+						//	"stem",
+						//	InputType.CHECKBOX,
+						//),
+						//getControlOptionTemp(
+						//	{ text: "Whole word matching" },
+						//	"matchingDefaults",
+						//	"whole",
+						//	InputType.CHECKBOX,
+						//),
+						//getControlOptionTemp(
+						//	{ text: "Diacritics sensitivity" },
+						//	"matchingDefaults",
+						//	"diacritics",
+						//	InputType.CHECKBOX,
+						//),
+						//getControlOptionTemp(
+						//	{ text: "Custom regular expression (regex)" },
+						//	"matchingDefaults",
+						//	"regex",
+						//	InputType.CHECKBOX,
+						//),
 					],
 				},
 			],

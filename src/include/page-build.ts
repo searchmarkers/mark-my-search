@@ -428,7 +428,7 @@ const pageReload = () => {
 };
 
 const pageThemeUpdate = async () => {
-	const config = await configGet([ ConfigKey.THEME ]);
+	const config = await configGet({ theme: true });
 	const styleTheme = document.getElementById("style-theme") as HTMLStyleElement;
 	styleTheme.textContent =
 `:root {

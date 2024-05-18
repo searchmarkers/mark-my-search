@@ -19,10 +19,7 @@ const createResearchInstance = async (args: {
 	url?: { stoplist: Array<string>, url: string, engine?: Engine }
 	terms?: MatchTerms
 }): Promise<ResearchInstance> => {
-	const config = await configGet([
-		ConfigKey.SHOW_HIGHLIGHTS,
-		ConfigKey.BAR_COLLAPSE,
-	]);
+	const config = await configGet({ showHighlights: [ "default" ], barCollapse: [ "fromSearch" ] });
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
@@ -54,9 +51,9 @@ const createResearchInstance = async (args: {
  * @returns The URL segment determined to be the search query, or the empty string if none is found.
  */
 const getSearchQuery = async (url: string): Promise<string> =>
-	configGet([ ConfigKey.AUTO_FIND_OPTIONS ]).then(sync =>
+	configGet({ autoFindOptions: [ "searchParams" ] }).then(config =>
 		new URL(url).searchParams.get(
-			configResolveList(sync.autoFindOptions.searchParams).find(param => new URL(url).searchParams.has(param)) ?? ""
+			configResolveList(config.autoFindOptions.searchParams).find(param => new URL(url).searchParams.has(param)) ?? ""
 		) ?? ""
 	).catch(() => {
 		log("search query extraction fail", "", { url });
@@ -242,7 +239,7 @@ const injectIntoTabs = async () => {
  */
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
-		? configGet([ ConfigKey.AUTO_FIND_OPTIONS ]).then(config =>
+		? configGet({ autoFindOptions: [ "enabled" ] }).then(config =>
 			updateActionIcon(config.autoFindOptions.enabled ?? false) // Prevent infinite recursion in case of storage failure.
 		) : chrome.action.setIcon({ path: useChromeAPI()
 			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
@@ -327,17 +324,17 @@ const updateActionIcon = (enabled?: boolean) =>
 const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	const logMetadata = { timeStart: Date.now(), tabId, url: urlString };
 	log("tab-communicate fulfillment start", "", logMetadata);
-	const config = await configGet([
-		ConfigKey.AUTO_FIND_OPTIONS,
-		ConfigKey.SHOW_HIGHLIGHTS,
-		ConfigKey.BAR_COLLAPSE,
-		ConfigKey.BAR_CONTROLS_SHOWN,
-		ConfigKey.BAR_LOOK,
-		ConfigKey.HIGHLIGHT_METHOD,
-		ConfigKey.MATCHING_DEFAULTS,
-		ConfigKey.URL_FILTERS,
-		ConfigKey.TERM_LIST_OPTIONS,
-	]);
+	const config = await configGet({
+		autoFindOptions: [ "enabled", "stoplist" ],
+		showHighlights: [ "overrideSearchPages", "overrideResearchPages" ],
+		barCollapse: [ "fromTermListAuto" ],
+		barControlsShown: true,
+		barLook: true,
+		highlightMethod: true,
+		matchingDefaults: [ "matchMode" ],
+		urlFilters: true,
+		termListOptions: [ "termLists" ],
+	});
 	const bank = await bankGet([
 		BankKey.RESEARCH_INSTANCES,
 		BankKey.ENGINES,
@@ -457,13 +454,13 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	const pageChangeRespond = async (urlString: string, tabId: number) => {
 		const logMetadata = { timeStart: Date.now(), tabId, url: urlString };
 		log("tab-communicate fulfillment start", "", logMetadata);
-		const config = await configGet([
-			ConfigKey.AUTO_FIND_OPTIONS,
-			ConfigKey.SHOW_HIGHLIGHTS,
-			ConfigKey.BAR_COLLAPSE,
-			ConfigKey.URL_FILTERS,
-			ConfigKey.TERM_LIST_OPTIONS,
-		]);
+		const config = await configGet({
+			autoFindOptions: [ "enabled", "stoplist" ],
+			showHighlights: [ "overrideSearchPages", "overrideResearchPages" ],
+			barCollapse: [ "fromTermListAuto" ],
+			urlFilters: true,
+			termListOptions: [ "termLists" ],
+		});
 		const bank = await bankGet([
 			BankKey.RESEARCH_INSTANCES,
 			BankKey.ENGINES,
@@ -596,7 +593,7 @@ const getTermsSelectedInTab = async (tabId: number): Promise<MatchTerms | undefi
  */
 const activateResearchInTab = async (tabId: number, terms: MatchTerms = []) => {
 	log("research-activation start", "", { tabId });
-	const config = await configGet([ ConfigKey.RESEARCH_INSTANCE_OPTIONS ]);
+	const config = await configGet({ researchInstanceOptions: [ "restoreLastInTab" ] });
 	const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 	const researchInstance = bank.researchInstances[tabId] && config.researchInstanceOptions.restoreLastInTab && !terms.length
 		? bank.researchInstances[tabId]
@@ -645,7 +642,7 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	if (!await isTabResearchPage(tabId)) {
 		return;
 	}
-	const config = await configGet([ ConfigKey.BAR_CONTROLS_SHOWN ]);
+	const config = await configGet({ barControlsShown: true });
 	const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 	const researchInstance = bank.researchInstances[tabId];
 	researchInstance.highlightsShown = toggleHighlightsOn
@@ -675,10 +672,10 @@ chrome.commands.onCommand.addListener(async commandString => {
 		chrome.runtime.openOptionsPage();
 		return;
 	} case CommandType.TOGGLE_ENABLED: {
-		configGet([ ConfigKey.AUTO_FIND_OPTIONS ]).then(local => {
-			local.autoFindOptions.enabled = !local.autoFindOptions.enabled;
-			configSet(local);
-			updateActionIcon(local.autoFindOptions.enabled);
+		configGet({ autoFindOptions: [ "enabled" ] }).then(config => {
+			config.autoFindOptions.enabled = !config.autoFindOptions.enabled;
+			configSet(config);
+			updateActionIcon(config.autoFindOptions.enabled);
 		});
 		return;
 	} case CommandType.TOGGLE_IN_TAB: {
@@ -772,13 +769,13 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 	}
 	if (message.initializationGet) {
 		log("initialization-return start", "", { tabId });
-		const config = (await configGet([
-			ConfigKey.BAR_CONTROLS_SHOWN,
-			ConfigKey.BAR_LOOK,
-			ConfigKey.HIGHLIGHT_METHOD,
-			ConfigKey.MATCHING_DEFAULTS,
-			ConfigKey.URL_FILTERS,
-		]));
+		const config = (await configGet({
+			barControlsShown: true,
+			barLook: true,
+			highlightMethod: true,
+			matchingDefaults: [ "matchMode" ],
+			urlFilters: true,
+		}));
 		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
 		const researchInstance = bank.researchInstances[tabId];
 		if (researchInstance) {

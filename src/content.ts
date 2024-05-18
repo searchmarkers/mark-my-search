@@ -101,8 +101,8 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: MatchTerms
-	[ConfigKey.BAR_CONTROLS_SHOWN]: ConfigBarControlsShown
-	[ConfigKey.BAR_LOOK]: ConfigBarLook
+	barControlsShown: ConfigBarControlsShown
+	barLook: ConfigBarLook
 	matchMode: MatchMode
 }
 

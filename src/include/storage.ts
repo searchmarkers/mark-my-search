@@ -12,21 +12,21 @@ type BankValues = {
 	[BankKey.RESEARCH_INSTANCES]: ResearchInstances
 	[BankKey.ENGINES]: Engines
 }
-type StorageValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? {
+type StorageValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
 	w_value: T
 	useDefault?: true
 	sync?: true
-} : Context extends StorageContext.STORE ? {
+}> : Context extends StorageContext.STORE ? {
 	w_value: T
 } : T
-type StorageListValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? {
-	listBase: Array<T>
+type StorageListValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
+	listBase: ReadonlyArray<T>
 	sync?: true
-} : Context extends StorageContext.STORE ? {
+}> : Context extends StorageContext.STORE ? {
 	w_listIn: Array<T>
 	w_listOut: Array<T>
 } : {
-	listBase: Array<T>
+	listBase: ReadonlyArray<T>
 	w_listIn: Array<T>
 	w_listOut: Array<T>
 }
@@ -55,11 +55,12 @@ type ConfigURLFilters<Context = StorageContext.INTERFACE> = {
 	noPageModify: StorageListValue<URLFilter[number], Context>
 	nonSearch: StorageListValue<URLFilter[number], Context>
 }
-type ConfigGroup<Context = StorageContext.INTERFACE> = Record<string,
-	StorageValue<unknown, Context> | StorageListValue<unknown, Context>
->
+type ConfigValue<Context = StorageContext.INTERFACE> =
+	| StorageValue<unknown, Context>
+	| StorageListValue<unknown, Context>
+type ConfigGroup<Context = StorageContext.INTERFACE> = Record<string, ConfigValue<Context>>
 type ConfigValues<Context = StorageContext.INTERFACE> = {
-	[ConfigKey.THEME]: {
+	theme: {
 		edition: StorageValue<ThemeEdition, Context>
 		variant: StorageValue<ThemeVariant, Context>
 		hue: StorageValue<number, Context>
@@ -68,31 +69,31 @@ type ConfigValues<Context = StorageContext.INTERFACE> = {
 		saturation: StorageValue<number, Context>
 		fontScale: StorageValue<number, Context>
 	}
-	[ConfigKey.RESEARCH_INSTANCE_OPTIONS]: {
+	researchInstanceOptions: {
 		restoreLastInTab: StorageValue<boolean, Context>
 	}
-	[ConfigKey.AUTO_FIND_OPTIONS]: {
+	autoFindOptions: {
 		enabled: StorageValue<boolean, Context>
 		stoplist: StorageListValue<string, Context>
 		searchParams: StorageListValue<string, Context>
 	}
-	[ConfigKey.MATCHING_DEFAULTS]: {
+	matchingDefaults: {
 		matchMode: StorageValue<MatchMode, Context>
 	}
-	[ConfigKey.SHOW_HIGHLIGHTS]: {
+	showHighlights: {
 		default: StorageValue<boolean, Context>
 		overrideSearchPages: StorageValue<boolean, Context>
 		overrideResearchPages: StorageValue<boolean, Context>
 	}
-	[ConfigKey.BAR_COLLAPSE]: {
+	barCollapse: {
 		fromSearch: StorageValue<boolean, Context>
 		fromTermListAuto: StorageValue<boolean, Context>
 	}
-	[ConfigKey.BAR_CONTROLS_SHOWN]: ConfigBarControlsShown<Context>
-	[ConfigKey.BAR_LOOK]: ConfigBarLook<Context>
-	[ConfigKey.HIGHLIGHT_METHOD]: ConfigHighlightMethod<Context>
-	[ConfigKey.URL_FILTERS]: ConfigURLFilters<Context>
-	[ConfigKey.TERM_LIST_OPTIONS]: {
+	barControlsShown: ConfigBarControlsShown<Context>
+	barLook: ConfigBarLook<Context>
+	highlightMethod: ConfigHighlightMethod<Context>
+	urlFilters: ConfigURLFilters<Context>
+	termListOptions: {
 		termLists: StorageValue<Array<TermList>, Context>
 	}
 }
@@ -111,19 +112,7 @@ enum BankKey {
 	ENGINES = "engines",
 }
 
-enum ConfigKey {
-	THEME = "theme",
-	RESEARCH_INSTANCE_OPTIONS = "researchInstanceOptions",
-	AUTO_FIND_OPTIONS = "autoFindOptions",
-	MATCHING_DEFAULTS = "matchingDefaults",
-	SHOW_HIGHLIGHTS = "showHighlights",
-	BAR_COLLAPSE = "barCollapse",
-	BAR_CONTROLS_SHOWN = "barControlsShown",
-	BAR_LOOK = "barLook",
-	HIGHLIGHT_METHOD = "highlightMethod",
-	URL_FILTERS = "urlFilters",
-	TERM_LIST_OPTIONS = "termListOptions",
-}
+type ConfigKey = keyof ConfigValues
 
 enum ThemeEdition {
 	CLASSIC = "classic",
@@ -270,10 +259,10 @@ const bankDefault: BankValues = {
 /**
  * The working cache of items retrieved from the persistent config since the last background startup.
  */
-const configCache: Partial<ConfigValues<StorageContext.STORE>> = {};
+//const configCache: Partial<ConfigValues<StorageContext.STORE>> = {};
 
-const configCacheKeysLocal: Set<string> = new Set;
-const configCacheKeysSync: Set<string> = new Set;
+//const configCacheKeysLocal: Set<string> = new Set;
+//const configCacheKeysSync: Set<string> = new Set;
 
 /**
  * Gets an object of key-value pairs corresponding to a set of keys in the given area of storage.
@@ -304,87 +293,127 @@ const bankGet = async <T extends BankKey>(keys: Array<T>): Promise<{ [P in T]: B
 		return true;
 	});
 	chrome.storage.session.get(keysToGet).then((bankStore: BankValues) => {
-		keysToGet.forEach(<K extends BankKey>(key: K) => {
-			bankCache[key] = bankStore[key] ?? bankDefault[key];
+		keysToGet.forEach(<K extends T>(key: K) => {
+			bankCache[key] = bankStore[key] ?? Object.assign({}, bankDefault[key]);
+			bank[key] = bankCache[key] as BankValues[K];
 		});
 	});
 	return bank;
 };
 
-type ConfigAreaName = "local" | "sync"
+type StorageAreaName = "local" | "sync"
 
-const configAreaNames: Array<ConfigAreaName> = [ "local", "sync" ];
-const configValueGetAreaName = (sync?: boolean): ConfigAreaName => sync ? "sync" : "local";
-
-// NOTE: need to consider how to deal with timings as "local" and "sync" are set separately; default value considerations etc.
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const configSet = async (config: Partial<ConfigValues>) => {
-	const storageSends: Record<ConfigAreaName, Array<ConfigKey>> = { local: [], sync: [] };
-	const storageFetchSends: Record<ConfigAreaName, Array<ConfigKey>> = { local: [], sync: [] };
-	Object.entries(config).forEach(([ configKey, configGroup ]: [ ConfigKey, ConfigValues[ConfigKey] ]) => {
-		const configGroupDefault = configDefault[configKey] as ConfigGroup<StorageContext.SCHEMA>;
-		if (!assert(typeof configGroupDefault !== "object", "config group could not be set", "config key is invalid", { configKey }))
-			return;
-		const configGroupCache = ((configCache[configKey] as unknown)
-			??= {}) as Partial<ConfigValues<StorageContext.STORE>[ConfigKey]>;
-		Object.entries(configGroup).forEach(([ key, value ]) => {
-			const configValueDefault = configGroupDefault[key];
-			if (!assert(typeof configValueDefault !== "object", "config value could not be set", "key is invalid", { key }))
-				return;
-			configGroupCache[key] = value;
-		});
-		configAreaNames.forEach(areaName => {
-			(Object.entries(configGroupDefault).some(([ key, valueDefault ]) =>
-				configValueGetAreaName(valueDefault.sync) === areaName && configGroupCache[key] !== undefined
-			) ? storageFetchSends : storageSends)[areaName].push(configKey);
-		});
-	});
-	const storageOperations = Object.entries(storageFetchSends)
-		.filter(({ 1: areaFetches }) => Object.keys(areaFetches).length)
-		.map(([ areaName, areaFetches ]: [ ConfigAreaName, Array<ConfigKey> ]) =>
-			chrome.storage[areaName].get(Object.keys(areaFetches)).then(configGroup => {
-				// TODO needs plenty of safeguards
-				//Object.entries(configGroup).forEach(([ key, value ]) => {
-
-				//})
-				//storageOperations.push(chrome.storage[areaName].set());
-			})
-		).concat(Object.entries(storageSends)
-			.filter(({ 1: areaFetches }) => Object.keys(areaFetches).length)
-			.map(([ areaName, areaFetches ]: [ ConfigAreaName, Array<ConfigKey> ]) =>
-				chrome.storage[areaName].set(Object.keys(areaFetches))
-			)
-		);
-	for (const promise of storageOperations) await promise;
+type Partial2<T> = {
+    [P in keyof T]: {
+		[P1 in keyof T[P]]?: T[P][P1];
+	};
 };
 
-/*const configGet = async <T extends ConfigKey>(keys: Array<T>): Promise<{ [P in T]: ConfigValues[P] }> => {
-	await configCachePopulate(keys);
-	const config = {} as { [P in T]: ConfigValues[P] };
-	keys.forEach(key1 => {
-		if ((configDefault[key1] as StorageValue<unknown, true, true>).w_value !== undefined) {
-			(config[key1] as StorageValue<unknown, false>) = (configCache[key1] as StorageValue<unknown>).w_value;
-		} else {
-			const config1 = {} as Record<string, StorageValue<unknown, false>>;
-			(config[key1] as typeof config1) = config1;
-			Object.keys(configDefault[key1]).forEach(key2 => {
-				config1[key2] = (configCache[key1] as Record<string, StorageValue<unknown>>)[key2].w_value;
-			});
-		}
-	});
-	return config;
-};*/
+// TODO store config to cache when setting and getting, update cache when storage changes
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const configGet = async <T extends ConfigKey>(keys: Array<T>): Promise<{ [P in T]: ConfigValues[P] }> =>
-	Object.fromEntries(keys.map(configKey =>
-		[ configKey, Object.fromEntries(Object.entries(configDefault[configKey] as ConfigGroup)
-			.map(([ key, valueDefault ]: [ string, Record<string, unknown> ]) =>
-				[ key, ("w_value" in valueDefault) ? valueDefault.w_value : { listBase: valueDefault.listBase, w_listIn: [], w_listOut: [] } ]
-			)
-		) ]
-	)) as { [P in T]: ConfigValues[P] }
+const configSet = async <Config extends Partial<Partial2<ConfigValues>>>(config: Config) => {
+	const storageAreaValues: Record<StorageAreaName, Record<string, unknown>> = { local: {}, sync: {} };
+	for (const [ configKey, group ] of Object.entries(config)) {
+		for (const [ groupKey, value ] of Object.entries(group)) {
+			const valueDefault = configDefault[configKey][groupKey];
+			const storageValues = valueDefault.sync ? storageAreaValues.sync : storageAreaValues.local;
+			const key = configKey + "." + groupKey;
+			if ((valueDefault as StorageValue<unknown, StorageContext.SCHEMA>).w_value !== undefined) {
+				(storageValues[key] as StorageValue<unknown, StorageContext.STORE>)
+					= {
+						w_value: value as StorageValue<unknown>,
+					};
+			} else if ((valueDefault as StorageListValue<unknown, StorageContext.SCHEMA>).listBase !== undefined) {
+				(storageValues[key] as StorageListValue<unknown, StorageContext.STORE>)
+					= {
+						w_listIn: (value as StorageListValue<unknown>).w_listIn,
+						w_listOut: (value as StorageListValue<unknown>).w_listOut,
+					};
+			}
+		}
+	}
+	const storagePromises = [
+		chrome.storage.local.set(storageAreaValues.local),
+		chrome.storage.sync.set(storageAreaValues.sync),
+	];
+	for (const promise of storagePromises) await promise;
+};
+
+type ConfigKeyObject<ConfigK extends ConfigKey> = {[C in ConfigK]?: Array<keyof ConfigValues[C]> | true}
+
+type ConfigPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>> = {
+	[C in ConfigK]: KeyObject[C] extends Array<infer GroupK extends keyof ConfigValues[C]>
+		? {[G in GroupK]: ConfigValues[C][G]}
+		: (KeyObject[C] extends true ? ConfigValues[C] : never)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>>
+	(keyObject: KeyObject) => new Promise<ConfigPartial<ConfigK, KeyObject>>(resolve => {
+		let pendingCount = 0;
+		const config = {} as ConfigPartial<ConfigK, KeyObject>;
+		const storageAreaKeys: Record<StorageAreaName, Array<string>> = { local: [], sync: [] };
+		const keyObjectEntries = Object.entries(keyObject) as Array<[ ConfigK, Array<string> | true ]>;
+		for (const [ configKey, groupInfo ] of keyObjectEntries) {
+			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+			for (const groupKey of groupKeys) {
+				const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
+				storageAreaKeys[valueDefault.sync ? "sync" : "local"].push(configKey + "." + groupKey);
+			}
+		}
+		const storageAreaPromises: Record<StorageAreaName, Promise<Record<string, unknown>>> = {
+			local: chrome.storage.local.get(storageAreaKeys.local).catch(reason => {
+				assert(false, "config keys returning default values", "storage get failed", { keys: storageAreaKeys.local, reason });
+				return {};
+			}),
+			sync: chrome.storage.sync.get(storageAreaKeys.sync).catch(reason => {
+				assert(false, "config keys returning default values", "storage get failed", { keys: storageAreaKeys.sync, reason });
+				return {};
+			}),
+		};
+		for (const [ configKey, groupInfo ] of keyObjectEntries) {
+			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+			groupKeys.forEach(async groupKey => {
+				pendingCount++;
+				const key = configKey + "." + groupKey;
+				(config[configKey] as unknown) ??= {} as ConfigGroup;
+				const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
+				const value = (await (valueDefault.sync ? storageAreaPromises.sync : storageAreaPromises.local))[key];
+				type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
+				type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
+				if ((valueDefault as StorageV).w_value !== undefined) {
+					if (value === undefined) {
+						(config[configKey][groupKey] as StorageValue<unknown>)
+							= (valueDefault as StorageV).w_value;
+					} else {
+						// TODO validate
+						(config[configKey][groupKey] as StorageValue<unknown>)
+							= (value as StorageValue<unknown, StorageContext.STORE>).w_value;
+					}
+				} else if ((valueDefault as StorageListV).listBase !== undefined) {
+					if (value === undefined) {
+						(config[configKey][groupKey] as StorageListValue<unknown>)
+							= {
+								listBase: (valueDefault as StorageListV).listBase,
+								w_listIn: [],
+								w_listOut: [],
+							};
+					} else {
+						// TODO validate
+						(config[configKey][groupKey] as StorageListValue<unknown>)
+							= {
+								listBase: (valueDefault as StorageListV).listBase,
+								w_listIn: (value as StorageListValue<unknown, StorageContext.STORE>).w_listIn,
+								w_listOut: (value as StorageListValue<unknown, StorageContext.STORE>).w_listOut,
+							};
+					}
+				}
+				pendingCount--;
+				if (pendingCount === 0) resolve(config);
+			});
+		}
+	})
 ;
 
 /**
@@ -432,7 +461,7 @@ const objectFixWithDefaults = (
 	return hasModified;
 };
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
+/*chrome.storage.onChanged.addListener((changes, areaName) => {
 	// TODO check that the change was not initiated from the same script
 	switch (areaName) {
 	case "session": {
@@ -471,7 +500,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 		});
 		break;
 	}}
-});
+});*/
 
 /*const updateCache = (changes: Record<string, chrome.storage.StorageChange>, areaName: StorageAreaName | "managed") => {
 	if (areaName === "managed") {

@@ -70,11 +70,11 @@ You can always activate ${getName()} by opening its popup (from the 'extensions'
 							input: {
 								getType: () => InputType.CHECKBOX,
 								onLoad: async setChecked => {
-									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									const config = await configGet({ autoFindOptions: [ "enabled" ] });
 									setChecked(config.autoFindOptions.enabled);
 								},
 								onChange: async checked => {
-									const config = await configGet([ ConfigKey.AUTO_FIND_OPTIONS ]);
+									const config = await configGet({ autoFindOptions: [ "enabled" ] });
 									config.autoFindOptions.enabled = checked;
 									await configSet(config);
 								},
