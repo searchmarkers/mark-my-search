@@ -7,7 +7,7 @@ enum StorageContext {
 }
 
 type ResearchInstances = Record<number, ResearchInstance>
-type Engines = Record<string, Engine>
+type Engines = Record<string, SearchSite>
 type BankValues = {
 	[BankKey.RESEARCH_INSTANCES]: ResearchInstances
 	[BankKey.ENGINES]: Engines
@@ -47,7 +47,7 @@ type ConfigBarLook<Context = StorageContext.INTERFACE> = {
 	borderRadius: StorageValue<string, Context>
 }
 type ConfigHighlightMethod<Context = StorageContext.INTERFACE> = {
-	paintReplaceByClassic: StorageValue<boolean, Context>
+	paintReplaceByElement: StorageValue<boolean, Context>
 	paintUseExperimental: StorageValue<boolean, Context>
 	hues: StorageValue<Array<number>, Context>
 }
@@ -221,7 +221,7 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 		borderRadius: { w_value: "4px", useDefault: true, sync: true },
 	},
 	highlightMethod: {
-		paintReplaceByClassic: { w_value: true },
+		paintReplaceByElement: { w_value: true },
 		paintUseExperimental: { w_value: false, useDefault: true },
 		hues: {
 			w_value: [ 300, 60, 110, 220, 30, 190, 0 ],

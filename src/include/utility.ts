@@ -1,9 +1,45 @@
 type MatchTerms = Array<MatchTerm>
 
+enum Browser {
+	FIREFOX,
+	CHROMIUM,
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const useChromeAPI = () =>
-	!this.browser
-;
+const compatibility = { // Some of this differs depending on the context the script runs in.
+	// We use a heuristic, since it's hard to find a better (synchronous) way of detecting the browser.
+	// See `runtime.getBrowserInfo()` (async, only supported in Firefox, no concept of the *underlying* browser).
+	browser: globalThis.browser ? Browser.FIREFOX : Browser.CHROMIUM,
+	highlight: {
+		paintEngine: {
+			paintMethod: !!globalThis.CSS && !!CSS.paintWorklet,
+			// `element()` might be defined anyway, could have false negatives.
+			elementMethod: !!globalThis.document && !!document["mozSetImageElement"],
+		},
+		highlightEngine: !!globalThis.CSS && !!CSS.highlights,
+	},
+};
+
+/**
+ * @deprecated Use `compatibility.browser` instead.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const useChromeAPI = () => compatibility.browser === Browser.CHROMIUM;
+
+enum Engine {
+	ELEMENT,
+	PAINT,
+	HIGHLIGHT,
+}
+
+enum PaintEngineMethod {
+	PAINT,
+	ELEMENT,
+	URL,
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
 
 /**
  * Gets a JSON-stringified form of the given object for use in logging.
@@ -167,7 +203,10 @@ type HighlightMessage = {
 	terms?: MatchTerms
 	termsOnHold?: MatchTerms
 	deactivate?: boolean
-	useClassicHighlighting?: boolean
+	setHighlighter?: {
+		engine: Engine
+		paintEngineMethod?: PaintEngineMethod
+	}
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	toggleBarCollapsedOn?: boolean

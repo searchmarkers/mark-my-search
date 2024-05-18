@@ -16,7 +16,7 @@ if (this.importScripts) {
  * @returns The resulting research instance.
  */
 const createResearchInstance = async (args: {
-	url?: { stoplist: Array<string>, url: string, engine?: Engine }
+	url?: { stoplist: Array<string>, url: string, engine?: SearchSite }
 	terms?: MatchTerms
 }): Promise<ResearchInstance> => {
 	const config = await configGet({ showHighlights: [ "default" ], barCollapse: [ "fromSearch" ] });
@@ -68,7 +68,7 @@ const getSearchQuery = async (url: string): Promise<string> =>
  * @returns An object containing a flag for whether or not the URL specifies a search,
  * and the first object which matched the URL (if any).
  */
-const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearch: boolean, engine?: Engine }> => {
+const isTabSearchPage = async (engines: Engines, url: string): Promise<{ isSearch: boolean, engine?: SearchSite }> => {
 	if (await getSearchQuery(url)) {
 		return { isSearch: true };
 	} else {
@@ -155,7 +155,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			delete engines[id];
 			return;
 		}
-		const engine = new Engine({ urlDynamicString });
+		const engine = new SearchSite({ urlDynamicString });
 		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) {
 			return;
 		}
@@ -306,149 +306,12 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.runtime.onStartup.addListener(initialize);
 
 	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
-	bankGet([ BankKey.RESEARCH_INSTANCES ]).then(session => { // TODO better workaround?
-		if (session.researchInstances === undefined) {
+	bankGet([ BankKey.RESEARCH_INSTANCES ]).then(bank => { // TODO better workaround?
+		if (bank.researchInstances === undefined) {
 			assert(false, "storage reinitialize", "storage read returned `undefined` when testing on wake");
 		}
 	});
 })();
-
-// AUDITED ABOVE
-
-/**
- * Compares an updated tab with its associated storage in order to identify necessary storage and highlighting changes,
- * then carries out these changes.
- * @param urlString The current URL of the tab, used to infer desired highlighting.
- * @param tabId The ID of a tab to check and interact with.
- */
-const pageChangeRespondOld = async (urlString: string, tabId: number) => {
-	const logMetadata = { timeStart: Date.now(), tabId, url: urlString };
-	log("tab-communicate fulfillment start", "", logMetadata);
-	const config = await configGet({
-		autoFindOptions: [ "enabled", "stoplist" ],
-		showHighlights: [ "overrideSearchPages", "overrideResearchPages" ],
-		barCollapse: [ "fromTermListAuto" ],
-		barControlsShown: true,
-		barLook: true,
-		highlightMethod: true,
-		matchingDefaults: [ "matchMode" ],
-		urlFilters: true,
-		termListOptions: [ "termLists" ],
-	});
-	const bank = await bankGet([
-		BankKey.RESEARCH_INSTANCES,
-		BankKey.ENGINES,
-	]);
-	const searchDetails = config.autoFindOptions.enabled
-		? await isTabSearchPage(bank.engines, urlString)
-		: { isSearch: false };
-	searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, config.urlFilters);
-	const termsFromLists = config.termListOptions.termLists
-		.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
-		.flatMap(termList => termList.terms);
-	const getTermsAdditionalDistinct = (terms: MatchTerms, termsExtra: MatchTerms) =>
-		termsExtra.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
-	const isResearchPage = await isTabResearchPage(tabId);
-	const overrideHighlightsShown = (searchDetails.isSearch && config.showHighlights.overrideSearchPages)
-		|| (isResearchPage && config.showHighlights.overrideResearchPages);
-	// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
-	if (searchDetails.isSearch) {
-		const researchInstance = await createResearchInstance({ url: {
-			stoplist: configResolveList(config.autoFindOptions.stoplist),
-			url: urlString,
-			engine: searchDetails.engine,
-		} });
-		// Apply terms from term lists.
-		researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
-		if (isResearchPage) {
-			//await executeScriptsInTabUnsafe(tabId).then(() =>
-			messageSendHighlight(tabId, {
-				termsOnHold: researchInstance.terms,
-			});
-			//);
-		} else {
-			bank.researchInstances[tabId] = researchInstance;
-			log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
-		}
-	}
-	let highlightActivation: Promise<unknown> = (async () => undefined)();
-	// If tab *now* has research OR has applicable term lists: activate highlighting in tab.
-	if ((await isTabResearchPage(tabId)) || termsFromLists.length) {
-		const highlightActivationReason = termsFromLists.length
-			? (await isTabResearchPage(tabId))
-				? "tab is a research page which term lists apply to"
-				: "tab is a page which terms lists apply to"
-			: "tab is a research page";
-		log("tab-communicate highlight activation request", highlightActivationReason, logMetadata);
-		const researchInstance = bank.researchInstances[tabId] ?? await createResearchInstance({});
-		researchInstance.terms = researchInstance.enabled
-			? researchInstance.terms.concat(getTermsAdditionalDistinct(researchInstance.terms, termsFromLists))
-			: termsFromLists;
-		if (!await isTabResearchPage(tabId)) {
-			researchInstance.barCollapsed = config.barCollapse.fromTermListAuto;
-		}
-		researchInstance.enabled = true;
-		highlightActivation = messageSendHighlight(tabId, {
-			terms: researchInstance.terms,
-			toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
-			toggleBarCollapsedOn: researchInstance.barCollapsed,
-			barControlsShown: config.barControlsShown,
-			barLook: config.barLook,
-			highlightMethod: config.highlightMethod,
-			matchMode: config.matchingDefaults.matchMode,
-			useClassicHighlighting: config.highlightMethod.paintReplaceByClassic,
-			enablePageModify: isUrlPageModifyAllowed(urlString, config.urlFilters),
-		});
-		bank.researchInstances[tabId] = researchInstance;
-	}
-	bankSet({ researchInstances: bank.researchInstances });
-	await highlightActivation;
-	log("tab-communicate fulfillment finish", "", logMetadata);
-};
-
-(() => {
-	chrome.tabs.onCreated.addListener(async tab => {
-		let openerTabId: number | undefined = tab.openerTabId;
-		if (tab.id === undefined || /\b\w+:(\/\/)?newtab\//.test(tab.pendingUrl ?? tab.url ?? "")) {
-			return;
-		}
-		if (openerTabId === undefined) {
-			if (!useChromeAPI()) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
-				return;
-			}
-			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
-			if (openerTabId === undefined) {
-				return;
-			}
-		}
-		log("tab-communicate obligation check", "tab created", { tabId: tab.id });
-		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-		if (await isTabResearchPage(openerTabId)) {
-			bank.researchInstances[tab.id] = { ...bank.researchInstances[openerTabId] };
-			bankSet(bank);
-			pageChangeRespondOld(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache.
-		}
-	});
-
-	chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
-		if (useChromeAPI()) {
-			// Chromium emits no `tabs` event for tab reload.
-			if (changeInfo.status === "loading" || changeInfo.status === "complete") {
-				pageChangeRespondOld((await chrome.tabs.get(tabId)).url ?? "", tabId);
-			}
-		} else if (changeInfo.url) {
-			pageChangeRespondOld(changeInfo.url, tabId);
-		}
-	});
-
-	chrome.tabs.onRemoved.addListener(async tabId => {
-		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
-		if (bank.researchInstances[tabId]) {
-			delete bank.researchInstances[tabId];
-			bankSet(bank);
-		}
-	});
-});//();
 
 (() => {
 	const pageChangeRespond = async (urlString: string, tabId: number) => {
@@ -788,7 +651,13 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				barLook: config.barLook,
 				highlightMethod: config.highlightMethod,
 				matchMode: config.matchingDefaults.matchMode,
-				useClassicHighlighting: config.highlightMethod.paintReplaceByClassic,
+				setHighlighter: config.highlightMethod.paintReplaceByElement ? {
+					engine: Engine.ELEMENT,
+				} : {
+					engine: Engine.PAINT,
+					paintEngineMethod: compatibility.highlight.paintEngine.paintMethod
+						? PaintEngineMethod.PAINT : PaintEngineMethod.ELEMENT,
+				},
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", config.urlFilters),
 			};
 		} else {

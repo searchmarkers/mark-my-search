@@ -123,13 +123,13 @@ const loadPopup = (() => {
 								},
 								onChange: checked => {
 									if (checked) {
-										bankGet([ BankKey.RESEARCH_INSTANCES ]).then(async session => {
+										bankGet([ BankKey.RESEARCH_INSTANCES ]).then(async bank => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 											if (tab.id === undefined) {
 												return;
 											}
 											const config = await configGet({ researchInstanceOptions: [ "restoreLastInTab" ] });
-											const researchInstance = session.researchInstances[tab.id];
+											const researchInstance = bank.researchInstances[tab.id];
 											if (researchInstance && config.researchInstanceOptions.restoreLastInTab) {
 												researchInstance.enabled = true;
 											}
@@ -412,8 +412,8 @@ const loadPopup = (() => {
 									{
 										className: "matching",
 										rows: [
-											getMatchModeInteractionInfo("whole", "Stemming"),
-											getMatchModeInteractionInfo("stem", "Whole Words"),
+											getMatchModeInteractionInfo("stem", "Stemming"),
+											getMatchModeInteractionInfo("whole", "Whole Words"),
 											getMatchModeInteractionInfo("case", "Case Sensitive"),
 											getMatchModeInteractionInfo("diacritics", "Accent Sensitive"),
 											getMatchModeInteractionInfo("regex", "Regular Expression"),

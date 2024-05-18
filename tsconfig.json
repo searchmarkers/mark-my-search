@@ -1,9 +1,8 @@
 {
 	"compilerOptions": {
-		"lib": [ "ES2020", "DOM" ],
 		"outDir": "dist",
-		"target": "ES2020",
+		"target": "ES2022",
 		"alwaysStrict": true,
-		"strictNullChecks": true
-	}
+		"strictNullChecks": true,
+	},
 }
