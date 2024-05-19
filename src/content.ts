@@ -3972,13 +3972,13 @@ const getTermsFromSelection = () => {
 			if (message.getDetails) {
 				sendResponse(getDetails(message.getDetails));
 			}
-			if (message.setHighlighter !== undefined) {
+			if (message.highlighter !== undefined) {
 				highlighter.current.endHighlighting();
-				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
+				if (message.highlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
 					highlighter.current = new DummyEngine();
-				} else if (message.setHighlighter.engine === Engine.PAINT) {
+				} else if (message.highlighter.engine === Engine.PAINT) {
 					highlighter.current = new PaintEngine(terms, highlightTags, termCountCheck,
-						message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT);
+						message.highlighter.paintEngine.method ?? PaintEngineMethod.PAINT);
 				} else {
 					highlighter.current = new ElementEngine(terms, highlightTags, termCountCheck);
 				}
@@ -4000,9 +4000,9 @@ const getTermsFromSelection = () => {
 			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 				controlsInfo.barLook[key] = value;
 			});
-			if (message.highlightMethod) {
+			if (message.highlightLook) {
 				hues.splice(0);
-				message.highlightMethod.hues.forEach(hue => hues.push(hue));
+				message.highlightLook.hues.forEach(hue => hues.push(hue));
 			}
 			if (message.matchMode) {
 				Object.assign(controlsInfo.matchMode, message.matchMode);

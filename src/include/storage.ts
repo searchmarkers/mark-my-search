@@ -14,12 +14,19 @@ type BankValues = {
 	[BankKey.ENGINES]: Engines
 }
 
-type StorageValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
-	value: T
+enum StoreType {
+	IMMEDIATE,
+	LIST,
+}
+
+type StoreImmediate<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
+	type: StoreType.IMMEDIATE
+	defaultValue: T
 	sync?: true
 }> : Context extends StorageContext.STORE ? T : T
 
-type StorageListValue<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
+type StoreList<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
+	type: StoreType.LIST
 	baseList: Array<T>
 	sync?: true
 }> : Context extends StorageContext.STORE ?
@@ -28,9 +35,16 @@ type StorageListValue<T, Context = StorageContext.INTERFACE> = Context extends S
 		baseExcludeList: Array<T>,
 		baseExcludeAll: boolean,
 	}
-: StorageListInterface<T>
+: StoreListInterface<T>
 
-class StorageListInterface<T> {
+type Store<Context = StorageContext.INTERFACE> =
+	| StoreImmediate<unknown, Context>
+	| StoreList<unknown, Context>
+;
+
+type StoreGroup<Context = StorageContext.INTERFACE> = Record<string, Store<Context>>
+
+class StoreListInterface<T> {
 	readonly baseList: Array<T>;
 	userList: Array<T>;
 	baseExcludeList: Array<T>;
@@ -65,74 +79,78 @@ class StorageListInterface<T> {
 }
 
 type ConfigBarControlsShown<Context = StorageContext.INTERFACE> = {
-	toggleBarCollapsed: StorageValue<boolean, Context>
-	disableTabResearch: StorageValue<boolean, Context>
-	performSearch: StorageValue<boolean, Context>
-	toggleHighlights: StorageValue<boolean, Context>
-	appendTerm: StorageValue<boolean, Context>
-	replaceTerms: StorageValue<boolean, Context>
+	toggleBarCollapsed: StoreImmediate<boolean, Context>
+	disableTabResearch: StoreImmediate<boolean, Context>
+	performSearch: StoreImmediate<boolean, Context>
+	toggleHighlights: StoreImmediate<boolean, Context>
+	appendTerm: StoreImmediate<boolean, Context>
+	replaceTerms: StoreImmediate<boolean, Context>
 }
 type ConfigBarLook<Context = StorageContext.INTERFACE> = {
-	showEditIcon: StorageValue<boolean, Context>
-	showRevealIcon: StorageValue<boolean, Context>
-	fontSize: StorageValue<string, Context>
-	opacityControl: StorageValue<number, Context>
-	opacityTerm: StorageValue<number, Context>
-	borderRadius: StorageValue<string, Context>
+	showEditIcon: StoreImmediate<boolean, Context>
+	showRevealIcon: StoreImmediate<boolean, Context>
+	fontSize: StoreImmediate<string, Context>
+	opacityControl: StoreImmediate<number, Context>
+	opacityTerm: StoreImmediate<number, Context>
+	borderRadius: StoreImmediate<string, Context>
 }
-type ConfigHighlightMethod<Context = StorageContext.INTERFACE> = {
-	paintReplaceByElement: StorageValue<boolean, Context>
-	paintUseExperimental: StorageValue<boolean, Context>
-	hues: StorageValue<Array<number>, Context>
+type ConfigHighlightLook<Context = StorageContext.INTERFACE> = {
+	hues: StoreImmediate<Array<number>, Context>
+}
+type ConfigHighlighter<Context = StorageContext.INTERFACE> = {
+	engine: StoreImmediate<Engine, Context>
+	paintEngine: StoreImmediate<PaintEngineConfig, Context>
 }
 type ConfigURLFilters<Context = StorageContext.INTERFACE> = {
-	noPageModify: StorageListValue<URLFilter[number], Context>
-	nonSearch: StorageListValue<URLFilter[number], Context>
+	noPageModify: StoreImmediate<URLFilter, Context>
+	noHighlight: StoreImmediate<URLFilter, Context>
+	nonSearch: StoreImmediate<URLFilter, Context>
 }
-
-type ConfigValue<Context = StorageContext.INTERFACE> =
-	| StorageValue<unknown, Context>
-	| StorageListValue<unknown, Context>
-	
-type ConfigGroup<Context = StorageContext.INTERFACE> = Record<string, ConfigValue<Context>>
 
 type ConfigValues<Context = StorageContext.INTERFACE> = {
 	theme: {
-		edition: StorageValue<ThemeEdition, Context>
-		variant: StorageValue<ThemeVariant, Context>
-		hue: StorageValue<number, Context>
-		contrast: StorageValue<number, Context>
-		lightness: StorageValue<number, Context>
-		saturation: StorageValue<number, Context>
-		fontScale: StorageValue<number, Context>
+		edition: StoreImmediate<ThemeEdition, Context>
+		variant: StoreImmediate<ThemeVariant, Context>
+		hue: StoreImmediate<number, Context>
+		contrast: StoreImmediate<number, Context>
+		lightness: StoreImmediate<number, Context>
+		saturation: StoreImmediate<number, Context>
+		fontScale: StoreImmediate<number, Context>
 	}
 	researchInstanceOptions: {
-		restoreLastInTab: StorageValue<boolean, Context>
+		restoreLastInTab: StoreImmediate<boolean, Context>
 	}
 	autoFindOptions: {
-		enabled: StorageValue<boolean, Context>
-		stoplist: StorageListValue<string, Context>
-		searchParams: StorageListValue<string, Context>
+		enabled: StoreImmediate<boolean, Context>
+		stoplist: StoreList<string, Context>
+		searchParams: StoreList<string, Context>
 	}
 	matchingDefaults: {
-		matchMode: StorageValue<MatchMode, Context>
+		matchMode: StoreImmediate<MatchMode, Context>
 	}
 	showHighlights: {
-		default: StorageValue<boolean, Context>
-		overrideSearchPages: StorageValue<boolean, Context>
-		overrideResearchPages: StorageValue<boolean, Context>
+		default: StoreImmediate<boolean, Context>
+		overrideSearchPages: StoreImmediate<boolean, Context>
+		overrideResearchPages: StoreImmediate<boolean, Context>
 	}
 	barCollapse: {
-		fromSearch: StorageValue<boolean, Context>
-		fromTermListAuto: StorageValue<boolean, Context>
+		fromSearch: StoreImmediate<boolean, Context>
+		fromTermListAuto: StoreImmediate<boolean, Context>
 	}
 	barControlsShown: ConfigBarControlsShown<Context>
 	barLook: ConfigBarLook<Context>
-	highlightMethod: ConfigHighlightMethod<Context>
+	highlightLook: ConfigHighlightLook<Context>
+	highlighter: ConfigHighlighter<Context>
 	urlFilters: ConfigURLFilters<Context>
 	termListOptions: {
-		termLists: StorageValue<Array<TermList>, Context>
+		termLists: StoreImmediate<Array<TermList>, Context>
 	}
+}
+
+type ConfigKey = keyof ConfigValues
+
+interface PaintEngineConfig {
+	method: PaintEngineMethod
 }
 
 type URLFilter = Array<{
@@ -151,8 +169,6 @@ enum BankKey {
 	ENGINES = "engines",
 }
 
-type ConfigKey = keyof ConfigValues
-
 enum ThemeEdition {
 	CLASSIC = "classic",
 }
@@ -170,32 +186,55 @@ interface ResearchInstance {
 	enabled: boolean
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const configResolveList = <T>(listValue: StorageListValue<T, StorageContext.INTERFACE>): Array<T> =>
-	listValue.baseList.filter(value => !listValue.baseExcludeList.includes(value)).concat(listValue.userList)
-;
-
 /**
  * The default options to be used for items missing from storage, or to which items may be reset.
  * Set to sensible values for a generic first-time user of the extension.
  */
-const configDefault: ConfigValues<StorageContext.SCHEMA> = {
+const configSchema: ConfigValues<StorageContext.SCHEMA> = {
 	theme: {
-		edition: { value: ThemeEdition.CLASSIC },
-		variant: { value: ThemeVariant.DARK },
-		hue: { value: 284 },
-		contrast: { value: 1 },
-		lightness: { value: 1 },
-		saturation: { value: 1 },
-		fontScale: { value: 1 },
+		edition: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: ThemeEdition.CLASSIC,
+		},
+		variant: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: ThemeVariant.DARK,
+		},
+		hue: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 284,
+		},
+		contrast: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 1,
+		},
+		lightness: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 1,
+		},
+		saturation: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 1,
+		},
+		fontScale: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 1,
+		},
 	},
 	researchInstanceOptions: {
-		restoreLastInTab: { value: true },
+		restoreLastInTab: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+		},
 	},
 	autoFindOptions: {
-		enabled: { value: true },
+		enabled: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+		},
 		// TODO allow specifying mappings of params to URL filters and whether the filter should be inverted?
 		searchParams: {
+			type: StoreType.LIST,
 			baseList: [ // Order of specificity, as only the first match will be used.
 				"search_terms", "search_term", "searchTerms", "searchTerm",
 				"search_query", "searchQuery",
@@ -214,6 +253,7 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 			sync: true,
 		},
 		stoplist: {
+			type: StoreType.LIST,
 			baseList: [
 				"i", "a", "an", "and", "or", "not", "the", "that", "there", "where", "which", "to", "do", "of", "in", "on", "at", "too",
 				"if", "for", "while", "is", "as", "isn't", "are", "aren't", "can", "can't", "how", "vs",
@@ -224,7 +264,8 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 	},
 	matchingDefaults: {
 		matchMode: {
-			value: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: {
 				regex: false,
 				case: false,
 				stem: true,
@@ -234,51 +275,138 @@ const configDefault: ConfigValues<StorageContext.SCHEMA> = {
 		},
 	},
 	showHighlights: {
-		default: { value: true, sync: true },
-		overrideSearchPages: { value: false, sync: true },
-		overrideResearchPages: { value: false, sync: true },
+		default: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
+		overrideSearchPages: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+			sync: true,
+		},
+		overrideResearchPages: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+			sync: true,
+		},
 	},
 	barCollapse: {
-		fromSearch: { value: false, sync: true },
-		fromTermListAuto: { value: false, sync: true },
+		fromSearch: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+			sync: true,
+		},
+		fromTermListAuto: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+			sync: true,
+		},
 	},
 	barControlsShown: {
-		toggleBarCollapsed: { value: true, sync: true },
-		disableTabResearch: { value: true, sync: true },
-		performSearch: { value: false, sync: true },
-		toggleHighlights: { value: true, sync: true },
-		appendTerm: { value: true, sync: true },
-		replaceTerms: { value: true, sync: true },
+		toggleBarCollapsed: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
+		disableTabResearch: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
+		performSearch: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+			sync: true,
+		},
+		toggleHighlights: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
+		appendTerm: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
+		replaceTerms: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
 	},
 	barLook: {
-		showEditIcon: { value: true, sync: true },
-		showRevealIcon: { value: true, sync: true },
-		fontSize: { value: "14.6px", sync: true },
-		opacityControl: { value: 0.8, sync: true },
-		opacityTerm: { value: 0.86, sync: true },
-		borderRadius: { value: "4px", sync: true },
-	},
-	highlightMethod: {
-		paintReplaceByElement: { value: true },
-		paintUseExperimental: { value: false },
-		hues: {
-			value: [ 300, 60, 110, 220, 30, 190, 0 ],
+		showEditIcon: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
 			sync: true,
+		},
+		showRevealIcon: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+			sync: true,
+		},
+		fontSize: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: "14.6px",
+			sync: true,
+		},
+		opacityControl: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 0.8,
+			sync: true,
+		},
+		opacityTerm: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: 0.86,
+			sync: true,
+		},
+		borderRadius: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: "4px",
+			sync: true,
+		},
+	},
+	highlightLook: {
+		hues: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: [ 300, 60, 110, 220, 30, 190, 0 ],
+			sync: true,
+		},
+	},
+	highlighter: {
+		engine: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: Engine.ELEMENT,
+		},
+		paintEngine: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: {
+				method: PaintEngineMethod.PAINT,
+			},
 		},
 	},
 	urlFilters: {
 		noPageModify: {
-			baseList: [],
-			sync: true
+			type: StoreType.IMMEDIATE,
+			defaultValue: [],
+			sync: true,
+		},
+		noHighlight: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: [],
+			sync: true,
 		},
 		nonSearch: {
-			baseList: [],
+			type: StoreType.IMMEDIATE,
+			defaultValue: [],
 			sync: true,
 		},
 	},
 	termListOptions: {
 		termLists: {
-			value: [],
+			type: StoreType.IMMEDIATE,
+			defaultValue: [],
 			sync: true,
 		},
 	},
@@ -354,41 +482,34 @@ type ConfigPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 		: (KeyObject[C] extends true ? ConfigValues[C] : never)
 }
 
-enum StorageType {
-	VALUE,
-	LIST_VALUE,
-}
-
-//type ConfigType<T extends ConfigValue<StorageContext.SCHEMA>>
-//= T extends StorageListValue<unknown, StorageContext.SCHEMA> ? StorageType.LIST_VALUE : StorageType.VALUE
-
 type ConfigTypesPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>> = {
 	[C in ConfigK]: KeyObject[C] extends Array<infer GroupK extends keyof ConfigValues[C]>
-		? {[G in GroupK]: StorageType}
-		: (KeyObject[C] extends true ? Record<keyof ConfigValues[C], StorageType> : never)
+		? {[G in GroupK]: StoreType}
+		: (KeyObject[C] extends true ? Record<keyof ConfigValues[C], StoreType> : never)
 }
 
 // TODO store config to cache when setting and getting, update cache when storage changes
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const configSet = async <Config extends Partial<Partial2<ConfigValues>>>(config: Config) => {
+const configSet = async (config: Partial<Partial2<ConfigValues>>) => {
 	const storageAreaValues: Record<StorageAreaName, Record<string, unknown>> = { local: {}, sync: {} };
 	for (const [ configKey, group ] of Object.entries(config)) {
 		for (const [ groupKey, value ] of Object.entries(group)) {
-			const valueDefault = configDefault[configKey][groupKey];
-			const storageValues = valueDefault.sync ? storageAreaValues.sync : storageAreaValues.local;
+			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			const storageValues = valueSchema.sync ? storageAreaValues.sync : storageAreaValues.local;
 			const key = configKey + "." + groupKey;
-			if ((valueDefault as StorageValue<unknown, StorageContext.SCHEMA>).value !== undefined) {
-				(storageValues[key] as StorageValue<unknown, StorageContext.STORE>)
-					= value as StorageValue<unknown>;
-			} else if ((valueDefault as StorageListValue<unknown, StorageContext.SCHEMA>).baseList !== undefined) {
-				(storageValues[key] as StorageListValue<unknown, StorageContext.STORE>)
-					= {
-						userList: (value as StorageListValue<unknown>).userList,
-						baseExcludeList: (value as StorageListValue<unknown>).baseExcludeList,
-						baseExcludeAll: (value as StorageListValue<unknown>).baseExcludeAll,
-					};
-			}
+			switch (valueSchema.type) {
+			case StoreType.IMMEDIATE: {
+				(storageValues[key] as StoreImmediate<unknown, StorageContext.STORE>) = value as StoreImmediate<unknown>;
+				break;
+			} case StoreType.LIST: {
+				(storageValues[key] as StoreList<unknown, StorageContext.STORE>) = {
+					userList: (value as StoreList<unknown>).userList,
+					baseExcludeList: (value as StoreList<unknown>).baseExcludeList,
+					baseExcludeAll: (value as StoreList<unknown>).baseExcludeAll,
+				};
+				break;
+			}}
 		}
 	}
 	const storagePromises = [
@@ -403,14 +524,13 @@ const configUnset = async <ConfigK extends ConfigKey>(keyObject: ConfigKeyObject
 	const storageAreaKeys: Record<StorageAreaName, Array<string>> = { local: [], sync: [] };
 	const keyObjectEntries = (typeof keyObject === "object"
 		? Object.entries(keyObject)
-		: Object.keys(configDefault).map((key: ConfigK) => [ key, true ])) as Array<[ ConfigK, Array<string> | true ]>;
+		: Object.keys(configSchema).map((key: ConfigK) => [ key, true ])) as Array<[ ConfigK, Array<string> | true ]>;
 	for (const [ configKey, groupInfo ] of keyObjectEntries) {
-		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 		for (const groupKey of groupKeys) {
-			const valueDefault = configDefault[configKey][groupKey];
-			const storageKeys = valueDefault.sync ? storageAreaKeys.sync : storageAreaKeys.local;
-			const key = configKey + "." + groupKey;
-			storageKeys.push(key);
+			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			const storageKeys = valueSchema.sync ? storageAreaKeys.sync : storageAreaKeys.local;
+			storageKeys.push(configKey + "." + groupKey);
 		}
 	}
 	const storagePromises = [
@@ -423,17 +543,15 @@ const configUnset = async <ConfigK extends ConfigKey>(keyObject: ConfigKeyObject
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>>
 	(keyObject: KeyObject) => new Promise<ConfigPartial<ConfigK, KeyObject>>(resolve => {
-		type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
-		type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
 		let pendingCount = 0;
 		const config = {} as ConfigPartial<ConfigK, KeyObject>;
 		const storageAreaKeys: Record<StorageAreaName, Array<string>> = { local: [], sync: [] };
 		const keyObjectEntries = Object.entries(keyObject) as Array<[ ConfigK, Array<string> | true ]>;
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
-			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {
-				const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
-				storageAreaKeys[valueDefault.sync ? "sync" : "local"].push(configKey + "." + groupKey);
+				const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+				storageAreaKeys[valueSchema.sync ? "sync" : "local"].push(configKey + "." + groupKey);
 			}
 		}
 		const storageAreaPromises: Record<StorageAreaName, Promise<Record<string, unknown>>> = {
@@ -447,41 +565,39 @@ const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 			}),
 		};
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
-			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			groupKeys.forEach(async groupKey => {
 				pendingCount++;
-				(config[configKey] as unknown) ??= {} as ConfigGroup;
+				(config[configKey] as unknown) ??= {} as StoreGroup;
 				const key = configKey + "." + groupKey;
-				const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
-				const value = (await (valueDefault.sync ? storageAreaPromises.sync : storageAreaPromises.local))[key];
-				if ((valueDefault as StorageV).value !== undefined) {
+				const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+				const value = (await (valueSchema.sync ? storageAreaPromises.sync : storageAreaPromises.local))[key];
+				switch (valueSchema.type) {
+				case StoreType.IMMEDIATE: {
 					if (value !== undefined
-						&& assert(typeof value === typeof (valueDefault as StorageV).value,
+						&& assert(typeof value === typeof valueSchema.defaultValue,
 							"config key returning default value", "value has wrong type", { key, value })
 					) {
-						(config[configKey][groupKey] as StorageValue<unknown>)
-							= value as StorageValue<unknown>;
+						(config[configKey][groupKey] as StoreImmediate<unknown>) = value as StoreImmediate<unknown>;
 					} else {
-						(config[configKey][groupKey] as StorageValue<unknown>)
-							= (valueDefault as StorageV).value;
+						(config[configKey][groupKey] as StoreImmediate<unknown>) = valueSchema.defaultValue;
 					}
-				} else if ((valueDefault as StorageListV).baseList !== undefined) {
+					break;
+				} case StoreType.LIST: {
 					if (value !== undefined
-						&& assert(typeof value === "object" && (value as StorageListValue<unknown>).userList,
+						&& assert(typeof value === "object" && (value as StoreList<unknown>).userList,
 							"config key returning default value", "list value has poor shape", { key, value })
 					) {
-						(config[configKey][groupKey] as StorageListValue<unknown>)
-							= new StorageListInterface(
-								(valueDefault as StorageListV).baseList,
-								(value as StorageListValue<unknown>).userList,
-								((value as StorageListValue<unknown>).baseExcludeAll
-									|| (value as StorageListValue<unknown>).baseExcludeList) ?? [],
-							);
+						(config[configKey][groupKey] as StoreList<unknown>) = new StoreListInterface(
+							valueSchema.baseList,
+							(value as StoreList<unknown>).userList,
+							((value as StoreList<unknown>).baseExcludeAll || (value as StoreList<unknown>).baseExcludeList) ?? [],
+						);
 					} else {
-						(config[configKey][groupKey] as StorageListValue<unknown>)
-							= new StorageListInterface((valueDefault as StorageListV).baseList);
+						(config[configKey][groupKey] as StoreList<unknown>) = new StoreListInterface(valueSchema.baseList);
 					}
-				}
+					break;
+				}}
 				pendingCount--;
 				if (pendingCount === 0) resolve(config);
 			});
@@ -492,22 +608,21 @@ const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configGetDefault = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>>
 	(keyObject: KeyObject): ConfigPartial<ConfigK, KeyObject> => {
-	type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
-	type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
 	const config = {} as ConfigPartial<ConfigK, KeyObject>;
 	const keyObjectEntries = Object.entries(keyObject) as Array<[ ConfigK, Array<string> | true ]>;
 	for (const [ configKey, groupInfo ] of keyObjectEntries) {
-		(config[configKey] as unknown) = {} as ConfigGroup;
-		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+		(config[configKey] as unknown) = {} as StoreGroup;
+		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 		for (const groupKey of groupKeys) {
-			const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
-			if ((valueDefault as StorageV).value !== undefined) {
-				(config[configKey][groupKey] as StorageValue<unknown>)
-					= (valueDefault as StorageV).value;
-			} else if ((valueDefault as StorageListV).baseList !== undefined) {
-				(config[configKey][groupKey] as StorageListValue<unknown>)
-					= new StorageListInterface((valueDefault as StorageListV).baseList);
-			}
+			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			switch (valueSchema.type) {
+			case StoreType.IMMEDIATE: {
+				(config[configKey][groupKey] as StoreImmediate<unknown>) = valueSchema.defaultValue;
+				break;
+			} case StoreType.LIST: {
+				(config[configKey][groupKey] as StoreList<unknown>) = new StoreListInterface(valueSchema.baseList);
+				break;
+			}}
 		}
 	}
 	return config;
@@ -516,68 +631,17 @@ const configGetDefault = <ConfigK extends ConfigKey, KeyObject extends ConfigKey
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configGetType = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>>
 	(keyObject: KeyObject): ConfigTypesPartial<ConfigK, KeyObject> => {
-	type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
-	type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
 	const configTypes = {} as ConfigTypesPartial<ConfigK, KeyObject>;
 	const keyObjectEntries = Object.entries(keyObject) as Array<[ ConfigK, Array<string> | true ]>;
 	for (const [ configKey, groupInfo ] of keyObjectEntries) {
-		(configTypes[configKey] as unknown) = {} as ConfigGroup;
-		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configDefault[configKey]);
+		(configTypes[configKey] as unknown) = {} as StoreGroup;
+		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 		for (const groupKey of groupKeys) {
-			const valueDefault = configDefault[configKey][groupKey] as ConfigValue<StorageContext.SCHEMA>;
-			if ((valueDefault as StorageV).value !== undefined) {
-				configTypes[configKey][groupKey] = StorageType.VALUE;
-			} else if ((valueDefault as StorageListV).baseList !== undefined) {
-				configTypes[configKey][groupKey] = StorageType.LIST_VALUE;
-			}
+			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			configTypes[configKey][groupKey] = valueSchema.type;
 		}
 	}
 	return configTypes;
-};
-
-/**
- * Makes an object conform to an object of defaults.
- * Missing default items are assigned, and items with no corresponding default are removed. Items within arrays are ignored.
- * @param object An object to repair.
- * @param defaults An object of default items to be compared with the first object.
- * @param toRemove An empty array to be filled with deleted top-level keys.
- * @param atTopLevel Indicates whether or not the function is currently at the top level of the object.
- * @returns Whether or not any fixes were applied.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const objectFixWithDefaults = (
-	object: Record<string, unknown>,
-	defaults: Record<string, unknown>,
-	toRemove: Array<string>,
-	atTopLevel = true,
-): boolean => {
-	let hasModified = false;
-	Object.keys(object).forEach(objectKey => {
-		if (defaults[objectKey] === undefined) {
-			delete object[objectKey];
-			if (atTopLevel) {
-				toRemove.push(objectKey);
-			}
-			hasModified = true;
-		} else if (typeof(object[objectKey]) === "object" && !Array.isArray(object[objectKey])) {
-			if (objectFixWithDefaults(
-				object[objectKey] as Record<string, unknown>,
-				defaults[objectKey] as Record<string, unknown>,
-				toRemove,
-				false,
-			)) {
-				hasModified = true;
-			}
-		}
-	});
-	Object.keys(defaults).forEach(defaultsKey => {
-		if (typeof(object[defaultsKey]) !== typeof(defaults[defaultsKey])
-			|| Array.isArray(object[defaultsKey]) !== Array.isArray(defaults[defaultsKey])) {
-			object[defaultsKey] = defaults[defaultsKey];
-			hasModified = true;
-		}
-	});
-	return hasModified;
 };
 
 /*chrome.storage.onChanged.addListener((changes, areaName) => {

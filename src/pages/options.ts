@@ -1,22 +1,14 @@
 type OptionsInfo = Array<{
 	label: string
-	options: Partial<Record<keyof ConfigValues, {
+	options: Partial<{[ConfigK in ConfigKey]: {
 		label: string
-		preferences?: Partial<Record<
-			| keyof ConfigValues["barCollapse"]
-			| keyof ConfigValues["barControlsShown"]
-			| keyof ConfigValues["barLook"]
-			| keyof ConfigValues["highlightMethod"]
-			| keyof ConfigValues["showHighlights"]
-			| keyof ConfigValues["autoFindOptions"]
-			| keyof ConfigValues["matchingDefaults"],
-		{
+		preferences?: Partial<{[GroupK in keyof ConfigValues[ConfigK]]: {
 			label: string
 			tooltip?: string
 			type: PreferenceType
-		}>>
+		}}>
 		type?: PreferenceType
-	}>>
+	}}>
 }>
 
 enum OptionClass {
@@ -217,7 +209,8 @@ label[for]:hover
 				barCollapse: true,
 				barControlsShown: true,
 				barLook: true,
-				highlightMethod: true,
+				highlightLook: true,
+				highlighter: true,
 				showHighlights: true,
 				autoFindOptions: true,
 				matchingDefaults: true,
@@ -239,7 +232,7 @@ label[for]:hover
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
 					const type: PreferenceType = preferenceInfo.type;
 					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
-					case StorageType.VALUE: {
+					case StoreType.IMMEDIATE: {
 						const configValue = (() => {
 							switch (type) {
 							case PreferenceType.INTEGER:
@@ -256,13 +249,13 @@ label[for]:hover
 						})();
 						config[optionKey][preferenceKey] = configValue;
 						break;
-					} case StorageType.LIST_VALUE: {
+					} case StoreType.LIST: {
 						const valueDefault = configGetDefault({ [optionKey]: [ preferenceKey ] }
-						)[optionKey][preferenceKey] as StorageListInterface<unknown>;
+						)[optionKey][preferenceKey] as StoreListInterface<unknown>;
 						const list: Array<unknown> = (type === PreferenceType.ARRAY_NUMBER)
 							? valueEnteredString.split(",").map(item => Number(item))
 							: valueEnteredString.split(",");
-						const listValue = new StorageListInterface(valueDefault.baseList);
+						const listValue = new StoreListInterface(valueDefault.baseList);
 						listValue.setList(list);
 						config[optionKey][preferenceKey] =  listValue;
 						break;
@@ -280,7 +273,8 @@ label[for]:hover
 			barCollapse: true,
 			barControlsShown: true,
 			barLook: true,
-			highlightMethod: true,
+			highlightLook: true,
+			highlighter: true,
 			showHighlights: true,
 			autoFindOptions: true,
 			matchingDefaults: true,
@@ -344,16 +338,16 @@ label[for]:hover
 				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
 				const [ valueDefault, value ] = (() => {
 					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
-					case StorageType.VALUE:
+					case StoreType.IMMEDIATE:
 						return [
-							configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StorageListValue<unknown>,
-							config[optionKey][preferenceKey] as StorageValue<unknown>,
+							configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StoreList<unknown>,
+							config[optionKey][preferenceKey] as StoreImmediate<unknown>,
 						];
-					case StorageType.LIST_VALUE:
+					case StoreType.LIST:
 						return [
 							(configGetDefault({ [optionKey]: [ preferenceKey ] }
-							)[optionKey][preferenceKey] as StorageListValue<unknown>).getList(),
-							(config[optionKey][preferenceKey] as StorageListValue<unknown>).getList(),
+							)[optionKey][preferenceKey] as StoreList<unknown>).getList(),
+							(config[optionKey][preferenceKey] as StoreList<unknown>).getList(),
 						];
 					}
 					return [];
@@ -418,7 +412,7 @@ label[for]:hover
 					label: "Controls to show in the toolbar",
 					preferences: {
 						disableTabResearch: {
-							label: "Disable research in the current tab",
+							label: "Deactivate in the current tab",
 							type: PreferenceType.BOOLEAN,
 						},
 						performSearch: {
@@ -468,14 +462,22 @@ label[for]:hover
 						},
 					},
 				},
-
-				highlightMethod: {
+				highlightLook: {
+					label: "Highlighting appearance",
+					preferences: {
+						hues: {
+							label: "Highlight colour hue values",
+							type: PreferenceType.ARRAY_NUMBER,
+						},
+					},
+				},
+				highlighter: {
 					label: "Keyword highlighting method and style",
 					preferences: {
-						paintReplaceByElement: {
-							label: "Use ELEMENT highlighting (hover for details)",
+						engine: {
+							label: "Highlighting engine (hover for details)",
 							tooltip:
-`Mark My Search has two highlighting methods. \
+`Mark My Search has two highlighting engines. \
 ELEMENT is a powerful variant of the model used by traditional highlighter extensions. \
 PAINT is an alternate model invented for Mark My Search.
 
@@ -492,9 +494,9 @@ PAINT
 • Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
 							,
-							type: PreferenceType.BOOLEAN,
+							type: PreferenceType.TEXT,
 						},
-						/*paintUseExperimental: {
+						/*paintEngine: {
 							label: "Use experimental browser APIs (hover for details)",
 							tooltip:
 `Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
@@ -509,10 +511,6 @@ PAINT
 							,
 							type: PreferenceType.BOOLEAN,
 						},*/
-						hues: {
-							label: "Highlight color hue cycle",
-							type: PreferenceType.ARRAY_NUMBER,
-						},
 					},
 				},
 				showHighlights: {

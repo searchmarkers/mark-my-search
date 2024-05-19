@@ -30,11 +30,11 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 				const config = await configGet({ [configKey]: [ key ] });
 				const value = config[configKey][key];
 				switch (configGetType({ [configKey]: [ key ] })[configKey][key]) {
-				case StorageType.VALUE: {
-					setValue(value as StorageValue<unknown> as unknown as boolean);
+				case StoreType.IMMEDIATE: {
+					setValue(value as StoreImmediate<unknown> as unknown as boolean);
 					break;
-				} case StorageType.LIST_VALUE: {
-					setValue((value as StorageListValue<unknown>).getList() as unknown as boolean);
+				} case StoreType.LIST: {
+					setValue((value as StoreList<unknown>).getList() as unknown as boolean);
 					break;
 				}}
 			},
@@ -47,12 +47,12 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 							? parseFloat(value as unknown as string)
 							: value;
 					switch (configGetType({ [configKey]: [ key ] })[configKey][key]) {
-					case StorageType.VALUE: {
-						(config[configKey][key] as unknown) = valueTransformed as StorageValue<unknown>;
+					case StoreType.IMMEDIATE: {
+						(config[configKey][key] as unknown) = valueTransformed as StoreImmediate<unknown>;
 						break;
-					} case StorageType.LIST_VALUE: {
-						const valueDefault = configGetDefault({ [configKey]: [ key ] })[configKey][key] as StorageListInterface<unknown>;
-						const listV = new StorageListInterface(valueDefault.baseList);
+					} case StoreType.LIST: {
+						const valueDefault = configGetDefault({ [configKey]: [ key ] })[configKey][key] as StoreListInterface<unknown>;
+						const listV = new StoreListInterface(valueDefault.baseList);
 						listV.setList(valueTransformed as Array<unknown>);
 						(config[configKey][key] as unknown) = listV;
 						break;
@@ -89,7 +89,7 @@ const loadOptionsNew = (() => {
 					interactions: [
 						getControlOptionTemp(
 							{ text: "Color hues to cycle through" },
-							"highlightMethod",
+							"highlightLook",
 							"hues",
 							InputType.TEXT_ARRAY,
 						),
@@ -181,18 +181,18 @@ const loadOptionsNew = (() => {
 								list: {
 									getArray: () =>
 										configGet({ urlFilters: [ "noPageModify" ] }).then(config => //
-											config.urlFilters.noPageModify.getList().map(({ hostname, pathname }) => hostname + pathname) //
+											config.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet({ urlFilters: [ "noPageModify" ] }).then(config => {
-											config.urlFilters.noPageModify.setList(array.map(value => {
+											config.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
-											}));
+											});
 											configSet(config);
 										})
 									,
@@ -451,18 +451,18 @@ const loadOptionsNew = (() => {
 								list: {
 									getArray: () =>
 										configGet({ urlFilters: [ "nonSearch" ] }).then(config => //
-											config.urlFilters.nonSearch.getList().map(({ hostname, pathname }) => hostname + pathname) //
+											config.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet({ urlFilters: [ "nonSearch" ] }).then(config => {
-											config.urlFilters.nonSearch.setList(array.map(value => {
+											config.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
-											}));
+											});
 											configSet(config);
 										})
 									,
@@ -536,9 +536,9 @@ PAINT
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
 								,
 							},
-							"highlightMethod",
-							"paintReplaceByElement",
-							InputType.CHECKBOX,
+							"highlighter",
+							"engine",
+							InputType.TEXT,
 						),
 						/*getControlOptionTemp(
 							{

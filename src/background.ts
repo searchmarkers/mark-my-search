@@ -53,7 +53,7 @@ const createResearchInstance = async (args: {
 const getSearchQuery = async (url: string): Promise<string> =>
 	configGet({ autoFindOptions: [ "searchParams" ] }).then(config =>
 		new URL(url).searchParams.get(
-			configResolveList(config.autoFindOptions.searchParams).find(param => new URL(url).searchParams.has(param)) ?? ""
+			config.autoFindOptions.searchParams.getList().find(param => new URL(url).searchParams.has(param)) ?? ""
 		) ?? ""
 	).catch(() => {
 		log("search query extraction fail", "", { url });
@@ -105,7 +105,7 @@ const isUrlFilteredIn = (() => {
  */
 const isUrlPageModifyAllowed = (urlString: string, urlFilters: ConfigURLFilters) => {
 	try {
-		return !isUrlFilteredIn(new URL(urlString), configResolveList(urlFilters.noPageModify));
+		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
 	} catch {
 		return true;
 	}
@@ -119,7 +119,7 @@ const isUrlPageModifyAllowed = (urlString: string, urlFilters: ConfigURLFilters)
  * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
  */
 const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: ConfigURLFilters) =>
-	!isUrlFilteredIn(new URL(urlString), configResolveList(urlFilters.nonSearch))
+	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
 
 /**
@@ -345,7 +345,7 @@ const updateActionIcon = (enabled?: boolean) =>
 		// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
 		if (searchDetails.isSearch) {
 			const researchInstance = await createResearchInstance({ url: {
-				stoplist: configResolveList(config.autoFindOptions.stoplist),
+				stoplist: config.autoFindOptions.stoplist.getList(),
 				url: urlString,
 				engine: searchDetails.engine,
 			} });
@@ -635,7 +635,8 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 		const config = (await configGet({
 			barControlsShown: true,
 			barLook: true,
-			highlightMethod: true,
+			highlightLook: true,
+			highlighter: true,
 			matchingDefaults: [ "matchMode" ],
 			urlFilters: true,
 		}));
@@ -649,15 +650,9 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				toggleBarCollapsedOn: researchInstance.barCollapsed,
 				barControlsShown: config.barControlsShown,
 				barLook: config.barLook,
-				highlightMethod: config.highlightMethod,
+				highlightLook: config.highlightLook,
+				highlighter: config.highlighter,
 				matchMode: config.matchingDefaults.matchMode,
-				setHighlighter: config.highlightMethod.paintReplaceByElement ? {
-					engine: Engine.ELEMENT,
-				} : {
-					engine: Engine.PAINT,
-					paintEngineMethod: compatibility.highlight.paintEngine.paintMethod
-						? PaintEngineMethod.PAINT : PaintEngineMethod.ELEMENT,
-				},
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", config.urlFilters),
 			};
 		} else {

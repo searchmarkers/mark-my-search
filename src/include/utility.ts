@@ -212,7 +212,8 @@ type HighlightMessage = {
 	toggleBarCollapsedOn?: boolean
 	barControlsShown?: ConfigBarControlsShown
 	barLook?: ConfigBarLook
-	highlightMethod?: ConfigHighlightMethod
+	highlightLook?: ConfigHighlightLook
+	highlighter?: ConfigHighlighter
 	matchMode?: MatchMode
 }
 

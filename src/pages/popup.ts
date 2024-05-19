@@ -247,18 +247,18 @@ const loadPopup = (() => {
 								list: {
 									getArray: () =>
 										configGet({ urlFilters: [ "noPageModify" ] }).then(config => //
-											config.urlFilters.noPageModify.getList().map(({ hostname, pathname }) => hostname + pathname) //
+											config.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet({ urlFilters: [ "noPageModify" ] }).then(config => {
-											config.urlFilters.noPageModify.setList(array.map(value => {
+											config.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
-											}));
+											});
 											configSet(config);
 										})
 									,
@@ -281,18 +281,18 @@ const loadPopup = (() => {
 								list: {
 									getArray: () =>
 										configGet({ urlFilters: [ "nonSearch" ] }).then(config => //
-											config.urlFilters.nonSearch.getList().map(({ hostname, pathname }) => hostname + pathname) //
+											config.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
 										configGet({ urlFilters: [ "nonSearch" ] }).then(config => {
-											config.urlFilters.nonSearch.setList(array.map(value => {
+											config.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
-											}));
+											});
 											configSet(config);
 										})
 									,
