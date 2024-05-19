@@ -458,6 +458,13 @@ const bankGet = async <T extends BankKey>(keys: Array<T>): Promise<{ [P in T]: B
 	return bank;
 };
 
+chrome.storage.session.onChanged.addListener(changes => {
+	// TODO check that the change was not initiated from the same script?
+	for (const [ key, value ] of Object.entries(changes)) {
+		bankCache[key] = value.newValue;
+	}
+});
+
 type StorageAreaName = "local" | "sync"
 
 type Partial2<T> = {
@@ -634,9 +641,122 @@ const configGetType = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObj
 	return configTypes;
 };
 
-chrome.storage.session.onChanged.addListener(changes => {
-	// TODO check that the change was not initiated from the same script?
-	for (const [ key, value ] of Object.entries(changes)) {
-		bankCache[key] = value.newValue;
+const SCHEMA_VERSION = 2;
+
+const specialKeys = {
+	schemaVersion: "_SCHEMA_VERSION",
+	oldContents: "_OLD_CONTENTS",
+	oldTimestamp: "_OLD_TIMESTAMP",
+} as const;
+
+const specialKeysSet: ReadonlySet<string> = new Set(Object.values(specialKeys));
+
+type JsonObject = Record<string | number | symbol, unknown>
+
+const migrations: Record<number, Record<number, (storage: JsonObject, areaName: StorageAreaName) => JsonObject>> = {
+	1: {
+		2: (old, areaName) => {
+			// TODO initialize with all top-level keys and use only Partial2
+			const config: Partial<Partial2<ConfigValues>> = {};
+			switch (areaName) {
+			case "local": {
+				config.autoFindOptions ??= {};
+				config.autoFindOptions.enabled = old.enabled as boolean;
+				config.researchInstanceOptions ??= {};
+				config.researchInstanceOptions.restoreLastInTab = old.persistResearchInstances as boolean;
+				return config;
+			} case "sync": {
+				if (old.highlightMethod && typeof old.highlightMethod === "object") {
+					config.highlightLook ??= {};
+					config.highlightLook.hues = old.highlightMethod["hues"];
+					config.highlighter ??= {};
+					config.highlighter.engine = old.highlightMethod["paintReplaceByClassic"] !== false ? Engine.ELEMENT : Engine.PAINT;
+					config.highlighter.paintEngine = {
+						method: old.highlightMethod["paintUseExperimental"] === true
+							? (globalThis.browser ? PaintEngineMethod.ELEMENT : PaintEngineMethod.PAINT)
+							: PaintEngineMethod.URL,
+					};
+				}
+				config.urlFilters = old.urlFilters as Partial<ConfigURLFilters>;
+				if (old.autoFindOptions && typeof old.autoFindOptions === "object") {
+					config.autoFindOptions ??= {};
+					const searchParams = configGetDefault({ autoFindOptions: [ "searchParams" ] }).autoFindOptions.searchParams;
+					searchParams.setList(old.autoFindOptions["searchParams"] ?? []);
+					config.autoFindOptions.searchParams = searchParams;
+					const stoplist = configGetDefault({ autoFindOptions: [ "stoplist" ] }).autoFindOptions.stoplist;
+					stoplist.setList(old.autoFindOptions["stoplist"] ?? []);
+					config.autoFindOptions.stoplist = stoplist;
+				}
+				if (old.matchModeDefaults) {
+					config.matchingDefaults ??= {};
+					const matchMode = Object.assign({}, old.matchModeDefaults as MatchMode);
+					matchMode.diacritics = !matchMode.diacritics;
+					config.matchingDefaults.matchMode = matchMode;
+				}
+				config.showHighlights = old.showHighlights as ConfigValues["showHighlights"];
+				config.barCollapse = old.barCollapse as ConfigValues["barCollapse"];
+				config.barControlsShown = old.barControlsShown as ConfigBarControlsShown;
+				config.barLook = old.barLook as ConfigBarLook;
+				if (old.termLists) {
+					config.termListOptions ??= {};
+					config.termListOptions.termLists = old.termLists as Array<TermList>;
+				}
+				return config;
+			}}
+		},
+	},
+};
+
+//const findMigrationPath = (fromVersion: number, toVersion: number) => {
+//};
+
+const storageInitializeArea = async (areaName: StorageAreaName, version1Key: string) => {
+	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
+	const keyValues = await storageArea.get([ "schemaVersion", version1Key ]);
+	const versionValue = keyValues.version ?? (keyValues[version1Key] ? 1 : undefined);
+	const version = (typeof versionValue === "number") ? versionValue : 0;
+	if (version === SCHEMA_VERSION) {
+		log("storage-initialize (single-area) complete with no changes", "schema version matches",
+			{ areaName, version });
+		return;
 	}
-});
+	assert(false, "storage-initialize (single-area) migration needed", "detected schema version does not match current",
+		{ areaName, detectedVersion: version, SCHEMA_VERSION });
+	// Currently, only supports single-step migrations.
+	if (migrations[version] && migrations[version][SCHEMA_VERSION]) {
+		log("storage-initialize (single-area) migration begin", "",
+			{ areaName });
+		const storage = await storageArea.get();
+		await storageArea.set({
+			[specialKeys.schemaVersion]: SCHEMA_VERSION,
+			[specialKeys.oldContents]: storage,
+			[specialKeys.oldTimestamp]: Date.now(),
+		});
+		await storageArea.remove(Object.keys(storage).filter(key => !specialKeysSet.has(key)));
+		const config = migrations[version][SCHEMA_VERSION](storage, areaName);
+		await configSet(config);
+		log("storage-initialize (single-area) migration complete", "old contents have been migrated and copied",
+			{ areaName, schemaVersion: SCHEMA_VERSION, specialKeys });
+		return;
+	}
+	!assert(false, "storage-initialize (single-area) reset begin", "no appropriate migration found",
+		{ areaName });
+	const storage = await storageArea.get();
+	await storageArea.set({
+		[specialKeys.schemaVersion]: SCHEMA_VERSION,
+		[specialKeys.oldContents]: storage,
+		[specialKeys.oldTimestamp]: Date.now(),
+	});
+	await storageArea.remove(Object.keys(storage).filter(key => !specialKeysSet.has(key)));
+	log("storage-initialize (single-area) reset complete", "old contents have been moved and the area has been set up",
+		{ areaName, schemaVersion: SCHEMA_VERSION, specialKeys });
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const configInitialize = async () => {
+	log("storage-initialize begin", "", { areaNames: [ "local", "sync" ] });
+	const localPromise = storageInitializeArea("local", "persistResearchInstances");
+	const syncPromise = storageInitializeArea("sync", "matchModeDefaults");
+	await localPromise;
+	await syncPromise;
+};

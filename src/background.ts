@@ -279,7 +279,8 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Prepares volatile extension components in a new browser session.
 	 */
 	const initialize = () => {
-		chrome.runtime.setUninstallURL("https://searchmarkers.github.io/pages/sendoff/");
+		configInitialize();
+		chrome.runtime.setUninstallURL("https://markmysearch.ator.systems/pages/sendoff/");
 		try {
 			manageEnginesCacheOnBookmarkUpdate();
 		} catch (error) {
