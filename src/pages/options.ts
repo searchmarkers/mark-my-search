@@ -180,15 +180,6 @@ label[for]:hover
 	 * @param optionsInfo Details of the options to present.
 	 */
 	const loadTab = async (tabIdx: number, tabContainer: HTMLElement, optionsInfo: OptionsInfo) => {
-		const config = await configGet({
-			barCollapse: true,
-			barControlsShown: true,
-			barLook: true,
-			highlightMethod: true,
-			showHighlights: true,
-			autoFindOptions: true,
-			matchingDefaults: true,
-		});
 		const tabInfo = optionsInfo[tabIdx];
 		const tabButton = document.createElement("button");
 		tabButton.textContent = tabInfo.label;
@@ -219,8 +210,18 @@ label[for]:hover
 		};
 		const valuesCurrent = {};
 		// Collect all values from inputs and commit them to storage on user form submission.
-		form.addEventListener("submit", event => {
+		form.addEventListener("submit", async event => {
 			event.preventDefault();
+			setSavePending(true);
+			const config = await configGet({
+				barCollapse: true,
+				barControlsShown: true,
+				barLook: true,
+				highlightMethod: true,
+				showHighlights: true,
+				autoFindOptions: true,
+				matchingDefaults: true,
+			});
 			// TODO remove code duplication using function
 			Object.keys(tabInfo.options).forEach(optionKey => {
 				const optionInfo = tabInfo.options[optionKey];
@@ -236,40 +237,53 @@ label[for]:hover
 					const valueEnteredString = input.value;
 					const valueEnteredBool = input.checked;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
-					const valueDefault = configDefault[optionKey][preferenceKey];
-					type StorageV = StorageValue<unknown, StorageContext.SCHEMA>
-					type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>
 					const type: PreferenceType = preferenceInfo.type;
-					if ((valueDefault as StorageV).value) {
-						(config[optionKey][preferenceKey] as StorageValue<unknown>) =
-							(type === PreferenceType.INTEGER || type === PreferenceType.FLOAT)
-								? Number(valueEnteredString)
-								: (type === PreferenceType.ARRAY)
-									? valueEnteredString.split(",")
-									: (type === PreferenceType.ARRAY_NUMBER)
-										? valueEnteredString.split(",").map(item => Number(item))
-										: valueEntered;
-					} else if ((valueDefault as StorageListV).listBase) {
+					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+					case StorageType.VALUE: {
+						const configValue = (() => {
+							switch (type) {
+							case PreferenceType.INTEGER:
+								return parseInt(valueEnteredString);
+							case PreferenceType.FLOAT:
+								return parseFloat(valueEnteredString);
+							case PreferenceType.ARRAY:
+								return valueEnteredString.split(",");
+							case PreferenceType.ARRAY_NUMBER:
+								return valueEnteredString.split(",").map(item => Number(item));
+							default:
+								return valueEntered;
+							}
+						})();
+						config[optionKey][preferenceKey] = configValue;
+						break;
+					} case StorageType.LIST_VALUE: {
+						const valueDefault = configGetDefault({ [optionKey]: [ preferenceKey ] }
+						)[optionKey][preferenceKey] as StorageListInterface<unknown>;
 						const list: Array<unknown> = (type === PreferenceType.ARRAY_NUMBER)
 							? valueEnteredString.split(",").map(item => Number(item))
 							: valueEnteredString.split(",");
-						const listBase = (valueDefault as StorageListV).listBase;
-						(config[optionKey][preferenceKey] as StorageListValue<unknown>) = {
-							listBase,
-							listIn: list.filter(item => !listBase.includes(item)),
-							listOut: listBase.filter(item => !list.includes(item)),
-						};
-					}
+						const listValue = new StorageListInterface(valueDefault.baseList);
+						listValue.setList(list);
+						config[optionKey][preferenceKey] =  listValue;
+						break;
+					}}
 					valuesCurrent[optionKey][preferenceKey] = valueEntered;
 				});
 			});
 			for (const rowModified of document.querySelectorAll(`.${OptionClass.MODIFIED}`)) {
 				rowModified.classList.remove(OptionClass.MODIFIED);
 			}
-			setSavePending(true);
-			configSet(config).then(() => {
-				setSavePending(false);
-			});
+			await configSet(config);
+			setSavePending(false);
+		});
+		const config = await configGet({
+			barCollapse: true,
+			barControlsShown: true,
+			barLook: true,
+			highlightMethod: true,
+			showHighlights: true,
+			autoFindOptions: true,
+			matchingDefaults: true,
 		});
 		// Construct and insert option elements from the option details.
 		Object.keys(tabInfo.options).forEach(optionKey => {
@@ -328,18 +342,22 @@ label[for]:hover
 				addCell(inputDefault);
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
-				const valueDefaultObject = configDefault[optionKey][preferenceKey];
-				type StorageV = StorageValue<unknown, StorageContext.SCHEMA>;
-				type StorageListV = StorageListValue<unknown, StorageContext.SCHEMA>;
-				const isList = (valueDefaultObject as StorageListV).listBase;
-				const valueDefault = isList
-					? (valueDefaultObject as StorageListV).listBase
-					: (valueDefaultObject as StorageV).value;
-				const value = isList
-					? (() => {
-						const value = config[optionKey][preferenceKey] as StorageListValue<unknown>;
-						return value.listBase.filter(item => !value.listOut.includes(item)).concat(value.listIn);
-					})() : (config[optionKey][preferenceKey] as StorageValue<unknown>);
+				const [ valueDefault, value ] = (() => {
+					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+					case StorageType.VALUE:
+						return [
+							configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StorageListValue<unknown>,
+							config[optionKey][preferenceKey] as StorageValue<unknown>,
+						];
+					case StorageType.LIST_VALUE:
+						return [
+							(configGetDefault({ [optionKey]: [ preferenceKey ] }
+							)[optionKey][preferenceKey] as StorageListValue<unknown>).getList(),
+							(config[optionKey][preferenceKey] as StorageListValue<unknown>).getList(),
+						];
+					}
+					return [];
+				})();
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
 					input.disabled = true;

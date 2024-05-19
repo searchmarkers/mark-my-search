@@ -29,7 +29,14 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 			onLoad: async setValue => {
 				const config = await configGet({ [configKey]: [ key ] });
 				const value = config[configKey][key];
-				setValue(((typeof value === "object" && value !== null && "listIn" in value) ? value["listIn"] : value) as boolean);
+				switch (configGetType({ [configKey]: [ key ] })[configKey][key]) {
+				case StorageType.VALUE: {
+					setValue(value as StorageValue<unknown> as unknown as boolean);
+					break;
+				} case StorageType.LIST_VALUE: {
+					setValue((value as StorageListValue<unknown>).getList() as unknown as boolean);
+					break;
+				}}
 			},
 			onChange: async (value, objectIndex, containerIndex, store) => {
 				if (store) {
@@ -39,12 +46,17 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 						: inputType === InputType.TEXT_NUMBER
 							? parseFloat(value as unknown as string)
 							: value;
-					if (typeof config[configKey][key] === "object" && config[configKey][key] !== null
-						&& "listIn" in (config[configKey][key] as Record<string, unknown>)) {
-						(config[configKey][key]["listIn"] as unknown) = valueTransformed;
-					} else {
-						(config[configKey][key] as unknown) = valueTransformed;
-					}
+					switch (configGetType({ [configKey]: [ key ] })[configKey][key]) {
+					case StorageType.VALUE: {
+						(config[configKey][key] as unknown) = valueTransformed as StorageValue<unknown>;
+						break;
+					} case StorageType.LIST_VALUE: {
+						const valueDefault = configGetDefault({ [configKey]: [ key ] })[configKey][key] as StorageListInterface<unknown>;
+						const listV = new StorageListInterface(valueDefault.baseList);
+						listV.setList(valueTransformed as Array<unknown>);
+						(config[configKey][key] as unknown) = listV;
+						break;
+					}}
 					await configSet(config);
 				}
 				if (details?.onChange) {
@@ -168,20 +180,20 @@ const loadOptionsNew = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										configGet({ urlFilters: [ "noPageModify" ] }).then(sync => //
-											sync.urlFilters.noPageModify.listIn.map(({ hostname, pathname }) => hostname + pathname) //
+										configGet({ urlFilters: [ "noPageModify" ] }).then(config => //
+											config.urlFilters.noPageModify.getList().map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										configGet({ urlFilters: [ "noPageModify" ] }).then(sync => {
-											sync.urlFilters.noPageModify.listIn = array.map(value => {
+										configGet({ urlFilters: [ "noPageModify" ] }).then(config => {
+											config.urlFilters.noPageModify.setList(array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
-											});
-											configSet(sync);
+											}));
+											configSet(config);
 										})
 									,
 								},
@@ -438,20 +450,20 @@ const loadOptionsNew = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										configGet({ urlFilters: [ "nonSearch" ] }).then(sync => //
-											sync.urlFilters.nonSearch.listIn.map(({ hostname, pathname }) => hostname + pathname) //
+										configGet({ urlFilters: [ "nonSearch" ] }).then(config => //
+											config.urlFilters.nonSearch.getList().map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										configGet({ urlFilters: [ "nonSearch" ] }).then(sync => {
-											sync.urlFilters.nonSearch.listIn = array.map(value => {
+										configGet({ urlFilters: [ "nonSearch" ] }).then(config => {
+											config.urlFilters.nonSearch.setList(array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
 													hostname: value.slice(0, pathnameStart),
 													pathname: value.slice(pathnameStart),
 												};
-											});
-											configSet(sync);
+											}));
+											configSet(config);
 										})
 									,
 								},
