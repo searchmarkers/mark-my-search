@@ -51,10 +51,9 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 						(config[configKey][key] as unknown) = valueTransformed as StoreImmediate<unknown>;
 						break;
 					} case StoreType.LIST: {
-						const valueDefault = configGetDefault({ [configKey]: [ key ] })[configKey][key] as StoreListInterface<unknown>;
-						const listV = new StoreListInterface(valueDefault.baseList);
-						listV.setList(valueTransformed as Array<unknown>);
-						(config[configKey][key] as unknown) = listV;
+						const storeList = configGetDefault({ [configKey]: [ key ] })[configKey][key] as StoreListInterface<unknown>;
+						storeList.setList(valueTransformed as Array<unknown>);
+						(config[configKey][key] as unknown) = storeList;
 						break;
 					}}
 					await configSet(config);

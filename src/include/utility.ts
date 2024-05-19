@@ -27,15 +27,15 @@ const compatibility = { // Some of this differs depending on the context the scr
 const useChromeAPI = () => compatibility.browser === Browser.CHROMIUM;
 
 enum Engine {
-	ELEMENT,
-	PAINT,
-	HIGHLIGHT,
+	ELEMENT = "ELEMENT",
+	PAINT = "PAINT",
+	HIGHLIGHT = "HIGHLIGHT",
 }
 
 enum PaintEngineMethod {
-	PAINT,
-	ELEMENT,
-	URL,
+	PAINT = "paint",
+	ELEMENT = "element",
+	URL = "url",
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

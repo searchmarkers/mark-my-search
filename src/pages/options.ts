@@ -2,14 +2,16 @@ type OptionsInfo = Array<{
 	label: string
 	options: Partial<{[ConfigK in ConfigKey]: {
 		label: string
-		preferences?: Partial<{[GroupK in keyof ConfigValues[ConfigK]]: {
-			label: string
-			tooltip?: string
-			type: PreferenceType
-		}}>
-		type?: PreferenceType
+		preferences: Partial<{[GroupK in keyof ConfigValues[ConfigK]]: Preference}>
 	}}>
 }>
+
+type Preference = {
+	label: string
+	tooltip?: string
+	type: PreferenceType
+	valueSet?: Set<unknown>
+}
 
 enum OptionClass {
 	ERRONEOUS = "erroneous",
@@ -28,12 +30,12 @@ enum OptionClass {
 	PREFERENCE_ROW = "preference-row",
 	PREFERENCE_CELL_LABEL = "preference-cell",
 	PREFERENCE_INPUT = "preference-input",
-	PREFERENCE_DEFAULT = "preference-default",
 	PREFERENCE_REVERT = "preference-revert",
 }
 
 enum PreferenceType {
 	BOOLEAN,
+	ENUM,
 	INTEGER,
 	FLOAT,
 	TEXT,
@@ -109,8 +111,6 @@ body.${OptionClass.SAVE_PENDING} .${OptionClass.SAVE_BUTTON}::after
 	{ background-color: hsl(0 0% 87%); }
 input[type=text]
 	{ font-size: small; width: 110px; }
-.${OptionClass.PREFERENCE_DEFAULT}
-	{ display: none; }
 .${OptionClass.IS_DEFAULT} .${OptionClass.PREFERENCE_REVERT}
 	{ display: none; }
 .${OptionClass.PREFERENCE_REVERT}
@@ -215,6 +215,7 @@ label[for]:hover
 				autoFindOptions: true,
 				matchingDefaults: true,
 			});
+			const configToUnset: Record<string, Array<string>> = {};
 			// TODO remove code duplication using function
 			Object.keys(tabInfo.options).forEach(optionKey => {
 				const optionInfo = tabInfo.options[optionKey];
@@ -235,29 +236,36 @@ label[for]:hover
 					case StoreType.IMMEDIATE: {
 						const configValue = (() => {
 							switch (type) {
+							case PreferenceType.BOOLEAN:
+								return valueEnteredBool;
+							case PreferenceType.ENUM:
+								return valueEnteredString;
 							case PreferenceType.INTEGER:
 								return parseInt(valueEnteredString);
 							case PreferenceType.FLOAT:
 								return parseFloat(valueEnteredString);
+							case PreferenceType.TEXT:
+								return valueEnteredString;
 							case PreferenceType.ARRAY:
 								return valueEnteredString.split(",");
 							case PreferenceType.ARRAY_NUMBER:
 								return valueEnteredString.split(",").map(item => Number(item));
-							default:
-								return valueEntered;
 							}
 						})();
 						config[optionKey][preferenceKey] = configValue;
+						if (configValue === configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+							configToUnset[optionKey] ??= [];
+							configToUnset[optionKey].push(preferenceKey);
+						}
 						break;
 					} case StoreType.LIST: {
-						const valueDefault = configGetDefault({ [optionKey]: [ preferenceKey ] }
-						)[optionKey][preferenceKey] as StoreListInterface<unknown>;
 						const list: Array<unknown> = (type === PreferenceType.ARRAY_NUMBER)
 							? valueEnteredString.split(",").map(item => Number(item))
 							: valueEnteredString.split(",");
-						const listValue = new StoreListInterface(valueDefault.baseList);
-						listValue.setList(list);
-						config[optionKey][preferenceKey] =  listValue;
+						const storeList = configGetDefault({ [optionKey]: [ preferenceKey ] }
+						)[optionKey][preferenceKey] as StoreListInterface<unknown>;
+						storeList.setList(list);
+						config[optionKey][preferenceKey] = storeList;
 						break;
 					}}
 					valuesCurrent[optionKey][preferenceKey] = valueEntered;
@@ -267,6 +275,7 @@ label[for]:hover
 				rowModified.classList.remove(OptionClass.MODIFIED);
 			}
 			await configSet(config);
+			await configUnset(configToUnset);
 			setSavePending(false);
 		});
 		const config = await configGet({
@@ -299,7 +308,7 @@ label[for]:hover
 			}
 			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
 			Object.keys(preferences).forEach((preferenceKey) => {
-				const preferenceInfo = preferences[preferenceKey];
+				const preferenceInfo = preferences[preferenceKey] as Preference;
 				const row = document.createElement("div");
 				const addCell = (node: Node, isInFirstColumn = false) => {
 					const cell = document.createElement("div");
@@ -314,15 +323,26 @@ label[for]:hover
 				preferenceLabel.htmlFor = inputId;
 				preferenceLabel.textContent = preferenceInfo.label;
 				preferenceLabel.title = preferenceInfo.tooltip ?? "";
-				const inputDefault = document.createElement("input");
-				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
-				inputDefault.classList.add(OptionClass.PREFERENCE_DEFAULT);
-				inputDefault.disabled = true;
-				const input = document.createElement("input");
-				input.type = inputDefault.type;
-				input.id = inputId;
-				input.classList.add(OptionClass.PREFERENCE_INPUT);
-				input.dataset.key = `${optionKey}-${preferenceKey}`;
+				let inputElement: HTMLSelectElement | HTMLInputElement;
+				if (preferenceInfo.type === PreferenceType.ENUM) {
+					const select = document.createElement("select");
+					select.id = inputId;
+					select.classList.add(OptionClass.PREFERENCE_INPUT);
+					select.dataset.key = `${optionKey}-${preferenceKey}`;
+					for (const value of preferenceInfo.valueSet ?? new Set()) {
+						const option = document.createElement("option");
+						option.textContent = String(value);
+						select.appendChild(option);
+					}
+					inputElement = select;
+				} else {
+					const input = document.createElement("input");
+					input.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
+					input.id = inputId;
+					input.classList.add(OptionClass.PREFERENCE_INPUT);
+					input.dataset.key = `${optionKey}-${preferenceKey}`;
+					inputElement = input;
+				}
 				const revertButton = document.createElement("button");
 				revertButton.type = "button";
 				revertButton.classList.add(OptionClass.PREFERENCE_REVERT);
@@ -332,57 +352,57 @@ label[for]:hover
 				revertButton.appendChild(revertImage);
 				addCell(preferenceLabel, true);
 				addCell(revertButton);
-				addCell(input);
-				addCell(inputDefault);
+				addCell(inputElement);
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
 				const [ valueDefault, value ] = (() => {
 					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
-					case StoreType.IMMEDIATE:
+					case StoreType.IMMEDIATE: {
+						const convert = (value: unknown) =>
+							preferenceInfo.type === PreferenceType.BOOLEAN ? value : String(value);
 						return [
-							configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StoreList<unknown>,
-							config[optionKey][preferenceKey] as StoreImmediate<unknown>,
+							convert(configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StoreList<unknown>),
+							convert(config[optionKey][preferenceKey] as StoreImmediate<unknown>),
 						];
-					case StoreType.LIST:
+					} case StoreType.LIST:
 						return [
 							(configGetDefault({ [optionKey]: [ preferenceKey ] }
-							)[optionKey][preferenceKey] as StoreList<unknown>).getList(),
-							(config[optionKey][preferenceKey] as StoreList<unknown>).getList(),
+							)[optionKey][preferenceKey] as StoreList<unknown>).getList().toString(),
+							(config[optionKey][preferenceKey] as StoreList<unknown>).getList().toString(),
 						];
 					}
 					return [];
 				})();
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
-					input.disabled = true;
+					inputElement.disabled = true;
 				} else {
-					const valueKey: string = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
-					inputDefault[valueKey] = valueDefault;
-					input[valueKey] = value;
-					valuesCurrent[optionKey][preferenceKey] = input[valueKey];
+					const valueKey: "checked" | "value" = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
+					inputElement[valueKey] = value;
+					valuesCurrent[optionKey][preferenceKey] = inputElement[valueKey];
 					const rowUpdateClasses = () => {
 						row.classList.toggle(
 							OptionClass.MODIFIED,
-							input[valueKey] !== valuesCurrent[optionKey][preferenceKey],
+							inputElement[valueKey] !== valuesCurrent[optionKey][preferenceKey],
 						);
 						row.classList.toggle(
 							OptionClass.IS_DEFAULT,
-							input[valueKey] === inputDefault[valueKey],
+							inputElement[valueKey] === valueDefault,
 						);
 						toolbarsUpdate();
 					};
-					input.addEventListener("input", rowUpdateClasses);
+					inputElement.addEventListener("input", rowUpdateClasses);
 					const discard = () => {
-						input[valueKey] = valuesCurrent[optionKey][preferenceKey];
+						inputElement[valueKey] = valuesCurrent[optionKey][preferenceKey];
 						rowUpdateClasses();
 					};
 					const revert = () => {
-						input[valueKey] = inputDefault[valueKey];
+						inputElement[valueKey] = valueDefault;
 						rowUpdateClasses();
 					};
 					revertButton.addEventListener("click", () => {
 						revert();
-						input.focus();
+						inputElement.focus();
 					});
 					rowUpdateClasses();
 					discardFns.push(discard);
@@ -494,7 +514,8 @@ PAINT
 • Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
 							,
-							type: PreferenceType.TEXT,
+							type: PreferenceType.ENUM,
+							valueSet: new Set([ "ELEMENT", "PAINT", "HIGHLIGHT" ]),
 						},
 						/*paintEngine: {
 							label: "Use experimental browser APIs (hover for details)",
