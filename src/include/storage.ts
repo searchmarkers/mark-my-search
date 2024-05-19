@@ -422,14 +422,6 @@ const bankDefault: BankValues = {
 };
 
 /**
- * The working cache of items retrieved from the persistent config since the last background startup.
- */
-//const configCache: Partial<ConfigValues<StorageContext.STORE>> = {};
-
-//const configCacheKeysLocal: Set<string> = new Set;
-//const configCacheKeysSync: Set<string> = new Set;
-
-/**
  * Gets an object of key-value pairs corresponding to a set of keys in the given area of storage.
  * Storage may be fetched asynchronously or immediately retrieved from a cache.
  * @param area The name of the storage area from which to retrieve values.
@@ -457,7 +449,7 @@ const bankGet = async <T extends BankKey>(keys: Array<T>): Promise<{ [P in T]: B
 		}
 		return true;
 	});
-	chrome.storage.session.get(keysToGet).then((bankStore: BankValues) => {
+	await chrome.storage.session.get(keysToGet).then((bankStore: BankValues) => {
 		keysToGet.forEach(<K extends T>(key: K) => {
 			bankCache[key] = bankStore[key] ?? Object.assign({}, bankDefault[key]);
 			bank[key] = bankCache[key] as BankValues[K];
@@ -487,8 +479,6 @@ type ConfigTypesPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyOb
 		? {[G in GroupK]: StoreType}
 		: (KeyObject[C] extends true ? Record<keyof ConfigValues[C], StoreType> : never)
 }
-
-// TODO store config to cache when setting and getting, update cache when storage changes
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configSet = async (config: Partial<Partial2<ConfigValues>>) => {
@@ -644,68 +634,9 @@ const configGetType = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObj
 	return configTypes;
 };
 
-/*chrome.storage.onChanged.addListener((changes, areaName) => {
-	// TODO check that the change was not initiated from the same script
-	switch (areaName) {
-	case "session": {
-		Object.entries(changes).forEach(([ key, value ]) => {
-			bankCache[key] = value.newValue;
-		});
-		break;
-	} case "local":
-	case "sync": {
-		const [ keyCache, keyCacheOther ] = areaName === "local"
-			? [ configCacheKeysLocal, configCacheKeysSync ]
-			: [ configCacheKeysSync, configCacheKeysLocal ];
-		console.log(changes);
-		Object.keys(changes).forEach(key1 => {
-			if (configDefault[key1].w_value) {
-				if (changes[key1].newValue?.w_value !== undefined) {
-					(configCache[key1] as StorageValue<unknown>) = {
-						w_value: changes[key1].newValue.w_value,
-					};
-					keyCache.add(key1);
-					keyCacheOther.delete(key1);
-				}
-			} else {
-				configCache[key1] ??= {};
-				Object.keys(changes[key1].newValue ?? {}).forEach(key2 => {
-					if (changes[key1].newValue[key2]?.w_value !== undefined) {
-						(configCache[key1][key2] as StorageValue<unknown>) = {
-							w_value: changes[key1].newValue[key2].w_value,
-						};
-						const key2Full = `${key1}_${key2}`;
-						keyCache.add(key2Full);
-						keyCacheOther.delete(key2Full);
-					}
-				});
-			}
-		});
-		break;
-	}}
-});*/
-
-/*const updateCache = (changes: Record<string, chrome.storage.StorageChange>, areaName: StorageAreaName | "managed") => {
-	if (areaName === "managed") {
-		return;
+chrome.storage.session.onChanged.addListener(changes => {
+	// TODO check that the change was not initiated from the same script?
+	for (const [ key, value ] of Object.entries(changes)) {
+		bankCache[key] = value.newValue;
 	}
-	if ([ "researchInstances", "engines" ].some(key => changes[key])) {
-		areaName = "session";
-	}
-	Object.entries(changes).forEach(([ key, value ]) => {
-		storageCache[areaName][key] = value.newValue;
-	});
-};
-
-chrome.storage.onChanged.addListener(updateCache);
-
-(() => {
-	Object.keys(storageCache).forEach(async (areaName: StorageAreaName) => {
-		const area = await chrome.storage[areaName].get();
-		const areaChange: Record<string, chrome.storage.StorageChange> = {};
-		Object.keys(area).forEach(key => {
-			areaChange[key] = { oldValue: area[key], newValue: area[key] };
-		});
-		updateCache(areaChange, areaName);
-	});
-})();*/
+});
