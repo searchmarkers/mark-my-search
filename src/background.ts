@@ -306,11 +306,6 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.runtime.onStartup.addListener(initialize);
 
 	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
-	bankGet([ BankKey.RESEARCH_INSTANCES ]).then(bank => { // TODO better workaround?
-		if (bank.researchInstances === undefined) {
-			assert(false, "storage reinitialize", "storage read returned `undefined` when testing on wake");
-		}
-	});
 })();
 
 (() => {
