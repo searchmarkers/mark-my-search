@@ -19,22 +19,26 @@ enum StoreType {
 	LIST,
 }
 
-type StoreImmediate<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
+type StoreImmediate<T, Context = StorageContext.INTERFACE>
+= Context extends StorageContext.SCHEMA ? Readonly<{
 	type: StoreType.IMMEDIATE
 	defaultValue: T
 	sync?: true
-}> : Context extends StorageContext.STORE ? T : T
+}>
+: Context extends StorageContext.STORE ? T
+: T
 
-type StoreList<T, Context = StorageContext.INTERFACE> = Context extends StorageContext.SCHEMA ? Readonly<{
+type StoreList<T, Context = StorageContext.INTERFACE>
+= Context extends StorageContext.SCHEMA ? Readonly<{
 	type: StoreType.LIST
 	baseList: Array<T>
 	sync?: true
-}> : Context extends StorageContext.STORE ?
-	{
-		userList: Array<T>,
-		baseExcludeList: Array<T>,
-		baseExcludeAll: boolean,
-	}
+}>
+: Context extends StorageContext.STORE ? {
+	userList: Array<T>,
+	baseExcludeList: Array<T>,
+	baseExcludeAll: boolean,
+}
 : StoreListInterface<T>
 
 type Store<Context = StorageContext.INTERFACE> =
@@ -643,13 +647,34 @@ const configGetType = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObj
 
 const SCHEMA_VERSION = 2;
 
-const specialKeys = {
-	schemaVersion: "_SCHEMA_VERSION",
-	oldContents: "_OLD_CONTENTS",
-	oldTimestamp: "_OLD_TIMESTAMP",
+// DO NOT EDIT EXISTING ENTRIES.
+const KEYS = {
+	special: {
+		/** Since 2.0.0 */
+		schemaVersion: "_schemaVersion",
+		/** Since 2.0.0 */
+		old_contents: "_old_contents",
+		/** Since 2.0.0 */
+		old_timestamp: "_old_timestamp",
+	} as const,
+
+	reserved: {
+	} as const,
+
+	reservedIn: {
+		local: {
+			/** Since 1.x */
+			schemaVersion1: "persistResearchInstances",
+		} as const,
+
+		sync: {
+			/** Since 1.x */
+			schemaVersion1: "matchModeDefaults",
+		} as const,
+	} as const,
 } as const;
 
-const specialKeysSet: ReadonlySet<string> = new Set(Object.values(specialKeys));
+const SPECIAL_KEYS_SET: ReadonlySet<string> = new Set(Object.values(KEYS.special));
 
 type JsonObject = Record<string | number | symbol, unknown>
 
@@ -710,53 +735,68 @@ const migrations: Record<number, Record<number, (storage: JsonObject, areaName: 
 //const findMigrationPath = (fromVersion: number, toVersion: number) => {
 //};
 
-const storageInitializeArea = async (areaName: StorageAreaName, version1Key: string) => {
+const storageResetArea = async (
+	areaName: StorageAreaName,
+	reason: string,
+	initialWarning?: boolean,
+): Promise<JsonObject> => {
+	if (initialWarning) {
+		assert(false, "storage-initialize (single-area) reset begin", reason, { areaName });
+	} else {
+		log("storage-initialize (single-area) reset begin", reason, { areaName });
+	}
 	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
+	const storage = await storageArea.get();
+	await storageArea.set({
+		[KEYS.special.schemaVersion]: SCHEMA_VERSION,
+		[KEYS.special.old_contents]: Object.fromEntries(Object.entries(storage).map(
+			([ key, value ]) => [ key, key === KEYS.special.old_contents ? null : value ]
+		)),
+		[KEYS.special.old_timestamp]: Date.now(),
+	});
+	log("storage-initialize (single-area) reset complete", "old contents have been moved and the area has been prepared",
+		{ areaName, schemaVersion: SCHEMA_VERSION, SPECIAL_KEYS: Object.values(KEYS.special) }
+	);
+	return storage;
+};
+
+const storageMigrateArea = async (areaName: StorageAreaName, schemaVersion: number) => {
+	log("storage-initialize (single-area) migration begin", "", { areaName });
+	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
+	const storage = await storageResetArea(areaName, "reset required before migration");
+	await storageArea.remove(Object.keys(storage).filter(key => !SPECIAL_KEYS_SET.has(key)));
+	const config = migrations[schemaVersion][SCHEMA_VERSION](storage, areaName);
+	await configSet(config);
+	log("storage-initialize (single-area) migration complete", "old contents have been migrated",
+		{ areaName, schemaVersion: SCHEMA_VERSION, SPECIAL_KEYS: Object.values(KEYS.special) }
+	);
+};
+
+const storageInitializeArea = async (areaName: StorageAreaName) => {
+	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
+	const version1Key = KEYS.reservedIn[areaName].schemaVersion1;
 	const keyValues = await storageArea.get([ "schemaVersion", version1Key ]);
 	const versionValue = keyValues.version ?? (keyValues[version1Key] ? 1 : undefined);
-	const version = (typeof versionValue === "number") ? versionValue : 0;
-	if (version === SCHEMA_VERSION) {
-		log("storage-initialize (single-area) complete with no changes", "schema version matches",
-			{ areaName, version });
+	const schemaVersion = (typeof versionValue === "number") ? versionValue : 0;
+	if (schemaVersion === SCHEMA_VERSION) {
+		log("storage-initialize (single-area) complete with no changes", "schema version matches", { areaName, schemaVersion });
 		return;
 	}
 	assert(false, "storage-initialize (single-area) migration needed", "detected schema version does not match current",
-		{ areaName, detectedVersion: version, SCHEMA_VERSION });
+		{ areaName, detectedVersion: schemaVersion, SCHEMA_VERSION });
 	// Currently, only supports single-step migrations.
-	if (migrations[version] && migrations[version][SCHEMA_VERSION]) {
-		log("storage-initialize (single-area) migration begin", "",
-			{ areaName });
-		const storage = await storageArea.get();
-		await storageArea.set({
-			[specialKeys.schemaVersion]: SCHEMA_VERSION,
-			[specialKeys.oldContents]: storage,
-			[specialKeys.oldTimestamp]: Date.now(),
-		});
-		await storageArea.remove(Object.keys(storage).filter(key => !specialKeysSet.has(key)));
-		const config = migrations[version][SCHEMA_VERSION](storage, areaName);
-		await configSet(config);
-		log("storage-initialize (single-area) migration complete", "old contents have been migrated and copied",
-			{ areaName, schemaVersion: SCHEMA_VERSION, specialKeys });
-		return;
+	if (migrations[schemaVersion] && migrations[schemaVersion][SCHEMA_VERSION]) {
+		await storageMigrateArea(areaName, schemaVersion);
+	} else {
+		await storageResetArea(areaName, "no appropriate migration found", true);
 	}
-	!assert(false, "storage-initialize (single-area) reset begin", "no appropriate migration found",
-		{ areaName });
-	const storage = await storageArea.get();
-	await storageArea.set({
-		[specialKeys.schemaVersion]: SCHEMA_VERSION,
-		[specialKeys.oldContents]: storage,
-		[specialKeys.oldTimestamp]: Date.now(),
-	});
-	await storageArea.remove(Object.keys(storage).filter(key => !specialKeysSet.has(key)));
-	log("storage-initialize (single-area) reset complete", "old contents have been moved and the area has been set up",
-		{ areaName, schemaVersion: SCHEMA_VERSION, specialKeys });
 };
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const configInitialize = async () => {
 	log("storage-initialize begin", "", { areaNames: [ "local", "sync" ] });
-	const localPromise = storageInitializeArea("local", "persistResearchInstances");
-	const syncPromise = storageInitializeArea("sync", "matchModeDefaults");
+	const localPromise = storageInitializeArea("local");
+	const syncPromise = storageInitializeArea("sync");
 	await localPromise;
 	await syncPromise;
 };
