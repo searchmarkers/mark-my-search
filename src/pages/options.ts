@@ -2,7 +2,11 @@ type OptionsInfo = Array<{
 	label: string
 	options: Partial<{[ConfigK in ConfigKey]: {
 		label: string
-		preferences: Partial<{[GroupK in keyof ConfigValues[ConfigK]]: Preference}>
+		preferences?: Partial<{[GroupK in keyof ConfigValues[ConfigK]]: Preference}>
+		special?: {
+			preferenceKey: keyof ConfigValues[ConfigK]
+			preferences: Record<string, Preference>
+		}
 	}}>
 }>
 
@@ -71,6 +75,8 @@ body
 	{ text-decoration: underline; font-style: italic; }
 .${OptionClass.TAB_BUTTON}
 	{ border-radius: 0; display: none; }
+.${OptionClass.TOOLBAR}
+	{ position: relative; }
 .${OptionClass.TOOLBAR} *
 	{ padding: 4px; }
 .${OptionClass.SAVE_BUTTON}[data-modification-count]::after
@@ -213,18 +219,16 @@ label[for]:hover
 				highlighter: true,
 				showHighlights: true,
 				autoFindOptions: true,
-				matchingDefaults: true,
+				matchModeDefaults: true,
 			});
 			const configToUnset: Record<string, Array<string>> = {};
 			// TODO remove code duplication using function
-			Object.keys(tabInfo.options).forEach(optionKey => {
-				const optionInfo = tabInfo.options[optionKey];
-				const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-				Object.keys(preferences).forEach(preferenceKey => {
-					const preferenceInfo = preferences[preferenceKey];
-					const input = document.querySelector(
+			for (const [ optionKey, optionInfo ] of Object.entries(tabInfo.options)) {
+				const preferences = optionInfo.preferences ?? {};
+				Object.entries(preferences).forEach(([ preferenceKey, preferenceInfo ]) => {
+					const input: HTMLInputElement | null = document.querySelector(
 						`.${OptionClass.PREFERENCE_INPUT}[data-key="${optionKey}-${preferenceKey}"]`
-					) as HTMLInputElement;
+					);
 					if (!input) {
 						return;
 					}
@@ -270,7 +274,22 @@ label[for]:hover
 					}}
 					valuesCurrent[optionKey][preferenceKey] = valueEntered;
 				});
-			});
+				if (optionInfo.special) {
+					const preferenceKey = optionInfo.special.preferenceKey;
+					const inputs: Array<HTMLInputElement> = Array.from(document.querySelectorAll(
+						`.${OptionClass.PREFERENCE_INPUT}[data-key="${optionKey}-${preferenceKey}"]`
+					));
+					const object = config[optionKey][preferenceKey] as Record<string, unknown>;
+					for (const input of inputs) {
+						const key = input.dataset.objectKey;
+						if (!key) {
+							continue;
+						}
+						object[key] = input.checked;
+					}
+					valuesCurrent[optionKey][preferenceKey] = object;
+				}
+			}
 			for (const rowModified of document.querySelectorAll(`.${OptionClass.MODIFIED}`)) {
 				rowModified.classList.remove(OptionClass.MODIFIED);
 			}
@@ -286,12 +305,11 @@ label[for]:hover
 			highlighter: true,
 			showHighlights: true,
 			autoFindOptions: true,
-			matchingDefaults: true,
+			matchModeDefaults: true,
 		});
 		// Construct and insert option elements from the option details.
-		Object.keys(tabInfo.options).forEach(optionKey => {
+		for (const [ optionKey, optionInfo ] of Object.entries(tabInfo.options)) {
 			valuesCurrent[optionKey] = {};
-			const optionInfo = tabInfo.options[optionKey];
 			const section = document.createElement("div");
 			section.classList.add(OptionClass.OPTION_SECTION);
 			const optionLabel = document.createElement("div");
@@ -306,9 +324,19 @@ label[for]:hover
 				optionLabel.classList.add(OptionClass.ERRONEOUS);
 				return;
 			}
-			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-			Object.keys(preferences).forEach((preferenceKey) => {
-				const preferenceInfo = preferences[preferenceKey] as Preference;
+			const preferences = optionInfo.preferences ?? {};
+			const createRow = (
+				label: string,
+				tooltip: string,
+				type: PreferenceType,
+				valueSet: Set<unknown>,
+				inputDataset: Record<string, string>,
+				setValueCurrent: (value: unknown) => void,
+				getValueCurrent: () => unknown,
+				configDefault: unknown,
+				configType: StoreType,
+				getConfigValue: () => unknown,
+			) => {
 				const row = document.createElement("div");
 				const addCell = (node: Node, isInFirstColumn = false) => {
 					const cell = document.createElement("div");
@@ -321,15 +349,17 @@ label[for]:hover
 				const inputId = `input-${getIdSequential.next().value}`;
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
-				preferenceLabel.textContent = preferenceInfo.label;
-				preferenceLabel.title = preferenceInfo.tooltip ?? "";
+				preferenceLabel.textContent = label;
+				preferenceLabel.title = tooltip;
 				let inputElement: HTMLSelectElement | HTMLInputElement;
-				if (preferenceInfo.type === PreferenceType.ENUM) {
+				if (type === PreferenceType.ENUM) {
 					const select = document.createElement("select");
 					select.id = inputId;
 					select.classList.add(OptionClass.PREFERENCE_INPUT);
-					select.dataset.key = `${optionKey}-${preferenceKey}`;
-					for (const value of preferenceInfo.valueSet ?? new Set()) {
+					for (const [ key, value ] of Object.entries(inputDataset)) {
+						select.dataset[key] = value;
+					}
+					for (const value of valueSet) {
 						const option = document.createElement("option");
 						option.textContent = String(value);
 						select.appendChild(option);
@@ -337,10 +367,12 @@ label[for]:hover
 					inputElement = select;
 				} else {
 					const input = document.createElement("input");
-					input.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
+					input.type = type === PreferenceType.BOOLEAN ? "checkbox" : "text";
 					input.id = inputId;
 					input.classList.add(OptionClass.PREFERENCE_INPUT);
-					input.dataset.key = `${optionKey}-${preferenceKey}`;
+					for (const [ key, value ] of Object.entries(inputDataset)) {
+						input.dataset[key] = value;
+					}
 					inputElement = input;
 				}
 				const revertButton = document.createElement("button");
@@ -356,34 +388,34 @@ label[for]:hover
 				table.appendChild(row);
 				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
 				const [ valueDefault, value ] = (() => {
-					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+					switch (configType) {
 					case StoreType.IMMEDIATE: {
-						const convert = (value: unknown) =>
-							preferenceInfo.type === PreferenceType.BOOLEAN ? value : String(value);
+						const convert = (value: StoreImmediate<unknown>) =>
+							type === PreferenceType.BOOLEAN ? value : String(value);
 						return [
-							convert(configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StoreList<unknown>),
-							convert(config[optionKey][preferenceKey] as StoreImmediate<unknown>),
+							convert(configDefault),
+							convert(getConfigValue()),
 						];
-					} case StoreType.LIST:
+					} case StoreType.LIST: {
+						const convert = (value: StoreList<unknown>) => value.getList().toString();
 						return [
-							(configGetDefault({ [optionKey]: [ preferenceKey ] }
-							)[optionKey][preferenceKey] as StoreList<unknown>).getList().toString(),
-							(config[optionKey][preferenceKey] as StoreList<unknown>).getList().toString(),
+							convert(configDefault as StoreList<unknown>),
+							convert(getConfigValue() as StoreList<unknown>),
 						];
-					}
+					}}
 					return [];
 				})();
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
 					inputElement.disabled = true;
 				} else {
-					const valueKey: "checked" | "value" = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
+					const valueKey: "checked" | "value" = type === PreferenceType.BOOLEAN ? "checked" : "value";
 					inputElement[valueKey] = value;
-					valuesCurrent[optionKey][preferenceKey] = inputElement[valueKey];
+					setValueCurrent(inputElement[valueKey]);
 					const rowUpdateClasses = () => {
 						row.classList.toggle(
 							OptionClass.MODIFIED,
-							inputElement[valueKey] !== valuesCurrent[optionKey][preferenceKey],
+							inputElement[valueKey] !== getValueCurrent(),
 						);
 						row.classList.toggle(
 							OptionClass.IS_DEFAULT,
@@ -393,7 +425,7 @@ label[for]:hover
 					};
 					inputElement.addEventListener("input", rowUpdateClasses);
 					const discard = () => {
-						inputElement[valueKey] = valuesCurrent[optionKey][preferenceKey];
+						inputElement[valueKey] = getValueCurrent();
 						rowUpdateClasses();
 					};
 					const revert = () => {
@@ -408,8 +440,49 @@ label[for]:hover
 					discardFns.push(discard);
 					revertFns.push(revert);
 				}
-			});
-		});
+			};
+			for (const [ preferenceKey, preferenceInfo ] of Object.entries(preferences)) {
+				createRow(
+					preferenceInfo.label,
+					preferenceInfo.tooltip ?? "",
+					preferenceInfo.type,
+					preferenceInfo.valueSet ?? new Set(),
+					{
+						key: `${optionKey}-${preferenceKey}`,
+					},
+					(value) => { valuesCurrent[optionKey][preferenceKey] = value; },
+					() => valuesCurrent[optionKey][preferenceKey],
+					configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
+					configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
+					() => config[optionKey][preferenceKey],
+				);
+			}
+			//if (optionInfo.special) {
+			//	const preferenceKey = optionInfo.special.preferenceKey;
+			//	(config[optionKey][preferenceKey] as MatchMode | undefined) ??= {
+			//		case:
+			//	};
+			//	const object = config[optionKey][preferenceKey] as Record<string, unknown>;
+			//	valuesCurrent[optionKey][preferenceKey] = object;
+			//	for (const [ key, preferenceInfo ] of Object.entries(optionInfo.special.preferences)) {
+			//		createRow(
+			//			preferenceInfo.label,
+			//			preferenceInfo.tooltip ?? "",
+			//			preferenceInfo.type,
+			//			preferenceInfo.valueSet ?? new Set(),
+			//			{
+			//				key: `${optionKey}-${preferenceKey}`,
+			//				objectKey: key,
+			//			},
+			//			(value) => { valuesCurrent[optionKey][preferenceKey][key] = value; },
+			//			() => valuesCurrent[optionKey][preferenceKey][key],
+			//			configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey][key],
+			//			StoreType.IMMEDIATE,
+			//			() => config[optionKey][preferenceKey][key],
+			//		);
+			//	}
+			//}
+		}
 	};
 
 	return (optionsInfo: OptionsInfo, config: OptionsConfig) => {
@@ -573,29 +646,29 @@ PAINT
 						},
 					},
 				},
-				matchingDefaults: {
+				matchModeDefaults: {
 					label: "Matching options for new terms",
 					preferences: {
-						//case: {
-						//	label: "Default case sensitivity",
-						//	type: PreferenceType.BOOLEAN,
-						//},
-						//stem: {
-						//	label: "Default word stemming",
-						//	type: PreferenceType.BOOLEAN,
-						//},
-						//whole: {
-						//	label: "Default whole word matching",
-						//	type: PreferenceType.BOOLEAN,
-						//},
-						//diacritics: {
-						//	label: "Default diacritics matching (ignore accents)",
-						//	type: PreferenceType.BOOLEAN,
-						//},
-						//regex: {
-						//	label: "Use custom regular expressions by default (advanced)",
-						//	type: PreferenceType.BOOLEAN,
-						//},
+						case: {
+							label: "Default case sensitivity",
+							type: PreferenceType.BOOLEAN,
+						},
+						stem: {
+							label: "Default word stemming",
+							type: PreferenceType.BOOLEAN,
+						},
+						whole: {
+							label: "Default whole word matching",
+							type: PreferenceType.BOOLEAN,
+						},
+						diacritics: {
+							label: "Default diacritics (accents) sensitivity",
+							type: PreferenceType.BOOLEAN,
+						},
+						regex: {
+							label: "Use custom regular expressions by default",
+							type: PreferenceType.BOOLEAN,
+						},
 					},
 				},
 			},

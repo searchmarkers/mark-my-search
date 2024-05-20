@@ -633,7 +633,7 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 			barLook: true,
 			highlightLook: true,
 			highlighter: true,
-			matchingDefaults: [ "matchMode" ],
+			matchModeDefaults: true,
 			urlFilters: true,
 		}));
 		const bank = await bankGet([ BankKey.RESEARCH_INSTANCES ]);
@@ -648,7 +648,7 @@ const messageHandleBackground = async (message: BackgroundMessage<true>): Promis
 				barLook: config.barLook,
 				highlightLook: config.highlightLook,
 				highlighter: config.highlighter,
-				matchMode: config.matchingDefaults.matchMode,
+				matchMode: config.matchModeDefaults,
 				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", config.urlFilters),
 			};
 		} else {

@@ -129,9 +129,7 @@ type ConfigValues<Context = StorageContext.INTERFACE> = {
 		stoplist: StoreList<string, Context>
 		searchParams: StoreList<string, Context>
 	}
-	matchingDefaults: {
-		matchMode: StoreImmediate<MatchMode, Context>
-	}
+	matchModeDefaults: Record<keyof MatchMode, StoreImmediate<boolean, Context>>
 	showHighlights: {
 		default: StoreImmediate<boolean, Context>
 		overrideSearchPages: StoreImmediate<boolean, Context>
@@ -266,16 +264,26 @@ const configSchema: ConfigValues<StorageContext.SCHEMA> = {
 			sync: true,
 		},
 	},
-	matchingDefaults: {
-		matchMode: {
+	matchModeDefaults: {
+		regex: {
 			type: StoreType.IMMEDIATE,
-			defaultValue: {
-				regex: false,
-				case: false,
-				stem: true,
-				whole: false,
-				diacritics: true,
-			},
+			defaultValue: false,
+		},
+		case: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+		},
+		stem: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
+		},
+		whole: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: false,
+		},
+		diacritics: {
+			type: StoreType.IMMEDIATE,
+			defaultValue: true,
 		},
 	},
 	showHighlights: {
@@ -661,7 +669,7 @@ const KEYS = {
 	reserved: {
 	} as const,
 
-	reservedIn: {
+	reservedFor: {
 		local: {
 			/** Since 1.x */
 			schemaVersion1: "persistResearchInstances",
@@ -669,7 +677,7 @@ const KEYS = {
 
 		sync: {
 			/** Since 1.x */
-			schemaVersion1: "matchModeDefaults",
+			schemaVersion1: "highlightMethod",
 		} as const,
 	} as const,
 } as const;
@@ -713,10 +721,9 @@ const migrations: Record<number, Record<number, (storage: JsonObject, areaName: 
 					config.autoFindOptions.stoplist = stoplist;
 				}
 				if (old.matchModeDefaults) {
-					config.matchingDefaults ??= {};
 					const matchMode = Object.assign({}, old.matchModeDefaults as MatchMode);
 					matchMode.diacritics = !matchMode.diacritics;
-					config.matchingDefaults.matchMode = matchMode;
+					config.matchModeDefaults = matchMode;
 				}
 				config.showHighlights = old.showHighlights as ConfigValues["showHighlights"];
 				config.barCollapse = old.barCollapse as ConfigValues["barCollapse"];
@@ -774,7 +781,7 @@ const storageMigrateArea = async (areaName: StorageAreaName, schemaVersion: numb
 
 const storageInitializeArea = async (areaName: StorageAreaName) => {
 	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
-	const version1Key = KEYS.reservedIn[areaName].schemaVersion1;
+	const version1Key = KEYS.reservedFor[areaName].schemaVersion1;
 	const keyValues = await storageArea.get([ "schemaVersion", version1Key ]);
 	const versionValue = keyValues.version ?? (keyValues[version1Key] ? 1 : undefined);
 	const schemaVersion = (typeof versionValue === "number") ? versionValue : 0;
