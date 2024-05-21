@@ -1,7 +1,6 @@
 import type { CommandInfo } from "/dist/modules/commands.mjs";
-import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
+import type { ConfigValues } from "/dist/modules/privileged/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import type { Engine, PaintEngineMethod } from "/dist/modules/common.mjs";
 
 type Tab = {
 	getDetails?: TabDetailsRequest
@@ -10,17 +9,14 @@ type Tab = {
 	terms?: Array<MatchTerm>
 	termsOnHold?: Array<MatchTerm>
 	deactivate?: boolean
-	setHighlighter?: {
-		engine: Engine
-		paintEngineMethod?: PaintEngineMethod
-	}
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
 	toggleBarCollapsedOn?: boolean
-	barControlsShown?: StorageSyncValues["barControlsShown"]
-	barLook?: StorageSyncValues["barLook"]
-	highlightMethod?: StorageSyncValues["highlightMethod"]
-	matchMode?: StorageSyncValues["matchModeDefaults"]
+	barControlsShown?: ConfigValues["barControlsShown"]
+	barLook?: ConfigValues["barLook"]
+	highlightLook?: ConfigValues["highlightLook"]
+	highlighter?: ConfigValues["highlighter"]
+	matchMode?: ConfigValues["matchModeDefaults"]
 }
 
 type TabDetailsRequest = {

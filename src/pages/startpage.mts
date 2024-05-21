@@ -1,9 +1,6 @@
 import * as Manifest from "/dist/modules/manifest.mjs";
 import { type Page, loadPage } from "/dist/modules/page/build.mjs";
-import {
-	type StorageLocalValues,
-	storageGet, storageSet,
-} from "/dist/modules/privileged/storage.mjs";
+import { Config } from "/dist/modules/privileged/storage.mjs";
 
 /**
  * Loads the startpage content into the page.
@@ -76,13 +73,11 @@ You can always activate ${Manifest.getName()} by opening its popup (from the 'ex
 							},
 							checkbox: {
 								onLoad: async setChecked => {
-									const local = await storageGet("local", [ "enabled" ]);
-									setChecked(local.enabled);
+									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									setChecked(config.autoFindOptions.enabled);
 								},
 								onToggle: checked => {
-									storageSet("local", {
-										enabled: checked,
-									} as StorageLocalValues);
+									Config.set({ autoFindOptions: { enabled: checked } });
 								},
 							},
 						},

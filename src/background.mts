@@ -1,10 +1,6 @@
 import "/dist/modules/namespace/normalize.mjs";
-import {
-	type ResearchInstance, type SearchSites, type URLFilter,
-	type StorageSessionValues, type StorageLocalValues, type StorageSyncValues,
-	storageGet, storageSet,
-	storageInitialize, optionsRepair,
-} from "/dist/modules/privileged/storage.mjs";
+import type { ConfigURLFilters, ResearchInstance, SearchSites, URLFilter } from "/dist/modules/privileged/storage.mjs";
+import { Bank, Config, configInitialize } from "/dist/modules/privileged/storage.mjs";
 import { parseCommand } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendTabMessage } from "/dist/modules/messaging/tab.mjs";
@@ -23,10 +19,7 @@ const createResearchInstance = async (args: {
 	url?: { stoplist: Array<string>, url: string, engine?: SearchSite }
 	terms?: Array<MatchTerm>
 }): Promise<ResearchInstance> => {
-	const sync = await storageGet("sync", [
-		"showHighlights",
-		"barCollapse",
-	]);
+	const config = await Config.get({ showHighlights: [ "default" ], barCollapse: [ "fromSearch" ] });
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
@@ -38,15 +31,15 @@ const createResearchInstance = async (args: {
 			terms: Array.from(new Set(termsRaw))
 				.filter(phrase => args.url ? !args.url.stoplist.includes(phrase) : false)
 				.map(phrase => new MatchTerm(phrase)),
-			highlightsShown: sync.showHighlights.default,
-			barCollapsed: sync.barCollapse.fromSearch,
+			highlightsShown: config.showHighlights.default,
+			barCollapsed: config.barCollapse.fromSearch,
 			enabled: true,
 		};
 	}
 	args.terms ??= [];
 	return {
 		terms: args.terms,
-		highlightsShown: sync.showHighlights.default,
+		highlightsShown: config.showHighlights.default,
 		barCollapsed: false,
 		enabled: true,
 	};
@@ -58,9 +51,9 @@ const createResearchInstance = async (args: {
  * @returns The URL segment determined to be the search query, or the empty string if none is found.
  */
 const getSearchQuery = async (url: string): Promise<string> =>
-	storageGet("sync", [ "autoFindOptions" ]).then(sync =>
+	Config.get({ autoFindOptions: [ "searchParams" ] }).then(config =>
 		new URL(url).searchParams.get(
-			sync.autoFindOptions.searchParams.find(param => new URL(url).searchParams.has(param)) ?? ""
+			config.autoFindOptions.searchParams.getList().find(param => new URL(url).searchParams.has(param)) ?? ""
 		) ?? ""
 	).catch(() => {
 		log("search query extraction fail", "", { url });
@@ -110,7 +103,7 @@ const isUrlFilteredIn = (() => {
  * @param urlFilters URL filter preferences.
  * @returns `true` if the corresponding page may be modified, `false` otherwise.
  */
-const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues["urlFilters"]) => {
+const isUrlPageModifyAllowed = (urlString: string, urlFilters: ConfigURLFilters) => {
 	try {
 		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
 	} catch {
@@ -125,7 +118,7 @@ const isUrlPageModifyAllowed = (urlString: string, urlFilters: StorageSyncValues
  * @param urlFilters An object of details about URL filtering.
  * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
  */
-const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: StorageSyncValues["urlFilters"]) =>
+const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: ConfigURLFilters) =>
 	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
 ;
 
@@ -189,69 +182,77 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			return;
 		}
 		browser.bookmarks.getTree().then(async nodes => {
-			const session = await storageGet("session", [ "engines" ]);
+			const bank = await Bank.get([ "engines" ]);
 			nodes.forEach(node =>
-				setEngines(session.engines, node => {
-					if (node.url) { // TODO should be able to make the assumption that engines is always an array
-						updateEngine(session.engines ?? [], node.id, node.url);
+				setEngines(bank.engines, node => {
+					if (node.url) {
+						updateEngine(bank.engines, node.id, node.url);
 					}
 				}, node)
 			);
-			storageSet("session", session);
+			Bank.set(bank);
 		});
 
 		browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
-			const session = await storageGet("session", [ "engines" ]);
-			setEngines(session.engines, node => {
-				delete session.engines[node.id];
+			const bank = await Bank.get([ "engines" ]);
+			setEngines(bank.engines, node => {
+				delete bank.engines[node.id];
 			}, removeInfo.node);
-			storageSet("session", session);
+			Bank.set(bank);
 		});
 
 		browser.bookmarks.onCreated.addListener(async (id, createInfo) => {
 			if (createInfo.url) {
-				const session = await storageGet("session", [ "engines" ]);
-				updateEngine(session.engines ?? [], id, createInfo.url);
-				storageSet("session", session);
+				const bank = await Bank.get([ "engines" ]);
+				updateEngine(bank.engines, id, createInfo.url);
+				Bank.set(bank);
 			}
 		});
 
 		browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
 			if (changeInfo.url) {
-				const session = await storageGet("session", [ "engines" ]);
-				updateEngine(session.engines ?? [], id, changeInfo.url);
-				storageSet("session", session);
+				const bank = await Bank.get([ "engines" ]);
+				updateEngine(bank.engines, id, changeInfo.url);
+				Bank.set(bank);
 			}
 		});
 	};
 })();
 
-const injectIntoTabs = async () => {
-	(await chrome.tabs.query({})).filter(tab => tab.id !== undefined).forEach(tab => {
-		chrome.scripting.executeScript({
+const injectIntoTabs = () => new Promise<void>(resolve => {
+	let pendingCount = 0;
+	chrome.tabs.query({}).then(tabs => tabs.forEach(async tab => {
+		if (tab.id === undefined) {
+			return;
+		}
+		pendingCount++;
+		await chrome.scripting.executeScript({
 			target: { tabId: tab.id as number },
-			files: [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
-				"/dist/content.js",
-			],
+			files: [ "/dist/content-entry.js" ],
 		}).catch(() => chrome.runtime.lastError); // Read `lastError` to suppress injection errors.
-	});
-};
+		pendingCount--;
+		if (pendingCount === 0) resolve();
+	}));
+});
 
-/**
- * Updates the action icon to reflect the extension's enabled/disabled status.
- * @param enabled If specified, overrides the extension's enabled/disabled status.
- */
-const updateActionIcon = (enabled?: boolean) =>
-	enabled === undefined
-		? storageGet("local", [ "enabled" ]).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: compatibility.browser === "chromium"
-			? (enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png") // Chromium lacks SVG support for the icon.
-			: (enabled ? "/icons/mms.svg" : "/icons/mms-off.svg")
-		})
-;
+///**
+// * Set the action icon to reflect the extension's enabled/disabled status.
+// * @param enabled If specified, overrides the extension's enabled/disabled status.
+// */
+//const setActionIconEnabled = async (enabled: boolean) => {
+//	await chrome.action.setIcon({ path: compatibility.browser === "chromium"
+//		? (enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png") // Chromium lacks SVG support for the icon.
+//		: (enabled ? "/icons/mms.svg" : "/icons/mms-off.svg")
+//	});
+//};
+
+///**
+// * Updates the action icon to reflect the extension's current enabled/disabled status.
+// */
+//const updateActionIcon = async () => {
+//	const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+//	await setActionIconEnabled(config.autoFindOptions.enabled);
+//};
 
 (() => {
 	const contextMenuListener = async (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) => {
@@ -285,16 +286,15 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Prepares volatile extension components in a new browser session.
 	 */
 	const initialize = () => {
-		chrome.runtime.setUninstallURL("https://searchmarkers.github.io/pages/sendoff/");
+		chrome.runtime.setUninstallURL("https://markmysearch.ator.systems/pages/sendoff/");
+		configInitialize();
 		try {
 			manageEnginesCacheOnBookmarkUpdate();
 		} catch (error) {
 			console.warn("TODO fix bookmark search engines check", error);
 		}
 		createContextMenuItems();
-		optionsRepair();
-		storageInitialize();
-		updateActionIcon();
+		//updateActionIcon();
 	};
 
 	const startOnInstall = (isExtensionInstall: boolean, allowOnboarding = true) => {
@@ -314,12 +314,6 @@ const updateActionIcon = (enabled?: boolean) =>
 	chrome.runtime.onStartup.addListener(initialize);
 
 	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
-	storageGet("session", [ "researchInstances" ]).then(session => { // TODO better workaround?
-		if (session.researchInstances === undefined) {
-			assert(false, "storage reinitialize", "storage read returned `undefined` when testing on wake");
-			storageInitialize();
-		}
-	});
 })();
 
 // AUDITED ABOVE
@@ -328,36 +322,32 @@ const updateActionIcon = (enabled?: boolean) =>
 	const pageChangeRespond = async (urlString: string, tabId: number) => {
 		const logMetadata = { timeStart: Date.now(), tabId, url: urlString };
 		log("tab-communicate fulfillment start", "", logMetadata);
-		const sync = await storageGet("sync", [
-			"autoFindOptions",
-			"showHighlights",
-			"barCollapse",
-			"urlFilters",
-			"termLists",
-		]);
-		const local = await storageGet("local", [ "enabled" ]);
-		const session = await storageGet("session", [
-			"researchInstances",
-			"engines",
-		]);
-		const searchDetails = local.enabled
-			? await isTabSearchPage(session.engines, urlString)
+		const config = await Config.get({
+			autoFindOptions: [ "enabled", "stoplist" ],
+			showHighlights: [ "overrideSearchPages", "overrideResearchPages" ],
+			barCollapse: [ "fromTermListAuto" ],
+			urlFilters: true,
+			termListOptions: [ "termLists" ],
+		});
+		const bank = await Bank.get([ "researchInstances", "engines" ]);
+		const searchDetails = config.autoFindOptions.enabled
+			? await isTabSearchPage(bank.engines, urlString)
 			: { isSearch: false };
-		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, sync.urlFilters);
-		const termsFromLists = sync.termLists
+		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, config.urlFilters);
+		const termsFromLists = config.termListOptions.termLists
 			.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 			.flatMap(termList => termList.terms);
 		const getTermsAdditionalDistinct = (terms: Array<MatchTerm>, termsExtra: Array<MatchTerm>) => termsExtra
 			.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
 		const isResearchPage = await Tabs.isTabResearchPage(tabId);
 		const overrideHighlightsShown =
-			(searchDetails.isSearch && sync.showHighlights.overrideSearchPages) ||
-			(isResearchPage && sync.showHighlights.overrideResearchPages);
+			(searchDetails.isSearch && config.showHighlights.overrideSearchPages) ||
+			(isResearchPage && config.showHighlights.overrideResearchPages);
 		// BELOW CONTENTS NOT AUDITED
 		// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
 		if (searchDetails.isSearch) {
 			const researchInstance = await createResearchInstance({ url: {
-				stoplist: sync.autoFindOptions.stoplist,
+				stoplist: config.autoFindOptions.stoplist.getList(),
 				url: urlString,
 				engine: searchDetails.engine,
 			} });
@@ -368,7 +358,7 @@ const updateActionIcon = (enabled?: boolean) =>
 					termsOnHold: researchInstance.terms,
 				});
 			} else {
-				session.researchInstances[tabId] = researchInstance;
+				bank.researchInstances[tabId] = researchInstance;
 				log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
 			}
 		}
@@ -381,21 +371,21 @@ const updateActionIcon = (enabled?: boolean) =>
 					: "tab is a page which terms lists apply to"
 				: "tab is a research page";
 			log("tab-communicate highlight activation request", highlightActivationReason, logMetadata);
-			const researchInstance = session.researchInstances[tabId] ?? await createResearchInstance({});
+			const researchInstance = bank.researchInstances[tabId] ?? await createResearchInstance({});
 			researchInstance.terms = researchInstance.enabled
 				? researchInstance.terms.concat(getTermsAdditionalDistinct(researchInstance.terms, termsFromLists))
 				: termsFromLists;
 			if (!await Tabs.isTabResearchPage(tabId)) {
-				researchInstance.barCollapsed = sync.barCollapse.fromTermListAuto;
+				researchInstance.barCollapsed = config.barCollapse.fromTermListAuto;
 			}
 			researchInstance.enabled = true;
 			highlightActivation = sendTabMessage(tabId, {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
 			});
-			session.researchInstances[tabId] = researchInstance;
+			bank.researchInstances[tabId] = researchInstance;
 		}
-		storageSet("session", { researchInstances: session.researchInstances } as StorageSessionValues);
+		Bank.set({ researchInstances: bank.researchInstances });
 		await highlightActivation;
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
@@ -406,20 +396,19 @@ const updateActionIcon = (enabled?: boolean) =>
 			return;
 		}
 		if (openerTabId === undefined) {
-			if (compatibility.browser !== "chromium") {
-				return;
-			}
 			// Must check `openerTabId` manually for Chromium, which may not define it on creation.
-			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
+			if (compatibility.browser === "chromium") {
+				openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
+			}
 			if (openerTabId === undefined) {
 				return;
 			}
 		}
 		log("tab-communicate obligation check", "tab created", { tabId: tab.id });
-		const session = await storageGet("session", [ "researchInstances" ]);
+		const bank = await Bank.get([ "researchInstances" ]);
 		if (await Tabs.isTabResearchPage(openerTabId)) {
-			session.researchInstances[tab.id] = { ...session.researchInstances[openerTabId] };
-			storageSet("session", session);
+			bank.researchInstances[tab.id] = { ...bank.researchInstances[openerTabId] };
+			Bank.set(bank);
 			pageChangeRespond(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache.
 		}
 	});
@@ -432,17 +421,17 @@ const updateActionIcon = (enabled?: boolean) =>
 	};
 
 	// Note: emitted events differ between Firefox and Chromium.
-	if (compatibility.browser === "firefox") {
-		browser.tabs.onUpdated.addListener(pageEventListener, { properties: [ "url", "status" ] });
-	} else {
+	if (compatibility.browser === "chromium") {
 		chrome.tabs.onUpdated.addListener(pageEventListener);
+	} else {
+		browser.tabs.onUpdated.addListener(pageEventListener, { properties: [ "url", "status" ] });
 	}
 
 	chrome.tabs.onRemoved.addListener(async tabId => {
-		const session = await storageGet("session", [ "researchInstances" ]);
-		if (session.researchInstances[tabId]) {
-			delete session.researchInstances[tabId];
-			storageSet("session", session);
+		const bank = await Bank.get([ "researchInstances" ]);
+		if (bank.researchInstances[tabId]) {
+			delete bank.researchInstances[tabId];
+			Bank.set(bank);
 		}
 	});
 })();
@@ -469,14 +458,14 @@ const getTermsSelectedInTab = async (tabId: number): Promise<Array<MatchTerm> | 
  */
 const activateResearchInTab = async (tabId: number, terms: Array<MatchTerm> = []) => {
 	log("research-activation start", "", { tabId });
-	const local = await storageGet("local", [ "persistResearchInstances" ]);
-	const session = await storageGet("session", [ "researchInstances" ]);
-	const researchInstance = session.researchInstances[tabId] && local.persistResearchInstances && !terms.length
-		? session.researchInstances[tabId]
+	const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+	const bank = await Bank.get([ "researchInstances" ]);
+	const researchInstance = bank.researchInstances[tabId] && config.researchInstanceOptions.restoreLastInTab && !terms.length
+		? bank.researchInstances[tabId]
 		: await createResearchInstance({ terms });
 	researchInstance.enabled = true;
-	session.researchInstances[tabId] = researchInstance;
-	storageSet("session", session);
+	bank.researchInstances[tabId] = researchInstance;
+	Bank.set(bank);
 	await handleMessage({
 		tabId,
 		terms: researchInstance.terms,
@@ -495,15 +484,15 @@ const activateResearchInTab = async (tabId: number, terms: Array<MatchTerm> = []
  */
 const deactivateResearchInTab = async (tabId: number) => {
 	log("research-deactivation start", "", { tabId });
-	const session = await storageGet("session", [ "researchInstances" ]);
-	const researchInstance = session.researchInstances[tabId];
+	const bank = await Bank.get([ "researchInstances" ]);
+	const researchInstance = bank.researchInstances[tabId];
 	if (researchInstance) {
 		if (researchInstance.terms.length) {
 			researchInstance.enabled = false;
 		} else {
-			delete session.researchInstances[tabId];
+			delete bank.researchInstances[tabId];
 		}
-		storageSet("session", session);
+		Bank.set(bank);
 	}
 	await sendTabMessage(tabId, { deactivate: true });
 	log("research-deactivation finish", "", { tabId });
@@ -518,9 +507,9 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	if (!await Tabs.isTabResearchPage(tabId)) {
 		return;
 	}
-	const sync = await storageGet("sync", [ "barControlsShown" ]);
-	const session = await storageGet("session", [ "researchInstances" ]);
-	const researchInstance = session.researchInstances[tabId];
+	const config = await Config.get({ barControlsShown: true });
+	const bank = await Bank.get([ "researchInstances" ]);
+	const researchInstance = bank.researchInstances[tabId];
 	researchInstance.highlightsShown = toggleHighlightsOn
 		?? !await sendTabMessage(tabId, { getDetails: { highlightsShown: true } }).then(response =>
 			response.highlightsShown
@@ -529,9 +518,9 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 		);
 	sendTabMessage(tabId, {
 		toggleHighlightsOn: researchInstance.highlightsShown,
-		barControlsShown: sync.barControlsShown,
+		barControlsShown: config.barControlsShown,
 	});
-	storageSet("session", { researchInstances: session.researchInstances } as StorageSessionValues);
+	Bank.set(bank);
 };
 
 chrome.commands.onCommand.addListener(async commandString => {
@@ -548,9 +537,10 @@ chrome.commands.onCommand.addListener(async commandString => {
 		chrome.runtime.openOptionsPage();
 		return;
 	} case "toggleEnabled": {
-		storageGet("local", [ "enabled" ]).then(local => {
-			storageSet("local", { enabled: !local.enabled } as StorageLocalValues);
-			updateActionIcon(!local.enabled);
+		Config.get({ autoFindOptions: [ "enabled" ] }).then(config => {
+			config.autoFindOptions.enabled = !config.autoFindOptions.enabled;
+			Config.set(config);
+			//updateActionIcon(config.autoFindOptions.enabled);
 		});
 		return;
 	} case "toggleInTab": {
@@ -564,8 +554,8 @@ chrome.commands.onCommand.addListener(async commandString => {
 		toggleHighlightsInTab(tabId);
 		return;
 	} case "toggleBar": {
-		const session = await storageGet("session", [ "researchInstances" ]);
-		const researchInstance = session.researchInstances[tabId];
+		const bank = await Bank.get([ "researchInstances" ]);
+		const researchInstance = bank.researchInstances[tabId];
 		if (!researchInstance) {
 			return;
 		}
@@ -573,7 +563,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 		sendTabMessage(tabId, {
 			toggleBarCollapsedOn: researchInstance.barCollapsed,
 		});
-		storageSet("session", session);
+		Bank.set(bank);
 		return;
 	}}
 	sendTabMessage(tabId, { commands: [ commandInfo ] });
@@ -590,23 +580,23 @@ const handleMessage = async (message: Message.Background<true>): Promise<Message
 	if (message.terms) {
 		const logMetadata = { tabId, terms: message.terms };
 		log("terms-assign start", "", logMetadata);
-		const session = await storageGet("session", [ "researchInstances" ]);
-		const researchInstance = session.researchInstances[tabId];
+		const bank = await Bank.get([ "researchInstances" ]);
+		const researchInstance = bank.researchInstances[tabId];
 		if (researchInstance) {
 			researchInstance.terms = message.terms;
-			await storageSet("session", session);
+			await Bank.set(bank);
 			log("terms-assign finish", "research instance created with terms", logMetadata);
 		} else {
 			const researchInstance = await createResearchInstance({ terms: message.terms });
-			session.researchInstances[tabId] = researchInstance;
-			await storageSet("session", session);
+			bank.researchInstances[tabId] = researchInstance;
+			await Bank.set(bank);
 			log("terms-assign finish", "terms assigned to existing research instance", logMetadata);
 		}
 	}
 	const tabMessage: Message.Tab = {
 		terms: message.termsSend
 			? (message.terms
-				?? (await storageGet("session", [ "researchInstances" ])).researchInstances[tabId]?.terms)
+				?? (await Bank.get([ "researchInstances" ])).researchInstances[tabId]?.terms)
 			: undefined,
 		commands: message.highlightCommands,
 	};
@@ -624,10 +614,10 @@ const handleMessage = async (message: Message.Background<true>): Promise<Message
 			await toggleHighlightsInTab(tabId, toggle.highlightsShownOn);
 		}
 		if (toggle.barCollapsedOn !== undefined) {
-			const session = await storageGet("session");
+			const bank = await Bank.get([ "researchInstances" ]);
 			if (await Tabs.isTabResearchPage(tabId)) {
-				session.researchInstances[tabId].barCollapsed = toggle.barCollapsedOn;
-				await storageSet("session", session);
+				bank.researchInstances[tabId].barCollapsed = toggle.barCollapsedOn;
+				await Bank.set(bank);
 			}
 		}
 		log("flags-toggle finish", "", logMetadata);
@@ -636,46 +626,36 @@ const handleMessage = async (message: Message.Background<true>): Promise<Message
 		deactivateResearchInTab(tabId);
 	}
 	if (message.performSearch) {
-		const session = await storageGet("session", [ "researchInstances" ]);
+		const bank = await Bank.get([ "researchInstances" ]);
 		(chrome.search["search"] as typeof browser.search.search)({
-			query: session.researchInstances[tabId].terms.map(term => term.phrase).join(" "),
+			query: bank.researchInstances[tabId].terms.map(term => term.phrase).join(" "),
 			tabId,
 		});
 	}
 	if (message.initializationGet) {
 		log("initialization-return start", "", { tabId });
-		const sync = (await storageGet("sync", [
-			"barControlsShown",
-			"barLook",
-			"highlightMethod",
-			"matchModeDefaults",
-		]));
-		const session = await storageGet("session", [ "researchInstances" ]);
-		const researchInstance = session.researchInstances[tabId];
+		const config = (await Config.get({
+			barControlsShown: true,
+			barLook: true,
+			highlightLook: true,
+			highlighter: true,
+			matchModeDefaults: true,
+			urlFilters: true,
+		}));
+		const bank = await Bank.get([ "researchInstances" ]);
+		const researchInstance = bank.researchInstances[tabId];
 		if (researchInstance) {
 			log("initialization-return finish", "", { tabId });
 			return {
 				terms: researchInstance.terms,
 				toggleHighlightsOn: researchInstance.highlightsShown,
 				toggleBarCollapsedOn: researchInstance.barCollapsed,
-				barControlsShown: sync.barControlsShown,
-				barLook: sync.barLook,
-				highlightMethod: sync.highlightMethod,
-				matchMode: sync.matchModeDefaults,
-				// eslint-disable-next-line no-constant-condition
-				setHighlighter: true // Set to `true` to test HIGHLIGHT engine, or `false` for regular behaviour.
-					? {
-						engine: "highlight",
-					}
-					: (
-						sync.highlightMethod.paintReplaceByElement ? {
-							engine: "element",
-						} : {
-							engine: "paint",
-							paintEngineMethod: globalThis.browser ? "element" : "paint", //compatibility.highlight.paintEngine.paintMethod ? "paint" : "element",
-						}
-					),
-				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", sync.urlFilters),
+				barControlsShown: config.barControlsShown,
+				barLook: config.barLook,
+				highlightLook: config.highlightLook,
+				highlighter: config.highlighter,
+				matchMode: config.matchModeDefaults,
+				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", config.urlFilters),
 			};
 		} else {
 			log("initialization-return fail", "no corresponding research instance exists", { tabId });

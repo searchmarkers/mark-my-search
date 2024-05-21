@@ -74,9 +74,9 @@ const compatibility: {
 };
 
 type Engine =
-	| "element"
-	| "paint"
-	| "highlight"
+	| "ELEMENT"
+	| "PAINT"
+	| "HIGHLIGHT"
 ;
 
 type PaintEngineMethod =

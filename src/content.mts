@@ -1,5 +1,5 @@
 /* eslint-disable indent */ // TODO remove
-import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
+import type { ConfigValues } from "/dist/modules/privileged/storage.mjs";
 import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
@@ -20,8 +20,8 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: Array<MatchTerm>
-	["barControlsShown"]: StorageSyncValues["barControlsShown"]
-	["barLook"]: StorageSyncValues["barLook"]
+	barControlsShown: ConfigValues["barControlsShown"]
+	barLook: ConfigValues["barLook"]
 	matchMode: MatchMode
 }
 
@@ -360,9 +360,9 @@ const onWindowMouseUp = () => {
 			await queuingPromise;
 		}
 		styleElementsInsert();
-		if (message.setHighlighter !== undefined) {
+		if (message.highlighter !== undefined) {
 			highlighter.current?.endHighlighting();
-			if (message.setHighlighter.engine === "highlight" && compatibility.highlight.highlightEngine) {
+			if (message.highlighter.engine === "HIGHLIGHT" && compatibility.highlight.highlightEngine) {
 				const enginePromise = import("/dist/modules/highlight/engines/highlight.mjs");
 				queuingPromise = enginePromise;
 				const { HighlightEngine } = await enginePromise;
@@ -373,10 +373,10 @@ const onWindowMouseUp = () => {
 					termTokens,
 					termPatterns,
 				);
-			} else if (message.setHighlighter.engine === "paint" && compatibility.highlight.paintEngine) {
+			} else if (message.highlighter.engine === "PAINT" && compatibility.highlight.paintEngine) {
 				const enginePromise = import("/dist/modules/highlight/engines/paint.mjs");
 				const methodPromise = PaintMethodLoader.loadMethod(
-					message.setHighlighter.paintEngineMethod ?? "paint",
+					message.highlighter.paintEngine.method,
 					termTokens,
 				);
 				queuingPromise = new Promise<void>(resolve =>
@@ -423,9 +423,9 @@ const onWindowMouseUp = () => {
 		Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 			controlsInfo.barLook[key] = value;
 		});
-		if (message.highlightMethod) {
+		if (message.highlightLook) {
 			hues.splice(0);
-			message.highlightMethod.hues.forEach(hue => hues.push(hue));
+			message.highlightLook.hues.forEach(hue => hues.push(hue));
 		}
 		if (message.matchMode) {
 			Object.assign(controlsInfo.matchMode, message.matchMode);

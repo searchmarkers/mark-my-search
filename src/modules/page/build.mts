@@ -1,5 +1,5 @@
 import * as Manifest from "/dist/modules/manifest.mjs";
-import { storageGet } from "/dist/modules/privileged/storage.mjs";
+import { Bank } from "/dist/modules/privileged/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
 import * as EmailJS from "/lib/email.min.js";
@@ -148,9 +148,9 @@ type FormField = {
 */
 const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-	const session = await storageGet("session", [ "researchInstances" ]);
-	const phrases = session.researchInstances[tab.id as number]
-		? session.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+	const bank = await Bank.get([ "researchInstances" ]);
+	const phrases = bank.researchInstances[tab.id as number]
+		? bank.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
 	const message = {
 		addon_version: Manifest.getVersion(),

@@ -1,4 +1,4 @@
-import { storageGet } from "/dist/modules/privileged/storage.mjs";
+import { Bank } from "/dist/modules/privileged/storage.mjs";
 
 /**
  * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.
@@ -6,7 +6,7 @@ import { storageGet } from "/dist/modules/privileged/storage.mjs";
  * @returns `true` if the tab is considered highlighted, `false` otherwise.
  */
 const isTabResearchPage = async (tabId: number): Promise<boolean> => {
-	const { researchInstances } = await storageGet("session", [ "researchInstances" ]);
+	const { researchInstances } = await Bank.get([ "researchInstances" ]);
 	return (tabId in researchInstances) && researchInstances[tabId].enabled;
 };
 

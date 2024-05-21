@@ -5,7 +5,7 @@ import { type MatchMode, MatchTerm, TermTokens } from "/dist/modules/match-term.
 import { type TermHues, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 type EleIDItem = typeof EleID[keyof typeof EleID]
 type EleClassItem = typeof EleClass[keyof typeof EleClass]
-import type { StorageSyncValues } from "/dist/modules/privileged/storage.mjs";
+import type { ConfigBarControlsShown } from "/dist/modules/privileged/storage.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
 import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
@@ -43,7 +43,7 @@ const getTermCommands = (commands: BrowserCommands): { down: Array<string>, up: 
 	};
 };
 
-export type ControlButtonName = keyof StorageSyncValues["barControlsShown"]
+export type ControlButtonName = keyof ConfigBarControlsShown
 type ControlButtonInfo = {
 	controlClasses?: Array<EleClassItem>
 	buttonClasses?: Array<EleClassItem>
@@ -693,7 +693,7 @@ export const insertTermControl = (
 	controlsInfo: ControlsInfo,
 	highlighter: Highlighter,
 ) => {
-	const term = terms[idx >= 0 ? idx : (terms.length + idx)] as MatchTerm;
+	let term = terms[idx >= 0 ? idx : (terms.length + idx)] as MatchTerm;
 	const { optionList, controlReveal } = createTermOptionList(
 		term,
 		term.matchMode,
@@ -702,8 +702,10 @@ export const insertTermControl = (
 		(matchType: string, checked: boolean) => {
 			const matchMode = Object.assign({}, term.matchMode) as MatchMode;
 			matchMode[matchType] = checked;
-			const termUpdate = new MatchTerm(term.phrase, matchMode);
-			TermsSetter.termsSet(terms.map(termCurrent => termCurrent === term ? termUpdate : termCurrent));
+			const termNew = new MatchTerm(term.phrase, matchMode);
+			terms = terms.map(termOther => termOther === term ? termNew : termOther);
+			TermsSetter.termsSet(terms);
+			term = termNew;
 		},
 	);
 	const controlPad = document.createElement("span");
