@@ -1,5 +1,4 @@
 import { type Page, loadPage, pageInsertWarning, sendProblemReport } from "/dist/modules/page/build.mjs";
-import type { ConfigValues, ConfigKey } from "/dist/modules/privileged/storage.mjs";
 import { Bank, Config } from "/dist/modules/privileged/storage.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { isTabResearchPage } from "/dist/modules/privileged/tabs.mjs";
@@ -22,37 +21,21 @@ const loadPopup = (() => {
 		label: {
 			text: labelText,
 		},
-		checkbox: {
+		input: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
 				const config = await Config.get({ termListOptions: [ "termLists" ] });
 				setChecked(config.termListOptions.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
-			onToggle: (checked, objectIndex, containerIndex) => {
+			onChange: (checked, objectIndex, containerIndex) => {
 				Config.get({ termListOptions: [ "termLists" ] }).then(config => {
-					const termOld = config.termListOptions.termLists[containerIndex].terms[objectIndex];
-					const matchMode = Object.assign({}, termOld.matchMode) as MatchMode;
+					const termList = config.termListOptions.termLists[containerIndex];
+					const matchMode = Object.assign({}, termList.terms[objectIndex].matchMode) as MatchMode;
 					matchMode[mode] = checked;
-					const term = new MatchTerm(termOld.phrase, Object.assign({}, matchMode));
-					config.termListOptions.termLists[containerIndex].terms[objectIndex] = term;
+					const term = new MatchTerm(termList.terms[objectIndex].phrase, matchMode);
+					termList.terms[objectIndex] = term;
 					Config.set(config);
 				});
 			},
-		},
-	});
-
-	/**
-	 * Creates info for a checkbox handling a basic storage field.
-	 * @param storageArea The name of the storage area to use.
-	 * @param storageKey The key for the field within the storage area.
-	 * @returns The resulting info object.
-	 */
-	const getConfigFieldCheckboxInfo = <K extends ConfigKey>(configKey: K, groupKey: keyof ConfigValues[K]): Page.Interaction.CheckboxInfo => ({
-		onLoad: async setChecked => {
-			const store = await Config.get({ [configKey]: [ groupKey ] });
-			setChecked(store[configKey][groupKey] as boolean);
-		},
-		onToggle: checked => {
-			Config.set({ [configKey]: { [groupKey]: checked } });
 		},
 	});
 
@@ -99,13 +82,16 @@ const loadPopup = (() => {
 							label: {
 								text: "Detect search engines",//"Highlight web searches",
 							},
-							checkbox: {
+							input: {
+								getType: () => "checkbox",
 								onLoad: async setChecked => {
 									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
 									setChecked(config.autoFindOptions.enabled);
 								},
-								onToggle: checked => {
-									Config.set({ autoFindOptions: { enabled: checked } });
+								onChange: async checked => {
+									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									config.autoFindOptions.enabled = checked;
+									await Config.set(config);
 								},
 							},
 						},
@@ -114,7 +100,18 @@ const loadPopup = (() => {
 							label: {
 								text: "Restore keywords on reactivation",
 							},
-							checkbox: getConfigFieldCheckboxInfo("researchInstanceOptions", "restoreLastInTab"),
+							input: {
+								getType: () => "checkbox",
+								onLoad: async setChecked => {
+									const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+									setChecked(config.researchInstanceOptions.restoreLastInTab);
+								},
+								onChange: async checked => {
+									const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+									config.researchInstanceOptions.restoreLastInTab = checked;
+									await Config.set(config);
+								},
+							},
 						},
 					],
 				},
@@ -128,12 +125,13 @@ const loadPopup = (() => {
 							label: {
 								text: "Active",
 							},
-							checkbox: {
+							input: {
+								getType: () => "checkbox",
 								onLoad: async setChecked => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									setChecked(tab.id === undefined ? false : await isTabResearchPage(tab.id));
 								},
-								onToggle: checked => {
+								onChange: checked => {
 									if (checked) {
 										Bank.get([ "researchInstances" ]).then(async bank => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -380,7 +378,8 @@ const loadPopup = (() => {
 									,
 									setArray: (array, index) =>
 										Config.get({ termListOptions: [ "termLists" ] }).then(config => {
-											config.termListOptions.termLists[index].terms = array as unknown as Array<MatchTerm>;
+											config.termListOptions.termLists[index].terms =
+												array as unknown as typeof config["termListOptions"]["termLists"][number]["terms"];
 											Config.set(config);
 										})
 									,
@@ -407,13 +406,14 @@ const loadPopup = (() => {
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
 														const config = await Config.get({ termListOptions: [ "termLists" ] });
-														setText(config.termListOptions.termLists[containerIndex].terms[objectIndex] ? config.termListOptions.termLists[containerIndex].terms[objectIndex].phrase : "");
+														setText(config.termListOptions.termLists[containerIndex].terms[objectIndex]
+															? config.termListOptions.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
 														Config.get({ termListOptions: [ "termLists" ] }).then(config => {
-															const termOld = config.termListOptions.termLists[containerIndex].terms[objectIndex];
-															const term = new MatchTerm(text, termOld.matchMode);
-															config.termListOptions.termLists[containerIndex].terms[objectIndex] = term;
+															const termList = config.termListOptions.termLists[containerIndex];
+															const term = new MatchTerm(text, termList.terms[objectIndex].matchMode);
+															termList.terms[objectIndex] = term;
 															Config.set(config);
 														});
 													},
@@ -427,7 +427,7 @@ const loadPopup = (() => {
 											getMatchModeInteractionInfo("stem", "Stemming"),
 											getMatchModeInteractionInfo("whole", "Whole Words"),
 											getMatchModeInteractionInfo("case", "Case Sensitive"),
-											getMatchModeInteractionInfo("diacritics", "Diacritics Insensitive"),
+											getMatchModeInteractionInfo("diacritics", "Diacritic Sensitive"),
 											getMatchModeInteractionInfo("regex", "Regular Expression"),
 										],
 									},
@@ -497,18 +497,20 @@ const loadPopup = (() => {
 	];
 
 	return () => {
-		loadPage(panelsInfo, `
-body
-	{ width: 300px; height: 500px; user-select: none; }
-.container-panel > .panel, .brand
-	{ margin-inline: 0; }
-		`, false);
+		loadPage(panelsInfo, {
+			titleText: "Control",
+			tabsFill: true,
+			borderShow: true,
+			brandShow: true,
+			height: 520,
+			width: 300,
+		});
 		pageInsertWarning(
-			document.querySelector(".container-panel .panel-sites_search_research") ?? document.body,
+			document.querySelector(".container.panel .panel-sites_search_research") ?? document.body,
 			"List entries are saved as you type them. This will be more clear in future.",
 		);
 		pageInsertWarning(
-			document.querySelector(".container-panel .panel-term_lists") ?? document.body,
+			document.querySelector(".container.panel .panel-term_lists") ?? document.body,
 			"Keyword lists are highly experimental. Please report any issues.",
 		);
 	};

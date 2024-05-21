@@ -1,7 +1,7 @@
 import * as Manifest from "/dist/modules/manifest.mjs";
-import { Bank } from "/dist/modules/privileged/storage.mjs";
+import { Bank, Config } from "/dist/modules/privileged/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
+import { getIdSequential } from "/dist/modules/common.mjs";
 import * as EmailJS from "/lib/email.min.js";
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -20,6 +20,7 @@ namespace Page {
 			textbox?: {
 				placeholder: string
 			}
+			tooltip?: string
 		}
 		object?: {
 			className: string
@@ -34,7 +35,7 @@ namespace Page {
 					placeholder: string
 				}
 			}
-			columns: Array<Interaction.ObjectColumnInfo>
+			columns: Array<Page.Interaction.ObjectColumnInfo>
 		}
 		textbox?: {
 			className: string
@@ -51,10 +52,16 @@ namespace Page {
 			url: string
 			text: string
 		}
-		submitters?: Array<Interaction.SubmitterInfo>
-		checkbox?: Interaction.CheckboxInfo
+		submitters?: Array<Page.Interaction.SubmitterInfo>
+		input?: Page.Interaction.InputInfo
 		note?: {
-			text: string
+			text?: string
+			getText?: () => Promise<string | undefined>
+			forInput?: (
+				input: HTMLInputElement,
+				getText: (() => Promise<string | undefined>) | undefined,
+				setFloatingText: (text: string) => void,
+			) => void
 		}
 	}
 	// eslint-disable-next-line @typescript-eslint/no-namespace
@@ -64,7 +71,7 @@ namespace Page {
 			key: string
 			label?: InteractionInfo["label"]
 			textbox?: InteractionInfo["textbox"]
-			checkbox?: InteractionInfo["checkbox"]
+			input?: InteractionInfo["input"]
 		}
 		export type ObjectColumnInfo = {
 			className: string
@@ -91,23 +98,27 @@ namespace Page {
 			}
 			alerts?: Record<AlertType, AlertInfo>
 		}
-		export type CheckboxLoad = (
-			setChecked: (checked: boolean) => void,
+		export type InputFetch = () => InputType
+		export type InputLoad = (
+			setValue: (value: boolean) => void,
 			objectIndex: number,
 			containerIndex: number,
 		) => Promise<void>
-		export type CheckboxToggle = (
+		export type InputToggle = (
 			checked: boolean,
 			objectIndex: number,
 			containerIndex: number,
+			store: boolean,
 		) => void
-		export type CheckboxInfo = {
+		export type InputInfo = {
 			autoId?: string
-			onLoad?: CheckboxLoad
-			onToggle?: CheckboxToggle
+			getType?: InputFetch
+			onLoad?: InputLoad
+			onChange?: InputToggle
 		}
 	}
 	export type SectionInfo = {
+		className?: string
 		title?: {
 			text: string
 			expands?: boolean
@@ -121,15 +132,21 @@ namespace Page {
 		}
 		sections: Array<SectionInfo>
 	}
+	export type InputType = (
+		| "checkbox"
+		| "text"
+		| "textArray"
+		| "textNumber"
+	)
 	export type AlertInfo = {
 		text: string
 		timeout?: number
 	}
-	export type AlertType =
+	export type AlertType = (
 		| "success"
 		| "failure"
 		| "pending"
-	;
+	)
 }
 
 type FormField = {
@@ -142,11 +159,15 @@ type FormField = {
 //	ENABLED = "enabled",
 //}
 
+export const isWindowInFrame = () => (
+	new URL(location.href).searchParams.get("frame") !== null
+);
+
 /**
  * Sends a problem report message to a dedicated inbox.
  * @param userMessage An optional message string to send as a comment.
 */
-const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
+export const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const bank = await Bank.get([ "researchInstances" ]);
 	const phrases = bank.researchInstances[tab.id as number]
@@ -172,16 +193,229 @@ const sendProblemReport = async (userMessage = "", formFields: Array<FormField>)
 
 // TODO document functions
 
-const pageInsertWarning = (container: HTMLElement, text: string) => {
+export const getOrderedShortcut = (keys: Array<string>): Array<string> => {
+	keys = keys.slice();
+	keys.sort((a, b) => (
+		(!b.endsWith("Ctrl") && b !== "Alt" && b !== "Command" && b !== "Shift") ||
+		a.endsWith("Ctrl") || (a === "Alt" && !b.endsWith("Ctrl")) || (a === "Command" && b === "Shift")
+	) ? -1 : 1);
+	return keys;
+};
+
+export const forInput = (input: HTMLInputElement, getText: (() => Promise<string | undefined>) | undefined,
+	setFloatingText: (text: string) => void, commandName: string) => {
+	input.classList.add("hidden-caret");
+	input.type = "text";
+	input.placeholder = "Type a shortcut";
+	input.addEventListener("focus", () => {
+		input.value = "";
+	});
+	const useMacKeys = navigator["userAgentData"]
+		? navigator["userAgentData"].platform === "macOS"
+		: navigator.platform.toLowerCase().includes("mac");
+	const getKeyName = (keyLetter: string) => (Object.entries({
+		" ": "Space",
+		".": "Period",
+		",": "Comma",
+		ArrowUp: "Up",
+		ArrowDown: "Down",
+		ArrowLeft: "Left",
+		ArrowRight: "Right",
+	}).find(([ letter ]) => keyLetter === letter) ?? [ keyLetter, keyLetter.length === 1 ? keyLetter.toUpperCase() : keyLetter ])[1];
+	const getModifierName = (modifier: string) => ({
+		ctrl: useMacKeys ? "MacCtrl" : "Ctrl",
+		alt: "Alt",
+		meta: useMacKeys ? "Command" : "",
+		shift: "Shift",
+	})[modifier];
+	const commandKeySequences: Record<string, Array<string>> = {};
+	const reservedShortcutPattern = new RegExp(`^(${
+		[
+			[ "F([3679]|1[12])" ],
+			[ "Shift", "F([3579]|12)" ],
+			[ "Alt", "[1-9]|D|F7|Left|Right|Home" ],
+			[ "Ctrl", "0|[ABCDFGHIJKLMNOPQRSTUVWXZ]|F[457]|PageUp|PageDown" ],
+			[ "Ctrl", "Shift", "[ABCDEGHIJKMNOPRSTWXYZ]|Delete|PageUp|PageDown" ],
+			[ "Ctrl", "Alt", "R" ],
+		].map(patternSequence => `(${patternSequence.map(pattern => `(${pattern})`).join("\\+")})`).join("|")
+	})$`);
+	const modifierEventKeys = new Set([
+		"Alt", "AltGraph", "CapsLock", "Control", "Fn", "FnLock", "Hyper", "Meta",
+		"NumLock", "ScrollLock", "Shift", "Super", "Symbol", "SymbolLock", "OS",
+	]);
+	// Per Firefox spec for WebExtension key combinations at
+	// https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/commands
+	const primaryMods = [ "Ctrl", "Alt", "Command", "MacCtrl" ];
+	const keyNamePatterns = {
+		regular: "[A-Z0-9]|Comma|Period|Home|End|PageUp|PageDown|Space|Insert|Delete|Up|Down|Left|Right",
+		function: "F[1-9]|F[1-9][0-9]",
+		media: "Media(NextTrack|PlayPause|PrevTrack|Stop)",
+	};
+	let key = "";
+	const modifiers = {
+		ctrl: false,
+		alt: false,
+		meta: false,
+		shift: false,
+	};
+	const modifiersUpdate = (event: KeyboardEvent) => {
+		Object.keys(modifiers).forEach(mod => {
+			modifiers[mod] = event[`${mod}Key`];
+		});
+	};
+	const inputUpdate = () => {
+		const modifierPart = Object.keys(modifiers).filter(mod => modifiers[mod])
+			.map(mod => getModifierName(mod)).join("+");
+		const keyPart = getKeyName(key);
+		input.value = modifierPart + (modifierPart ? "+" : "") + keyPart;
+		if (input.value) {
+			if (input.validity.valid) {
+				if (reservedShortcutPattern.test(input.value)) {
+					setFloatingText("Can't override a Firefox shortcut");
+					return;
+				}
+				const duplicates = Object.entries(commandKeySequences)
+					.filter(([ key, shortcut ]) => key !== commandName && shortcut.join("+") === input.value);
+				if (duplicates.length) {
+					setFloatingText("This shortcut is already in use by Mark\u00A0My\u00A0Search");
+					return;
+				}
+				setFloatingText("");
+				inputCommit();
+			} else {
+				const keyNameRegex = new RegExp(
+					`^(${Object.values(keyNamePatterns).map(pattern => `(${pattern})`).join("|")})$`
+				);
+				if (keyPart && !keyNameRegex.test(keyPart)) {
+					setFloatingText("Invalid letter");
+				} else if (input.value.startsWith("Shift+") || !modifierPart && keyPart) {
+					setFloatingText("Include Ctrl or Alt");
+				} else if (Object.keys(modifiers).filter(mod => modifiers[mod]).length > 2) {
+					setFloatingText("No more than 2 modifiers");
+				} else if (input.value.endsWith("+")) {
+					setFloatingText("Type a letter");
+				} else {
+					setFloatingText("Invalid combination");
+				}
+			}
+		} else {
+			setFloatingText("");
+		}
+	};
+	const inputCommit = async () => {
+		const updating = browser.commands.update({
+			name: commandName,
+			shortcut: input.value,
+		});
+		if (input.value) {
+			const container = input.parentElement?.parentElement?.parentElement as HTMLElement; // Hack
+			const warning = container.querySelector(".warning");
+			const text = "If a shortcut doesn't work, it might already be used by another add-on.";
+			if (!warning || warning.textContent !== text) {
+				pageInsertWarning(container, text);
+			}
+		}
+		input.blur();
+		await updating;
+	};
+	input.pattern = `^(${[
+		// Does not protect against repeated modifiers.
+		`(${
+			primaryMods.join("|")
+		})\\+((Shift|${
+			primaryMods.join("|")
+		})\\+)?(${keyNamePatterns.regular})`,
+		`((${
+			primaryMods.join("|")
+		})\\+)?((Shift|${
+			primaryMods.join("|")
+		})\\+)?(${keyNamePatterns.function})`,
+		keyNamePatterns.media,
+	].map(pattern => `(${pattern})`).join("|")})$|^\\s*$`;
+	input.addEventListener("keydown", event => {
+		if (event.key === "Tab") {
+			return;
+		}
+		if (event.key === "Escape") {
+			input.blur();
+			return;
+		}
+		event.preventDefault();
+		event.cancelBubble = true;
+		if (event.key === "Backspace") {
+			input.value = "";
+			inputCommit();
+			return;
+		}
+		if (!modifierEventKeys.has(event.key)) {
+			key = event.key;
+		}
+		modifiersUpdate(event);
+		inputUpdate();
+	});
+	input.addEventListener("keyup", event => {
+		event.preventDefault();
+		event.cancelBubble = true;
+		const keyChanged = event.key === key;
+		if (keyChanged) {
+			key = "";
+		}
+		const getModifiersActive = () => Object.entries(modifiers).filter(({ 1: value }) => value).join(",");
+		const modsActive = getModifiersActive();
+		modifiersUpdate(event);
+		if (keyChanged || getModifiersActive() !== modsActive) {
+			inputUpdate();
+		}
+	});
+	input.addEventListener("focusin", () => {
+		chrome.commands.getAll().then(commands => {
+			commands.forEach(command => {
+				if (!command.name) {
+					return;
+				}
+				commandKeySequences[command.name] = getOrderedShortcut(command.shortcut?.split("+") ?? []);
+			});
+		});
+	});
+	input.addEventListener("focusout", async () => {
+		key = "";
+		Object.keys(modifiers).forEach(mod => {
+			modifiers[mod] = false;
+		});
+		if (getText) {
+			input.value = await getText() ?? "";
+		}
+	});
+};
+
+export const pageInsertWarning = (container: HTMLElement, text: string) => {
 	const warning = document.createElement("div");
 	warning.classList.add("warning");
 	warning.textContent = text;
 	container.appendChild(warning);
 };
 
-const pageFocusScrollContainer = () =>
-	(document.querySelector(".container-panel") as HTMLElement).focus()
-;
+export const pageFocusScrollContainer = () => {
+	(document.querySelector(".container.panel") as HTMLElement).focus();
+};
+
+export const pageReload = () => {
+	location.reload();
+};
+
+export const pageThemeUpdate = async () => {
+	const config = await Config.get({ theme: true });
+	const styleTheme = document.getElementById("style-theme") as HTMLStyleElement;
+	styleTheme.textContent =
+`:root {
+	--hue: ${config.theme.hue};
+	--contrast: ${config.theme.contrast};
+	--lightness: ${config.theme.lightness};
+	--saturation: ${config.theme.saturation};
+	--font-scale: ${config.theme.fontScale};
+}`
+	;
+};
 
 /**
  * 
@@ -189,30 +423,100 @@ const pageFocusScrollContainer = () =>
  * @param additionalStyleText 
  * @param shiftModifierIsRequired 
  */
-const loadPage = (() => {
+export const loadPage = (() => {
 	/**
 	 * Fills and inserts a CSS stylesheet element to style the page.
 	 */
 	const fillAndInsertStylesheet = (additionalStyleText = "") => {
 		const style = document.createElement("style");
-		style.textContent = `
+		style.id = "style";
+		const getHsl = (hue: number, saturation: number, lightness: number, alpha?: number) =>
+			`hsl(${hue === -1 ? "var(--hue)" : hue} calc(${saturation}% * var(--saturation)) calc((((${lightness}% - 50%) * var(--contrast)) + 50%) * var(--lightness))${
+				alpha === undefined ? "" : ` / ${alpha}`
+			})`;
+		const getHslUnthemed = (hue: number, saturation: number, lightness: number, alpha?: number) =>
+			`hsl(${hue === -1 ? "var(--hue)" : hue} ${saturation}% ${lightness}%${
+				alpha === undefined ? "" : ` / ${alpha}`
+			})`;
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		const getColor = (colorDark: string, colorLight?: string) => colorDark;
+		const color = {
+			border: {
+				frame: getColor(getHslUnthemed(-1, 100, 14)),
+				tab: getColor(getHslUnthemed(-1, 30, 32)),
+				tabBottom: getColor(getHslUnthemed(-1, 100, 50)),
+			},
+			bg: {
+				frame: getColor(getHslUnthemed(-1, 100, 6)),
+				panelContainer: getColor(getHsl(-1, 30, 14), getHsl(-1, 20, 38)),
+				sectionGap: getColor(getHsl(-1, 28, 20)),
+				section: getColor(getHsl(-1, 100, 7), getHsl(-1, 20, 50)),
+				alert: {
+					success: getColor(getHsl(120, 50, 24)),
+					pending: getColor(getHsl(0, 50, 24)),
+					failure: getColor(getHsl(60, 50, 24)),
+				},
+				input: {
+					any: getColor(getHsl(-1, 60, 16), getHsl(-1, 20, 46)),
+					hover: getColor(getHsl(-1, 60, 20), getHsl(-1, 20, 48)),
+					active: getColor(getHsl(-1, 60, 14), getHsl(-1, 20, 40)),
+				},
+			},
+			text: {
+				title: getColor(getHsl(-1, 20, 60), getHsl(-1, 20, 7)),
+				label: {
+					any: getColor(getHsl(-1, 0, 72), getHsl(-1, 0, 6)),
+					hover: getColor(getHsl(-1, 0, 66), getHsl(-1, 0, 12)),
+				},
+				note: getColor(getHsl(-1, 6, 54), getHsl(-1, 6, 20)),
+				anchor: {
+					any: getColor(getHslUnthemed(200, 100, 80), "revert"),
+					visited: getColor(getHslUnthemed(260, 100, 80), "revert"),
+					active: getColor(getHslUnthemed(0, 100, 60), "revert"),
+				},
+				input: {
+					any: getColor(getHsl(0, 0, 90), getHsl(0, 0, 0)),
+					disabled: getColor(getHsl(0, 0, 100, 0.6), getHsl(0, 0, 0, 0.6)),
+				},
+			},
+			widget: {
+				collapse: getColor("white", "black"),
+			},
+		};
+		style.textContent =
+`:root {
+	--hue: ${Config.getDefault({ theme: [ "hue" ] })};
+	--contrast: ${Config.getDefault({ theme: [ "contrast" ] })};
+	--lightness: ${Config.getDefault({ theme: [ "lightness" ] })};
+	--saturation: ${Config.getDefault({ theme: [ "saturation" ] })};
+	--font-scale: ${Config.getDefault({ theme: [ "fontScale" ] })};
+}
 body
-	{ height: 100vh; margin: 0; border: 2px solid hsl(300 100% 14%); border-radius: 8px; overflow: hidden;
-	font-family: ubuntu, sans-serif; background: hsl(300 100% 6%); }
+	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
+	font-family: ubuntu, sans-serif; background: ${color.bg.frame}; user-select: none; }
+body, .container.tab .tab
+	{ border-radius: 8px; }
+.container.tab .tab
+	{ padding-block: 1px; text-align: center; text-decoration: none; }
 *
-	{ font-size: 16px; scrollbar-color: hsl(300 50% 40% / 0.5) transparent; }
+	{ font-size: 16px; scrollbar-color: hsl(var(--hue) 50% 40% / 0.5) transparent; }
 ::-webkit-scrollbar
 	{ width: 5px; }
 ::-webkit-scrollbar-thumb
-	{ background: hsl(300 50% 40% / 0.5); }
+	{ background: hsl(var(--hue) 50% 40% / 0.5); }
 ::-webkit-scrollbar-thumb:hover
-	{ background: hsl(300 50% 60% / 0.5); }
+	{ background: hsl(var(--hue) 50% 60% / 0.5); }
 ::-webkit-scrollbar-thumb:active
-	{ background: hsl(300 50% 80% / 0.5); }
+	{ background: hsl(var(--hue) 50% 80% / 0.5); }
 textarea
 	{ resize: none; }
+#frame .hidden
+	{ display: none; }
+.hidden-caret
+	{ caret-color: transparent; }
 #frame
-	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit; background: inherit; }
+	{ display: flex; flex-direction: column; height: 100%; border-radius: inherit;
+	background: inherit; }
 .brand
 	{ display: flex; }
 .brand > *
@@ -223,44 +527,53 @@ textarea
 	{ align-self: center; font-size: 14px; color: hsl(0 0% 80% / 0.5); }
 .brand .logo
 	{ width: 32px; height: 32px; }
-.container-tab
+.container.tab
 	{ display: flex; justify-content: center;
-	border-top: 2px solid hsl(300 30% 32%); border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
-.container-tab > .tab
-	{ flex: 1 1 auto; font-size: 14px; border: none; border-bottom: 2px solid transparent; border-radius: inherit;
-	background: transparent; color: hsl(300 20% 90%); }
-.container-tab > .tab:hover
-	{ background: hsl(300 30% 22%); }
-.container-panel
-	{ flex: 1 1 auto; border-top: 2px ridge hsl(300 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
-	outline: none; background: hsl(300 16% 30%); }
+	border-top: 2px solid ${color.border.tab}; border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+.container.tab .tab
+	{ flex: 1 1 auto; font-size: 14px; padding-inline: 10px; border: none; border-bottom: 2px solid transparent;
+	border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; color: hsl(var(--hue) 20% 90%); }
+.container.tab .tab:hover
+	{ background: hsl(var(--hue) 30% 22%); }
+.container.panel
+	{ flex: 1 1 auto; border-top: 2px ridge hsl(var(--hue) 50% 30%); border-top-left-radius: inherit; overflow-y: auto;
+	outline: none; background: ${color.bg.panelContainer}; }
 @supports (overflow-y: overlay)
-	{ .container-panel { overflow-y: overlay; }; }
-.container-panel > .panel
-	{ display: none; flex-direction: column; gap: 1px;
-	border-radius: inherit; background: hsl(0 0% 100% / 0.26); box-shadow: 0 0 10px; }
-.container-panel > .panel, .brand
+	{ .container.panel { overflow-y: overlay; }; }
+.container.panel > .panel
+	{ display: none; position: relative; flex-direction: column; gap: 1px;
+	border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
+	background: ${color.bg.sectionGap}; box-shadow: 0 0 10px; }
+.container.panel > .panel, .brand
 	{ margin-inline: max(0px, calc((100vw - 700px)/2)); }
 .warning
 	{ padding: 4px; border-radius: 2px; background: hsl(60 39% 71%); color: hsl(0 0% 8%); white-space: break-spaces; }
 /**/
 
-.panel-sites_search_research .container-tab > .tab.panel-sites_search_research,
-.panel-term_lists .container-tab > .tab.panel-term_lists,
-.panel-features .container-tab > .tab.panel-features,
-.panel-general .container-tab > .tab.panel-general
-	{ border-bottom: 2px solid hsl(300 100% 50%); background: hsl(300 30% 32%); }
-.panel-sites_search_research .container-panel > .panel.panel-sites_search_research,
-.panel-term_lists .container-panel > .panel.panel-term_lists,
-.panel-features .container-panel > .panel.panel-features,
-.panel-general .container-panel > .panel.panel-general
+.panel-sites_search_research .container.tab .tab.panel-sites_search_research,
+.panel-term_lists .container.tab .tab.panel-term_lists,
+.panel-features .container.tab .tab.panel-features,
+.panel-search .container.tab .tab.panel-search,
+.panel-theme .container.tab .tab.panel-theme,
+.panel-toolbar .container.tab .tab.panel-toolbar,
+.panel-advanced .container.tab .tab.panel-advanced,
+.panel-general .container.tab .tab.panel-general
+	{ border-bottom: 2px solid ${color.border.tabBottom}; background: ${color.border.tab}; }
+.panel-sites_search_research .container.panel > .panel.panel-sites_search_research,
+.panel-term_lists .container.panel > .panel.panel-term_lists,
+.panel-features .container.panel > .panel.panel-features,
+.panel-search .container.panel > .panel.panel-search,
+.panel-theme .container.panel > .panel.panel-theme,
+.panel-toolbar .container.panel > .panel.panel-toolbar,
+.panel-advanced .container.panel > .panel.panel-advanced,
+.panel-general .container.panel > .panel.panel-general
 	{ display: flex; }
 /**/
 
 .panel .section
-	{ display: flex; flex-direction: column; width: 100%; background: hsl(300 100% 7%); }
+	{ display: flex; flex-direction: column; width: 100%; background: ${color.bg.section}; }
 .panel .section > .title, .panel .section > .title-row, .panel .section > .title-row > .title
-	{ border: none; background: none; text-align: center; font-size: 15px; color: hsl(300 20% 60%); }
+	{ border: none; background: none; text-align: center; font-size: 15px; color: ${color.text.title}; }
 .panel .section > .title-row > .title
 	{ flex: 1; }
 .panel.panel .section > .container
@@ -286,36 +599,52 @@ textarea
 .panel .interaction input[type="text"],
 .panel .interaction textarea,
 .panel .interaction .submitter
-	{ border: none; background: hsl(300 60% 16%); color: hsl(0 0% 90%); font-family: inherit; }
+	{ border: none; background: ${color.bg.input.any}; color: ${color.text.input.any}; font-family: inherit; }
 .panel .interaction input[type="checkbox"]
 	{ align-self: center; }
 .panel .interaction:is(.action, .link, .organizer) > *
 	{ padding-block: 0; }
 .panel .interaction .label, .alert
-	{ color: hsl(300 0% 72%); }
+	{ white-space: pre-line; color: ${color.text.label.any}; }
+.panel .interaction.option .label[title]
+	{ cursor: help; }
+.panel .interaction.option .label[title]:hover::after
+	{ /* content: "(hover for details)"; margin-left: 0.5em; color: hsl(var(--hue) 0% 72% / 0.6); */ }
 .panel .interaction.option label.label[for]:hover
-	{ color: hsl(300 0% 66%); }
+	{ color: ${color.text.label.hover}; }
 .panel .interaction .submitter
 	{ padding-block: 3px; }
 .panel .interaction .submitter:disabled
-	{ pointer-events: none; color: hsl(0 0% 60%); }
+	{ pointer-events: none; color: ${color.text.input.disabled}; }
 .panel .interaction .alert,
 .panel .interaction .submitter
 	{ padding-inline: 2px; }
 .panel .interaction .submitter:hover
-	{ background: hsl(300 60% 20%); }
+	{ background: ${color.bg.input.hover}; }
 .panel .interaction .submitter:active
-	{ background: hsl(300 60% 14%); }
+	{ background: ${color.bg.input.active}; }
 .panel .interaction .note
-	{ font-size: 14px; color: hsl(300 6% 54%); white-space: break-spaces; }
+	{ font-size: 14px; color: ${color.text.note}; white-space: break-spaces; }
+.panel .interaction input.note
+	{ width: 140px; text-align: right; border: none; background: none; }
+.panel .interaction input.note:invalid
+	{ background: hsl(0 50% 50% / 0.5); }
+.panel .interaction.option .note
+	{ align-self: center; }
+.panel .interaction.option .note-container
+	{ display: flex; flex-direction: row-reverse; } /* Make sure any contained floating label is aligned to the right. */
+.panel .interaction .note-container .floating-frame
+	{ position: absolute; padding: 4px; border-radius: 2px; margin-top: 1.5em; background: hsl(60 90% 70%); }
+.panel .interaction .note-container .floating-frame:empty
+	{ display: none; }
 .panel .interaction.option .label
 	{ flex: 1; }
 .panel .interaction.link a
-	{ color: hsl(200 100% 80%); }
+	{ color: ${color.text.anchor.any}; }
 .panel .interaction.link a:visited
-	{ color: hsl(260 100% 80%); }
+	{ color: ${color.text.anchor.visited}; }
 .panel .interaction.link a:active
-	{ color: hsl(0 100% 60%); }
+	{ color: ${color.text.anchor.active}; }
 /**/
 
 #frame .alert
@@ -324,11 +653,11 @@ textarea
 #frame .alert:not(.shown)
 	{ height: 0; margin-block: 0; }
 .alert.success
-	{ background: hsl(120 50% 24%); }
+	{ background: ${color.bg.alert.success}; }
 .alert.failure
-	{ background: hsl(0 50% 24%); }
+	{ background: ${color.bg.alert.pending}; }
 .alert.pending
-	{ background: hsl(60 50% 24%); }
+	{ background: ${color.bg.alert.failure}; }
 /**/
 
 .panel .section > .title, .panel .section > .title-row > .title
@@ -336,7 +665,7 @@ textarea
 .panel.panel-term_lists .section > .container
 	{ padding: 4px; }
 .panel.panel-term_lists .container-terms .term
-	{ display: flex; background: hsl(300 30% 15%); }
+	{ display: flex; background: hsl(var(--hue) 30% 15%); }
 .panel.panel-term_lists .container-terms .term .phrase-input
 	{ width: 120px; background: none; }
 .panel.panel-term_lists .container-terms .term .phrase-input:not(:focus, :hover, :placeholder-shown)
@@ -363,7 +692,7 @@ textarea
 #frame .panel .collapse-toggle:not(:checked) + label[tabindex]::before, #frame .panel .collapse-toggle:not(:checked) + * > label[tabindex]::before
 	{ rotate: 0deg; }
 #frame .panel .collapse-toggle + label[tabindex], #frame .panel .collapse-toggle + * > label[tabindex]
-	{ display: block; align-self: start; background: transparent; color: white; cursor: pointer; width: 1.2em; height: 1.2em; }
+	{ display: block; align-self: start; background: transparent; color: ${color.widget.collapse}; cursor: pointer; width: 1.2em; height: 1.2em; }
 #frame .panel .collapse-toggle:not(:checked) + label ~ *
 	{ display: none; }
 
@@ -371,19 +700,24 @@ textarea
 	{ display: flex; flex-direction: row; }
 #frame .panel .section > .title-row label
 	{ position: absolute; align-self: center; }
-/**/
-		` + additionalStyleText;
+/**/`
+		+ additionalStyleText;
+		pageThemeUpdate();
+		const styleTheme = document.createElement("style");
+		styleTheme.id = "style-theme";
 		document.head.appendChild(style);
+		document.head.appendChild(styleTheme);
 	};
 
-	const classNameIsPanel = (className: string) =>
+	const classNameIsPanel = (className: string) => (
 		className.split("-")[0] === "panel"
-	;
+	);
 
-	const getPanelClassName = (classArray: Array<string>) =>
+	const getPanelClassName = (classArray: Array<string>) => (
 		classArray.find(className => classNameIsPanel(className)) ?? ""
-	;
+	);
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const focusActivePanel = () => {
 		const frame = document.querySelector("#frame") as HTMLElement;
 		const className = getPanelClassName(Array.from(frame.classList));
@@ -398,54 +732,34 @@ textarea
 		}
 	};
 
-	const getTabs = () =>
-		document.querySelectorAll(".container-tab .tab")
-	;
+	const getTabs = () => (
+		document.querySelectorAll(".container.tab .tab")
+	);
 
-	const shiftTabFromTab = (tabCurrent: HTMLButtonElement, toRight: boolean, cycle: boolean) => {
-		const tabNext = ( //
-			tabCurrent[toRight ? "nextElementSibling" : "previousElementSibling"] //
-				?? (cycle //
-					? (tabCurrent.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"] //
-					: null //
-				)
-		) as HTMLButtonElement | null;
-		if (tabNext) {
-			tabNext.focus();
-			tabNext.dispatchEvent(new MouseEvent("mousedown"));
-		}
+	const shiftTabFromTab = (tab: HTMLElement, toRight: boolean, cycle: boolean) => {
+		const tabNext = (() => {
+			const tabNext = tab[toRight ? "nextElementSibling" : "previousElementSibling"] as HTMLElement | null;
+			if (tabNext) {
+				return tabNext;
+			} if (cycle) {
+				return (tab.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"] as HTMLElement;
+			} else {
+				return null;
+			}
+		})();
+		tabNext?.click();
 	};
 
-	const handleTabs = (shiftModifierIsRequired = true) => {
-		const frame = document.querySelector("#frame") as HTMLElement;
-		getTabs().forEach((tab: HTMLButtonElement) => {
-			const onClick = () => {
-				frame.classList.forEach(className => {
-					if (classNameIsPanel(className)) {
-						frame.classList.remove(className);
-					}
-				});
-				frame.classList.add(getPanelClassName(Array.from(tab.classList)));
-			};
-			tab.addEventListener("click", onClick);
-			tab.addEventListener("mousedown", onClick);
-			tab.addEventListener("keydown", event => {
-				if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-					shiftTabFromTab(tab, true, true);
-				} else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-					shiftTabFromTab(tab, false, true);
-				}
-			});
-		});
+	const handleTabs = () => {
+		const frame = document.getElementById("frame") as HTMLElement;
 		document.addEventListener("keydown", event => {
-			if (shiftModifierIsRequired && !event.shiftKey) {
+			if (event.ctrlKey || event.metaKey) {
 				return;
 			}
 			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
-					.querySelector(`.container-tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
+					.querySelector(`.container.tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
 				shiftTabFromTab(currentTab, toRight, cycle);
-				focusActivePanel();
 			};
 			if (event.key === "PageDown") {
 				shiftTab(true, true);
@@ -455,17 +769,24 @@ textarea
 				event.preventDefault();
 			}
 		});
-		(getTabs()[0] as HTMLButtonElement).click();
 	};
 
 	const reload = (panelsInfo: Array<Page.PanelInfo>) => {
 		panelsInfo.forEach(panelInfo => {
 			panelInfo.sections.forEach(sectionInfo => {
 				sectionInfo.interactions.forEach(interactionInfo => {
-					if (interactionInfo.checkbox && interactionInfo.checkbox.autoId) {
-						const checkbox = document.getElementById(interactionInfo.checkbox.autoId) as HTMLInputElement;
-						if (interactionInfo.checkbox.onLoad) {
-							interactionInfo.checkbox.onLoad(checked => checkbox.checked = checked, 0, 0);
+					if (interactionInfo.input && interactionInfo.input.autoId) {
+						const input = document.getElementById(interactionInfo.input.autoId) as HTMLInputElement;
+						if (interactionInfo.input.onLoad) {
+							interactionInfo.input.onLoad(value => {
+								const attribute = typeof value === "boolean" ? "checked" : "value";
+								if (input[attribute] !== value) {
+									input[attribute] = value as never;
+									if (interactionInfo.input?.onChange) {
+										interactionInfo.input?.onChange(value, -1, -1, false);
+									}
+								}
+							}, 0, 0); // TODO make function
 						}
 					}
 					(interactionInfo.submitters ?? []).forEach(submitterInfo => {
@@ -508,10 +829,7 @@ textarea
 	const clearAlert = (alert: HTMLElement) => {
 		alert.classList.remove("shown");
 		setTimeout(() => {
-			if (!alert) {
-				return;
-			}
-			alert.remove();
+			alert?.remove();
 		}, 1000);
 	};
 
@@ -527,7 +845,7 @@ textarea
 			if (!labelInfo) {
 				return;
 			}
-			const [ label, checkboxId ] = (() => {
+			const [ label, inputId ] = (() => {
 				if (labelInfo.textbox) {
 					const label = document.createElement("input");
 					label.type = "text";
@@ -543,11 +861,14 @@ textarea
 					if (labelInfo.getText) {
 						labelInfo.getText(containerIndex).then(text => label.textContent = text);
 					}
-					const checkboxId = `input-${getIdSequential.next().value}`;
-					label.htmlFor = checkboxId;
-					return [ label, checkboxId ];
+					const inputId = `input-${getIdSequential.next().value}`;
+					label.htmlFor = inputId;
+					return [ label, inputId ];
 				}
 			})();
+			if (labelInfo.tooltip) {
+				label.title = labelInfo.tooltip;
+			}
 			label.classList.add("label");
 			const onChangeInternal = () => {
 				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
@@ -558,29 +879,44 @@ textarea
 				labelTextbox.addEventListener("blur", () => onChangeInternal());
 			}
 			container.appendChild(label);
-			return checkboxId;
+			return inputId;
 		};
 
-		const insertCheckbox = (container: HTMLElement, checkboxInfo: Page.InteractionInfo["checkbox"], id = "",
+		const insertInput = (container: HTMLElement, inputInfo: Page.Interaction.InputInfo | undefined, id = "",
 			getObjectIndex: () => number, containerIndex: number) => {
-			if (!checkboxInfo) {
+			if (!inputInfo) {
 				return;
 			}
-			checkboxInfo.autoId = id;
-			const checkbox = document.createElement("input");
-			checkbox.type = "checkbox";
-			checkbox.id = id;
-			checkbox.classList.add("checkbox");
-			container.appendChild(checkbox);
-			if (checkboxInfo.onLoad) {
-				checkboxInfo.onLoad(checked => checkbox.checked = checked, getObjectIndex(), containerIndex);
+			inputInfo.autoId = id;
+			const input = document.createElement("input");
+			input.id = id;
+			switch (inputInfo.getType ? inputInfo.getType() : undefined) {
+			case "checkbox": {
+				input.type = "checkbox";
+				input.classList.add("checkbox");
+				break;
+			} case "textArray":
+			case "textNumber":
+			case "text": {
+				input.type = "text";
+				break;
+			}}
+			container.appendChild(input);
+			if (inputInfo.onLoad) {
+				inputInfo.onLoad(value => {
+					if (typeof value === "boolean") {
+						input.checked = value;
+					} else {
+						input.value = value;
+					}
+				}, getObjectIndex(), containerIndex);
 			}
-			if (checkboxInfo.onToggle) {
-				checkbox.addEventListener("change", () =>
-					checkboxInfo.onToggle ? checkboxInfo.onToggle(checkbox.checked, getObjectIndex(), containerIndex) : undefined
+			if (inputInfo.onChange) {
+				input.addEventListener("change", async () =>
+					inputInfo.onChange ? inputInfo.onChange((!inputInfo.getType || inputInfo.getType() === "checkbox") ? input.checked : (input.value as unknown as boolean), getObjectIndex(), containerIndex, true) : undefined
 				);
 			}
-			return checkbox;
+			return input;
 		};
 
 		const insertTextbox = (container: HTMLElement, textboxInfo: Page.InteractionInfo["textbox"],
@@ -669,13 +1005,13 @@ textarea
 				const getObjectIndex = () => Array.from(container.children).indexOf(objectElement);
 				const insertColumn = (columnInfo: Page.Interaction.ObjectColumnInfo) => {
 					if (columnInfo.rows.length > 1) {
-						const checkboxId = `input-${getIdSequential.next().value}`;
+						const inputId = `input-${getIdSequential.next().value}`;
 						const toggleCheckbox = document.createElement("input");
 						toggleCheckbox.type = "checkbox";
-						toggleCheckbox.id = checkboxId;
+						toggleCheckbox.id = inputId;
 						toggleCheckbox.classList.add("collapse-toggle");
 						const toggleButton = document.createElement("label");
-						toggleButton.htmlFor = checkboxId;
+						toggleButton.htmlFor = inputId;
 						toggleButton.tabIndex = 0;
 						toggleButton.addEventListener("keydown", event => {
 							if (event.key === "Enter") {
@@ -691,8 +1027,8 @@ textarea
 						const row = document.createElement("div");
 						row.classList.add(rowInfo.className);
 						insertTextbox(row, rowInfo.textbox, getObjectIndex, containerIndex, container);
-						const checkboxId = insertLabel(row, rowInfo.label, containerIndex);
-						insertCheckbox(row, rowInfo.checkbox, checkboxId, getObjectIndex, containerIndex);
+						const inputId = insertLabel(row, rowInfo.label, containerIndex);
+						insertInput(row, rowInfo.input, inputId, getObjectIndex, containerIndex);
 						column.appendChild(row);
 					};
 					columnInfo.rows.forEach(rowInfo => insertRow(rowInfo));
@@ -799,7 +1135,7 @@ textarea
 			}
 			container.appendChild(button);
 			let getMessageText = () => "";
-			// eslint-disable-next-line @typescript-eslint/no-empty-function, @typescript-eslint/no-unused-vars
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
 			let allowInputs = (allowed = true) => {};
 			button.addEventListener("click", () => {
 				button.disabled = true;
@@ -831,7 +1167,7 @@ textarea
 								button,
 								-1,
 								errorText,
-								text => text.replace("{status}", error ? error.status.toString() : "-1").replace("{text}", errorText),
+								text => text.replace("{status}", error ? error.status.toString() : "-1").replace("{text}", errorText), //
 							);
 						}
 						button.disabled = false;
@@ -892,28 +1228,53 @@ textarea
 			container.appendChild(list);
 		};
 
-		const insertNote = (container: HTMLElement, noteInfo: Page.InteractionInfo["note"]) => {
+		const insertNote = async (container: HTMLElement, noteInfo: Page.InteractionInfo["note"]) => {
 			if (!noteInfo) {
 				return;
 			}
-			const note = document.createElement("div");
+			const isInput = !!noteInfo.forInput;
+			const noteContainer = document.createElement("div");
+			noteContainer.classList.add("note-container");
+			const note = document.createElement(isInput ? "input" : "div");
+			noteContainer.appendChild(note);
 			note.classList.add("note");
-			note.textContent = noteInfo.text;
-			container.appendChild(note);
+			if (noteInfo.forInput) {
+				const input = note as HTMLInputElement;
+				input.type = "text";
+				const floatingPanel = document.createElement("div");
+				floatingPanel.classList.add("floating-frame");
+				noteContainer.appendChild(floatingPanel);
+				noteInfo.forInput(input, noteInfo.getText, text => {
+					floatingPanel.textContent = text;
+					if (!text) {
+						floatingPanel.replaceChildren();
+					}
+				});
+				input.addEventListener("focusout", () => {
+					floatingPanel.replaceChildren();
+				});
+			}
+			container.appendChild(noteContainer);
+			const text = (noteInfo.getText ? await noteInfo.getText() : undefined) ?? noteInfo.text;
+			if (text !== undefined) {
+				note[isInput ? "value" : "textContent"] = text;
+			} else {
+				note.remove();
+			}
 		};
 
 		const insertInteraction = (container: HTMLElement, interactionInfo: Page.InteractionInfo) => {
 			let index = container.childElementCount;
 			const interaction = document.createElement("div");
 			interaction.classList.add("interaction", interactionInfo.className);
-			const checkboxId = insertLabel(interaction, interactionInfo.label, index);
+			const inputId = insertLabel(interaction, interactionInfo.label, index);
 			const insertBody = () => {
 				insertObjectList(interaction, interactionInfo.object, index);
 				insertAnchor(interaction, interactionInfo.anchor);
 				insertSubmitters(interaction, interactionInfo.submitters, () => index);
 				insertTextbox(interaction, interactionInfo.textbox, () => index, 0);
 				insertNote(interaction, interactionInfo.note);
-				insertCheckbox(interaction, interactionInfo.checkbox, checkboxId, () => index, 0);
+				insertInput(interaction, interactionInfo.input, inputId, () => index, 0);
 			};
 			const labelTextbox = interaction.querySelector("input") as HTMLInputElement;
 			if (interactionInfo.list) {
@@ -964,6 +1325,9 @@ textarea
 		return (sectionInfo: Page.SectionInfo) => {
 			const section = document.createElement("div");
 			section.classList.add("section");
+			if (sectionInfo.className) {
+				section.classList.add(sectionInfo.className);
+			}
 			if (sectionInfo.title) {
 				const title = document.createElement("div");
 				title.classList.add("title");
@@ -1020,7 +1384,7 @@ textarea
 		name.classList.add("name");
 		name.textContent = Manifest.getName();
 		version.classList.add("version");
-		version.textContent = `v${Manifest.getVersion()}`;
+		version.textContent = Manifest.getVersion();
 		logo.classList.add("logo");
 		logo.src = "/icons/mms.svg";
 		brand.classList.add("brand");
@@ -1036,19 +1400,20 @@ textarea
 		document.body.appendChild(frame);
 		frame.appendChild(createBrand());
 		const panelContainer = document.createElement("div");
-		panelContainer.classList.add("container-panel");
+		panelContainer.classList.add("container", "panel");
 		panelContainer.tabIndex = -1;
 		frame.appendChild(panelContainer);
 		const tabContainer = document.createElement("div");
-		tabContainer.classList.add("container-tab");
+		tabContainer.classList.add("container", "tab");
+		tabContainer.title = "Switch tabs with PageDown and PageUp";
 		frame.appendChild(tabContainer);
 		return frame;
 	};
 
-	const insertAndManageContent = (panelsInfo: Array<Page.PanelInfo>, shiftModifierIsRequired = true) => {
+	const insertAndManageContent = (panelsInfo: Array<Page.PanelInfo>) => {
 		document.body.appendChild(createFrameStructure());
-		const panelContainer = document.querySelector(".container-panel") as HTMLElement;
-		const tabContainer = document.querySelector(".container-tab") as HTMLElement;
+		const panelContainer = document.querySelector(".container.panel") as HTMLElement;
+		const tabContainer = document.querySelector(".container.tab") as HTMLElement;
 		panelsInfo.forEach(panelInfo => {
 			const panel = document.createElement("div");
 			panel.classList.add("panel", panelInfo.className);
@@ -1056,23 +1421,30 @@ textarea
 				panel.appendChild(createSection(sectionInfo));
 			});
 			panelContainer.appendChild(panel);
-			const tab = document.createElement("button");
-			tab.type = "button";
-			tab.classList.add("tab", panelInfo.className);
-			tab.textContent = panelInfo.name.text;
-			tabContainer.appendChild(tab);
+			const tabButton = document.createElement("a");
+			tabButton.id = panelInfo.className;
+			tabButton.classList.add("tab", panelInfo.className);
+			tabButton.href = `#${panelInfo.className}`;
+			tabButton.tabIndex = -1;
+			tabButton.addEventListener("focusin", event => {
+				event.preventDefault();
+				tabButton.blur();
+				pageFocusScrollContainer();
+			});
+			tabButton.textContent = panelInfo.name.text;
+			tabContainer.appendChild(tabButton);
 		});
 		// TODO handle multiple tabs correctly
 		// TODO visual indication of letter
 		const lettersTaken: Set<string> = new Set();
-		const info: Array<{ letter: string, checkboxInfo?: Page.InteractionInfo["checkbox"] }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
+		const info: Array<{ letter: string, inputInfo?: Page.Interaction.InputInfo }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
 			sectionInfo.interactions
 				.map(interactionInfo => {
-					if (interactionInfo.checkbox && interactionInfo.label) {
+					if (interactionInfo.input && interactionInfo.label) {
 						const letter = Array.from(interactionInfo.label.text).find(letter => !lettersTaken.has(letter));
 						if (letter) {
 							lettersTaken.add(letter);
-							return { letter, checkboxInfo: interactionInfo.checkbox };
+							return { letter, inputInfo: interactionInfo.input };
 						}
 					}
 					return { letter: "" };
@@ -1087,37 +1459,76 @@ textarea
 				if (info.letter !== event.key) {
 					return false;
 				}
-				if (info.checkboxInfo && info.checkboxInfo.autoId) {
-					const checkbox = document.getElementById(info.checkboxInfo.autoId) as HTMLInputElement;
-					checkbox.focus();
-					checkbox.click();
+				if (info.inputInfo && info.inputInfo.autoId) {
+					const input = document.getElementById(info.inputInfo.autoId) as HTMLInputElement;
+					input.focus();
 					event.preventDefault();
 				}
 				return true;
 			});
 		});
-		handleTabs(shiftModifierIsRequired);
+		handleTabs();
 		chrome.storage.onChanged.addListener(() => reload(panelsInfo));
 		chrome.tabs.onActivated.addListener(() => reload(panelsInfo));
 	};
 
-	return (panelsInfo: Array<Page.PanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
-		chrome.tabs.query = (compatibility.browser === "chromium")
-			? chrome.tabs.query
-			: browser.tabs.query as typeof chrome.tabs.query;
+	return (panelsInfo: Array<Page.PanelInfo>, info: {
+		titleText: string
+		tabsFill: boolean
+		borderShow: boolean
+		brandShow: boolean
+		borderRadiusUse?: boolean
+		height?: number
+		width?: number
+	}) => {
 		const viewportMeta = document.createElement("meta");
 		viewportMeta.name = "viewport";
 		viewportMeta.content = "width=device-width, initial-scale=1";
 		document.head.appendChild(viewportMeta);
-		fillAndInsertStylesheet(additionalStyleText);
-		insertAndManageContent(panelsInfo, shiftModifierIsRequired);
+		const title = document.createElement("title");
+		title.text = `${info.titleText} - ${Manifest.getName()}`;
+		document.head.appendChild(title);
+		const iconLink = document.createElement("link");
+		iconLink.rel = "icon";
+		iconLink.href = chrome.runtime.getURL("/icons/mms.svg");
+		document.head.appendChild(iconLink);
+		fillAndInsertStylesheet(`
+body {
+	overflow-y: auto;
+	min-height: ${info.height ? `${info.height}px` : "unset"};
+	width: ${info.width ? `${info.width}px` : "unset"};
+	${info.borderShow ? "" : "border: none;"}
+	${info.borderRadiusUse !== false ? "" : "border-radius: 0;"}
+}
+.container.tab .tab {
+	${info.tabsFill ? "" : "flex: unset;"}
+}
+` + (info.brandShow ? "" : `
+.brand {
+	display: none;
+}
+.container.panel {
+	border-top: none;
+}
+		`));
+		insertAndManageContent(panelsInfo);
 		pageFocusScrollContainer();
+		const chooseTab = () => {
+			const hash = (new URL(location.href)).hash;
+			const tabButton = hash.length ? document.getElementById(hash.slice(1)) : getTabs()[0];
+			if (tabButton) {
+				const frame = document.getElementById("frame") as HTMLElement;
+				frame.classList.forEach(className => {
+					if (classNameIsPanel(className)) {
+						frame.classList.remove(className);
+					}
+				});
+				frame.classList.add(tabButton.id);
+			}
+		};
+		chooseTab();
+		addEventListener("hashchange", () => chooseTab());
 	};
 })();
 
-export {
-	type Page, type FormField,
-	loadPage,
-	pageInsertWarning,
-	sendProblemReport,
-};
+export type { Page, FormField };

@@ -1,6 +1,11 @@
+//import { isWindowInFrame } from "/dist/modules/page/build.mjs";
 import type { StoreImmediate, StoreList, ConfigValues, ConfigKey } from "/dist/modules/privileged/storage.mjs";
 import { StoreType, StoreListInterface, Config } from "/dist/modules/privileged/storage.mjs";
 import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
+
+const isWindowInFrame = () => (
+	new URL(location.href).searchParams.get("frame") !== null
+);
 
 type OptionsInfo = Array<{
 	label: string
@@ -723,8 +728,6 @@ PAINT
 			},
 		},
 	];
-
-	const isWindowInFrame = () => true;
 
 	return () => {
 		// TODO use storage.onChanged to refresh rather than manually updating page

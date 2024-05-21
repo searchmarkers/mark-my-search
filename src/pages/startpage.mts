@@ -71,13 +71,16 @@ You can always activate ${Manifest.getName()} by opening its popup (from the 'ex
 							label: {
 								text: "Should online searches be highlighted automatically?",
 							},
-							checkbox: {
+							input: {
+								getType: () => "checkbox",
 								onLoad: async setChecked => {
 									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
 									setChecked(config.autoFindOptions.enabled);
 								},
-								onToggle: checked => {
-									Config.set({ autoFindOptions: { enabled: checked } });
+								onChange: async checked => {
+									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									config.autoFindOptions.enabled = checked;
+									await Config.set(config);
 								},
 							},
 						},
@@ -154,7 +157,7 @@ You can always activate ${Manifest.getName()} by opening its popup (from the 'ex
 						{
 							className: "action",
 							label: {
-								text: "Matching options affect how strictly Mark My Search looks for a keyword.",
+								text: `Matching options affect how strictly ${Manifest.getName()} looks for a keyword.`,
 							},
 						},
 						{
@@ -241,7 +244,7 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 								text: "Settings - open the popup at any time to quickly change highlighting options.",
 							},
 							note: {
-								text: "Click the extensions icon and pin Mark My Search to the toolbar.",
+								text: `Click the extensions icon and pin ${Manifest.getName()} to the toolbar.`,
 							},
 						},
 						{
@@ -278,15 +281,12 @@ or assign a shortcut like [Alt+Shift+1] for individual terms.`,
 	];
 
 	return () => {
-		const title = document.createElement("title");
-		title.text = `${Manifest.getName()} - Start`;
-		document.head.appendChild(title);
-		loadPage(panelsInfo, `
-body
-	{ border: unset; }
-.container-tab > .tab
-	{ flex: unset; padding-inline: 10px; }
-		`);
+		loadPage(panelsInfo, {
+			titleText: "Start",
+			tabsFill: false,
+			borderShow: false,
+			brandShow: true,
+		});
 	};
 })();
 

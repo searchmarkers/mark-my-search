@@ -1,13 +1,22 @@
+import * as Manifest from "/dist/modules/manifest.mjs";
+import {
+	type Page, loadPage, pageReload, pageThemeUpdate,
+	isWindowInFrame, sendProblemReport, getOrderedShortcut, forInput,
+} from "/dist/modules/page/build.mjs";
+import type { StoreImmediate, StoreList, ConfigValues, ConfigKey } from "/dist/modules/privileged/storage.mjs";
+import { StoreType, StoreListInterface, Config } from "/dist/modules/privileged/storage.mjs";
+import { compatibility } from "/dist/modules/common.mjs";
+
 const getControlOptionTemp = <ConfigK extends ConfigKey>(
 	labelInfo: { text: string, tooltip?: string },
 	configKey: ConfigK,
 	key: keyof ConfigValues[ConfigK],
-	inputType: InputType,
+	inputType: Page.InputType,
 	details?: {
 		onChange?: () => unknown
 		command?: { name?: string, shortcut?: string }
 	}
-): PageInteractionInfo => ({
+): Page.InteractionInfo => ({
 		className: "option",
 		label: {
 			text: labelInfo.text,
@@ -20,16 +29,16 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 					(await chrome.commands.getAll())
 						.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
 				).join("+") : undefined,
-			forInput: details?.command?.name && (chrome.commands["update"] || (this["browser"] && browser.commands["update"]))
+			forInput: details?.command?.name && (chrome.commands["update"] || (globalThis["browser"] && browser.commands["update"]))
 				? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
 				: undefined,
 		},
 		input: {
 			getType: () => inputType,
 			onLoad: async setValue => {
-				const config = await configGet({ [configKey]: [ key ] });
+				const config = await Config.get({ [configKey]: [ key ] });
 				const value = config[configKey][key];
-				switch (configGetType({ [configKey]: [ key ] })[configKey][key]) {
+				switch (Config.getType({ [configKey]: [ key ] })[configKey][key]) {
 				case StoreType.IMMEDIATE: {
 					setValue(value as StoreImmediate<unknown> as unknown as boolean);
 					break;
@@ -40,23 +49,23 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 			},
 			onChange: async (value, objectIndex, containerIndex, store) => {
 				if (store) {
-					const config = await configGet({ [configKey]: [ key ] });
-					const valueTransformed = (inputType === InputType.TEXT_ARRAY)
+					const config = await Config.get({ [configKey]: [ key ] });
+					const valueTransformed = (inputType === "textArray")
 						? (value as unknown as string).split(",")
-						: inputType === InputType.TEXT_NUMBER
+						: inputType === "textNumber"
 							? parseFloat(value as unknown as string)
 							: value;
-					switch (configGetType({ [configKey]: [ key ] })[configKey][key]) {
+					switch (Config.getType({ [configKey]: [ key ] })[configKey][key]) {
 					case StoreType.IMMEDIATE: {
 						(config[configKey][key] as unknown) = valueTransformed as StoreImmediate<unknown>;
 						break;
 					} case StoreType.LIST: {
-						const storeList = configGetDefault({ [configKey]: [ key ] })[configKey][key] as StoreListInterface<unknown>;
+						const storeList = Config.getDefault({ [configKey]: [ key ] })[configKey][key] as StoreListInterface<unknown>;
 						storeList.setList(valueTransformed as Array<unknown>);
 						(config[configKey][key] as unknown) = storeList;
 						break;
 					}}
-					await configSet(config);
+					await Config.set(config);
 				}
 				if (details?.onChange) {
 					details.onChange();
@@ -74,7 +83,7 @@ const loadOptionsNew = (() => {
 	/**
 	 * Details of the page's panels and their various components.
 	 */
-	const panelsInfo: Array<PagePanelInfo> = [
+	const panelsInfo: Array<Page.PanelInfo> = [
 		{
 			className: "panel-general",
 			name: {
@@ -90,13 +99,13 @@ const loadOptionsNew = (() => {
 							{ text: "Color hues to cycle through" },
 							"highlightLook",
 							"hues",
-							InputType.TEXT_ARRAY,
+							"textArray",
 						),
 						{
 							className: "option",
 							label: {
 								text: "Accessibility options",
-								tooltip: `${getName()} lacks visibility and screen reader options.\nI have a few plans, but need ideas!`,
+								tooltip: `${Manifest.getName()} lacks visibility and screen reader options.\nI have a few plans, but need ideas!`,
 							},
 						},
 					],
@@ -118,17 +127,17 @@ const loadOptionsNew = (() => {
 								},
 								message: {
 									rows: 2,
-									placeholder: `How can I make ${getName()} more usable for you?`,
+									placeholder: `How can I make ${Manifest.getName()} more usable for you?`,
 									required: true,
 								},
 								alerts: {
-									[PageAlertType.SUCCESS]: {
+									success: {
 										text: "Success",
 									},
-									[PageAlertType.FAILURE]: {
+									failure: {
 										text: "Status {status}: {text}",
 									},
-									[PageAlertType.PENDING]: {
+									pending: {
 										text: "Pending, do not close popup",
 									},
 								},
@@ -152,19 +161,19 @@ const loadOptionsNew = (() => {
 							},
 							"showHighlights",
 							"default",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Always show on search pages" },
 							"showHighlights",
 							"overrideSearchPages",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Always show on other pages" },
 							"showHighlights",
 							"overrideResearchPages",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 					],
 				},
@@ -179,12 +188,12 @@ const loadOptionsNew = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										configGet({ urlFilters: [ "noPageModify" ] }).then(config => //
+										Config.get({ urlFilters: [ "noPageModify" ] }).then(config => //
 											config.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										configGet({ urlFilters: [ "noPageModify" ] }).then(config => {
+										Config.get({ urlFilters: [ "noPageModify" ] }).then(config => {
 											config.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -192,7 +201,7 @@ const loadOptionsNew = (() => {
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											configSet(config);
+											Config.set(config);
 										})
 									,
 								},
@@ -231,14 +240,14 @@ const loadOptionsNew = (() => {
 							{ text: "Edition" },
 							"theme",
 							"edition",
-							InputType.TEXT,
+							"text",
 							{ onChange: pageReload },
 						),
 						getControlOptionTemp(
 							{ text: "Variant" },
 							"theme",
 							"variant",
-							InputType.TEXT,
+							"text",
 							{ onChange: pageReload },
 						),
 					],
@@ -252,28 +261,28 @@ const loadOptionsNew = (() => {
 							{ text: "Hue" },
 							"theme",
 							"hue",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Contrast" },
 							"theme",
 							"contrast",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Lightness" },
 							"theme",
 							"lightness",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 							{ onChange: pageThemeUpdate },
 						),
 						getControlOptionTemp(
 							{ text: "Saturation" },
 							"theme",
 							"saturation",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 							{ onChange: pageThemeUpdate },
 						),
 					],
@@ -287,7 +296,7 @@ const loadOptionsNew = (() => {
 							{ text: "Font scale" },
 							"theme",
 							"fontScale",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 							{ onChange: pageThemeUpdate },
 						),
 					],
@@ -309,25 +318,25 @@ const loadOptionsNew = (() => {
 							{ text: "Font size" },
 							"barLook",
 							"fontSize",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of keyword buttons" },
 							"barLook",
 							"opacityTerm",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 						),
 						getControlOptionTemp(
 							{ text: "Opacity of control buttons" },
 							"barLook",
 							"opacityControl",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 						),
 						getControlOptionTemp(
 							{ text: "Rounded corners" },
 							"barLook",
 							"borderRadius",
-							InputType.TEXT_NUMBER,
+							"textNumber",
 						),
 					],
 				},
@@ -340,34 +349,34 @@ const loadOptionsNew = (() => {
 							{ text: "\"Deactivate in the current tab\"" },
 							"barControlsShown",
 							"disableTabResearch",
-							InputType.CHECKBOX,
+							"checkbox",
 							{ command: { name: "toggle-research-tab" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Web Search with these keywords\"" },
 							"barControlsShown",
 							"performSearch",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "\"Show/hide highlights\"" },
 							"barControlsShown",
 							"toggleHighlights",
-							InputType.CHECKBOX,
+							"checkbox",
 							{ command: { name: "toggle-highlights" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Add a new keyword\"" },
 							"barControlsShown",
 							"appendTerm",
-							InputType.CHECKBOX,
+							"checkbox",
 							{ command: { name: "focus-term-append" } },
 						),
 						getControlOptionTemp(
 							{ text: "\"Replace keywords with detected search\"" },
 							"barControlsShown",
 							"replaceTerms",
-							InputType.CHECKBOX,
+							"checkbox",
 							{ command: { name: "terms-replace" } },
 						),
 					],
@@ -381,13 +390,13 @@ const loadOptionsNew = (() => {
 							{ text: "Show edit pen" },
 							"barLook",
 							"showEditIcon",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Show options button" },
 							"barLook",
 							"showRevealIcon",
-							InputType.CHECKBOX,
+							"checkbox",
 							{ command: { shortcut: "Shift+Space" } }, // Hardcoded in the content script.
 						),
 					],
@@ -401,13 +410,13 @@ const loadOptionsNew = (() => {
 							{ text: "Collapse when a search is detected" },
 							"barCollapse",
 							"fromSearch",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Collapse when a Keyword List applies to the page" },
 							"barCollapse",
 							"fromTermListAuto",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 					],
 				},
@@ -428,13 +437,13 @@ const loadOptionsNew = (() => {
 							{ text: "URL parameters containing keywords" },
 							"autoFindOptions",
 							"searchParams",
-							InputType.TEXT_ARRAY,
+							"textArray",
 						),
 						getControlOptionTemp(
 							{ text: "Keywords to exclude" },
 							"autoFindOptions",
 							"stoplist",
-							InputType.TEXT_ARRAY,
+							"textArray",
 						),
 					],
 				},
@@ -449,12 +458,12 @@ const loadOptionsNew = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										configGet({ urlFilters: [ "nonSearch" ] }).then(config => //
+										Config.get({ urlFilters: [ "nonSearch" ] }).then(config => //
 											config.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										configGet({ urlFilters: [ "nonSearch" ] }).then(config => {
+										Config.get({ urlFilters: [ "nonSearch" ] }).then(config => {
 											config.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -462,7 +471,7 @@ const loadOptionsNew = (() => {
 													pathname: value.slice(pathnameStart),
 												};
 											});
-											configSet(config);
+											Config.set(config);
 										})
 									,
 								},
@@ -517,7 +526,7 @@ Once fixed, they will be accessible here too.`
 							{
 								text: "Use CLASSIC highlighting",
 								tooltip:
-`${getName()} has two highlighting methods. \
+`${Manifest.getName()} has two highlighting methods. \
 CLASSIC is a powerful variant of the model used by traditional highlighter extensions. \
 PAINT is an alternate model invented for the Mark My Search browser extension.
 
@@ -537,7 +546,7 @@ PAINT
 							},
 							"highlighter",
 							"engine",
-							InputType.TEXT,
+							"text",
 						),
 						/*getControlOptionTemp(
 							{
@@ -556,7 +565,7 @@ PAINT
 							},
 							"highlightMethod",
 							"paintUseExperimental",
-							InputType.CHECKBOX,
+							"checkbox",
 						),*/
 					],
 				},
@@ -569,31 +578,31 @@ PAINT
 							{ text: "Case sensitivity" },
 							"matchModeDefaults",
 							"case",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Word stemming" },
 							"matchModeDefaults",
 							"stem",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Whole word matching" },
 							"matchModeDefaults",
 							"whole",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Diacritics sensitivity" },
 							"matchModeDefaults",
 							"diacritics",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 						getControlOptionTemp(
 							{ text: "Custom regular expression (regex)" },
 							"matchModeDefaults",
 							"regex",
-							InputType.CHECKBOX,
+							"checkbox",
 						),
 					],
 				},
@@ -609,7 +618,7 @@ PAINT
 			brandShow: !isWindowInFrame(),
 			borderRadiusUse: !isWindowInFrame(),
 			height: isWindowInFrame() ? 570 : undefined,
-			width: isWindowInFrame() && useChromeAPI() ? 650 : undefined,
+			width: (isWindowInFrame() && compatibility.browser === "chromium") ? 650 : undefined,
 		});
 	};
 })();

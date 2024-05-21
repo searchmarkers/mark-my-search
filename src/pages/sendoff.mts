@@ -1,4 +1,3 @@
-import * as Manifest from "/dist/modules/manifest.mjs";
 import { type Page, loadPage, sendProblemReport } from "/dist/modules/page/build.mjs";
 
 /**
@@ -42,42 +41,42 @@ const loadSendoff = (() => {
 										label: {
 											text: "Not what I was looking for",
 										},
-										checkbox: {},
+										input: {},
 									},
 									{
 										className: "option",
 										label: {
 											text: "Highlighting doesn't show up",
 										},
-										checkbox: {},
+										input: {},
 									},
 									{
 										className: "option",
 										label: {
 											text: "Breaks or slows down pages",
 										},
-										checkbox: {},
+										input: {},
 									},
 									{
 										className: "option",
 										label: {
 											text: "Toolbar gets in the way",
 										},
-										checkbox: {},
+										input: {},
 									},
 									{
 										className: "option",
 										label: {
 											text: "Highlighting is sometimes incomplete",
 										},
-										checkbox: {},
+										input: {},
 									},
 									{
 										className: "option",
 										label: {
 											text: "Highlighting is ugly or overwhelming",
 										},
-										checkbox: {},
+										input: {},
 									},
 									{
 										className: "option",
@@ -87,7 +86,7 @@ const loadSendoff = (() => {
 										note: {
 											text: "Turn off \"Detect search engines\" in the popup",
 										},
-										checkbox: {},
+										input: {},
 									},
 								],
 								message: {
@@ -129,15 +128,12 @@ const loadSendoff = (() => {
 	];
 
 	return () => {
-		const title = document.createElement("title");
-		title.text = `${Manifest.getName()} - Uninstalled`;
-		document.head.appendChild(title);
-		loadPage(panelsInfo, `
-body
-	{ border: unset; }
-.container-tab > .tab
-	{ flex: unset; padding-inline: 10px; }
-		`);
+		loadPage(panelsInfo, {
+			titleText: "Uninstalled",
+			tabsFill: false,
+			borderShow: false,
+			brandShow: true,
+		});
 	};
 })();
 
