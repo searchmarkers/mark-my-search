@@ -1,6 +1,6 @@
 chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chrome.storage;
 
-enum StorageContext {
+enum ConfigContext {
 	SCHEMA,
 	STORE,
 	INTERFACE,
@@ -19,34 +19,34 @@ enum StoreType {
 	LIST,
 }
 
-type StoreImmediate<T, Context = StorageContext.INTERFACE>
-= Context extends StorageContext.SCHEMA ? Readonly<{
+type StoreImmediate<T, Context = ConfigContext.INTERFACE>
+= Context extends ConfigContext.SCHEMA ? Readonly<{
 	type: StoreType.IMMEDIATE
 	defaultValue: T
 	sync?: true
 }>
-: Context extends StorageContext.STORE ? T
+: Context extends ConfigContext.STORE ? T
 : T
 
-type StoreList<T, Context = StorageContext.INTERFACE>
-= Context extends StorageContext.SCHEMA ? Readonly<{
+type StoreList<T, Context = ConfigContext.INTERFACE>
+= Context extends ConfigContext.SCHEMA ? Readonly<{
 	type: StoreType.LIST
 	baseList: Array<T>
 	sync?: true
 }>
-: Context extends StorageContext.STORE ? {
+: Context extends ConfigContext.STORE ? {
 	userList: Array<T>,
 	baseExcludeList: Array<T>,
 	baseExcludeAll: boolean,
 }
 : StoreListInterface<T>
 
-type Store<Context = StorageContext.INTERFACE> =
+type Store<Context = ConfigContext.INTERFACE> =
 	| StoreImmediate<unknown, Context>
 	| StoreList<unknown, Context>
 ;
 
-type StoreGroup<Context = StorageContext.INTERFACE> = Record<string, Store<Context>>
+type StoreGroup<Context = ConfigContext.INTERFACE> = Record<string, Store<Context>>
 
 class StoreListInterface<T> {
 	readonly baseList: Array<T>;
@@ -82,7 +82,7 @@ class StoreListInterface<T> {
 	}
 }
 
-type ConfigBarControlsShown<Context = StorageContext.INTERFACE> = {
+type ConfigBarControlsShown<Context = ConfigContext.INTERFACE> = {
 	toggleBarCollapsed: StoreImmediate<boolean, Context>
 	disableTabResearch: StoreImmediate<boolean, Context>
 	performSearch: StoreImmediate<boolean, Context>
@@ -90,7 +90,7 @@ type ConfigBarControlsShown<Context = StorageContext.INTERFACE> = {
 	appendTerm: StoreImmediate<boolean, Context>
 	replaceTerms: StoreImmediate<boolean, Context>
 }
-type ConfigBarLook<Context = StorageContext.INTERFACE> = {
+type ConfigBarLook<Context = ConfigContext.INTERFACE> = {
 	showEditIcon: StoreImmediate<boolean, Context>
 	showRevealIcon: StoreImmediate<boolean, Context>
 	fontSize: StoreImmediate<string, Context>
@@ -98,20 +98,20 @@ type ConfigBarLook<Context = StorageContext.INTERFACE> = {
 	opacityTerm: StoreImmediate<number, Context>
 	borderRadius: StoreImmediate<string, Context>
 }
-type ConfigHighlightLook<Context = StorageContext.INTERFACE> = {
+type ConfigHighlightLook<Context = ConfigContext.INTERFACE> = {
 	hues: StoreImmediate<Array<number>, Context>
 }
-type ConfigHighlighter<Context = StorageContext.INTERFACE> = {
+type ConfigHighlighter<Context = ConfigContext.INTERFACE> = {
 	engine: StoreImmediate<Engine, Context>
 	paintEngine: StoreImmediate<PaintEngineConfig, Context>
 }
-type ConfigURLFilters<Context = StorageContext.INTERFACE> = {
+type ConfigURLFilters<Context = ConfigContext.INTERFACE> = {
 	noPageModify: StoreImmediate<URLFilter, Context>
 	noHighlight: StoreImmediate<URLFilter, Context>
 	nonSearch: StoreImmediate<URLFilter, Context>
 }
 
-type ConfigValues<Context = StorageContext.INTERFACE> = {
+type ConfigValues<Context = ConfigContext.INTERFACE> = {
 	theme: {
 		edition: StoreImmediate<ThemeEdition, Context>
 		variant: StoreImmediate<ThemeVariant, Context>
@@ -192,7 +192,7 @@ interface ResearchInstance {
  * The default options to be used for items missing from storage, or to which items may be reset.
  * Set to sensible values for a generic first-time user of the extension.
  */
-const configSchema: ConfigValues<StorageContext.SCHEMA> = {
+const configSchema: ConfigValues<ConfigContext.SCHEMA> = {
 	theme: {
 		edition: {
 			type: StoreType.IMMEDIATE,
@@ -504,15 +504,15 @@ const configSet = async (config: Partial<Partial2<ConfigValues>>) => {
 	const storageAreaValues: Record<StorageAreaName, Record<string, unknown>> = { local: {}, sync: {} };
 	for (const [ configKey, group ] of Object.entries(config)) {
 		for (const [ groupKey, value ] of Object.entries(group)) {
-			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 			const storageValues = valueSchema.sync ? storageAreaValues.sync : storageAreaValues.local;
 			const key = configKey + "." + groupKey;
 			switch (valueSchema.type) {
 			case StoreType.IMMEDIATE: {
-				(storageValues[key] as StoreImmediate<unknown, StorageContext.STORE>) = value as StoreImmediate<unknown>;
+				(storageValues[key] as StoreImmediate<unknown, ConfigContext.STORE>) = value as StoreImmediate<unknown>;
 				break;
 			} case StoreType.LIST: {
-				(storageValues[key] as StoreList<unknown, StorageContext.STORE>) = {
+				(storageValues[key] as StoreList<unknown, ConfigContext.STORE>) = {
 					userList: (value as StoreList<unknown>).userList,
 					baseExcludeList: (value as StoreList<unknown>).baseExcludeList,
 					baseExcludeAll: (value as StoreList<unknown>).baseExcludeAll,
@@ -537,7 +537,7 @@ const configUnset = async <ConfigK extends ConfigKey>(keyObject: ConfigKeyObject
 	for (const [ configKey, groupInfo ] of keyObjectEntries) {
 		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 		for (const groupKey of groupKeys) {
-			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 			const storageKeys = valueSchema.sync ? storageAreaKeys.sync : storageAreaKeys.local;
 			storageKeys.push(configKey + "." + groupKey);
 		}
@@ -559,7 +559,7 @@ const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
 			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {
-				const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				storageAreaKeys[valueSchema.sync ? "sync" : "local"].push(configKey + "." + groupKey);
 			}
 		}
@@ -579,7 +579,7 @@ const configGet = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<
 				pendingCount++;
 				(config[configKey] as unknown) ??= {} as StoreGroup;
 				const key = configKey + "." + groupKey;
-				const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				const value = (await (valueSchema.sync ? storageAreaPromises.sync : storageAreaPromises.local))[key];
 				switch (valueSchema.type) {
 				case StoreType.IMMEDIATE: {
@@ -623,7 +623,7 @@ const configGetDefault = <ConfigK extends ConfigKey, KeyObject extends ConfigKey
 		(config[configKey] as unknown) = {} as StoreGroup;
 		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 		for (const groupKey of groupKeys) {
-			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 			switch (valueSchema.type) {
 			case StoreType.IMMEDIATE: {
 				(config[configKey][groupKey] as StoreImmediate<unknown>) = valueSchema.defaultValue;
@@ -646,7 +646,7 @@ const configGetType = <ConfigK extends ConfigKey, KeyObject extends ConfigKeyObj
 		(configTypes[configKey] as unknown) = {} as StoreGroup;
 		const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 		for (const groupKey of groupKeys) {
-			const valueSchema: Store<StorageContext.SCHEMA> = configSchema[configKey][groupKey];
+			const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 			configTypes[configKey][groupKey] = valueSchema.type;
 		}
 	}
@@ -684,9 +684,10 @@ const KEYS = {
 
 const SPECIAL_KEYS_SET: ReadonlySet<string> = new Set(Object.values(KEYS.special));
 
-type JsonObject = Record<string | number | symbol, unknown>
+type StorageKey = string
+type StorageObject = Record<StorageKey, unknown>
 
-const migrations: Record<number, Record<number, (storage: JsonObject, areaName: StorageAreaName) => JsonObject>> = {
+const migrations: Record<number, Record<number, (storage: StorageObject, areaName: StorageAreaName) => StorageObject>> = {
 	1: {
 		2: (old, areaName) => {
 			// TODO initialize with all top-level keys and use only Partial2
@@ -746,7 +747,7 @@ const storageResetArea = async (
 	areaName: StorageAreaName,
 	reason: string,
 	initialWarning?: boolean,
-): Promise<JsonObject> => {
+): Promise<StorageObject> => {
 	if (initialWarning) {
 		assert(false, "storage-initialize (single-area) reset begin", reason, { areaName });
 	} else {
@@ -762,20 +763,26 @@ const storageResetArea = async (
 		[KEYS.special.old_timestamp]: Date.now(),
 	});
 	log("storage-initialize (single-area) reset complete", "old contents have been moved and the area has been prepared",
-		{ areaName, schemaVersion: SCHEMA_VERSION, SPECIAL_KEYS: Object.values(KEYS.special) }
+		{ areaName, schemaVersion: SCHEMA_VERSION, specialKeys: Object.values(KEYS.special) }
 	);
 	return storage;
 };
 
+const storageCleanAreaOf = async (areaName: StorageAreaName, keysToRemove: Array<StorageKey>) => {
+	log("storage-initialize (single-area) cleanup begin", "", { areaName });
+	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
+	await storageArea.remove(keysToRemove.filter(key => !SPECIAL_KEYS_SET.has(key)));
+	log("storage-initialize (single-area) cleanup complete", "", { areaName });
+};
+
 const storageMigrateArea = async (areaName: StorageAreaName, schemaVersion: number) => {
 	log("storage-initialize (single-area) migration begin", "", { areaName });
-	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
 	const storage = await storageResetArea(areaName, "reset required before migration");
-	await storageArea.remove(Object.keys(storage).filter(key => !SPECIAL_KEYS_SET.has(key)));
+	await storageCleanAreaOf(areaName, Object.keys(storage));
 	const config = migrations[schemaVersion][SCHEMA_VERSION](storage, areaName);
 	await configSet(config);
 	log("storage-initialize (single-area) migration complete", "old contents have been migrated",
-		{ areaName, schemaVersion: SCHEMA_VERSION, SPECIAL_KEYS: Object.values(KEYS.special) }
+		{ areaName, schemaVersion: SCHEMA_VERSION, specialKeys: Object.values(KEYS.special) }
 	);
 };
 
@@ -795,7 +802,8 @@ const storageInitializeArea = async (areaName: StorageAreaName) => {
 	if (migrations[schemaVersion] && migrations[schemaVersion][SCHEMA_VERSION]) {
 		await storageMigrateArea(areaName, schemaVersion);
 	} else {
-		await storageResetArea(areaName, "no appropriate migration found", true);
+		const storage = await storageResetArea(areaName, "no appropriate migration found", true);
+		await storageCleanAreaOf(areaName, Object.keys(storage));
 	}
 };
 
