@@ -79,8 +79,8 @@ interface ControlsInfo {
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: MatchTerms
-	[StorageSync.BAR_CONTROLS_SHOWN]: StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
-	[StorageSync.BAR_LOOK]: StorageSyncValues[StorageSync.BAR_LOOK]
+	barControlsShown: ConfigBarControlsShown
+	barLook: ConfigBarLook
 	matchMode: MatchMode
 }
 
@@ -209,7 +209,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: 
 		&.${EleClass.MATCH_REGEX} .${EleClass.CONTROL_CONTENT} {
 			font-weight: bold;
 		}
-		&.${EleClass.MATCH_DIACRITICS} .${EleClass.CONTROL_CONTENT} {
+		&:not(.${EleClass.MATCH_DIACRITICS}) .${EleClass.CONTROL_CONTENT} {
 			font-style: italic;
 		}
 	}
@@ -239,7 +239,7 @@ const fillStylesheetContent = (terms: MatchTerms, hues: TermHues, controlsInfo: 
 		&:not(.${EleClass.MATCH_STEM}) .${EleClass.CONTROL_CONTENT} {
 			border-bottom: 3px solid hsl(0 0% 38%);
 		}
-		&.${EleClass.MATCH_DIACRITICS} .${EleClass.CONTROL_CONTENT} {
+		&:not(.${EleClass.MATCH_DIACRITICS}) .${EleClass.CONTROL_CONTENT} {
 			border-left: 3px dashed black;
 		}
 	}
@@ -549,7 +549,7 @@ Methods for inserting, updating, or removing parts of the toolbar, as well as dr
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Toolbar {
-	export type ControlButtonName = keyof StorageSyncValues[StorageSync.BAR_CONTROLS_SHOWN]
+	export type ControlButtonName = keyof ConfigValues["barControlsShown"]
 	type ControlButtonInfo = {
 		controlClasses?: Array<EleClass>
 		buttonClasses?: Array<EleClass>
@@ -990,7 +990,7 @@ namespace Toolbar {
 				{ matchType: "case", title: "Case Sensitive" },
 				{ matchType: "whole", title: "Whole Word" },
 				{ matchType: "stem", title: "Stem Word" },
-				{ matchType: "diacritics", title: "Diacritics" },
+				{ matchType: "diacritics", title: "Diacritics Sensitive" },
 				{ matchType: "regex", title: "Regex Mode" },
 			];
 			return options.map(({ matchType, title }) => {
@@ -3972,13 +3972,13 @@ const getTermsFromSelection = () => {
 			if (message.getDetails) {
 				sendResponse(getDetails(message.getDetails));
 			}
-			if (message.setHighlighter !== undefined) {
+			if (message.highlighter !== undefined) {
 				highlighter.current.endHighlighting();
-				if (message.setHighlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
+				if (message.highlighter.engine === Engine.HIGHLIGHT && compatibility.highlight.highlightEngine) {
 					highlighter.current = new DummyEngine();
-				} else if (message.setHighlighter.engine === Engine.PAINT) {
+				} else if (message.highlighter.engine === Engine.PAINT) {
 					highlighter.current = new PaintEngine(terms, highlightTags, termCountCheck,
-						message.setHighlighter.paintEngineMethod ?? PaintEngineMethod.PAINT);
+						message.highlighter.paintEngine.method ?? PaintEngineMethod.PAINT);
 				} else {
 					highlighter.current = new ElementEngine(terms, highlightTags, termCountCheck);
 				}
@@ -4000,9 +4000,9 @@ const getTermsFromSelection = () => {
 			Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 				controlsInfo.barLook[key] = value;
 			});
-			if (message.highlightMethod) {
+			if (message.highlightLook) {
 				hues.splice(0);
-				message.highlightMethod.hues.forEach(hue => hues.push(hue));
+				message.highlightLook.hues.forEach(hue => hues.push(hue));
 			}
 			if (message.matchMode) {
 				Object.assign(controlsInfo.matchMode, message.matchMode);

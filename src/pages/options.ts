@@ -1,21 +1,22 @@
 type OptionsInfo = Array<{
 	label: string
-	options: Partial<Record<keyof StorageSyncValues, {
+	options: Partial<{[ConfigK in ConfigKey]: {
 		label: string
-		preferences?: Partial<Record<keyof StorageSyncValues["barCollapse"]
-			| keyof StorageSyncValues["barControlsShown"]
-			| keyof StorageSyncValues["barLook"]
-			| keyof StorageSyncValues["highlightMethod"]
-			| keyof StorageSyncValues["showHighlights"]
-			| keyof StorageSyncValues["autoFindOptions"]
-			| keyof StorageSyncValues["matchModeDefaults"], {
-			label: string
-			tooltip?: string
-			type: PreferenceType
-		}>>
-		type?: PreferenceType
-	}>>
+		preferences?: Partial<{[GroupK in keyof ConfigValues[ConfigK]]: Preference}>
+		special?: {
+			preferenceKey: keyof ConfigValues[ConfigK]
+			preferences: Record<string, Preference>
+		}
+	}}>
 }>
+
+type Preference = {
+	label: string
+	tooltip?: string
+	type: PreferenceType
+	valueSet?: Set<unknown>
+	getPreviewElement?: (value: unknown) => HTMLElement
+}
 
 enum OptionClass {
 	ERRONEOUS = "erroneous",
@@ -31,15 +32,20 @@ enum OptionClass {
 	OPTION_SECTION = "option-section",
 	OPTION_LABEL = "option-label",
 	TABLE_PREFERENCES = "table-preferences",
+	PREFERENCE_ROW_CONTAINER = "preference-row-container",
 	PREFERENCE_ROW = "preference-row",
 	PREFERENCE_CELL_LABEL = "preference-cell",
 	PREFERENCE_INPUT = "preference-input",
-	PREFERENCE_DEFAULT = "preference-default",
 	PREFERENCE_REVERT = "preference-revert",
+}
+
+enum OptionSpecialClass {
+	HIGHLIGHT_COLORS = "highlight-colors",
 }
 
 enum PreferenceType {
 	BOOLEAN,
+	ENUM,
 	INTEGER,
 	FLOAT,
 	TEXT,
@@ -53,13 +59,12 @@ type OptionsConfig = {
 }
 
 /**
- * Loads the options content into the page.
- * This presents the user with advanced options for customizing the extension.
- * @param optionsInfo Details of the options to present.
+ * Loads the sendoff page content into the page.
+ * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.
  */
 const loadOptions = (() => {
 	/**
-	 * Fills and inserts a CSS stylesheet element to style all options and surrounding page structure.
+	 * Details of the page's panels and their various components.
 	 */
 	const fillAndInsertStylesheet = (config: OptionsConfig) => {
 		const style = document.createElement("style");
@@ -76,6 +81,8 @@ body
 	{ text-decoration: underline; font-style: italic; }
 .${OptionClass.TAB_BUTTON}
 	{ border-radius: 0; display: none; }
+.${OptionClass.TOOLBAR}
+	{ position: relative; }
 .${OptionClass.TOOLBAR} *
 	{ padding: 4px; }
 .${OptionClass.SAVE_BUTTON}[data-modification-count]::after
@@ -102,22 +109,22 @@ body.${OptionClass.SAVE_PENDING} .${OptionClass.SAVE_BUTTON}::after
 	{ margin-bottom: 4px; font-weight: bold; color: hsl(0 0% 40%); }
 .${OptionClass.TABLE_PREFERENCES}
 	{ display: flex; flex-flow: column; }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_ROW} > *
-	{ display: flex; align-items: center; }
+.${OptionClass.PREFERENCE_ROW_CONTAINER}
+	{ display: flex; flex-direction: column; color: hsl(0 0% 21%); }
+.${OptionClass.PREFERENCE_ROW_CONTAINER}:nth-child(even)
+	{ background-color: hsl(0 0% 87%); }
+.${OptionClass.PREFERENCE_ROW}
+	{ display: flex; flex: 1; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
 	{ flex: 1; margin-block: 2px; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > ::after
 	{ content: ":" }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
 	{ flex: 1; }
-.${OptionClass.PREFERENCE_ROW}
-	{ display: flex; color: hsl(0 0% 21%); }
-.${OptionClass.PREFERENCE_ROW}:nth-child(even)
-	{ background-color: hsl(0 0% 87%); }
+.${OptionClass.PREFERENCE_CELL_LABEL}
+	{ display: flex; align-items: center; }
 input[type=text]
 	{ font-size: small; width: 110px; }
-.${OptionClass.PREFERENCE_DEFAULT}
-	{ display: none; }
 .${OptionClass.IS_DEFAULT} .${OptionClass.PREFERENCE_REVERT}
 	{ display: none; }
 .${OptionClass.PREFERENCE_REVERT}
@@ -132,6 +139,10 @@ label
 	{ color: hsl(0 0% 28%); }
 label[for]:hover
 	{ color: hsl(0 0% 6%); }
+.${OptionSpecialClass.HIGHLIGHT_COLORS}
+	{ display: flex; }
+.${OptionSpecialClass.HIGHLIGHT_COLORS} > *
+	{ background: hsl(var(--hue) 100% 50%); height: 16px; aspect-ratio: 1; border: 1px solid hsl(0 0% 0% / 0.5); }
 		`;
 		document.head.appendChild(style);
 	};
@@ -179,7 +190,6 @@ label[for]:hover
 	 * @param optionsInfo Details of the options to present.
 	 */
 	const loadTab = async (tabIdx: number, tabContainer: HTMLElement, optionsInfo: OptionsInfo) => {
-		const sync = await storageGet("sync");
 		const tabInfo = optionsInfo[tabIdx];
 		const tabButton = document.createElement("button");
 		tabButton.textContent = tabInfo.label;
@@ -210,46 +220,108 @@ label[for]:hover
 		};
 		const valuesCurrent = {};
 		// Collect all values from inputs and commit them to storage on user form submission.
-		form.addEventListener("submit", event => {
+		form.addEventListener("submit", async event => {
 			event.preventDefault();
+			setSavePending(true);
+			const config = await configGet({
+				barCollapse: true,
+				barControlsShown: true,
+				barLook: true,
+				highlightLook: true,
+				highlighter: true,
+				showHighlights: true,
+				autoFindOptions: true,
+				matchModeDefaults: true,
+			});
+			const configToUnset: Record<string, Array<string>> = {};
 			// TODO remove code duplication using function
-			Object.keys(tabInfo.options).forEach(optionKey => {
-				const optionInfo = tabInfo.options[optionKey];
-				const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-				Object.keys(preferences).forEach(preferenceKey => {
-					const preferenceInfo = preferences[preferenceKey];
-					const input = document.querySelector(
+			for (const [ optionKey, optionInfo ] of Object.entries(tabInfo.options)) {
+				const preferences = optionInfo.preferences ?? {};
+				Object.entries(preferences).forEach(([ preferenceKey, preferenceInfo ]) => {
+					const input: HTMLInputElement | null = document.querySelector(
 						`.${OptionClass.PREFERENCE_INPUT}[data-key="${optionKey}-${preferenceKey}"]`
-					) as HTMLInputElement;
+					);
 					if (!input) {
 						return;
 					}
-					const valueEnteredString = input["value"] as string;
-					const valueEnteredBool = input["checked"] as boolean;
+					const valueEnteredString = input.value;
+					const valueEnteredBool = input.checked;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
-					sync[optionKey][preferenceKey] = ((type: PreferenceType) => { // Convert value for storage.
-						if (type === PreferenceType.ARRAY || type === PreferenceType.ARRAY_NUMBER) {
-							return valueEnteredString.split(",").map(item => type === PreferenceType.ARRAY_NUMBER ? Number(item) : item);
-						} else if (type === PreferenceType.INTEGER || type === PreferenceType.FLOAT) {
-							return Number(valueEnteredString);
+					const type: PreferenceType = preferenceInfo.type;
+					switch (configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+					case StoreType.IMMEDIATE: {
+						const configValue = (() => {
+							switch (type) {
+							case PreferenceType.BOOLEAN:
+								return valueEnteredBool;
+							case PreferenceType.ENUM:
+								return valueEnteredString;
+							case PreferenceType.INTEGER:
+								return parseInt(valueEnteredString);
+							case PreferenceType.FLOAT:
+								return parseFloat(valueEnteredString);
+							case PreferenceType.TEXT:
+								return valueEnteredString;
+							case PreferenceType.ARRAY:
+								return valueEnteredString.split(",");
+							case PreferenceType.ARRAY_NUMBER:
+								return valueEnteredString.split(",").map(item => Number(item));
+							}
+						})();
+						config[optionKey][preferenceKey] = configValue;
+						if (configValue === configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+							configToUnset[optionKey] ??= [];
+							configToUnset[optionKey].push(preferenceKey);
 						}
-						return valueEntered;
-					})(preferenceInfo.type);
+						break;
+					} case StoreType.LIST: {
+						const list: Array<unknown> = (type === PreferenceType.ARRAY_NUMBER)
+							? valueEnteredString.split(",").map(item => Number(item))
+							: valueEnteredString.split(",");
+						const storeList = configGetDefault({ [optionKey]: [ preferenceKey ] }
+						)[optionKey][preferenceKey] as StoreListInterface<unknown>;
+						storeList.setList(list);
+						config[optionKey][preferenceKey] = storeList;
+						break;
+					}}
 					valuesCurrent[optionKey][preferenceKey] = valueEntered;
 				});
-			});
+				if (optionInfo.special) {
+					const preferenceKey = optionInfo.special.preferenceKey;
+					const inputs: Array<HTMLInputElement> = Array.from(document.querySelectorAll(
+						`.${OptionClass.PREFERENCE_INPUT}[data-key="${optionKey}-${preferenceKey}"]`
+					));
+					const object = config[optionKey][preferenceKey] as Record<string, unknown>;
+					for (const input of inputs) {
+						const key = input.dataset.objectKey;
+						if (!key) {
+							continue;
+						}
+						object[key] = input.checked;
+					}
+					valuesCurrent[optionKey][preferenceKey] = object;
+				}
+			}
 			for (const rowModified of document.querySelectorAll(`.${OptionClass.MODIFIED}`)) {
 				rowModified.classList.remove(OptionClass.MODIFIED);
 			}
-			setSavePending(true);
-			storageSet("sync", sync).then(() => {
-				setSavePending(false);
-			});
+			await configSet(config);
+			await configUnset(configToUnset);
+			setSavePending(false);
+		});
+		const config = await configGet({
+			barCollapse: true,
+			barControlsShown: true,
+			barLook: true,
+			highlightLook: true,
+			highlighter: true,
+			showHighlights: true,
+			autoFindOptions: true,
+			matchModeDefaults: true,
 		});
 		// Construct and insert option elements from the option details.
-		Object.keys(tabInfo.options).forEach(optionKey => {
+		for (const [ optionKey, optionInfo ] of Object.entries(tabInfo.options)) {
 			valuesCurrent[optionKey] = {};
-			const optionInfo = tabInfo.options[optionKey];
 			const section = document.createElement("div");
 			section.classList.add(OptionClass.OPTION_SECTION);
 			const optionLabel = document.createElement("div");
@@ -260,36 +332,66 @@ label[for]:hover
 			table.classList.add(OptionClass.TABLE_PREFERENCES);
 			section.appendChild(table);
 			container.appendChild(section);
-			if (sync[optionKey] === undefined) {
+			if (config[optionKey] === undefined) {
 				optionLabel.classList.add(OptionClass.ERRONEOUS);
 				return;
 			}
-			const preferences = optionInfo.preferences ?? { [optionKey]: optionInfo };
-			Object.keys(preferences).forEach((preferenceKey) => {
-				const preferenceInfo = preferences[preferenceKey];
-				const row = document.createElement("div");
+			const preferences = optionInfo.preferences ?? {};
+			const createRow = (
+				label: string,
+				tooltip: string,
+				type: PreferenceType,
+				valueSet: Set<unknown>,
+				inputDataset: Record<string, string>,
+				getPreviewElement: ((value: unknown) => HTMLElement) | undefined,
+				setValueCurrent: (value: unknown) => void,
+				getValueCurrent: () => unknown,
+				configDefault: unknown,
+				configType: StoreType,
+				getConfigValue: () => unknown,
+			) => {
+				const rowContainer = document.createElement("div");
+				rowContainer.classList.add(OptionClass.PREFERENCE_ROW_CONTAINER, OptionClass.IS_DEFAULT);
+				const preferenceRow = document.createElement("div");
+				preferenceRow.classList.add(OptionClass.PREFERENCE_ROW);
+				rowContainer.appendChild(preferenceRow);
 				const addCell = (node: Node, isInFirstColumn = false) => {
 					const cell = document.createElement("div");
 					cell.appendChild(node);
 					if (isInFirstColumn) {
 						cell.classList.add(OptionClass.PREFERENCE_CELL_LABEL);
 					}
-					row.appendChild(cell);
+					preferenceRow.appendChild(cell);
 				};
 				const inputId = `input-${getIdSequential.next().value}`;
 				const preferenceLabel = document.createElement("label");
 				preferenceLabel.htmlFor = inputId;
-				preferenceLabel.textContent = preferenceInfo.label;
-				preferenceLabel.title = preferenceInfo.tooltip ?? "";
-				const inputDefault = document.createElement("input");
-				inputDefault.type = preferenceInfo.type === PreferenceType.BOOLEAN ? "checkbox" : "text";
-				inputDefault.classList.add(OptionClass.PREFERENCE_DEFAULT);
-				inputDefault.disabled = true;
-				const input = document.createElement("input");
-				input.type = inputDefault.type;
-				input.id = inputId;
-				input.classList.add(OptionClass.PREFERENCE_INPUT);
-				input.dataset.key = `${optionKey}-${preferenceKey}`;
+				preferenceLabel.textContent = label;
+				preferenceLabel.title = tooltip;
+				let inputElement: HTMLSelectElement | HTMLInputElement;
+				if (type === PreferenceType.ENUM) {
+					const select = document.createElement("select");
+					select.id = inputId;
+					select.classList.add(OptionClass.PREFERENCE_INPUT);
+					for (const [ key, value ] of Object.entries(inputDataset)) {
+						select.dataset[key] = value;
+					}
+					for (const value of valueSet) {
+						const option = document.createElement("option");
+						option.textContent = String(value);
+						select.appendChild(option);
+					}
+					inputElement = select;
+				} else {
+					const input = document.createElement("input");
+					input.type = type === PreferenceType.BOOLEAN ? "checkbox" : "text";
+					input.id = inputId;
+					input.classList.add(OptionClass.PREFERENCE_INPUT);
+					for (const [ key, value ] of Object.entries(inputDataset)) {
+						input.dataset[key] = value;
+					}
+					inputElement = input;
+				}
 				const revertButton = document.createElement("button");
 				revertButton.type = "button";
 				revertButton.classList.add(OptionClass.PREFERENCE_REVERT);
@@ -299,50 +401,123 @@ label[for]:hover
 				revertButton.appendChild(revertImage);
 				addCell(preferenceLabel, true);
 				addCell(revertButton);
-				addCell(input);
-				addCell(inputDefault);
-				table.appendChild(row);
-				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
-				const valueDefault = optionsDefault[optionKey][preferenceKey];
-				const value = sync[optionKey][preferenceKey];
+				addCell(inputElement);
+				table.appendChild(rowContainer);
+				const [ valueDefault, value ] = (() => {
+					switch (configType) {
+					case StoreType.IMMEDIATE: {
+						const convert = (value: StoreImmediate<unknown>) =>
+							type === PreferenceType.BOOLEAN ? value : String(value);
+						return [
+							convert(configDefault),
+							convert(getConfigValue()),
+						];
+					} case StoreType.LIST: {
+						const convert = (value: StoreList<unknown>) => value.getList().toString();
+						return [
+							convert(configDefault as StoreList<unknown>),
+							convert(getConfigValue() as StoreList<unknown>),
+						];
+					}}
+					return [];
+				})();
 				if (value === undefined) {
 					preferenceLabel.classList.add(OptionClass.ERRONEOUS);
-					input.disabled = true;
+					inputElement.disabled = true;
 				} else {
-					const valueKey: string = preferenceInfo.type === PreferenceType.BOOLEAN ? "checked" : "value";
-					inputDefault[valueKey] = valueDefault;
-					input[valueKey] = value;
-					valuesCurrent[optionKey][preferenceKey] = input[valueKey];
+					const valueKey: "checked" | "value" = type === PreferenceType.BOOLEAN ? "checked" : "value";
+					inputElement[valueKey] = value;
+					setValueCurrent(inputElement[valueKey]);
+					const previewRow = document.createElement("div");
+					let previewElement = getPreviewElement && getPreviewElement(inputElement[valueKey]);
+					if (previewElement) {
+						const label = document.createElement("label");
+						label.classList.add(OptionClass.PREFERENCE_CELL_LABEL);
+						label.textContent = " ";
+						previewRow.classList.add(OptionClass.PREFERENCE_ROW);
+						previewRow.appendChild(label);
+						previewRow.appendChild(previewElement);
+						rowContainer.appendChild(previewRow);
+					}
 					const rowUpdateClasses = () => {
-						row.classList.toggle(
+						rowContainer.classList.toggle(
 							OptionClass.MODIFIED,
-							input[valueKey] !== valuesCurrent[optionKey][preferenceKey],
+							inputElement[valueKey] !== getValueCurrent(),
 						);
-						row.classList.toggle(
+						rowContainer.classList.toggle(
 							OptionClass.IS_DEFAULT,
-							input[valueKey] === inputDefault[valueKey],
+							inputElement[valueKey] === valueDefault,
 						);
 						toolbarsUpdate();
+						if (previewElement) {
+							previewRow.removeChild(previewElement);
+						}
+						previewElement = getPreviewElement && getPreviewElement(inputElement[valueKey]);
+						if (previewElement) {
+							previewRow.appendChild(previewElement);
+						}
 					};
-					input.addEventListener("input", rowUpdateClasses);
+					inputElement.addEventListener("input", rowUpdateClasses);
 					const discard = () => {
-						input[valueKey] = valuesCurrent[optionKey][preferenceKey];
+						inputElement[valueKey] = getValueCurrent();
 						rowUpdateClasses();
 					};
 					const revert = () => {
-						input[valueKey] = inputDefault[valueKey];
+						inputElement[valueKey] = valueDefault;
 						rowUpdateClasses();
 					};
 					revertButton.addEventListener("click", () => {
 						revert();
-						input.focus();
+						inputElement.focus();
 					});
 					rowUpdateClasses();
 					discardFns.push(discard);
 					revertFns.push(revert);
 				}
-			});
-		});
+			};
+			for (const [ preferenceKey, preferenceInfo ] of Object.entries(preferences)) {
+				createRow(
+					preferenceInfo.label,
+					preferenceInfo.tooltip ?? "",
+					preferenceInfo.type,
+					preferenceInfo.valueSet ?? new Set(),
+					{
+						key: `${optionKey}-${preferenceKey}`,
+					},
+					preferenceInfo.getPreviewElement,
+					(value) => { valuesCurrent[optionKey][preferenceKey] = value; },
+					() => valuesCurrent[optionKey][preferenceKey],
+					configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
+					configGetType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
+					() => config[optionKey][preferenceKey],
+				);
+			}
+			//if (optionInfo.special) {
+			//	const preferenceKey = optionInfo.special.preferenceKey;
+			//	(config[optionKey][preferenceKey] as MatchMode | undefined) ??= {
+			//		case:
+			//	};
+			//	const object = config[optionKey][preferenceKey] as Record<string, unknown>;
+			//	valuesCurrent[optionKey][preferenceKey] = object;
+			//	for (const [ key, preferenceInfo ] of Object.entries(optionInfo.special.preferences)) {
+			//		createRow(
+			//			preferenceInfo.label,
+			//			preferenceInfo.tooltip ?? "",
+			//			preferenceInfo.type,
+			//			preferenceInfo.valueSet ?? new Set(),
+			//			{
+			//				key: `${optionKey}-${preferenceKey}`,
+			//				objectKey: key,
+			//			},
+			//			(value) => { valuesCurrent[optionKey][preferenceKey][key] = value; },
+			//			() => valuesCurrent[optionKey][preferenceKey][key],
+			//			configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey][key],
+			//			StoreType.IMMEDIATE,
+			//			() => config[optionKey][preferenceKey][key],
+			//		);
+			//	}
+			//}
+		}
 	};
 
 	return (optionsInfo: OptionsInfo, config: OptionsConfig) => {
@@ -365,7 +540,7 @@ label[for]:hover
 					label: "Controls to show in the toolbar",
 					preferences: {
 						disableTabResearch: {
-							label: "Disable research in the current tab",
+							label: "Deactivate in the current tab",
 							type: PreferenceType.BOOLEAN,
 						},
 						performSearch: {
@@ -415,13 +590,32 @@ label[for]:hover
 						},
 					},
 				},
-				highlightMethod: {
+				highlightLook: {
+					label: "Highlighting appearance",
+					preferences: {
+						hues: {
+							label: "Highlight colour hue values",
+							type: PreferenceType.ARRAY_NUMBER,
+							getPreviewElement: (huesString: string) => {
+								const container = document.createElement("div");
+								container.classList.add(OptionSpecialClass.HIGHLIGHT_COLORS);
+								for (const hue of huesString.split(",").map(hueString => parseInt(hueString))) {
+									const colorElement = document.createElement("div");
+									colorElement.style.setProperty("--hue", hue.toString());
+									container.appendChild(colorElement);
+								}
+								return container;
+							},
+						},
+					},
+				},
+				highlighter: {
 					label: "Keyword highlighting method and style",
 					preferences: {
-						paintReplaceByElement: {
-							label: "Use ELEMENT highlighting (hover for details)",
+						engine: {
+							label: "Highlighting engine (hover for details)",
 							tooltip:
-`Mark My Search has two highlighting methods. \
+`Mark My Search has two highlighting engines. \
 ELEMENT is a powerful variant of the model used by traditional highlighter extensions. \
 PAINT is an alternate model invented for Mark My Search.
 
@@ -438,9 +632,10 @@ PAINT
 • Very efficient at matching time. Matches are found instantly and almost never cause slowdown.
 • Has no effect on webpages, but backgrounds which obscure highlights become hidden.`
 							,
-							type: PreferenceType.BOOLEAN,
+							type: PreferenceType.ENUM,
+							valueSet: new Set([ "ELEMENT", "PAINT", "HIGHLIGHT" ]),
 						},
-						/*paintUseExperimental: {
+						/*paintEngine: {
 							label: "Use experimental browser APIs (hover for details)",
 							tooltip:
 `Mark My Search can highlight using experimental APIs. The behavior of this flag will change over time.
@@ -455,10 +650,6 @@ PAINT
 							,
 							type: PreferenceType.BOOLEAN,
 						},*/
-						hues: {
-							label: "Highlight color hue cycle",
-							type: PreferenceType.ARRAY_NUMBER,
-						},
 					},
 				},
 				showHighlights: {
@@ -516,11 +707,11 @@ PAINT
 							type: PreferenceType.BOOLEAN,
 						},
 						diacritics: {
-							label: "Default diacritics matching (ignore accents)",
+							label: "Default diacritics (accents) sensitivity",
 							type: PreferenceType.BOOLEAN,
 						},
 						regex: {
-							label: "Use custom regular expressions by default (advanced)",
+							label: "Use custom regular expressions by default",
 							type: PreferenceType.BOOLEAN,
 						},
 					},
