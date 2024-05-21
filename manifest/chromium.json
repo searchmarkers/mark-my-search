@@ -37,7 +37,7 @@
 	],
 
 	"options_ui": {
-		"page": "/pages/options.html",
+		"page": "/pages/options.html?frame",
 		"browser_style": false
 	},
 
