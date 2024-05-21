@@ -789,8 +789,8 @@ const storageMigrateArea = async (areaName: StorageAreaName, schemaVersion: numb
 const storageInitializeArea = async (areaName: StorageAreaName) => {
 	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
 	const version1Key = KEYS.reservedFor[areaName].schemaVersion1;
-	const keyValues = await storageArea.get([ "schemaVersion", version1Key ]);
-	const versionValue = keyValues.version ?? (keyValues[version1Key] ? 1 : undefined);
+	const storageSpecial = await storageArea.get([ "schemaVersion", KEYS.special.schemaVersion ]);
+	const versionValue = storageSpecial[KEYS.special.schemaVersion] ?? (storageSpecial[version1Key] ? 1 : undefined);
 	const schemaVersion = (typeof versionValue === "number") ? versionValue : 0;
 	if (schemaVersion === SCHEMA_VERSION) {
 		log("storage-initialize (single-area) complete with no changes", "schema version matches", { areaName, schemaVersion });
@@ -805,6 +805,7 @@ const storageInitializeArea = async (areaName: StorageAreaName) => {
 		const storage = await storageResetArea(areaName, "no appropriate migration found", true);
 		storageCleanAreaOf(areaName, Object.keys(storage));
 	}
+	log("storage-initialize (single-area) complete", "", { areaName });
 };
 
 export const configInitialize = async () => {
