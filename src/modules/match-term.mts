@@ -26,7 +26,7 @@ class MatchTerm {
 			case: false,
 			stem: true,
 			whole: false,
-			diacritics: false,
+			diacritics: true,
 		};
 		if (matchMode) {
 			Object.assign(matchModeThis, matchMode);
@@ -70,7 +70,7 @@ const generatePattern = (term: MatchTerm): RegExp => {
 	const optionalHyphenStandin = "_ _ _"; // TODO improve method of inserting optional hyphens
 	const optionalHyphen = term.matchMode.regex ? "" : "(\\p{Pd})?";
 	const getDiacriticsMatchingPatternStringSafe = (chars: string) =>
-		term.matchMode.diacritics ? getDiacriticsMatchingPatternString(chars) : chars;
+		term.matchMode.diacritics ? chars : getDiacriticsMatchingPatternString(chars);
 	const getHyphenatedPatternString = (word: string) =>
 		word.replace(/(\w\?|\w)/g,`$1${optionalHyphenStandin}`);
 	const getBoundaryTest = (charBoundary: string) =>

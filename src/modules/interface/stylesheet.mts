@@ -83,7 +83,7 @@ const fillContent = (
 		&.${EleClass.MATCH_REGEX} .${EleClass.CONTROL_CONTENT} {
 			font-weight: bold;
 		}
-		&.${EleClass.MATCH_DIACRITICS} .${EleClass.CONTROL_CONTENT} {
+		&:not(.${EleClass.MATCH_DIACRITICS}) .${EleClass.CONTROL_CONTENT} {
 			font-style: italic;
 		}
 	}
@@ -113,7 +113,7 @@ const fillContent = (
 		&:not(.${EleClass.MATCH_STEM}) .${EleClass.CONTROL_CONTENT} {
 			border-bottom: 3px solid hsl(0 0% 38%);
 		}
-		&.${EleClass.MATCH_DIACRITICS} .${EleClass.CONTROL_CONTENT} {
+		&:not(.${EleClass.MATCH_DIACRITICS}) .${EleClass.CONTROL_CONTENT} {
 			border-left: 3px dashed black;
 		}
 	}

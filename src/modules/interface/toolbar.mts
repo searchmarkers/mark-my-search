@@ -540,7 +540,7 @@ const createTermOptionList = (
 			{ matchType: "case", title: "Case Sensitive" },
 			{ matchType: "whole", title: "Whole Word" },
 			{ matchType: "stem", title: "Stem Word" },
-			{ matchType: "diacritics", title: "Diacritics" },
+			{ matchType: "diacritics", title: "Diacritics Sensitive" },
 			{ matchType: "regex", title: "Regex Mode" },
 		];
 		return options.map(({ matchType, title }) => {
