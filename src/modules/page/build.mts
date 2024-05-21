@@ -404,6 +404,7 @@ export const pageReload = () => {
 };
 
 export const pageThemeUpdate = async () => {
+	return;
 	const config = await Config.get({ theme: true });
 	const styleTheme = document.getElementById("style-theme") as HTMLStyleElement;
 	styleTheme.textContent =
@@ -485,11 +486,11 @@ export const loadPage = (() => {
 		};
 		style.textContent =
 `:root {
-	--hue: ${Config.getDefault({ theme: [ "hue" ] })};
-	--contrast: ${Config.getDefault({ theme: [ "contrast" ] })};
-	--lightness: ${Config.getDefault({ theme: [ "lightness" ] })};
-	--saturation: ${Config.getDefault({ theme: [ "saturation" ] })};
-	--font-scale: ${Config.getDefault({ theme: [ "fontScale" ] })};
+	--hue: ${Config.getDefault({ theme: [ "hue" ] }).theme.hue};
+	--contrast: ${Config.getDefault({ theme: [ "contrast" ] }).theme.contrast};
+	--lightness: ${Config.getDefault({ theme: [ "lightness" ] }).theme.lightness};
+	--saturation: ${Config.getDefault({ theme: [ "saturation" ] }).theme.saturation};
+	--font-scale: ${Config.getDefault({ theme: [ "fontScale" ] }).theme.fontScale};
 }
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
