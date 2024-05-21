@@ -15,6 +15,7 @@ type Preference = {
 	tooltip?: string
 	type: PreferenceType
 	valueSet?: Set<unknown>
+	getPreviewElement?: (value: unknown) => HTMLElement
 }
 
 enum OptionClass {
@@ -31,10 +32,15 @@ enum OptionClass {
 	OPTION_SECTION = "option-section",
 	OPTION_LABEL = "option-label",
 	TABLE_PREFERENCES = "table-preferences",
+	PREFERENCE_ROW_CONTAINER = "preference-row-container",
 	PREFERENCE_ROW = "preference-row",
 	PREFERENCE_CELL_LABEL = "preference-cell",
 	PREFERENCE_INPUT = "preference-input",
 	PREFERENCE_REVERT = "preference-revert",
+}
+
+enum OptionSpecialClass {
+	HIGHLIGHT_COLORS = "highlight-colors",
 }
 
 enum PreferenceType {
@@ -103,18 +109,20 @@ body.${OptionClass.SAVE_PENDING} .${OptionClass.SAVE_BUTTON}::after
 	{ margin-bottom: 4px; font-weight: bold; color: hsl(0 0% 40%); }
 .${OptionClass.TABLE_PREFERENCES}
 	{ display: flex; flex-flow: column; }
-.${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_ROW} > *
-	{ display: flex; align-items: center; }
+.${OptionClass.PREFERENCE_ROW_CONTAINER}
+	{ display: flex; flex-direction: column; color: hsl(0 0% 21%); }
+.${OptionClass.PREFERENCE_ROW_CONTAINER}:nth-child(even)
+	{ background-color: hsl(0 0% 87%); }
+.${OptionClass.PREFERENCE_ROW}
+	{ display: flex; flex: 1; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL}
 	{ flex: 1; margin-block: 2px; }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > ::after
 	{ content: ":" }
 .${OptionClass.TABLE_PREFERENCES} .${OptionClass.PREFERENCE_CELL_LABEL} > *
 	{ flex: 1; }
-.${OptionClass.PREFERENCE_ROW}
-	{ display: flex; color: hsl(0 0% 21%); }
-.${OptionClass.PREFERENCE_ROW}:nth-child(even)
-	{ background-color: hsl(0 0% 87%); }
+.${OptionClass.PREFERENCE_CELL_LABEL}
+	{ display: flex; align-items: center; }
 input[type=text]
 	{ font-size: small; width: 110px; }
 .${OptionClass.IS_DEFAULT} .${OptionClass.PREFERENCE_REVERT}
@@ -131,6 +139,10 @@ label
 	{ color: hsl(0 0% 28%); }
 label[for]:hover
 	{ color: hsl(0 0% 6%); }
+.${OptionSpecialClass.HIGHLIGHT_COLORS}
+	{ display: flex; }
+.${OptionSpecialClass.HIGHLIGHT_COLORS} > *
+	{ background: hsl(var(--hue) 100% 50%); height: 16px; aspect-ratio: 1; border: 1px solid hsl(0 0% 0% / 0.5); }
 		`;
 		document.head.appendChild(style);
 	};
@@ -331,20 +343,25 @@ label[for]:hover
 				type: PreferenceType,
 				valueSet: Set<unknown>,
 				inputDataset: Record<string, string>,
+				getPreviewElement: ((value: unknown) => HTMLElement) | undefined,
 				setValueCurrent: (value: unknown) => void,
 				getValueCurrent: () => unknown,
 				configDefault: unknown,
 				configType: StoreType,
 				getConfigValue: () => unknown,
 			) => {
-				const row = document.createElement("div");
+				const rowContainer = document.createElement("div");
+				rowContainer.classList.add(OptionClass.PREFERENCE_ROW_CONTAINER, OptionClass.IS_DEFAULT);
+				const preferenceRow = document.createElement("div");
+				preferenceRow.classList.add(OptionClass.PREFERENCE_ROW);
+				rowContainer.appendChild(preferenceRow);
 				const addCell = (node: Node, isInFirstColumn = false) => {
 					const cell = document.createElement("div");
 					cell.appendChild(node);
 					if (isInFirstColumn) {
 						cell.classList.add(OptionClass.PREFERENCE_CELL_LABEL);
 					}
-					row.appendChild(cell);
+					preferenceRow.appendChild(cell);
 				};
 				const inputId = `input-${getIdSequential.next().value}`;
 				const preferenceLabel = document.createElement("label");
@@ -385,8 +402,7 @@ label[for]:hover
 				addCell(preferenceLabel, true);
 				addCell(revertButton);
 				addCell(inputElement);
-				table.appendChild(row);
-				row.classList.add(OptionClass.PREFERENCE_ROW, OptionClass.IS_DEFAULT);
+				table.appendChild(rowContainer);
 				const [ valueDefault, value ] = (() => {
 					switch (configType) {
 					case StoreType.IMMEDIATE: {
@@ -412,16 +428,34 @@ label[for]:hover
 					const valueKey: "checked" | "value" = type === PreferenceType.BOOLEAN ? "checked" : "value";
 					inputElement[valueKey] = value;
 					setValueCurrent(inputElement[valueKey]);
+					const previewRow = document.createElement("div");
+					let previewElement = getPreviewElement && getPreviewElement(inputElement[valueKey]);
+					if (previewElement) {
+						const label = document.createElement("label");
+						label.classList.add(OptionClass.PREFERENCE_CELL_LABEL);
+						label.textContent = " ";
+						previewRow.classList.add(OptionClass.PREFERENCE_ROW);
+						previewRow.appendChild(label);
+						previewRow.appendChild(previewElement);
+						rowContainer.appendChild(previewRow);
+					}
 					const rowUpdateClasses = () => {
-						row.classList.toggle(
+						rowContainer.classList.toggle(
 							OptionClass.MODIFIED,
 							inputElement[valueKey] !== getValueCurrent(),
 						);
-						row.classList.toggle(
+						rowContainer.classList.toggle(
 							OptionClass.IS_DEFAULT,
 							inputElement[valueKey] === valueDefault,
 						);
 						toolbarsUpdate();
+						if (previewElement) {
+							previewRow.removeChild(previewElement);
+						}
+						previewElement = getPreviewElement && getPreviewElement(inputElement[valueKey]);
+						if (previewElement) {
+							previewRow.appendChild(previewElement);
+						}
 					};
 					inputElement.addEventListener("input", rowUpdateClasses);
 					const discard = () => {
@@ -450,6 +484,7 @@ label[for]:hover
 					{
 						key: `${optionKey}-${preferenceKey}`,
 					},
+					preferenceInfo.getPreviewElement,
 					(value) => { valuesCurrent[optionKey][preferenceKey] = value; },
 					() => valuesCurrent[optionKey][preferenceKey],
 					configGetDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
@@ -561,6 +596,16 @@ label[for]:hover
 						hues: {
 							label: "Highlight colour hue values",
 							type: PreferenceType.ARRAY_NUMBER,
+							getPreviewElement: (huesString: string) => {
+								const container = document.createElement("div");
+								container.classList.add(OptionSpecialClass.HIGHLIGHT_COLORS);
+								for (const hue of huesString.split(",").map(hueString => parseInt(hueString))) {
+									const colorElement = document.createElement("div");
+									colorElement.style.setProperty("--hue", hue.toString());
+									container.appendChild(colorElement);
+								}
+								return container;
+							},
 						},
 					},
 				},
