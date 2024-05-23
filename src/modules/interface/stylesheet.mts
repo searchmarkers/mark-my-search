@@ -11,7 +11,7 @@ import { Z_INDEX_MAX } from "/dist/modules/common.mjs";
  * @param hues Color hues for term styles to cycle through.
  */
 const fillContent = (
-	terms: Array<MatchTerm>,
+	terms: ReadonlyArray<MatchTerm>,
 	termTokens: TermTokens,
 	hues: TermHues,
 	barLook: Toolbar.BarLook,

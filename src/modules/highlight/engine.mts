@@ -13,7 +13,7 @@ type HighlighterProcess =
 type EngineCSS = Readonly<{
 	misc: () => string
 	termHighlights: () => string
-	termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => string
+	termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => string
 }>
 
 interface AbstractEngine {

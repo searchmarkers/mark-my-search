@@ -8,12 +8,22 @@ import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
-import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
 import * as Toolbar from "/dist/modules/interface/toolbar.mjs";
 import * as ToolbarClasses from "/dist/modules/interface/toolbar/classes.mjs";
 import { assert, compatibility, itemsMatch } from "/dist/modules/common.mjs";
 
 type UpdateTermStatus = (term: MatchTerm) => void
+
+type SetTerms<InternalOnly = false> = (
+	terms: ReadonlyArray<MatchTerm>,
+) => InternalOnly extends false ? Promise<void> : void
+
+type SetTerm<InternalOnly = false> = <Term extends MatchTerm | null>(
+	term: Term,
+	idxOrAppends: Term extends MatchTerm ? (number | true) : number,
+) => InternalOnly extends false ? Promise<void> : void
+
+type DoPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => boolean
 
 interface ControlsInfo {
 	pageModifyEnabled: boolean
@@ -78,126 +88,79 @@ const getTermsFromSelection = (termTokens: TermTokens) => {
  * TODO document params
  */
 const refreshTermControlsAndStartHighlighting = (
-	terms: Array<MatchTerm>,
+	termsOld: ReadonlyArray<MatchTerm>,
+	terms: ReadonlyArray<MatchTerm>,
+	update: {
+		term: MatchTerm | null
+		termIndex: number
+	} | null,
+	setTerm: SetTerm,
+	setTerms: SetTerms,
+	doPhrasesMatchTerms: DoPhrasesMatchTerms,
 	termTokens: TermTokens,
 	controlsInfo: ControlsInfo,
 	highlighter: Highlighter,
 	commands: Toolbar.BrowserCommands,
 	hues: TermHues,
-	termsUpdate?: Array<MatchTerm>,
 ) => {
 	// TODO fix this abomination of a function
-	let termUpdate: MatchTerm | undefined = undefined;
-	let termToUpdateIdx: keyof typeof Toolbar.TermChange | number | undefined = undefined;
-	if (termsUpdate) {
-		if (termsUpdate.length < terms.length
-			&& (terms.length === 1 || termEquals(termsUpdate[termsUpdate.length - 1], terms[terms.length - 2]))
-		) {
-			termToUpdateIdx = Toolbar.TermChange.REMOVE;
-			termUpdate = terms[terms.length - 1];
-		} else if (termsUpdate.length > terms.length
-			&& (termsUpdate.length === 1 || termEquals(termsUpdate[termsUpdate.length - 2], terms[terms.length - 1]))
-		) {
-			termToUpdateIdx = Toolbar.TermChange.CREATE;
-			termUpdate = termsUpdate[termsUpdate.length - 1];
-		} else {
-			const termsCopy = terms.slice();
-			const termsUpdateCopy = termsUpdate?.slice();
-			let i = 0;
-			while (termsUpdateCopy.length && termsCopy.length) {
-				if (termEquals(termsUpdateCopy[0], termsCopy[0])) {
-					termsUpdateCopy.splice(0, 1);
-					termsCopy.splice(0, 1);
-					i++;
-				} else {
-					if (termEquals(termsUpdateCopy[0], termsCopy[1])) {
-						// Term deleted at current index.
-						termToUpdateIdx = Toolbar.TermChange.REMOVE;
-						termUpdate = termsCopy[0];
-						termsCopy.splice(0, 1);
-						i++;
-					} else if (termEquals(termsUpdateCopy[1], termsCopy[0])) {
-						// Term created at current index.
-						termToUpdateIdx = Toolbar.TermChange.CREATE;
-						termUpdate = termsUpdateCopy[0];
-						termsUpdateCopy.splice(0, 1);
-					} else if (termEquals(termsUpdateCopy[1], termsCopy[1])) {
-						// Term changed at current index.
-						termToUpdateIdx = i;
-						termUpdate = termsUpdateCopy[0];
-						termsUpdateCopy.splice(0, 1);
-						termsCopy.splice(0, 1);
-						i++;
-					}
-					break;
-				}
-			}
-		}
-	}
-	const termsToHighlight: Array<MatchTerm> = [];
-	const termsToPurge: Array<MatchTerm> = [];
 	if (document.getElementById(EleID.BAR)) {
-		if (termsUpdate !== undefined && termToUpdateIdx !== undefined
-			&& termToUpdateIdx !== Toolbar.TermChange.REMOVE && termUpdate) {
-			if (termToUpdateIdx === Toolbar.TermChange.CREATE) {
-				terms.push(new MatchTerm(termUpdate.phrase, termUpdate.matchMode));
-				const idx = terms.length - 1;
-				Toolbar.insertTermControl(terms, idx, termTokens, commands, controlsInfo, highlighter);
-				termsToHighlight.push(terms[idx]);
+		if (update && update.term) {
+			if (update.termIndex === termsOld.length) {
+				Toolbar.insertTermControl(update.term, setTerm, termTokens, commands, controlsInfo, highlighter);
 			} else {
-				const termOld = terms[termToUpdateIdx];
-				termsToPurge.push(new MatchTerm(termOld.phrase, termOld.matchMode));
-				const term = new MatchTerm(termUpdate.phrase, termUpdate.matchMode);
-				terms[termToUpdateIdx] = term;
-				Toolbar.refreshTermControl(term, termToUpdateIdx, termTokens, highlighter);
-				termsToHighlight.push(term);
+				Toolbar.refreshTermControl(update.term, update.termIndex, termTokens, highlighter);
 			}
-		} else if (termsUpdate !== undefined) {
-			if (termToUpdateIdx === Toolbar.TermChange.REMOVE && termUpdate) {
-				const termRemovedPreviousIdx = terms.findIndex(term => JSON.stringify(term) === JSON.stringify(termUpdate));
-				if (assert(
-					termRemovedPreviousIdx !== -1, "term not deleted", "not stored in this page", { term: termUpdate }
-				)) {
-					Toolbar.removeTermControl(termRemovedPreviousIdx);
-					highlighter.current?.undoHighlights([ terms[termRemovedPreviousIdx] ]);
-					terms.splice(termRemovedPreviousIdx, 1);
-					Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-					highlighter.current?.countMatches();
-					return;
-				}
-			} else {
-				terms.splice(0);
-				termsUpdate.forEach(term => {
-					terms.push(new MatchTerm(term.phrase, term.matchMode));
-				});
-				highlighter.current?.undoHighlights();
-				Toolbar.insertToolbar(terms, termTokens, commands, hues, controlsInfo, highlighter);
-			}
-		} else {
+		} else if (update && !update.term) {
+			Toolbar.removeTermControl(update.termIndex);
+			highlighter.current?.undoHighlights([ termsOld[update.termIndex] ]);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			highlighter.current?.countMatches(); // TODO this method should be handled by the engine, and not exposed
 			return;
+		} else if (!update) {
+			highlighter.current?.undoHighlights();
+			Toolbar.insert(
+				terms,
+				setTerm,
+				setTerms,
+				doPhrasesMatchTerms,
+				termTokens,
+				commands,
+				hues,
+				controlsInfo,
+				highlighter,
+			);
 		}
-	} else if (termsUpdate) {
-		terms.splice(0);
-		termsUpdate.forEach(term => {
-			terms.push(new MatchTerm(term.phrase, term.matchMode));
-		});
-		highlighter.current?.undoHighlights();
-		Toolbar.insertToolbar(terms, termTokens, commands, hues, controlsInfo, highlighter);
 	} else {
-		return;
+		highlighter.current?.undoHighlights();
+		Toolbar.insert(
+			terms,
+			setTerm,
+			setTerms,
+			doPhrasesMatchTerms,
+			termTokens,
+			commands,
+			hues,
+			controlsInfo,
+			highlighter,
+		);
 	}
 	Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
 	if (!controlsInfo.pageModifyEnabled) {
-		const bar = document.getElementById(EleID.BAR) as Element;
-		bar.classList.add(EleClass.DISABLED);
 		return;
 	}
+	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term =>
+		!termsOld.find(termOld => termEquals(term, termOld))
+	);
+	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(term =>
+		!terms.find(termOld => termEquals(term, termOld))
+	);
 	// Give the interface a chance to redraw before performing [expensive] highlighting.
 	setTimeout(() => {
 		highlighter.current?.startHighlighting(
-			terms,
-			termsToHighlight,
-			termsToPurge,
+			terms as Array<MatchTerm>,
+			termsToHighlight as Array<MatchTerm>,
+			termsToPurge as Array<MatchTerm>,
 			hues,
 		);
 	});
@@ -244,6 +207,7 @@ const styleElementsCleanup = () => {
  */
 const produceEffectOnCommandFn = function* (
 	terms: Array<MatchTerm>,
+	setTerms: (terms: ReadonlyArray<MatchTerm>) => void,
 	controlsInfo: ControlsInfo,
 	highlighter: Highlighter,
 ) {
@@ -265,7 +229,7 @@ const produceEffectOnCommandFn = function* (
 			selectModeFocus = !selectModeFocus;
 			break;
 		} case "replaceTerms": {
-			TermsSetter.termsSet(controlsInfo.termsOnHold);
+			setTerms(controlsInfo.termsOnHold);
 			break;
 		} case "stepGlobal": {
 			if (focusReturnToDocument()) {
@@ -339,7 +303,66 @@ const onWindowMouseUp = () => {
 	};
 	const highlighter: Highlighter = {};
 	const updateTermStatus = (term: MatchTerm) => Toolbar.updateTermStatus(term, termTokens, highlighter);
-	const produceEffectOnCommand = produceEffectOnCommandFn(terms, controlsInfo, highlighter);
+	const setTermsInternal: SetTerms<true> = termsNew => {
+		if (itemsMatch(terms, termsNew, termEquals) && (terms.length > 0 || document.getElementById(EleID.BAR))) {
+			return;
+		}
+		const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
+		terms.splice(0, terms.length, ...termsNew);
+		window.addEventListener("mouseup", onWindowMouseUp);
+		refreshTermControlsAndStartHighlighting(
+			termsOld,
+			terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+			null,
+			setTerm,
+			setTerms,
+			doPhrasesMatchTerms,
+			termTokens,
+			controlsInfo,
+			highlighter,
+			commands,
+			hues,
+		);
+	};
+	const setTerms: SetTerms = async termsNew => {
+		setTermsInternal(termsNew);
+		await sendBackgroundMessage({ terms });
+	};
+	const setTermInternal: SetTerm<true> = (term, idxOrAppends) => {
+		const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
+		if (typeof idxOrAppends === "number") {
+			if (term) {
+				terms[idxOrAppends] = term;
+			} {
+				delete terms[idxOrAppends];
+			}
+		} else if (term) {
+			terms.push(term);
+		}
+		window.addEventListener("mouseup", onWindowMouseUp);
+		refreshTermControlsAndStartHighlighting(
+			termsOld,
+			terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+			{ term, termIndex: typeof idxOrAppends === "number" ? idxOrAppends : termsOld.length },
+			setTerm,
+			setTerms,
+			doPhrasesMatchTerms,
+			termTokens,
+			controlsInfo,
+			highlighter,
+			commands,
+			hues,
+		);
+	};
+	const setTerm: SetTerm = async (term, idxOrAppends) => {
+		setTermInternal(term, idxOrAppends);
+		await sendBackgroundMessage({ terms });
+	};
+	const doPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => (
+		phrases.length === terms.length // TODO this seems dubious
+		&& phrases.every(phrase => terms.find(term => term.phrase === phrase))
+	);
+	const produceEffectOnCommand = produceEffectOnCommandFn(terms, setTerms, controlsInfo, highlighter);
 	produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 	const getDetails = (request: Message.TabDetailsRequest) => ({
 		terms: request.termsFromSelection ? getTermsFromSelection(termTokens) : undefined,
@@ -351,7 +374,11 @@ const onWindowMouseUp = () => {
 		sendResponse: (response: Message.TabResponse) => void,
 	) => void
 	let queuingPromise: Promise<unknown> | undefined = undefined;
-	const messageHandleHighlight: MessageHandler = (message, sender, sendResponse) => {
+	const messageHandleHighlight: MessageHandler = (
+		message,
+		sender,
+		sendResponse,
+	) => {
 		if (message.getDetails) {
 			sendResponse(getDetails(message.getDetails));
 		}
@@ -407,6 +434,7 @@ const onWindowMouseUp = () => {
 		}
 		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 			controlsInfo.pageModifyEnabled = message.enablePageModify;
+			Toolbar.barVisibilityUpdate(controlsInfo);
 			if (!controlsInfo.pageModifyEnabled) {
 				highlighter.current?.endHighlighting();
 			}
@@ -418,7 +446,7 @@ const onWindowMouseUp = () => {
 		Object.entries(message.barControlsShown ?? {})
 			.forEach(([ controlName, value ]: [ Toolbar.ControlButtonName, boolean ]) => {
 				controlsInfo.barControlsShown[controlName] = value;
-				Toolbar.controlVisibilityUpdate(controlName, controlsInfo, terms);
+				Toolbar.controlVisibilityUpdate(controlName, controlsInfo, doPhrasesMatchTerms);
 			});
 		Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 			controlsInfo.barLook[key] = value;
@@ -440,30 +468,20 @@ const onWindowMouseUp = () => {
 			controlsInfo.termsOnHold = message.termsOnHold;
 		}
 		if (message.deactivate) {
+			//removeTermsAndDeactivate();
 			window.removeEventListener("mouseup", onWindowMouseUp);
 			highlighter.current?.endHighlighting();
 			terms.splice(0);
-			Toolbar.controlsRemove();
+			Toolbar.remove();
 			styleElementsCleanup();
 		}
-		if (message.terms !== undefined &&
-			(!itemsMatch(terms, message.terms, termEquals) || (!terms.length && !document.getElementById(EleID.BAR)))
-		) {
-			window.addEventListener("mouseup", onWindowMouseUp);
-			refreshTermControlsAndStartHighlighting(
-				terms,
-				termTokens,
-				controlsInfo,
-				highlighter,
-				commands,
-				hues,
-				message.terms,
-			);
+		if (message.terms) {
+			setTermsInternal(message.terms);
 		}
 		(message.commands ?? []).forEach(command => {
 			produceEffectOnCommand.next(command);
 		});
-		Toolbar.controlVisibilityUpdate("replaceTerms", controlsInfo, terms);
+		Toolbar.controlVisibilityUpdate("replaceTerms", controlsInfo, doPhrasesMatchTerms);
 		const bar = document.getElementById(EleID.BAR);
 		if (bar) {
 			bar.classList.toggle(EleClass.HIGHLIGHTS_SHOWN, controlsInfo.highlightsShown);
@@ -477,7 +495,11 @@ const onWindowMouseUp = () => {
 			sender: chrome.runtime.MessageSender,
 			sendResponse: (response: Message.TabResponse) => void,
 		}> = [];
-		const messageHandleHighlightUninitialized: MessageHandler = (message, sender, sendResponse) => {
+		const messageHandleHighlightUninitialized: MessageHandler = (
+			message,
+			sender,
+			sendResponse,
+		) => {
 			if (message.getDetails) {
 				sendResponse(getDetails(message.getDetails));
 				delete message.getDetails;
@@ -516,7 +538,9 @@ const onWindowMouseUp = () => {
 		};
 		chrome.runtime.onMessage.addListener(messageHandleHighlightUninitialized);
 	})();
-	TermsSetter.registerMessageHandler(messageHandleHighlight);
 })();
 
-export type { UpdateTermStatus, ControlsInfo };
+export type {
+	UpdateTermStatus, SetTerms, SetTerm, DoPhrasesMatchTerms,
+	ControlsInfo,
+};

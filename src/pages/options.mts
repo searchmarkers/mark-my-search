@@ -257,7 +257,7 @@ label[for]:hover
 					const valueEnteredBool = input.checked;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
 					const type: PreferenceType = preferenceInfo.type;
-					switch (Config.get({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+					switch (Config.getType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
 					case StoreType.IMMEDIATE: {
 						const configValue = (() => {
 							switch (type) {

@@ -8,8 +8,7 @@ type EleClassItem = typeof EleClass[keyof typeof EleClass]
 import type { ConfigBarControlsShown } from "/dist/modules/privileged/storage.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
-import * as TermsSetter from "/dist/modules/interface/terms-setter-legacy.mjs";
-import type { ControlsInfo } from "/dist/content.mjs";
+import type { SetTerm, SetTerms, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 import { assert, getIdSequential } from "/dist/modules/common.mjs";
 
 export type BrowserCommands = Array<chrome.commands.Command>
@@ -95,38 +94,44 @@ const insertTermInput = (() => {
 	 * @param terms Terms being controlled and highlighted.
 	 */
 	const commit = (
-		term: MatchTerm | undefined,
-		terms: Array<MatchTerm>,
+		term: MatchTerm | null,
+		setTerm: SetTerm,
 		termTokens: TermTokens,
 		inputValue?: string,
 	) => {
-		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
 		const control = term ? getControl(term, termTokens) : getControlAppendTerm();
 		if (!control) {
 			return;
 		}
 		const termInput = control.querySelector("input") as HTMLInputElement;
 		inputValue = inputValue ?? termInput.value;
-		const idx = getTermIndexFromArray(term, terms);
 		// TODO standard method of avoiding race condition (arising from calling termsSet, which immediately updates controls)
-		if (replaces && inputValue === "") {
-			if (document.activeElement === termInput) {
-				selectInput(getControlAtIndex(idx + 1) as HTMLElement);
+		if (term) {
+			const idx = getTermIndexFromBar(term, termTokens);
+			if (idx === null) {
 				return;
 			}
-			TermsSetter.termsSet(terms.slice(0, idx).concat(terms.slice(idx + 1)));
-		} else if (replaces && inputValue !== term.phrase) {
-			const termChanged = new MatchTerm(inputValue, term.matchMode);
-			TermsSetter.termsSet(terms.map((term, i) => i === idx ? termChanged : term));
-		} else if (!replaces && inputValue !== "") {
-			const termChanged = new MatchTerm(
-				inputValue,
-				getTermControlMatchModeFromClassList(control.classList),
-				{
-					allowStemOverride: true,
-				},
-			);
-			TermsSetter.termsSet(terms.concat(termChanged));
+			if (inputValue === "") {
+				if (document.activeElement === termInput) {
+					selectInput(getControlAtIndex(idx + 1) as HTMLElement);
+					return;
+				}
+				setTerm(null, idx);
+			} else if (inputValue !== term.phrase) {
+				term = new MatchTerm(inputValue, term.matchMode);
+				setTerm(term, idx);
+			}
+		} else {
+			if (inputValue !== "") {
+				term = new MatchTerm(
+					inputValue,
+					getTermControlMatchModeFromClassList(control.classList),
+					{
+						allowStemOverride: true,
+					},
+				);
+				setTerm(term, true);
+			}
 		}
 	};
 
@@ -140,11 +145,11 @@ const insertTermInput = (() => {
 	 * @param terms Terms being controlled and highlighted.
 	 */
 	const tryShiftTermFocus = (
-		term: MatchTerm | undefined,
+		term: MatchTerm | null,
+		setTerm: SetTerm,
 		idxTarget: number | undefined,
 		shiftRight: boolean | undefined,
 		onBeforeShift: () => void,
-		terms: Array<MatchTerm>,
 		termTokens: TermTokens,
 	) => {
 		const replaces = !!term; // Whether a commit in this control replaces an existing term or appends a new one.
@@ -153,16 +158,21 @@ const insertTermInput = (() => {
 		if (!control || !termInput) {
 			return;
 		}
-		const idx = replaces ? getTermIndexFromArray(term, terms) : terms.length;
-		shiftRight ??= (idxTarget ?? idx) > idx;
+		const termCount = getTermCountFromBar();
+		const termIdx = replaces ? getTermIndexFromBar(term, termTokens) : termCount;
+		if (termIdx === null) {
+			return;
+		}
+		shiftRight ??= (idxTarget ?? termIdx) > termIdx;
 		if (termInput.selectionStart !== termInput.selectionEnd
 			|| termInput.selectionStart !== (shiftRight ? termInput.value.length : 0)) {
 			return;
 		}
 		onBeforeShift();
-		idxTarget ??= Math.max(0, Math.min(shiftRight ? idx + 1 : idx - 1, terms.length));
-		if (idx === idxTarget) {
-			commit(term, terms, termTokens);
+		idxTarget ??= Math.max(0, Math.min(shiftRight ? termIdx + 1 : termIdx - 1, termCount));
+		if (termIdx === idxTarget) {
+			// TODO why does this need to be done here?
+			commit(term, setTerm, termTokens);
 			if (!replaces) {
 				termInput.value = "";
 			}
@@ -175,9 +185,9 @@ const insertTermInput = (() => {
 	};
 
 	return (
-		terms: Array<MatchTerm>,
+		term: MatchTerm | null,
+		setTerm: SetTerm,
 		controlPad: HTMLElement,
-		idxCode: typeof TermChange["CREATE"] | number,
 		insertInput: (termInput: HTMLInputElement) => void,
 		termTokens: TermTokens,
 	) => {
@@ -185,9 +195,8 @@ const insertTermInput = (() => {
 			.getElementsByClassName(EleClass.CONTROL_CONTENT)[0] as HTMLElement ?? controlPad;
 		const controlEdit = controlPad
 			.getElementsByClassName(EleClass.CONTROL_EDIT)[0] as HTMLElement | undefined;
-		const term = terms[idxCode] as MatchTerm | undefined;
 		// Whether a commit in this control replaces an existing term or appends a new one.
-		const replaces = idxCode !== TermChange.CREATE;
+		const replaces = term !== null;
 		const input = document.createElement("input");
 		input.type = "text";
 		input.classList.add(EleClass.CONTROL_INPUT);
@@ -213,7 +222,7 @@ const insertTermInput = (() => {
 			controlEdit.addEventListener("click", event => {
 				if (inputSize) { // Input is shown; currently a delete button.
 					input.value = "";
-					commit(term, terms, termTokens);
+					commit(term, setTerm, termTokens);
 					hide();
 				} else { // Input is hidden; currently an edit button.
 					show(event);
@@ -222,7 +231,7 @@ const insertTermInput = (() => {
 			controlEdit.addEventListener("contextmenu", event => {
 				event.preventDefault();
 				input.value = "";
-				commit(term, terms, termTokens);
+				commit(term, setTerm, termTokens);
 				hide();
 			});
 			controlContent.addEventListener("contextmenu", show);
@@ -246,7 +255,7 @@ const insertTermInput = (() => {
 				} else {
 					const inputValue = input.value;
 					resetInput(inputValue);
-					commit(term, terms, termTokens, inputValue);
+					commit(term, setTerm, termTokens, inputValue);
 				}
 				return;
 			}
@@ -259,10 +268,10 @@ const insertTermInput = (() => {
 			case "ArrowRight": {
 				tryShiftTermFocus(
 					term,
+					setTerm,
 					undefined,
 					event.key === "ArrowRight",
 					() => event.preventDefault(),
-					terms,
 					termTokens,
 				);
 				return;
@@ -271,10 +280,10 @@ const insertTermInput = (() => {
 			case "ArrowDown": {
 				tryShiftTermFocus(
 					term,
-					(event.key === "ArrowUp") ? 0 : terms.length,
+					setTerm,
+					(event.key === "ArrowUp") ? 0 : getTermCountFromBar(),
 					undefined,
 					() => event.preventDefault(),
-					terms,
 					termTokens,
 				);
 				return;
@@ -314,7 +323,7 @@ const insertTermInput = (() => {
 				if (inputSizeNew) {
 					resetInput();
 				} else {
-					commit(term, terms, termTokens);
+					commit(term, setTerm, termTokens);
 				}
 			}
 			inputSize = inputSizeNew;
@@ -325,19 +334,6 @@ const insertTermInput = (() => {
 })();
 
 /**
- * Gets the index of a term within an array of terms.
- * @param term A term to find.
- * @param terms Terms to search in.
- * @returns The append term constant index if not found, the term's index otherwise.
- */
-const getTermIndexFromArray = (
-	term: MatchTerm | undefined,
-	terms: Array<MatchTerm>,
-): typeof TermChange["CREATE"] | number => (
-	term ? terms.indexOf(term) : TermChange.CREATE
-);
-
-/**
  * Gets the control of a term or at an index.
  * @param term A term to identify the control by, if supplied.
  * @param idx An index to identify the control by, if supplied.
@@ -345,13 +341,13 @@ const getTermIndexFromArray = (
  * OR the control matching `idx` if supplied and less than the number of terms,
  * OR the append term control otherwise.
  */
-export const getControl = (term: MatchTerm, termTokens: TermTokens): HTMLElement | null => (
+const getControl = (term: MatchTerm, termTokens: TermTokens): HTMLElement | null => (
 	document.getElementById(EleID.BAR_TERMS)
 		?.getElementsByClassName(getTermTokenClass(termTokens.get(term)))[0] as HTMLElement
 		?? null
 );
 
-export const getControlAtIndex = (idx: number | undefined): HTMLElement | null => {
+const getControlAtIndex = (idx: number | undefined): HTMLElement | null => {
 	const barTerms = document.getElementById(EleID.BAR_TERMS);
 	if (!barTerms) {
 		return null;
@@ -361,6 +357,28 @@ export const getControlAtIndex = (idx: number | undefined): HTMLElement | null =
 	}
 	return barTerms.children.item(idx) as HTMLElement;
 };
+
+/**
+ * Gets the index of a term within the terms listed as controls in the toolbar.
+ * @param term A term to find.
+ * @param termTokens 
+ * @returns The term's index.
+ */
+const getTermIndexFromBar = (term: MatchTerm, termTokens: TermTokens): number | null => {
+	const termControl = document.querySelector(`#${EleID.BAR} .${getTermClass(term, termTokens)}`);
+	if (!termControl) {
+		return -1;
+	}
+	return Array.from(termControl.parentElement?.children ?? []).indexOf(termControl);
+};
+
+/**
+ * Gets the number of terms listed as controls in the toolbar.
+ * @returns The term count.
+ */
+const getTermCountFromBar = (): number => (
+	document.querySelector(`#${EleID.BAR_TERMS}`)?.childElementCount ?? 0
+);
 
 /**
  * Gets the control for appending a new term.
@@ -385,13 +403,15 @@ export const updateTermStatus = (term: MatchTerm, termTokens: TermTokens, highli
  * @param term A term to update the tooltip for.
  */
 const updateTermTooltip = (
-	terms: Array<MatchTerm>,
 	term: MatchTerm,
 	termTokens: TermTokens,
 	commands: BrowserCommands,
 	highlighter: Highlighter,
 ) => {
-	const idx = terms.indexOf(term);
+	const idx = getTermIndexFromBar(term, termTokens);
+	if (idx === null) {
+		return;
+	}
 	const { up: { [idx]: command }, down: { [idx]: commandReverse } } = getTermCommands(commands);
 	const controlPad = (getControl(term, termTokens) as HTMLElement)
 		.getElementsByClassName(EleClass.CONTROL_PAD)[0] as HTMLElement;
@@ -527,7 +547,7 @@ const createTermOption = (
  * @returns The resulting menu element.
  */
 const createTermOptionList = (
-	term: MatchTerm | undefined,
+	term: MatchTerm | null,
 	matchMode: MatchMode,
 	termTokens: TermTokens,
 	controlsInfo: ControlsInfo,
@@ -663,7 +683,7 @@ const createTermOptionList = (
  * Opens and focuses the menu of matching options for a term, allowing the user to toggle matching modes.
  * @param term The term for which to open a matching options menu.
  */
-const openTermOptionList = (term: MatchTerm | undefined, termTokens: TermTokens) => {
+const openTermOptionList = (term: MatchTerm | null, termTokens: TermTokens) => {
 	const control = term ? getControl(term, termTokens) : getControlAppendTerm();
 	const input = control?.querySelector("input");
 	const optionList = control?.querySelector(`.${EleClass.OPTION_LIST}`) as HTMLElement | null;
@@ -679,21 +699,19 @@ const openTermOptionList = (term: MatchTerm | undefined, termTokens: TermTokens)
 
 /**
  * Inserts an interactive term control element.
- * @param terms Terms being controlled and highlighted.
- * @param idx The index in `terms` of a term to assign.
+ * @param terms The term corresponding to this control.
  * @param command The string of a command to display as a shortcut hint for jumping to the next term.
  * @param commandReverse The string of a command to display as a shortcut hint for jumping to the previous term.
  * @param controlsInfo Details of controls inserted.
  */
 export const insertTermControl = (
-	terms: Array<MatchTerm>,
-	idx: number,
+	term: MatchTerm,
+	setTerm: SetTerm,
 	termTokens: TermTokens,
 	commands: BrowserCommands,
 	controlsInfo: ControlsInfo,
 	highlighter: Highlighter,
 ) => {
-	let term = terms[idx >= 0 ? idx : (terms.length + idx)] as MatchTerm;
 	const { optionList, controlReveal } = createTermOptionList(
 		term,
 		term.matchMode,
@@ -702,10 +720,11 @@ export const insertTermControl = (
 		(matchType: string, checked: boolean) => {
 			const matchMode = Object.assign({}, term.matchMode) as MatchMode;
 			matchMode[matchType] = checked;
-			const termNew = new MatchTerm(term.phrase, matchMode);
-			terms = terms.map(termOther => termOther === term ? termNew : termOther);
-			TermsSetter.termsSet(terms);
-			term = termNew;
+			term = new MatchTerm(term.phrase, matchMode);
+			const idx = getTermIndexFromBar(term, termTokens);
+			if (idx !== null) {
+				setTerm(term, idx);
+			}
 		},
 	);
 	const controlPad = document.createElement("span");
@@ -720,7 +739,7 @@ export const insertTermControl = (
 		highlighter.current?.stepToNextOccurrence(false, false, term);
 	};
 	controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
-		updateTermTooltip(terms, term, termTokens, commands, highlighter);
+		updateTermTooltip(term, termTokens, commands, highlighter);
 	});
 	controlPad.appendChild(controlContent);
 	const controlEdit = document.createElement("button");
@@ -738,7 +757,13 @@ export const insertTermControl = (
 	controlEditRemove.draggable = false;
 	controlEdit.append(controlEditChange, controlEditRemove);
 	controlPad.appendChild(controlEdit);
-	insertTermInput(terms, controlPad, idx, input => controlPad.insertBefore(input, controlEdit), termTokens);
+	insertTermInput(
+		term,
+		setTerm,
+		controlPad,
+		input => controlPad.insertBefore(input, controlEdit),
+		termTokens,
+	);
 	const control = document.createElement("span");
 	control.classList.add(EleClass.CONTROL, getTermClass(term, termTokens));
 	control.appendChild(controlPad);
@@ -750,18 +775,20 @@ export const insertTermControl = (
 export const controlVisibilityUpdate = (
 	controlName: ControlButtonName,
 	controlsInfo: ControlsInfo,
-	terms: Array<MatchTerm>,
+	doPhrasesMatchTerms: DoPhrasesMatchTerms,
 ) => {
 	const control = document.querySelector(`#${EleID.BAR} .${Classes.controlGetClass(controlName)}`);
 	if (control) {
 		const value = controlsInfo.barControlsShown[controlName];
-		const shown = controlName === "replaceTerms"
-			? (value && controlsInfo.termsOnHold.length > 0 && (
-				controlsInfo.termsOnHold.length !== terms.length
-				|| !controlsInfo.termsOnHold.every(termOnHold => terms.find(term => term.phrase === termOnHold.phrase))
-			))
-			: value;
-		control.classList.toggle(EleClass.DISABLED, !shown);
+		if (controlName === "replaceTerms") {
+			const shown = (value
+				&& controlsInfo.termsOnHold.length > 0
+				&& !doPhrasesMatchTerms(controlsInfo.termsOnHold.map(term => term.phrase))
+			);
+			control.classList.toggle(EleClass.DISABLED, !shown);
+		} else {
+			control.classList.toggle(EleClass.DISABLED, !value);
+		}
 	}
 };
 
@@ -811,6 +838,11 @@ export const focusTermInput = (termIdx?: number) => {
 	bar.addEventListener("focusout", returnSelection);
 };
 
+export const barVisibilityUpdate = (controlsInfo: ControlsInfo) => {
+	const bar = document.getElementById(EleID.BAR);
+	bar?.classList.toggle(EleClass.DISABLED, !controlsInfo.pageModifyEnabled);
+};
+
 /**
  * Inserts constant bar controls into the toolbar.
  * @param terms Terms highlighted in the page to mark the scroll position of.
@@ -818,7 +850,7 @@ export const focusTermInput = (termIdx?: number) => {
  * @param commands Browser commands to use in shortcut hints.
  * @param hues Color hues for term styles to cycle through.
  */
-export const controlsInsert = (() => {
+const controlsInsert = (() => {
 	/**
 	 * Inserts a control.
 	 * @param terms Terms to be controlled and highlighted.
@@ -891,7 +923,9 @@ export const controlsInsert = (() => {
 		};
 
 		return (
-			terms: Array<MatchTerm>,
+			setTerm: SetTerm,
+			setTerms: SetTerms,
+			doPhrasesMatchTerms: DoPhrasesMatchTerms,
 			controlName: ControlButtonName,
 			hideWhenInactive: boolean,
 			termTokens: TermTokens,
@@ -943,10 +977,16 @@ export const controlsInsert = (() => {
 					containerId: EleID.BAR_RIGHT,
 					setUp: container => {
 						const pad = container.querySelector(`.${EleClass.CONTROL_PAD}`) as HTMLElement;
-						insertTermInput(terms, pad, TermChange.CREATE, input => pad.appendChild(input), termTokens);
+						insertTermInput(
+							null,
+							setTerm,
+							pad,
+							input => pad.appendChild(input),
+							termTokens,
+						);
 						updateTermControlMatchModeClassList(controlsInfo.matchMode, container.classList);
 						const { optionList, controlReveal } = createTermOptionList(
-							undefined,
+							null,
 							controlsInfo.matchMode,
 							termTokens,
 							controlsInfo,
@@ -964,17 +1004,20 @@ export const controlsInsert = (() => {
 					path: "/icons/refresh.svg",
 					containerId: EleID.BAR_RIGHT,
 					onClick: () => {
-						TermsSetter.termsSet(controlsInfo.termsOnHold);
+						setTerms(controlsInfo.termsOnHold);
 					},
 				},
 			};
 			controlInsertWithInfo(controlName, info[controlName], hideWhenInactive);
-			controlVisibilityUpdate(controlName, controlsInfo, terms);
+			controlVisibilityUpdate(controlName, controlsInfo, doPhrasesMatchTerms);
 		};
 	})();
 
 	return (
-		terms: Array<MatchTerm>,
+		terms: ReadonlyArray<MatchTerm>,
+		setTerm: SetTerm,
+		setTerms: SetTerms,
+		doPhrasesMatchTerms: DoPhrasesMatchTerms,
 		termTokens: TermTokens,
 		commands: BrowserCommands,
 		hues: TermHues,
@@ -984,6 +1027,7 @@ export const controlsInsert = (() => {
 		Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
 		const bar = document.createElement("div");
 		bar.id = EleID.BAR;
+		barVisibilityUpdate(controlsInfo);
 		// Inputs should not be focusable unless user has already focused bar. (1)
 		const inputsSetFocusable = (focusable: boolean) => {
 			bar.querySelectorAll(`input.${EleClass.CONTROL_INPUT}`).forEach((input: HTMLElement) => {
@@ -1068,9 +1112,6 @@ export const controlsInsert = (() => {
 		if (controlsInfo.highlightsShown) {
 			bar.classList.add(EleClass.HIGHLIGHTS_SHOWN);
 		}
-		if (!controlsInfo.pageModifyEnabled) {
-			bar.classList.add(EleClass.DISABLED);
-		}
 		const barLeft = document.createElement("span");
 		barLeft.id = EleID.BAR_LEFT;
 		barLeft.classList.add(EleClass.BAR_CONTROLS);
@@ -1084,10 +1125,18 @@ export const controlsInsert = (() => {
 		bar.appendChild(barRight);
 		document.body.insertAdjacentElement("beforebegin", bar);
 		Object.keys(controlsInfo.barControlsShown).forEach((barControlName: ControlButtonName) => {
-			controlInsert(terms, barControlName, !controlsInfo.barControlsShown[barControlName], termTokens, controlsInfo);
+			controlInsert(
+				setTerm,
+				setTerms,
+				doPhrasesMatchTerms,
+				barControlName,
+				!controlsInfo.barControlsShown[barControlName],
+				termTokens,
+				controlsInfo,
+			);
 		});
-		terms.forEach((term, i) =>
-			insertTermControl(terms, i, termTokens, commands, controlsInfo, highlighter)
+		terms.forEach(term =>
+			insertTermControl(term, setTerm, termTokens, commands, controlsInfo, highlighter)
 		);
 		const gutter = document.createElement("div");
 		gutter.id = EleID.MARKER_GUTTER;
@@ -1098,7 +1147,8 @@ export const controlsInsert = (() => {
 /**
  * Removes the control bar and scroll gutter.
  */
-export const controlsRemove = () => {
+const controlsRemove = () => {
+	// TODO why is this in charge of the scroll gutter??
 	const bar = document.getElementById(EleID.BAR);
 	const gutter = document.getElementById(EleID.MARKER_GUTTER);
 	if (bar) {
@@ -1113,14 +1163,17 @@ export const controlsRemove = () => {
 };
 
 /**
- * Insert the toolbar and appropriate controls.
+ * Inserts the toolbar and appropriate controls.
  * @param terms Terms to highlight and display in the toolbar.
  * @param commands Browser commands to use in shortcut hints.
  * @param hues Color hues for term styles to cycle through.
  * @param controlsInfo Details of controls to insert.
  */
-export const insertToolbar = (
-	terms: Array<MatchTerm>,
+export const insert = (
+	terms: ReadonlyArray<MatchTerm>,
+	setTerm: SetTerm,
+	setTerms: SetTerms,
+	doPhrasesMatchTerms: DoPhrasesMatchTerms,
 	termTokens: TermTokens,
 	commands: BrowserCommands,
 	hues: TermHues,
@@ -1130,7 +1183,17 @@ export const insertToolbar = (
 	const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
 		&& document.activeElement.closest(`#${EleID.BAR}`);
 	controlsRemove();
-	controlsInsert(terms, termTokens, commands, hues, controlsInfo, highlighter);
+	controlsInsert(
+		terms,
+		setTerm,
+		setTerms,
+		doPhrasesMatchTerms,
+		termTokens,
+		commands,
+		hues,
+		controlsInfo,
+		highlighter,
+	);
 	if (focusingControlAppend) {
 		const input = getControlAppendTerm()?.querySelector("input");
 		if (input) {
@@ -1138,4 +1201,11 @@ export const insertToolbar = (
 			input.select();
 		}
 	}
+};
+
+/**
+ * Removes the toolbar and appropriate controls.
+ */
+export const remove = () => {
+	controlsRemove();
 };
