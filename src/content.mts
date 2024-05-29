@@ -8,8 +8,8 @@ import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
-import { type AbstractToolbar, StandardToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
-import * as ToolbarClasses from "/dist/modules/interface/toolbar/classes.mjs";
+import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
+import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
 import { assert, compatibility, itemsMatch } from "/dist/modules/common.mjs";
 
 type UpdateTermStatus = (term: MatchTerm) => void
@@ -221,10 +221,7 @@ const produceEffectOnCommandFn = function* (
 			toolbar.focusTermInput(commandInfo.termIdx ?? null);
 			break;
 		} case "selectTerm": {
-			const barTerms = document.getElementById(EleID.BAR_TERMS) as HTMLElement;
-			barTerms.classList.remove(ToolbarClasses.getControlPadClass(focusedIdx));
-			focusedIdx = getFocusedIdx(commandInfo.termIdx ?? -1);
-			barTerms.classList.add(ToolbarClasses.getControlPadClass(focusedIdx));
+			toolbar.indicateTerm(terms[focusedIdx]);
 			if (!selectModeFocus) {
 				highlighter.current?.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
@@ -347,7 +344,7 @@ class TermUpdateNotifier {
 	);
 	// TODO remove toolbar completely when not in use
 	// use WeakRef?
-	const toolbar: AbstractToolbar = new StandardToolbar([],
+	const toolbar: AbstractToolbar = new Toolbar([],
 		commands, hues,
 		controlsInfo,
 		setTerm, setTerms, doPhrasesMatchTerms,

@@ -1,8 +1,8 @@
 import { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
+import { getControlClass, getControlPadClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import type * as Toolbar from "/dist/modules/interface/toolbar.mjs";
-import * as ToolbarClasses from "/dist/modules/interface/toolbar/classes.mjs";
+import type { ControlsInfo } from "/dist/content.mjs";
 import { Z_INDEX_MAX } from "/dist/modules/common.mjs";
 
 /**
@@ -14,7 +14,7 @@ const fillContent = (
 	terms: ReadonlyArray<MatchTerm>,
 	termTokens: TermTokens,
 	hues: TermHues,
-	barLook: Toolbar.BarLook,
+	barLook: ControlsInfo["barLook"],
 	highlighter: Highlighter,
 ) => {
 	const style = document.getElementById(EleID.STYLE) as HTMLStyleElement;
@@ -65,8 +65,8 @@ const fillContent = (
 			}
 		}
 	}
-	&.${EleClass.COLLAPSED} .${ToolbarClasses.controlGetClass("toggleBarCollapsed")} .${EleClass.PRIMARY},
-	&:not(.${EleClass.COLLAPSED}) .${ToolbarClasses.controlGetClass("toggleBarCollapsed")} .${EleClass.SECONDARY} {
+	&.${EleClass.COLLAPSED} .${getControlClass("toggleBarCollapsed")} .${EleClass.PRIMARY},
+	&:not(.${EleClass.COLLAPSED}) .${getControlClass("toggleBarCollapsed")} .${EleClass.SECONDARY} {
 		display: none;
 	}
 	& .${EleClass.CONTROL_REVEAL} img {
@@ -376,7 +376,7 @@ ${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
 			background: hsl(${hue} 70% 70%);
 		}
 	}
-	&.${ToolbarClasses.getControlPadClass(i)} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
+	&.${getControlPadClass(i)} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
 		background: hsl(${hue} 100% 90%);
 	}
 }
