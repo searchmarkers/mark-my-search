@@ -7,11 +7,11 @@ import type { ControlFocusArea } from "/dist/modules/interface/toolbar/common.mj
 import { applyMatchModeToClassList, getMatchModeFromClassList } from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleClass } from "/dist/modules/common.mjs";
-import type { SetTerm, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
+import type { TermAppender, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 class TermAppendControl implements TermAbstractControl {
 	readonly #toolbarInterface: ToolbarTermControlInterface;
-	readonly #setTerm: SetTerm;
+	readonly #termAppender: TermAppender;
 
 	readonly #input: TermInput;
 	readonly #optionList: TermOptionList;
@@ -22,11 +22,11 @@ class TermAppendControl implements TermAbstractControl {
 	constructor (
 		controlsInfo: ControlsInfo,
 		toolbarInterface: ToolbarTermControlInterface,
-		setTerm: SetTerm,
+		termAppender: TermAppender,
 		doPhrasesMatchTerms: DoPhrasesMatchTerms,
 	) {
 		this.#toolbarInterface = toolbarInterface;
-		this.#setTerm = setTerm;
+		this.#termAppender = termAppender;
 		this.matchMode = Object.assign({}, controlsInfo.matchMode);
 		let controlContainerTemp: HTMLElement | undefined = undefined;
 		const setUpControl = (container: HTMLElement) => {
@@ -102,7 +102,7 @@ class TermAppendControl implements TermAbstractControl {
 				token => this.control.classListContains(token),
 			);
 			const term = new MatchTerm(inputValue, matchMode, { allowStemOverride: true });
-			this.#setTerm(term, true);
+			this.#termAppender.appendTerm(term);
 		}
 	}
 

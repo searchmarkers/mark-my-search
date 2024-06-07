@@ -12,6 +12,10 @@ import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/inte
 import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
 import { assert, compatibility, itemsMatch } from "/dist/modules/common.mjs";
 
+type GetToolbar = (<CreateIfNull extends boolean>
+	(createIfNull: CreateIfNull) => CreateIfNull extends true ? AbstractToolbar : (AbstractToolbar | null)
+)
+
 type UpdateTermStatus = (term: MatchTerm) => void
 
 type DoPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => boolean
@@ -26,7 +30,7 @@ interface ControlsInfo {
 	termsOnHold: Array<MatchTerm>
 	barControlsShown: ConfigValues["barControlsShown"]
 	barLook: ConfigValues["barLook"]
-	matchMode: MatchMode
+	matchMode: Readonly<MatchMode>
 }
 
 /**
@@ -181,9 +185,9 @@ const styleElementsCleanup = () => {
  */
 const produceEffectOnCommandFn = function* (
 	terms: Array<MatchTerm>,
-	setTerms: (terms: ReadonlyArray<MatchTerm>) => void,
+	termSetter: TermSetter,
 	controlsInfo: ControlsInfo,
-	toolbar: AbstractToolbar,
+	getToolbar: GetToolbar,
 	highlighter: Highlighter,
 ) {
 	let selectModeFocus = false;
@@ -204,7 +208,7 @@ const produceEffectOnCommandFn = function* (
 			selectModeFocus = !selectModeFocus;
 			break;
 		} case "replaceTerms": {
-			setTerms(controlsInfo.termsOnHold);
+			termSetter.setTerms(controlsInfo.termsOnHold);
 			break;
 		} case "stepGlobal": {
 			if (focusReturnToDocument()) {
@@ -218,10 +222,10 @@ const produceEffectOnCommandFn = function* (
 			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
-			toolbar.focusTermInput(commandInfo.termIdx ?? null);
+			getToolbar(false)?.focusTermInput(commandInfo.termIdx ?? null);
 			break;
 		} case "selectTerm": {
-			toolbar.indicateTerm(terms[focusedIdx]);
+			getToolbar(false)?.indicateTerm(terms[focusedIdx]);
 			if (!selectModeFocus) {
 				highlighter.current?.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
@@ -236,16 +240,16 @@ const onWindowMouseUp = () => {
 	}
 };
 
-type SetTerms = (terms: ReadonlyArray<MatchTerm>) => void
+interface TermSetter extends TermReplacer, TermAppender {
+	setTerms: (termsNew: ReadonlyArray<MatchTerm>) => void;
+}
 
-type SetTerm = <Term extends MatchTerm | null>(term: Term, idxOrAppends: Term extends MatchTerm ? (number | true) : number) => void
+interface TermReplacer {
+	replaceTerm: (term: MatchTerm | null, index: number) => void;
+}
 
-class TermUpdateNotifier {
-	constructor () {
-
-	}
-
-	//setTerms
+interface TermAppender {
+	appendTerm: (term: MatchTerm) => void;
 }
 
 (() => {
@@ -286,57 +290,77 @@ class TermUpdateNotifier {
 		},
 	};
 	const highlighter: Highlighter = {};
-	const updateTermStatus = (term: MatchTerm) => toolbar.updateTermStatus(term);
-	const setTermsInternal: SetTerms = termsNew => {
-		if (itemsMatch(terms, termsNew, termEquals) && (terms.length > 0 || document.getElementById(EleID.BAR))) {
-			return;
-		}
-		const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
-		terms.splice(0, terms.length, ...termsNew);
-		window.addEventListener("mouseup", onWindowMouseUp);
-		refreshTermControlsAndStartHighlighting(
-			termsOld,
-			terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
-			null,
-			termTokens,
-			controlsInfo,
-			toolbar,
-			highlighter,
-			commands,
-			hues,
-		);
-	};
-	const setTerms: SetTerms = async termsNew => {
-		setTermsInternal(termsNew);
-		await sendBackgroundMessage({ terms });
-	};
-	const setTermInternal: SetTerm = (term, idxOrAppends) => {
-		const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
-		if (typeof idxOrAppends === "number") {
-			if (term) {
-				terms[idxOrAppends] = term;
-			} {
-				terms.splice(idxOrAppends, 1);
+	const updateTermStatus = (term: MatchTerm) => getToolbar(false)?.updateTermStatus(term);
+	const termSetterInternal: TermSetter = {
+		setTerms: termsNew => {
+			if (itemsMatch(terms, termsNew, termEquals) && (terms.length > 0 || document.getElementById(EleID.BAR))) {
+				return;
 			}
-		} else if (term) {
+			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
+			terms.splice(0, terms.length, ...termsNew);
+			window.addEventListener("mouseup", onWindowMouseUp);
+			refreshTermControlsAndStartHighlighting(
+				termsOld,
+				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+				null,
+				termTokens,
+				controlsInfo,
+				getToolbar(true),
+				highlighter,
+				commands,
+				hues,
+			);
+		},
+		replaceTerm: (term, termIndex) => {
+			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
+			if (term) {
+				terms[termIndex] = term;
+			} else {
+				terms.splice(termIndex, 1);
+			}
+			window.addEventListener("mouseup", onWindowMouseUp);
+			refreshTermControlsAndStartHighlighting(
+				termsOld,
+				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+				{ term, termIndex },
+				termTokens,
+				controlsInfo,
+				getToolbar(true),
+				highlighter,
+				commands,
+				hues,
+			);
+		},
+		appendTerm: term => {
+			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
 			terms.push(term);
-		}
-		window.addEventListener("mouseup", onWindowMouseUp);
-		refreshTermControlsAndStartHighlighting(
-			termsOld,
-			terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
-			{ term, termIndex: typeof idxOrAppends === "number" ? idxOrAppends : termsOld.length },
-			termTokens,
-			controlsInfo,
-			toolbar,
-			highlighter,
-			commands,
-			hues,
-		);
+			window.addEventListener("mouseup", onWindowMouseUp);
+			refreshTermControlsAndStartHighlighting(
+				termsOld,
+				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+				{ term, termIndex: termsOld.length },
+				termTokens,
+				controlsInfo,
+				getToolbar(true),
+				highlighter,
+				commands,
+				hues,
+			);
+		},
 	};
-	const setTerm: SetTerm = async (term, idxOrAppends) => {
-		setTermInternal(term, idxOrAppends);
-		await sendBackgroundMessage({ terms });
+	const termSetter: TermSetter = {
+		setTerms: async termsNew => {
+			termSetterInternal.setTerms(termsNew);
+			await sendBackgroundMessage({ terms });
+		},
+		replaceTerm: async (term, termIndex) => {
+			termSetterInternal.replaceTerm(term, termIndex);
+			await sendBackgroundMessage({ terms });
+		},
+		appendTerm: async term => {
+			termSetterInternal.appendTerm(term);
+			await sendBackgroundMessage({ terms });
+		},
 	};
 	const doPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => (
 		phrases.length === terms.length // TODO this seems dubious
@@ -344,13 +368,23 @@ class TermUpdateNotifier {
 	);
 	// TODO remove toolbar completely when not in use
 	// use WeakRef?
-	const toolbar: AbstractToolbar = new Toolbar([],
-		commands, hues,
-		controlsInfo,
-		setTerm, setTerms, doPhrasesMatchTerms,
-		termTokens, highlighter,
-	);
-	const produceEffectOnCommand = produceEffectOnCommandFn(terms, setTerms, controlsInfo, toolbar, highlighter);
+	const getToolbar: GetToolbar = (() => {
+		// TODO use generator function?
+		let toolbar: AbstractToolbar | null = null;
+		return (createIfNull) => {
+			if (createIfNull && !toolbar) {
+				console.log("toolbar");
+				toolbar = new Toolbar([],
+					commands, hues,
+					controlsInfo,
+					termSetter, doPhrasesMatchTerms,
+					termTokens, highlighter,
+				);
+			}
+			return toolbar as Toolbar;
+		};
+	})();
+	const produceEffectOnCommand = produceEffectOnCommandFn(terms, termSetter, controlsInfo, getToolbar, highlighter);
 	produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
 	const getDetails = (request: Message.TabDetailsRequest) => ({
 		terms: request.termsFromSelection ? getTermsFromSelection(termTokens) : undefined,
@@ -374,6 +408,7 @@ class TermUpdateNotifier {
 		if (queuingPromise) {
 			await queuingPromise;
 		}
+		console.log(message);
 		styleElementsInsert();
 		if (message.highlighter !== undefined) {
 			highlighter.current?.endHighlighting();
@@ -422,7 +457,7 @@ class TermUpdateNotifier {
 		}
 		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 			controlsInfo.pageModifyEnabled = message.enablePageModify;
-			toolbar.updateBarVisibility();
+			getToolbar(false)?.updateBarVisibility();
 			if (!controlsInfo.pageModifyEnabled) {
 				highlighter.current?.endHighlighting();
 			}
@@ -434,7 +469,7 @@ class TermUpdateNotifier {
 		Object.entries(message.barControlsShown ?? {})
 			.forEach(([ controlName, value ]: [ ControlButtonName, boolean ]) => {
 				controlsInfo.barControlsShown[controlName] = value;
-				toolbar.updateControlVisibility(controlName);
+				getToolbar(false)?.updateControlVisibility(controlName);
 			});
 		Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
 			controlsInfo.barLook[key] = value;
@@ -444,7 +479,7 @@ class TermUpdateNotifier {
 			message.highlightLook.hues.forEach(hue => hues.push(hue));
 		}
 		if (message.matchMode) {
-			Object.assign(controlsInfo.matchMode, message.matchMode);
+			controlsInfo.matchMode = message.matchMode;
 		}
 		if (message.toggleHighlightsOn !== undefined) {
 			controlsInfo.highlightsShown = message.toggleHighlightsOn;
@@ -460,16 +495,16 @@ class TermUpdateNotifier {
 			window.removeEventListener("mouseup", onWindowMouseUp);
 			highlighter.current?.endHighlighting();
 			terms.splice(0);
-			toolbar.remove();
+			getToolbar(false)?.remove();
 			styleElementsCleanup();
 		}
 		if (message.terms) {
-			setTermsInternal(message.terms);
+			termSetterInternal.setTerms(message.terms);
 		}
 		(message.commands ?? []).forEach(command => {
 			produceEffectOnCommand.next(command);
 		});
-		toolbar.updateControlVisibility("replaceTerms");
+		getToolbar(false)?.updateControlVisibility("replaceTerms");
 		const bar = document.getElementById(EleID.BAR);
 		if (bar) {
 			bar.classList.toggle(EleClass.HIGHLIGHTS_SHOWN, controlsInfo.highlightsShown);
@@ -529,6 +564,8 @@ class TermUpdateNotifier {
 })();
 
 export type {
-	TermUpdateNotifier, SetTerms, SetTerm, UpdateTermStatus, DoPhrasesMatchTerms,
+	TermSetter, TermReplacer, TermAppender,
+	DoPhrasesMatchTerms,
+	UpdateTermStatus,
 	ControlsInfo,
 };

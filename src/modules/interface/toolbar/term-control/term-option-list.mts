@@ -10,6 +10,8 @@ class TermOptionList {
 
 	readonly #optionList: HTMLElement;
 	readonly #checkboxes: Array<HTMLInputElement> = [];
+
+	#matchMode: MatchMode;
 	
 	/**
 	 * Creates a menu structure containing clickable elements to individually toggle the matching options for the term.
@@ -25,20 +27,21 @@ class TermOptionList {
 	) {
 		this.#controlsInfo = controlsInfo;
 		this.#controlInterface = controlInterface;
+		this.#matchMode = matchMode;
 		this.#optionList = document.createElement("span");
 		this.#optionList.classList.add(EleClass.OPTION_LIST);
 		const options = (() => {
-			const options: Array<{ matchType: keyof MatchMode, title: string }> = [
-				{ matchType: "case", title: "Case Sensitive" },
-				{ matchType: "whole", title: "Whole Word" },
-				{ matchType: "stem", title: "Stem Word" },
-				{ matchType: "diacritics", title: "Diacritics Sensitive" },
-				{ matchType: "regex", title: "Regex Mode" },
-			];
-			return options.map(({ matchType, title }) => {
-				const {
-					optionElement, checkbox, toggle, makeFocusable,
-				} = this.createOption(matchType, title, matchMode, onActivated);
+			const options: Array<keyof MatchMode> = [ "case", "whole", "stem", "diacritics", "regex" ];
+			return options.map(matchType => {
+				const titles: Record<keyof MatchMode, string> = {
+					case: "Case Sensitive",
+					whole: "Whole Word",
+					stem: "Stem Word",
+					diacritics: "Diacritics Sensitive",
+					regex: "Regex Mode",
+				};
+				const title = titles[matchType];
+				const { optionElement, checkbox, toggle, makeFocusable } = this.createOption(matchType, title, onActivated);
 				this.#optionList.appendChild(optionElement);
 				this.#checkboxes.push(checkbox);
 				return {
@@ -145,7 +148,6 @@ class TermOptionList {
 	createOption (
 		matchType: keyof MatchMode,
 		text: string,
-		matchMode: Readonly<MatchMode>,
 		onActivated: (matchType: string, checked: boolean) => void,
 	) {
 		const option = document.createElement("label");
@@ -155,7 +157,7 @@ class TermOptionList {
 		const checkbox = document.createElement("input");
 		checkbox.type = "checkbox";
 		checkbox.id = id;
-		checkbox.checked = matchMode[matchType];
+		checkbox.checked = this.#matchMode[matchType];
 		checkbox.tabIndex = -1;
 		// TODO is this the correct event to use? should "change" be used instead?
 		checkbox.addEventListener("click", () => {
@@ -193,6 +195,10 @@ class TermOptionList {
 				}
 			},
 		};
+	}
+
+	setMatchMode (matchMode: Readonly<MatchMode>) {
+		this.#matchMode = matchMode;
 	}
 
 	/**

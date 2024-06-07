@@ -7,11 +7,11 @@ import { applyMatchModeToClassList, getTermCommands } from "/dist/modules/interf
 import { type MatchMode, MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
 import { EleClass, getTermClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import type { SetTerm, ControlsInfo } from "/dist/content.mjs";
+import type { TermReplacer, ControlsInfo } from "/dist/content.mjs";
 
 class TermReplaceControl implements TermAbstractControl {
 	readonly #toolbarInterface: ToolbarTermControlInterface;
-	readonly #setTerm: SetTerm;
+	readonly #termReplacer: TermReplacer;
 	readonly #termTokens: TermTokens;
 	readonly #highlighter: Highlighter;
 
@@ -35,12 +35,12 @@ class TermReplaceControl implements TermAbstractControl {
 		commands: BrowserCommands,
 		controlsInfo: ControlsInfo, // TODO ControlsInfo should be an observable
 		toolbarInterface: ToolbarTermControlInterface,
-		setTerm: SetTerm,
+		termReplacer: TermReplacer,
 		termTokens: TermTokens,
 		highlighter: Highlighter,
 	) {
 		this.#toolbarInterface = toolbarInterface;
-		this.#setTerm = setTerm;
+		this.#termReplacer = termReplacer;
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
 		this.#term = termParameter;
@@ -48,16 +48,16 @@ class TermReplaceControl implements TermAbstractControl {
 			(matchType: string, checked: boolean) => {
 				const matchMode = Object.assign({}, this.#term.matchMode) as MatchMode;
 				matchMode[matchType] = checked;
-				this.#term = new MatchTerm(this.#term.phrase, matchMode);
 				const idx = toolbarInterface.getTermControlIndex(this);
 				if (idx !== null) {
-					setTerm(this.#term, idx);
+					termReplacer.replaceTerm(new MatchTerm(this.#term.phrase, matchMode), idx);
 				}
 			},
 			this.#term.matchMode,
 			controlsInfo,
 			this,
 		);
+		this.#optionList.setMatchMode(this.#term.matchMode);
 		const revealButton = this.#optionList.createRevealButton();
 		revealButton.addEventListener("click", () => {
 			this.#input.classListToggle(EleClass.OPENED_MENU, true);
@@ -92,6 +92,7 @@ class TermReplaceControl implements TermAbstractControl {
 		editRemoveImage.draggable = false;
 		editButton.append(editChangeImage, editRemoveImage);
 		this.#input = new TermInput({ type: "replace", editButton, content: this.#controlContent }, this, this.#toolbarInterface);
+		this.#input.setTerm(this.#term);
 		this.#input.appendTo(this.#controlPad);
 		this.#controlPad.appendChild(editButton);
 		this.#control = document.createElement("span");
@@ -149,10 +150,9 @@ class TermReplaceControl implements TermAbstractControl {
 				this.#toolbarInterface.selectTermInput(index + 1);
 				return;
 			}
-			this.#setTerm(null, index);
+			this.#termReplacer.replaceTerm(null, index);
 		} else if (inputValue !== this.#term.phrase) {
-			this.#term = new MatchTerm(inputValue, this.#term.matchMode);
-			this.#setTerm(this.#term, index);
+			this.#termReplacer.replaceTerm(new MatchTerm(inputValue, this.#term.matchMode), index);
 		}
 	}
 
@@ -207,6 +207,8 @@ class TermReplaceControl implements TermAbstractControl {
 		this.#control.classList.remove(getTermClass(this.#term, this.#termTokens));
 		this.#term = term;
 		this.#controlContent.textContent = this.#term.phrase;
+		this.#input.setTerm(term);
+		this.#optionList.setMatchMode(term.matchMode);
 		this.#control.classList.add(getTermClass(this.#term, this.#termTokens));
 	}
 

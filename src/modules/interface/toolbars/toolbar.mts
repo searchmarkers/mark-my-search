@@ -9,12 +9,11 @@ import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import type { SetTerm, SetTerms, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
+import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 class Toolbar implements AbstractToolbar {
 	readonly #controlsInfo: ControlsInfo;
-	readonly #setTerm: SetTerm;
-	readonly #setTerms: SetTerms;
+	readonly #termSetter: TermSetter;
 	readonly #doPhrasesMatchTerms: DoPhrasesMatchTerms;
 	readonly #termTokens: TermTokens;
 	readonly #highlighter: Highlighter;
@@ -36,14 +35,12 @@ class Toolbar implements AbstractToolbar {
 		commands: BrowserCommands,
 		hues: TermHues,
 		controlsInfo: ControlsInfo,
-		setTerm: SetTerm,
-		setTerms: SetTerms,
+		termSetter: TermSetter,
 		doPhrasesMatchTerms: DoPhrasesMatchTerms,
 		termTokens: TermTokens,
 		highlighter: Highlighter,
 	) {
-		this.#setTerm = setTerm;
-		this.#setTerms = setTerms;
+		this.#termSetter = termSetter;
 		this.#doPhrasesMatchTerms = doPhrasesMatchTerms;
 		this.#controlsInfo = controlsInfo;
 		this.#termTokens = termTokens;
@@ -108,11 +105,10 @@ class Toolbar implements AbstractToolbar {
 				}
 				event.preventDefault();
 				if (!event.shiftKey && control.getInputValue().length > 0) {
-					// Force term-append to commit (add new term) then regain focus.
-					control.unfocusInput();
-					// Use focus-term-input command to ensure that focus+selection will later be restored.
-					// TODO ensure focus+selection is restored by a cleaner method
-					control.focusInput();
+					control.commit();
+					// TODO this (alternative) sequence is now obsolete anyway, but why does it not work anymore?
+					//control.unfocusInput();
+					//control.focusInput();
 				} else {
 					// Ensure proper return of focus+selection.
 					control.unfocusInput();
@@ -144,7 +140,7 @@ class Toolbar implements AbstractToolbar {
 		for (const sectionName of Toolbar.sectionNames) {
 			this.#bar.appendChild(this.#sections[sectionName]);
 		}
-		this.#termAppendControl = new TermAppendControl(controlsInfo, this, setTerm, doPhrasesMatchTerms);
+		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termSetter, doPhrasesMatchTerms);
 		this.#termAppendControl.appendTo(this.#sections.right);
 		this.#controls = {
 			toggleBarCollapsed: this.createAndInsertControl("toggleBarCollapsed"),
@@ -159,7 +155,7 @@ class Toolbar implements AbstractToolbar {
 				token: this.#termTokens.get(term),
 				control: new TermReplaceControl(term,
 					commands, controlsInfo,
-					this, this.#setTerm, this.#termTokens, this.#highlighter,
+					this, this.#termSetter, this.#termTokens, this.#highlighter,
 				),
 			});
 		});
@@ -191,7 +187,7 @@ class Toolbar implements AbstractToolbar {
 			token: this.#termTokens.get(term),
 			control: new TermReplaceControl(term,
 				commands, this.#controlsInfo,
-				this, this.#setTerm, this.#termTokens, this.#highlighter,
+				this, this.#termSetter, this.#termTokens, this.#highlighter,
 			),
 		});
 		this.refreshTermControls();
@@ -202,19 +198,21 @@ class Toolbar implements AbstractToolbar {
 			token: this.#termTokens.get(term),
 			control: new TermReplaceControl(term,
 				commands, this.#controlsInfo,
-				this, this.#setTerm, this.#termTokens, this.#highlighter,
+				this, this.#termSetter, this.#termTokens, this.#highlighter,
 			),
 		});
 		this.refreshTermControls();
 	}
 
 	replaceTerm (term: MatchTerm, termOld: MatchTerm | number) {
-		const index = typeof termOld === "number"
-			? termOld
-			: this.#termControls.findIndex(
+		if (typeof termOld === "number") {
+			this.#termControls[termOld].control.replaceTerm(term);
+		} else {
+			const index = this.#termControls.findIndex(
 				({ token }) => token === this.#termTokens.get(term)
 			);
-		this.#termControls[index].control.replaceTerm(term);
+			this.#termControls[index].control.replaceTerm(term);
+		}
 	}
 
 	// TODO ensure that focus is handled correctly
@@ -225,7 +223,7 @@ class Toolbar implements AbstractToolbar {
 				token: this.#termTokens.get(term),
 				control: new TermReplaceControl(term,
 					commands, this.#controlsInfo,
-					this, this.#setTerm, this.#termTokens, this.#highlighter,
+					this, this.#termSetter, this.#termTokens, this.#highlighter,
 				),
 			});
 		}
@@ -318,7 +316,7 @@ class Toolbar implements AbstractToolbar {
 		return { control: null, termIndex: null, focusArea: "none" };
 	}
 
-	returnSelectionToDocument = (eventHasRelatedTarget: boolean) => {
+	returnSelectionToDocument (eventHasRelatedTarget: boolean) {
 		if (eventHasRelatedTarget) {
 			setTimeout(() => {
 				if (!document.activeElement || !document.activeElement.closest(`#${EleID.BAR}`)) {
@@ -340,7 +338,7 @@ class Toolbar implements AbstractToolbar {
 				this.#selectionReturn.target.selectionRanges.forEach(range => selection.addRange(range));
 			}
 		}
-	};
+	}
 
 	updateBarVisibility () {
 		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModifyEnabled);
@@ -410,14 +408,18 @@ class Toolbar implements AbstractToolbar {
 			path: "/icons/refresh.svg",
 			containerId: "BAR_RIGHT",
 			onClick: () => {
-				this.#setTerms(controlsInfo.termsOnHold);
+				this.#termSetter.setTerms(controlsInfo.termsOnHold);
 			},
 		};}
 	}
 
 	insertIntoDocument () {
-		document.body.insertAdjacentElement("beforebegin", this.#bar);
-		document.body.insertAdjacentElement("afterend", this.#scrollGutter);
+		if (!this.#bar.parentElement) {
+			document.body.insertAdjacentElement("beforebegin", this.#bar);
+		}
+		if (!this.#scrollGutter.parentElement) {
+			document.body.insertAdjacentElement("afterend", this.#scrollGutter);
+		}
 	}
 
 	remove () {

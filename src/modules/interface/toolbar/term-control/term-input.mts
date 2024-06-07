@@ -9,7 +9,7 @@ class TermInput {
 	
 	readonly #input: HTMLInputElement;
 
-	term: MatchTerm | null;
+	#term: MatchTerm | null = null;
 
 	/**
 	 * Creates an interactive term editing input. Inserts it into a term control.
@@ -36,46 +36,38 @@ class TermInput {
 		if (!document.activeElement || !document.activeElement.closest(`#${EleID.BAR}`)) {
 			input.tabIndex = -1;
 		}
-		const resetInput = () => {
-			input.value = this.term?.phrase ?? "";
-		};
-		const show = (event: MouseEvent) => {
+		const focusOnEvent = (event: MouseEvent) => {
 			event.preventDefault();
-			input.focus();
-			input.select();
-			if (document.getSelection()?.toString() === input.value) {
-				setTimeout(() => {
-					input.select();
-				});
-			}
-		};
-		const hide = () => {
-			input.blur();
+			this.select();
 		};
 		if (controlElements.type === "replace") {
 			controlElements.editButton.addEventListener("click", event => {
 				if (inputSize) { // Input is shown; currently a delete button.
 					input.value = "";
 					controlInterface.commit();
-					hide();
+					this.unfocus();
 				} else { // Input is hidden; currently an edit button.
-					show(event);
+					focusOnEvent(event);
 				}
 			});
 			controlElements.editButton.addEventListener("contextmenu", event => {
 				event.preventDefault();
 				input.value = "";
 				controlInterface.commit();
-				hide();
+				this.unfocus();
 			});
-			controlElements.content.addEventListener("contextmenu", show);
+			controlElements.content.addEventListener("contextmenu", focusOnEvent);
 		} else if (controlElements.type === "append") {
-			controlElements.button.addEventListener("click", show);
-			controlElements.button.addEventListener("contextmenu", show);
+			controlElements.button.addEventListener("click", focusOnEvent);
+			controlElements.button.addEventListener("contextmenu", focusOnEvent);
 		}
-		(new ResizeObserver(entries =>
-			entries.forEach(entry => entry.contentRect.width === 0 ? hide() : undefined)
-		)).observe(input);
+		new ResizeObserver(entries => {
+			entries.forEach(entry => {
+				if (entry.contentRect.width === 0) {
+					this.unfocus();
+				}
+			});
+		}).observe(input);
 		input.addEventListener("keydown", event => {
 			if (event.key === "Tab") {
 				return; // Must be caught by the bar to be handled independently.
@@ -84,17 +76,15 @@ class TermInput {
 			switch (event.key) {
 			case "Enter": {
 				if (event.shiftKey) {
-					hide();
+					this.unfocus();
 				} else {
-					const inputValue = input.value;
-					input.value = inputValue;
-					controlInterface.commit(inputValue);
+					controlInterface.commit();
 				}
 				return;
 			}
 			case "Escape": {
-				resetInput();
-				hide();
+				this.resetValue();
+				this.unfocus();
 				return;
 			}
 			case "ArrowLeft":
@@ -139,8 +129,8 @@ class TermInput {
 		new ResizeObserver(entries => {
 			const inputSizeNew = entries[0]?.contentBoxSize[0]?.inlineSize ?? 0;
 			if (inputSizeNew !== inputSize) {
-				if (inputSizeNew) {
-					resetInput();
+				if (inputSizeNew > 0) {
+					this.resetValue();
 				} else {
 					controlInterface.commit();
 				}
@@ -182,8 +172,16 @@ class TermInput {
 		}
 	}
 
+	setTerm (term: MatchTerm) {
+		this.#term = term;
+	}
+
 	getValue (): string {
 		return this.#input.value;
+	}
+
+	resetValue () {
+		this.#input.value = this.#term?.phrase ?? "";
 	}
 
 	/**
@@ -192,10 +190,16 @@ class TermInput {
 	 */
 	select (shiftCaret?: "right" | "left") {
 		this.#input.focus();
-		this.#input.select();
-		if (shiftCaret !== undefined) {
+		if (shiftCaret) {
 			const caretPosition = shiftCaret === "right" ? 0 : -1;
 			this.#input.setSelectionRange(caretPosition, caretPosition);
+		} else {
+			this.#input.select();
+			if (document.getSelection()?.toString() === this.#input.value) {
+				setTimeout(() => {
+					this.#input.select();
+				});
+			}
 		}
 	}
 
@@ -203,8 +207,7 @@ class TermInput {
 		const selection = getSelection() as Selection;
 		const activeElementOriginal = document.activeElement as HTMLElement;
 		const selectionRangesOriginal = Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i));
-		this.#input.focus();
-		this.#input.select();
+		this.select();
 		return {
 			element: activeElementOriginal,
 			selectionRanges: selectionRangesOriginal,
@@ -212,6 +215,7 @@ class TermInput {
 	}
 
 	unfocus () {
+		console.log("unfocusing...");
 		this.#input.blur();
 	}
 
