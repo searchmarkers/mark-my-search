@@ -42,7 +42,6 @@ class TermAppendControl implements TermAbstractControl {
 		this.control = new Control("appendTerm", {
 			buttonClasses: [ EleClass.CONTROL_BUTTON, EleClass.CONTROL_CONTENT ],
 			path: "/icons/create.svg",
-			containerId: "BAR_RIGHT",
 			setUp: container => {
 				controlContainerTemp = container;
 			},

@@ -141,14 +141,26 @@ class Toolbar implements AbstractToolbar {
 			this.#bar.appendChild(this.#sections[sectionName]);
 		}
 		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termSetter, doPhrasesMatchTerms);
-		this.#termAppendControl.appendTo(this.#sections.right);
-		this.#controls = {
-			toggleBarCollapsed: this.createAndInsertControl("toggleBarCollapsed"),
-			disableTabResearch: this.createAndInsertControl("disableTabResearch"),
-			performSearch: this.createAndInsertControl("performSearch"),
-			toggleHighlights: this.createAndInsertControl("toggleHighlights"),
-			appendTerm: this.#termAppendControl.control,
-			replaceTerms: this.createAndInsertControl("replaceTerms"),
+		this.#controls = { // The order of properties determines the order of insertion into (sections of) the toolbar.
+			toggleBarCollapsed: (
+				this.createAndInsertControl("toggleBarCollapsed", "left")
+			),
+			disableTabResearch: (
+				this.createAndInsertControl("disableTabResearch", "left")
+			),
+			performSearch: (
+				this.createAndInsertControl("performSearch", "left")
+			),
+			toggleHighlights: (
+				this.createAndInsertControl("toggleHighlights", "left")
+			),
+			appendTerm: (() => {
+				this.#termAppendControl.appendTo(this.#sections.right);
+				return this.#termAppendControl.control;
+			})(),
+			replaceTerms: (
+				this.createAndInsertControl("replaceTerms", "right")
+			),
 		};
 		terms.forEach(term => {
 			this.#termControls.push({
@@ -348,17 +360,13 @@ class Toolbar implements AbstractToolbar {
 		this.#controls[controlName].updateVisibility();
 	}
 
-	createAndInsertControl (controlName: Exclude<ControlButtonName, "appendTerm">): Control {
-		const controlButtonInfo = this.createControlButtonInfo(controlName);
-		const control = new Control(controlName, controlButtonInfo, this.#controlsInfo, this.#doPhrasesMatchTerms);
-		switch (controlButtonInfo.containerId) {
-		case "BAR_LEFT": {
-			control.appendTo(this.#sections.left);
-			break;
-		} case "BAR_RIGHT": {
-			control.appendTo(this.#sections.right);
-			break;
-		}}
+	createAndInsertControl (
+		controlName: Exclude<ControlButtonName, "appendTerm">,
+		barSide: typeof Toolbar.sectionNames[number],
+	): Control {
+		const info = this.createControlButtonInfo(controlName);
+		const control = new Control(controlName, info, this.#controlsInfo, this.#doPhrasesMatchTerms);
+		control.appendTo(this.#sections[barSide]);
 		return control;
 	}
 
@@ -374,7 +382,6 @@ class Toolbar implements AbstractToolbar {
 			controlClasses: [ EleClass.UNCOLLAPSIBLE ],
 			path: "/icons/arrow.svg",
 			pathSecondary: "/icons/mms.svg",
-			containerId: "BAR_LEFT",
 			onClick: () => {
 				controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
 				sendBackgroundMessage({
@@ -386,19 +393,16 @@ class Toolbar implements AbstractToolbar {
 			},
 		}; case "disableTabResearch": return {
 			path: "/icons/close.svg",
-			containerId: "BAR_LEFT",	
 			onClick: () => sendBackgroundMessage({
 				deactivateTabResearch: true,
 			}),
 		}; case "performSearch": return {
 			path: "/icons/search.svg",
-			containerId: "BAR_LEFT",
 			onClick: () => sendBackgroundMessage({
 				performSearch: true,
 			}),
 		}; case "toggleHighlights": return {
 			path: "/icons/show.svg",
-			containerId: "BAR_LEFT",
 			onClick: () => sendBackgroundMessage({
 				toggle: {
 					highlightsShownOn: !controlsInfo.highlightsShown,
@@ -406,7 +410,6 @@ class Toolbar implements AbstractToolbar {
 			}),
 		}; case "replaceTerms": return {
 			path: "/icons/refresh.svg",
-			containerId: "BAR_RIGHT",
 			onClick: () => {
 				this.#termSetter.setTerms(controlsInfo.termsOnHold);
 			},

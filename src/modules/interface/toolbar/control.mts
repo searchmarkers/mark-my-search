@@ -9,7 +9,6 @@ type ControlButtonInfo = {
 	path?: string
 	pathSecondary?: string
 	label?: string
-	containerId: "BAR_LEFT" | "BAR_RIGHT"
 	onClick?: () => void
 	setUp?: (container: HTMLElement) => void
 }
