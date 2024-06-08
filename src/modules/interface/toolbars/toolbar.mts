@@ -11,6 +11,14 @@ import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
+enum ToolbarSection {
+	LEFT = "left",
+	TERMS = "terms",
+	RIGHT = "right",
+}
+
+const toolbarSectionNames = [ ToolbarSection.LEFT, ToolbarSection.TERMS, ToolbarSection.RIGHT ] as const;
+
 class Toolbar implements AbstractToolbar {
 	readonly #controlsInfo: ControlsInfo;
 	readonly #termSetter: TermSetter;
@@ -19,8 +27,7 @@ class Toolbar implements AbstractToolbar {
 	readonly #highlighter: Highlighter;
 
 	readonly #bar: HTMLElement;
-	static readonly sectionNames = [ "left", "terms", "right" ] as const;
-	readonly #sections: Readonly<Record<typeof Toolbar.sectionNames[number], HTMLElement>>;
+	readonly #sections: Readonly<Record<ToolbarSection, HTMLElement>>;
 	readonly #controls: Readonly<Record<ControlButtonName, Control>>;
 	readonly #termControls: Array<{ token: string, control: TermReplaceControl }> = [];
 	readonly #termAppendControl: TermAppendControl;
@@ -137,29 +144,29 @@ class Toolbar implements AbstractToolbar {
 		this.#sections.terms.id = EleID.BAR_TERMS;
 		this.#sections.right.id = EleID.BAR_RIGHT;
 		this.#sections.right.classList.add(EleClass.BAR_CONTROLS);
-		for (const sectionName of Toolbar.sectionNames) {
+		for (const sectionName of toolbarSectionNames) {
 			this.#bar.appendChild(this.#sections[sectionName]);
 		}
 		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termSetter, doPhrasesMatchTerms);
 		this.#controls = { // The order of properties determines the order of insertion into (sections of) the toolbar.
 			toggleBarCollapsed: (
-				this.createAndInsertControl("toggleBarCollapsed", "left")
+				this.createAndInsertControl("toggleBarCollapsed", ToolbarSection.LEFT)
 			),
 			disableTabResearch: (
-				this.createAndInsertControl("disableTabResearch", "left")
+				this.createAndInsertControl("disableTabResearch", ToolbarSection.LEFT)
 			),
 			performSearch: (
-				this.createAndInsertControl("performSearch", "left")
+				this.createAndInsertControl("performSearch", ToolbarSection.LEFT)
 			),
 			toggleHighlights: (
-				this.createAndInsertControl("toggleHighlights", "left")
+				this.createAndInsertControl("toggleHighlights", ToolbarSection.LEFT)
 			),
 			appendTerm: (() => {
 				this.#termAppendControl.appendTo(this.#sections.right);
 				return this.#termAppendControl.control;
 			})(),
 			replaceTerms: (
-				this.createAndInsertControl("replaceTerms", "right")
+				this.createAndInsertControl("replaceTerms", ToolbarSection.RIGHT)
 			),
 		};
 		terms.forEach(term => {
@@ -362,7 +369,7 @@ class Toolbar implements AbstractToolbar {
 
 	createAndInsertControl (
 		controlName: Exclude<ControlButtonName, "appendTerm">,
-		barSide: typeof Toolbar.sectionNames[number],
+		barSide: Exclude<ToolbarSection, ToolbarSection.TERMS>,
 	): Control {
 		const info = this.createControlButtonInfo(controlName);
 		const control = new Control(controlName, info, this.#controlsInfo, this.#doPhrasesMatchTerms);
