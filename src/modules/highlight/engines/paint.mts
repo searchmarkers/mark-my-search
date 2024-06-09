@@ -86,11 +86,10 @@ class PaintEngine implements AbstractEngine {
 		this.termPatterns = termPatterns;
 		this.method = method;
 		this.getCSS = method.getCSS;
-		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, termTokens, hues,
-				this.method ? Array.from(this.method.getHighlightedElements()) as Array<HTMLElement> : []
-			)
-		), 200, 2000);
+		this.requestRefreshIndicators = requestCallFn(
+			() => this.termMarkers.insert(terms, termTokens, hues, Array.from(this.method.getHighlightedElements())),
+			200, 2000,
+		);
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
@@ -100,14 +99,11 @@ class PaintEngine implements AbstractEngine {
 			(element): TreeCache => ({
 				id: "",
 				styleRuleIdx: -1,
-				isHighlightable: this.method?.highlightables.checkElement(element) ?? false,
+				isHighlightable: this.method.highlightables.checkElement(element),
 				flows: [],
 			}),
 			() => this.countMatches(),
 			ancestor => {
-				if (!this.method) {
-					return;
-				}
 				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
 				this.styleUpdates.observe(ancestorHighlightable);
 				const highlighting = ancestorHighlightable[CACHE] as TreeCache ?? {
@@ -165,15 +161,11 @@ class PaintEngine implements AbstractEngine {
 		// MAIN
 		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
-		const method = this.method;
-		if (method) {
-			this.styleUpdate(
-				Array.from(new Set(
-					Array.from(this.elementsVisible)
-						.map(element => method.highlightables.findAncestor(element))
-				)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
-			);
-		}
+		this.styleUpdate(
+			Array.from(new Set(
+				Array.from(this.elementsVisible).map(element => this.method.highlightables.findAncestor(element))
+			)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
+		);
 		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
@@ -185,7 +177,7 @@ class PaintEngine implements AbstractEngine {
 		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
 			element.removeAttribute("markmysearch-h_id");
 		});
-		this.method?.endHighlighting();
+		this.method.endHighlighting();
 		this.specialHighlighter.endHighlighting();
 		this.termWalker.cleanup();
 	}
@@ -195,7 +187,7 @@ class PaintEngine implements AbstractEngine {
 	}
 
 	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>, hues: Array<number>) {
-		this.method?.tempReplaceContainers(root, recurse);
+		this.method.tempReplaceContainers(root, recurse);
 		const styleRules: Array<StyleRuleInfo> = [];
 		// 'root' must have [elementInfo].
 		this.collectStyleRules(root, recurse, new Range(), styleRules, terms, hues);
@@ -210,13 +202,9 @@ class PaintEngine implements AbstractEngine {
 		terms: Array<MatchTerm>,
 		hues: Array<number>,
 	) {
-		const method = this.method;
-		if (!method) {
-			return;
-		}
 		if (ancestor && CACHE in ancestor) {
 			styleRules.push({
-				rule: method.constructHighlightStyleRule(
+				rule: this.method.constructHighlightStyleRule(
 					(ancestor[CACHE] as TreeCache).id,
 					getBoxesOwned(this.termTokens, ancestor),
 					terms,
@@ -234,7 +222,7 @@ class PaintEngine implements AbstractEngine {
 			while (child = walker.nextNode() as Element) {
 				if (CACHE in child) {
 					styleRules.push({
-						rule: method.constructHighlightStyleRule(
+						rule: this.method.constructHighlightStyleRule(
 							(child[CACHE] as TreeCache).id,
 							getBoxesOwned(this.termTokens, child),
 							terms,
@@ -276,22 +264,14 @@ class PaintEngine implements AbstractEngine {
 
 	getShiftAndVisibilityObservers (terms: Array<MatchTerm>, hues: Array<number>) {
 		const shiftObserver = new ResizeObserver(entries => {
-			const method = this.method;
-			if (!method) {
-				return;
-			}
 			const styleRules: Array<StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(method.highlightables.findAncestor(entry.target), true, terms, hues)
+				this.getStyleRules(this.method.highlightables.findAncestor(entry.target), true, terms, hues)
 			);
 			if (styleRules.length) {
 				this.styleUpdate(styleRules);
 			}
 		});
 		const visibilityObserver = new IntersectionObserver(entries => {
-			const method = this.method;
-			if (!method) {
-				return;
-			}
 			let styleRules: Array<StyleRuleInfo> = [];
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
@@ -300,13 +280,13 @@ class PaintEngine implements AbstractEngine {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
 						styleRules = styleRules.concat(
-							this.getStyleRules(method.highlightables.findAncestor(entry.target), false, terms, hues)
+							this.getStyleRules(this.method.highlightables.findAncestor(entry.target), false, terms, hues)
 						);
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
 					if (CACHE in entry.target) {
-						method.tempRemoveDrawElement(entry.target);
+						this.method.tempRemoveDrawElement(entry.target);
 					}
 					this.elementsVisible.delete(entry.target);
 					shiftObserver.unobserve(entry.target);

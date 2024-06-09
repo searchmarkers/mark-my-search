@@ -17,11 +17,11 @@ type EngineCSS = Readonly<{
 }>
 
 interface AbstractEngine {
-	termOccurrences?: AbstractTermCounter
-	termWalker?: AbstractTermWalker
-	termMarkers?: AbstractTermMarker
+	termOccurrences: AbstractTermCounter
+	termWalker: AbstractTermWalker
+	termMarkers: AbstractTermMarker
 
-	getCSS?: EngineCSS
+	getCSS: EngineCSS
 
 	// TODO document
 	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string

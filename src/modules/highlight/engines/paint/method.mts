@@ -10,7 +10,7 @@ interface AbstractMethod {
 
 	endHighlighting: () => void
 
-	getHighlightedElements: () => NodeListOf<Element>
+	getHighlightedElements: () => NodeListOf<HTMLElement>
 
 	/**
 	 * Gets a CSS rule to style all elements as per the enabled PAINT variant.

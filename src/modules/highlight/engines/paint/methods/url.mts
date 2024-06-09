@@ -27,7 +27,7 @@ class UrlMethod implements AbstractMethod {
 	endHighlighting () {}
 
 	getHighlightedElements () {
-		return document.body.querySelectorAll("[markmysearch-h_id]");
+		return document.body.querySelectorAll("[markmysearch-h_id]") as NodeListOf<HTMLElement>;
 	}
 
 	constructHighlightStyleRule (highlightId: string, boxes: Array<Box>, terms: Array<MatchTerm>, hues: Array<number>) {

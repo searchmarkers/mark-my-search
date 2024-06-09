@@ -309,13 +309,13 @@ const fillContent = (
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }
-${highlighter.current?.getCSS?.termHighlights() ?? ""}
+${highlighter.current?.getCSS.termHighlights() ?? ""}
 
 /**/
 
 `) + `
 
-${highlighter.current?.getCSS?.misc() ?? ""}
+${highlighter.current?.getCSS.misc() ?? ""}
 
 /* || Transitions */
 
@@ -337,7 +337,7 @@ ${highlighter.current?.getCSS?.misc() ?? ""}
 		style.textContent += makeImportant(`
 /* || Term Highlight */
 
-${highlighter.current?.getCSS?.termHighlight(terms, hues, i) ?? ""}
+${highlighter.current?.getCSS.termHighlight(terms, hues, i) ?? ""}
 
 /**/
 

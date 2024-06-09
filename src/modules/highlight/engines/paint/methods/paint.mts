@@ -85,7 +85,7 @@ class PaintMethod implements AbstractMethod {
 	}
 
 	getHighlightedElements () {
-		return document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]");
+		return document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]") as NodeListOf<HTMLElement>;
 	}
 
 	constructHighlightStyleRule (highlightId: string, boxes: Array<Box>) {

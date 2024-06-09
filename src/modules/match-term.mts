@@ -21,7 +21,7 @@ class MatchTerm {
 		allowStemOverride: boolean
 	}> = {}) {
 		this.phrase = phrase;
-		const matchModeThis = {
+		const matchModeThis: MatchMode = {
 			regex: false,
 			case: false,
 			stem: true,

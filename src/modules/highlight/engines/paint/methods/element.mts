@@ -62,7 +62,7 @@ border-radius: 2px;
 	endHighlighting () {}
 
 	getHighlightedElements () {
-		return document.body.querySelectorAll("[markmysearch-h_id]");
+		return document.body.querySelectorAll("[markmysearch-h_id]") as NodeListOf<HTMLElement>;
 	}
 
 	getElementDrawId (highlightId: string) {

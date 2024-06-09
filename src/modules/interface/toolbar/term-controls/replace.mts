@@ -182,7 +182,7 @@ class TermReplaceControl implements TermAbstractControl {
 	updateStatus () {
 		this.#controlPad.classList.toggle(
 			EleClass.DISABLED,
-			!this.#highlighter.current?.termOccurrences?.exists(this.#term, this.#termTokens),
+			!this.#highlighter.current?.termOccurrences.exists(this.#term, this.#termTokens),
 		);
 	}
 
@@ -197,7 +197,7 @@ class TermReplaceControl implements TermAbstractControl {
 		}
 		const { [index]: commandObject } = getTermCommands(commands);
 		const { down: command, up: commandReverse } = commandObject ?? { down: "", up: "" };
-		const occurrenceCount = this.#highlighter.current?.termOccurrences?.countBetter(this.#term, this.#termTokens) ?? 0;
+		const occurrenceCount = this.#highlighter.current?.termOccurrences.countBetter(this.#term, this.#termTokens) ?? 0;
 		const matchesString = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page`;
 		if (occurrenceCount > 0 && command && commandReverse) {
 			const commandString = (occurrenceCount === 1)
