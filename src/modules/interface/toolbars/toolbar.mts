@@ -99,7 +99,7 @@ class Toolbar implements AbstractToolbar {
 				// Special case to specifically focus the term append input, in case the button is hidden.
 				if (control && !event.shiftKey && index === this.#termControls.length - 1) {
 					event.preventDefault();
-					this.#selectionReturn.target = this.#termAppendControl.focusInput();
+					this.#selectionReturn.setTargetIfValid(this.#termAppendControl.focusInput());
 					return;
 				}
 				if (!(event.shiftKey ? control === this.#termControls[0] : control === this.#termAppendControl)) {
@@ -203,7 +203,7 @@ class Toolbar implements AbstractToolbar {
 	focusMenuOpener () {
 		for (const termControl of this.getTermAbstractControls()) {
 			if (termControl.inputOpenedMenu()) {
-				this.#selectionReturn.target = termControl.focusInput();
+				this.#selectionReturn.setTargetIfValid(termControl.focusInput());
 				return;
 			}
 		}
@@ -304,9 +304,9 @@ class Toolbar implements AbstractToolbar {
 
 	focusTermInput (termIndex: number | null) {
 		if (typeof termIndex === "number" && termIndex < this.#termControls.length) {
-			this.#selectionReturn.target = this.#termControls[termIndex].focusInput();
+			this.#selectionReturn.setTargetIfValid(this.#termControls[termIndex].focusInput());
 		} else {
-			this.#selectionReturn.target = this.#termAppendControl.focusInput();
+			this.#selectionReturn.setTargetIfValid(this.#termAppendControl.focusInput());
 		}
 	}
 
@@ -336,7 +336,7 @@ class Toolbar implements AbstractToolbar {
 		if (eventHasRelatedTarget) {
 			setTimeout(() => {
 				if (!document.activeElement || !document.activeElement.closest(`#${EleID.BAR}`)) {
-					this.#selectionReturn.target = null;
+					this.#selectionReturn.forgetTarget();
 				}
 			});
 			return; // Focus is being moved, not lost.
@@ -344,14 +344,18 @@ class Toolbar implements AbstractToolbar {
 		if (document.activeElement && document.activeElement.closest(`#${EleID.BAR}`)) {
 			return;
 		}
-		if (this.#selectionReturn.target?.element) {
-			this.#selectionReturn.target.element.focus({ preventScroll: true });
-		}
-		if (this.#selectionReturn.target?.selectionRanges) {
-			const selection = document.getSelection();
-			if (selection) {
-				selection.removeAllRanges();
-				this.#selectionReturn.target.selectionRanges.forEach(range => selection.addRange(range));
+		const target = this.#selectionReturn.getTarget();
+		if (target) {
+			this.#selectionReturn.forgetTarget();
+			if (target.element) {
+				target.element.focus({ preventScroll: true });
+			}
+			if (target.selectionRanges) {
+				const selection = document.getSelection();
+				if (selection) {
+					selection.removeAllRanges();
+					target.selectionRanges.forEach(range => selection.addRange(range));
+				}
 			}
 		}
 	}
@@ -441,14 +445,19 @@ class Toolbar implements AbstractToolbar {
 class ToolbarSelectionReturnManager {
 	#target: SelectionReturnTarget | null = null;
 
-	set target(target: SelectionReturnTarget | null) {
-		if (target?.element && target.element.closest(`#${EleID.BAR}`)) {
+	setTargetIfValid (target: SelectionReturnTarget) {
+		if (target.element && target.element.closest(`#${EleID.BAR}`)) {
 			this.#target = null;
 			return;
 		}
 		this.#target = target;
 	}
-	get target() {
+
+	forgetTarget () {
+		this.#target = null;
+	}
+
+	getTarget () {
 		return this.#target;
 	}
 }
