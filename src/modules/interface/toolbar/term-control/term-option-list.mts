@@ -100,10 +100,10 @@ class TermOptionList {
 		this.#optionList.addEventListener("focusout", event => {
 			this.#optionList.removeAttribute("tabindex");
 			const newFocus = event.relatedTarget as Element | null;
+			console.log(newFocus);
 			if (this.#optionList.contains(newFocus)) {
 				return;
 			}
-			console.log("option list focus out");
 			for (const option of options) {
 				option.makeFocusable(false);
 			}
@@ -111,8 +111,6 @@ class TermOptionList {
 				this.close(false);
 			} else {
 				this.close(true);
-				console.log("forgetting menu opener (option list focus out)");
-				toolbarInterface.forgetMenuOpener();
 			}
 		});
 	}
@@ -123,24 +121,21 @@ class TermOptionList {
 		button.classList.add(EleClass.CONTROL_BUTTON, EleClass.CONTROL_REVEAL);
 		button.tabIndex = -1;
 		button.disabled = !this.#controlsInfo.barLook.showRevealIcon;
-		button.addEventListener("focusin", () => {
-			console.log("forgetting menu opener (reveal button focus in)");
-			this.#toolbarInterface.forgetMenuOpener();
-		});
 		button.addEventListener("mousedown", () => {
-			// If menu was open, it is about to be "just closed" because the mousedown will close it.
-			// If menu was closed, remove "just closed" class if present.
-			this.#controlInterface.classListToggle(
-				EleClass.MENU_JUST_CLOSED_BY_BUTTON, // *just closed "by button"* because this class is only applied here.
-				this.#controlInterface.classListContains(EleClass.MENU_OPEN),
-			);
-			this.close(true);
+			if (this.isOpen()) {
+				this.#optionList.dataset.mousedownClosed = "";
+				this.close(true);
+			}
 		});
 		button.addEventListener("click", () => {
-			if (this.#controlInterface.classListContains(EleClass.MENU_JUST_CLOSED_BY_BUTTON)) {
-				return;
+			if ("mousedownClosed" in this.#optionList.dataset) {
+				delete this.#optionList.dataset.mousedownClosed;
+			} else {
+				this.open();
 			}
-			this.open();
+		});
+		button.addEventListener("mouseleave", () => {
+			delete this.#optionList.dataset.mousedownClosed;
 		});
 		const image = document.createElement("img");
 		image.src = chrome.runtime.getURL("/icons/reveal.svg");
@@ -182,10 +177,13 @@ class TermOptionList {
 		const label = document.createElement("span");
 		label.textContent = text;
 		option.addEventListener("mousedown", event => {
-			event.preventDefault(); // Prevent the menu from perceiving a loss in focus (and closing) the second time an option is clicked.
+			// Prevent the menu from perceiving a loss in focus (and closing) the second time an option is clicked.
+			// TODO why does that happen?
+			event.preventDefault();
 		});
 		option.addEventListener("mouseup", () => {
-			if (!option.closest(`.${EleClass.MENU_OPEN}`)) { // So that the user can "pulldown" the menu and release over an option.
+			if (!option.closest(`.${EleClass.MENU_OPEN}`)) {
+				// For when the user 'pulls down' the menu and releases over the option.
 				checkbox.click();
 			}
 		});
@@ -225,6 +223,10 @@ class TermOptionList {
 			this.#toolbarInterface.focusMenuOpener();
 		}
 		this.#controlInterface.classListToggle(EleClass.MENU_OPEN, false);
+	}
+	
+	isOpen (): boolean {
+		return this.#controlInterface.classListContains(EleClass.MENU_OPEN);
 	}
 
 	appendTo (parent: HTMLElement) {

@@ -61,13 +61,9 @@ class TermReplaceControl implements TermAbstractControl {
 		this.#optionList.setMatchMode(this.#term.matchMode);
 		const revealButton = this.#optionList.createRevealButton();
 		revealButton.addEventListener("focusin", event => {
-			if (event.relatedTarget && this.#input.isEventTarget(event.relatedTarget)) {
-				console.log("adding menu opener");
-				this.#input.classListToggle(EleClass.OPENED_MENU, true);
+			if (event.relatedTarget) {
+				toolbarInterface.markMenuOpener(event.relatedTarget);
 			}
-		});
-		revealButton.addEventListener("focusout", () => {
-			console.log("reveal button focus out");
 		});
 		this.#controlPad = document.createElement("span");
 		this.#controlPad.classList.add(EleClass.CONTROL_PAD, EleClass.DISABLED);
@@ -117,11 +113,27 @@ class TermReplaceControl implements TermAbstractControl {
 		return this.#input.getValue();
 	}
 
+	inputOpenedMenu (): boolean {
+		return this.#input.classListContains(EleClass.MENU_OPENER);
+	}
+
+	markInputOpenedMenu (value: boolean) {
+		if (value) {
+			this.#toolbarInterface.forgetMenuOpener();
+		}
+		this.#input.classListToggle(EleClass.MENU_OPENER, value);
+	}
+
+	inputIsEventTarget (target: EventTarget): boolean {
+		return this.#input.isEventTarget(target);
+	}
+
 	selectInput (shiftCaret?: "right" | "left") {
 		this.#input.select(shiftCaret);
 	}
 
 	focusInput () {
+		this.markInputOpenedMenu(false);
 		return this.#input.focus();
 	}
 

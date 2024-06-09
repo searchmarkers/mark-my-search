@@ -47,6 +47,8 @@ interface AbstractToolbar extends ToolbarTermControlInterface, ToolbarControlBut
 
 interface ToolbarTermControlInterface extends ToolbarTermInputInterface, ToolbarTermOptionListInterface {
 	getTermControlIndex: (control: TermAbstractControl) => number | null
+
+	markMenuOpener: (eventTarget: EventTarget) => void
 }
 
 interface ToolbarTermInputInterface {

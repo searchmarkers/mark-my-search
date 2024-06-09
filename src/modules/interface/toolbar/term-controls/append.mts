@@ -33,9 +33,9 @@ class TermAppendControl implements TermAbstractControl {
 			const pad = container.querySelector(`.${EleClass.CONTROL_PAD}`) as HTMLElement;
 			this.#input.appendTo(pad);
 			const revealButton = this.#optionList.createRevealButton();
-			revealButton.addEventListener("click", () => {
-				if (this.#input.hasFocus()) {
-					this.#input.classListToggle(EleClass.OPENED_MENU, true);
+			revealButton.addEventListener("focusin", event => {
+				if (event.relatedTarget) {
+					toolbarInterface.markMenuOpener(event.relatedTarget);
 				}
 			});
 			pad.appendChild(revealButton);
@@ -69,11 +69,27 @@ class TermAppendControl implements TermAbstractControl {
 		return this.#input.getValue();
 	}
 
+	inputOpenedMenu (): boolean {
+		return this.#input.classListContains(EleClass.MENU_OPENER);
+	}
+
+	markInputOpenedMenu (value: boolean) {
+		if (value) {
+			this.#toolbarInterface.forgetMenuOpener();
+		}
+		this.#input.classListToggle(EleClass.MENU_OPENER, value);
+	}
+
+	inputIsEventTarget (target: EventTarget): boolean {
+		return this.#input.isEventTarget(target);
+	}
+
 	selectInput (shiftCaret?: "right" | "left") {
 		this.#input.select(shiftCaret);
 	}
 
 	focusInput () {
+		this.markInputOpenedMenu(false);
 		return this.#input.focus();
 	}
 

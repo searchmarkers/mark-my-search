@@ -89,21 +89,20 @@ class TermInput {
 			}
 			case "ArrowLeft":
 			case "ArrowRight": {
-				this.tryShiftTermFocus(event.key === "ArrowRight" ? "right" : "left", () => event.preventDefault());
+				this.tryShiftTermFocus((event.key === "ArrowRight") ? "right" : "left", event.preventDefault);
 				return;
 			}
 			case "ArrowUp":
 			case "ArrowDown": {
-				this.tryShiftTermFocus((event.key === "ArrowUp") ? 0 : toolbarInterface.getTermCount(), () => event.preventDefault());
+				this.tryShiftTermFocus((event.key === "ArrowUp") ? 0 : toolbarInterface.getTermCount(), event.preventDefault);
 				return;
 			}
 			case " ": {
-				if (!event.shiftKey) {
-					return;
+				if (event.shiftKey) {
+					event.preventDefault();
+					input.classList.add(EleClass.MENU_OPENER);
+					controlInterface.openOptionList();
 				}
-				event.preventDefault();
-				input.classList.add(EleClass.OPENED_MENU);
-				controlInterface.openOptionList();
 				return;
 			}}
 		});

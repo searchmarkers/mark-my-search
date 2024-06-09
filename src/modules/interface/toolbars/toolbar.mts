@@ -176,26 +176,36 @@ class Toolbar implements AbstractToolbar {
 		this.#scrollGutter.id = EleID.MARKER_GUTTER;
 	}
 
+	getTermAbstractControls (): Array<TermAbstractControl> {
+		const array: Array<TermAbstractControl> = [];
+		return array.concat(this.#termControls).concat(this.#termAppendControl);
+	}
+
 	setCollapsed (collapsed: boolean) {
 		this.#bar.classList.toggle(EleClass.COLLAPSED, collapsed);
 	}
 
-	forgetMenuOpener () {
-		for (const control of this.#termControls) {
-			control.classListToggle(EleClass.OPENED_MENU, false);
-		}
-		this.#termAppendControl.classListToggle(EleClass.OPENED_MENU, false);
-	}
-
-	focusMenuOpener () {
-		for (const control of this.#termControls) {
-			if (control.classListContains(EleClass.OPENED_MENU)) {
-				this.#selectionReturn.target = control.focusInput();
+	markMenuOpener (eventTarget: EventTarget) {
+		for (const termControl of this.getTermAbstractControls()) {
+			if (termControl.inputIsEventTarget(eventTarget)) {
+				termControl.markInputOpenedMenu(true);
 				return;
 			}
 		}
-		if (this.#termAppendControl.classListContains(EleClass.OPENED_MENU)) {
-			this.#selectionReturn.target = this.#termAppendControl.focusInput();
+	}
+
+	forgetMenuOpener () {
+		for (const termControl of this.getTermAbstractControls()) {
+			termControl.markInputOpenedMenu(false);
+		}
+	}
+
+	focusMenuOpener () {
+		for (const termControl of this.getTermAbstractControls()) {
+			if (termControl.inputOpenedMenu()) {
+				this.#selectionReturn.target = termControl.focusInput();
+				return;
+			}
 		}
 	}
 
@@ -251,18 +261,14 @@ class Toolbar implements AbstractToolbar {
 
 	updateTermStatus (term: MatchTerm) {
 		const termToken = this.#termTokens.get(term);
-		this.#termControls
-			.find(control => control.getTermToken() === termToken)
-			?.updateStatus();
+		this.#termControls.find(control => control.getTermToken() === termToken)?.updateStatus();
 	}
 
 	indicateTerm (term: MatchTerm | null) {
 		this.#sections.terms.classList.remove(this.#indicatedClassToken ?? "");
 		if (term) {
 			const termToken = this.#termTokens.get(term);
-			const termControl = this.#termControls.findIndex(control =>
-				control.getTermToken() === termToken
-			);
+			const termControl = this.#termControls.findIndex(control => control.getTermToken() === termToken);
 			this.#indicatedClassToken = getControlPadClass(termControl);
 			this.#sections.terms.classList.add(this.#indicatedClassToken);
 		}

@@ -52,7 +52,7 @@ const fillContent = (
 		color: hsl(0 0% 0%);
 	}
 	&:active .${EleClass.CONTROL_INPUT}.${EleClass.WAS_FOCUSED},
-	& .${EleClass.CONTROL_INPUT}:is(:focus, .${EleClass.OPENED_MENU}) {
+	& .${EleClass.CONTROL_INPUT}:is(:focus, .${EleClass.MENU_OPENER}) {
 		width: 5em;
 		padding: 0 2px 0 2px;
 		margin-inline: 3px;
