@@ -159,6 +159,7 @@ class TermReplaceControl implements TermAbstractControl {
 	 */
 	commit (inputValue?: string) {
 		inputValue ??= this.#input.getValue();
+		this.#input.resetValue();
 		// TODO standard method of avoiding race condition (arising from calling termsSet, which immediately updates controls)
 		const index = this.#toolbarInterface.getTermControlIndex(this);
 		if (index === null) {

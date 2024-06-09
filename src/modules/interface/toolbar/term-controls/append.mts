@@ -110,6 +110,7 @@ class TermAppendControl implements TermAbstractControl {
 
 	commit (inputValue?: string) {
 		inputValue ??= this.#input.getValue();
+		this.#input.resetValue();
 		// TODO standard method of avoiding race condition (arising from calling termsSet, which immediately updates controls)
 		if (inputValue !== "") {
 			const matchMode: MatchMode = getMatchModeFromClassList(

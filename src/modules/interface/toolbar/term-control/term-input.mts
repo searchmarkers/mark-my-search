@@ -161,11 +161,7 @@ class TermInput {
 		onBeforeShift();
 		const targetIndex = typeof shiftTarget === "number" ? shiftTarget : (index + (shiftTarget === "right" ? 1 : -1));
 		if (index === targetIndex) {
-			// TODO why does this need to be done here?
 			this.#controlInterface.commit();
-			//if (!replaces) {
-			//	this.#input.value = "";
-			//}
 		} else {
 			this.#toolbarInterface.selectTermInput(targetIndex, typeof shiftTarget === "string" ? shiftTarget : undefined);
 		}
