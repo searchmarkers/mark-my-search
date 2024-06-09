@@ -7,7 +7,7 @@ import {
 	type TermHues, getTermClass, getTermClassToken,
 } from "/dist/modules/common.mjs";
 
-class StandardTermMarker implements AbstractTermMarker {
+class TermMarker implements AbstractTermMarker {
 	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Array<HTMLElement>) {
 		if (terms.length === 0) {
 			return; // No terms results in an empty selector, which is not allowed.
@@ -66,4 +66,4 @@ class StandardTermMarker implements AbstractTermMarker {
 	}
 }
 
-export { StandardTermMarker };
+export { TermMarker };

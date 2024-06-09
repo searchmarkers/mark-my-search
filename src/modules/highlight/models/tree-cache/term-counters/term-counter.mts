@@ -3,7 +3,7 @@ import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
-class StandardTermCounter implements AbstractTermCounter {
+class TermCounter implements AbstractTermCounter {
 	countBetter (term: MatchTerm) {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: Element) =>
 			highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
@@ -38,4 +38,4 @@ class StandardTermCounter implements AbstractTermCounter {
 	}
 }
 
-export { StandardTermCounter };
+export { TermCounter };

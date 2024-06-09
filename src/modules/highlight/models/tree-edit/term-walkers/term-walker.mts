@@ -5,7 +5,7 @@ import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { getTermClass } from "/dist/modules/common.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass } from "/dist/modules/common.mjs";
 
-class StandardTermWalker implements AbstractTermWalker {
+class TermWalker implements AbstractTermWalker {
 	step (
 		reverse: boolean,
 		stepNotJump: boolean,
@@ -244,4 +244,4 @@ const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = docume
 		});
 };
 
-export { StandardTermWalker };
+export { TermWalker };

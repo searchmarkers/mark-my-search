@@ -3,7 +3,7 @@ import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, getElementYRelative, type TermHues, getTermClass } from "/dist/modules/common.mjs";
 
-class StandardTermMarker implements AbstractTermMarker {
+class TermMarker implements AbstractTermMarker {
 	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Array<HTMLElement>) {
 		if (terms.length === 0) {
 			return; // Efficient escape in case of no possible markers to be inserted.
@@ -32,4 +32,4 @@ class StandardTermMarker implements AbstractTermMarker {
 	}
 }
 
-export { StandardTermMarker };
+export { TermMarker };

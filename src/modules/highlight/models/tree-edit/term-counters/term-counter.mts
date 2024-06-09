@@ -2,7 +2,7 @@ import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-co
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { getTermClass } from "/dist/modules/common.mjs";
 
-class StandardTermCounter implements AbstractTermCounter {
+class TermCounter implements AbstractTermCounter {
 	readonly countBetter = this.countFaster;
 
 	countFaster (term: MatchTerm, termTokens: TermTokens) {
@@ -18,4 +18,4 @@ class StandardTermCounter implements AbstractTermCounter {
 	}
 }
 
-export { StandardTermCounter };
+export { TermCounter };

@@ -3,7 +3,7 @@ import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
 
-class StandardTermWalker implements AbstractTermWalker {
+class TermWalker implements AbstractTermWalker {
 	step (
 		reverse: boolean,
 		stepNotJump: boolean,
@@ -59,4 +59,4 @@ class StandardTermWalker implements AbstractTermWalker {
 	cleanup () {}
 }
 
-export { StandardTermWalker };
+export { TermWalker };

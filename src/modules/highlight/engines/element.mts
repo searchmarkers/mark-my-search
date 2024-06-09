@@ -5,9 +5,9 @@ import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/pain
 import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { StandardTermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/standard.mjs";
-import { StandardTermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/standard.mjs";
-import { StandardTermMarker } from "/dist/modules/highlight/models/tree-edit/term-markers/standard.mjs";
+import { TermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/term-counter.mjs";
+import { TermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/term-walker.mjs";
+import { TermMarker } from "/dist/modules/highlight/models/tree-edit/term-markers/term-marker.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
@@ -97,9 +97,9 @@ class FlowNodeList {
 }
 
 class ElementEngine implements AbstractEngine {
-	readonly termOccurrences: AbstractTermCounter = new StandardTermCounter();
-	readonly termWalker: AbstractTermWalker = new StandardTermWalker();
-	readonly termMarkers: AbstractTermMarker = new StandardTermMarker();
+	readonly termOccurrences: AbstractTermCounter = new TermCounter();
+	readonly termWalker: AbstractTermWalker = new TermWalker();
+	readonly termMarkers: AbstractTermMarker = new TermMarker();
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;

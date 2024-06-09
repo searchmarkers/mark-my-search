@@ -3,13 +3,13 @@ import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engi
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import { StandardFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/standard.mjs";
+import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
 import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { StandardTermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/standard.mjs";
-import { StandardTermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/standard.mjs";
-import { StandardTermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/standard.mjs";
+import { TermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs";
+import { TermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs";
+import { TermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
@@ -105,9 +105,9 @@ class ExtendedHighlightRegistry {
 }
 
 class HighlightEngine implements AbstractEngine {
-	readonly termOccurrences: AbstractTermCounter = new StandardTermCounter();
-	readonly termWalker: AbstractTermWalker = new StandardTermWalker();
-	readonly termMarkers: AbstractTermMarker = new StandardTermMarker();
+	readonly termOccurrences: AbstractTermCounter = new TermCounter();
+	readonly termWalker: AbstractTermWalker = new TermWalker();
+	readonly termMarkers: AbstractTermMarker = new TermMarker();
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
@@ -136,7 +136,7 @@ class HighlightEngine implements AbstractEngine {
 		this.requestRefreshTermControls = requestCallFn(() => (
 			terms.forEach(term => updateTermStatus(term))
 		), 50, 500);
-		this.flowMonitor = new StandardFlowMonitor<Flow>(
+		this.flowMonitor = new FlowMonitor<Flow>(
 			terms,
 			termPatterns,
 			() => ({ flows: [] }),

@@ -4,7 +4,7 @@ import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { type BaseFlow, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
-class StandardFlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
+class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 	readonly mutationObserver = new MutationObserver(() => undefined);
 
 	readonly createElementCache: (element: Element) => TreeCache<Flow> = () => ({ flows: [] });
@@ -272,4 +272,4 @@ const getTextFlows = (
 	return textFlows;
 };
 
-export { StandardFlowMonitor };
+export { FlowMonitor };
