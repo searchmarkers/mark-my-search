@@ -31,9 +31,7 @@ interface TermControlInputInterface extends TermControlComponentInterface {
 	openOptionList: () => void
 }
 
-interface TermControlOptionListInterface extends TermControlComponentInterface {
-	forgetToolbarOpenedMenu: () => void
-}
+interface TermControlOptionListInterface extends TermControlComponentInterface {}
 
 export type {
 	TermAbstractControl,

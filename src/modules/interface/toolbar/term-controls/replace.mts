@@ -56,11 +56,18 @@ class TermReplaceControl implements TermAbstractControl {
 			this.#term.matchMode,
 			controlsInfo,
 			this,
+			toolbarInterface,
 		);
 		this.#optionList.setMatchMode(this.#term.matchMode);
 		const revealButton = this.#optionList.createRevealButton();
-		revealButton.addEventListener("click", () => {
-			this.#input.classListToggle(EleClass.OPENED_MENU, true);
+		revealButton.addEventListener("focusin", event => {
+			if (event.relatedTarget && this.#input.isEventTarget(event.relatedTarget)) {
+				console.log("adding menu opener");
+				this.#input.classListToggle(EleClass.OPENED_MENU, true);
+			}
+		});
+		revealButton.addEventListener("focusout", () => {
+			console.log("reveal button focus out");
 		});
 		this.#controlPad = document.createElement("span");
 		this.#controlPad.classList.add(EleClass.CONTROL_PAD, EleClass.DISABLED);
@@ -102,8 +109,8 @@ class TermReplaceControl implements TermAbstractControl {
 		this.updateMatchModeClassList();
 	}
 
-	forgetToolbarOpenedMenu () {
-		this.#toolbarInterface.forgetOpenedMenu();
+	getTermToken () {
+		return this.#termTokens.get(this.#term);
 	}
 
 	getInputValue () {
@@ -127,7 +134,7 @@ class TermReplaceControl implements TermAbstractControl {
 	}
 
 	getFocusArea (): ControlFocusArea {
-		if (this.#input.isFocused()) {
+		if (this.#input.hasFocus()) {
 			return "input";
 		}
 		return "none";
@@ -146,7 +153,7 @@ class TermReplaceControl implements TermAbstractControl {
 			return;
 		}
 		if (inputValue === "") {
-			if (this.#input.isFocused()) {
+			if (this.#input.hasFocus()) {
 				this.#toolbarInterface.selectTermInput(index + 1);
 				return;
 			}

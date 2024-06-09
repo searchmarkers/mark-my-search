@@ -1,12 +1,14 @@
 import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
+import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.mjs";
 import { getMatchModeOptionClass, getInputIdSequential } from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchMode } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass } from "/dist/modules/common.mjs";
+import { EleClass } from "/dist/modules/common.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
 
 class TermOptionList {
 	readonly #controlsInfo: ControlsInfo;
 	readonly #controlInterface: TermControlOptionListInterface;
+	readonly #toolbarInterface: ToolbarTermOptionListInterface;
 
 	readonly #optionList: HTMLElement;
 	readonly #checkboxes: Array<HTMLInputElement> = [];
@@ -24,9 +26,11 @@ class TermOptionList {
 		matchMode: Readonly<MatchMode>,
 		controlsInfo: ControlsInfo,
 		controlInterface: TermControlOptionListInterface,
+		toolbarInterface: ToolbarTermOptionListInterface,
 	) {
 		this.#controlsInfo = controlsInfo;
 		this.#controlInterface = controlInterface;
+		this.#toolbarInterface = toolbarInterface;
 		this.#matchMode = matchMode;
 		this.#optionList = document.createElement("span");
 		this.#optionList.classList.add(EleClass.OPTION_LIST);
@@ -79,7 +83,7 @@ class TermOptionList {
 				}
 			} else if (/\b\w\b/.test(event.key)) {
 				options.some(option => {
-					if (option.title.toLowerCase().startsWith(event.key)) {
+					if (option.title.toLowerCase()[0] === event.key) {
 						option.toggle();
 						return true;
 					}
@@ -99,12 +103,16 @@ class TermOptionList {
 			if (this.#optionList.contains(newFocus)) {
 				return;
 			}
-			options.forEach(option => option.makeFocusable(false));
+			console.log("option list focus out");
+			for (const option of options) {
+				option.makeFocusable(false);
+			}
 			if (newFocus?.classList.contains(EleClass.CONTROL_REVEAL)) {
 				this.close(false);
 			} else {
 				this.close(true);
-				controlInterface.forgetToolbarOpenedMenu();
+				console.log("forgetting menu opener (option list focus out)");
+				toolbarInterface.forgetMenuOpener();
 			}
 		});
 	}
@@ -115,6 +123,10 @@ class TermOptionList {
 		button.classList.add(EleClass.CONTROL_BUTTON, EleClass.CONTROL_REVEAL);
 		button.tabIndex = -1;
 		button.disabled = !this.#controlsInfo.barLook.showRevealIcon;
+		button.addEventListener("focusin", () => {
+			console.log("forgetting menu opener (reveal button focus in)");
+			this.#toolbarInterface.forgetMenuOpener();
+		});
 		button.addEventListener("mousedown", () => {
 			// If menu was open, it is about to be "just closed" because the mousedown will close it.
 			// If menu was closed, remove "just closed" class if present.
@@ -123,7 +135,6 @@ class TermOptionList {
 				this.#controlInterface.classListContains(EleClass.MENU_OPEN),
 			);
 			this.close(true);
-			this.#controlInterface.forgetToolbarOpenedMenu();
 		});
 		button.addEventListener("click", () => {
 			if (this.#controlInterface.classListContains(EleClass.MENU_JUST_CLOSED_BY_BUTTON)) {
@@ -159,8 +170,7 @@ class TermOptionList {
 		checkbox.id = id;
 		checkbox.checked = this.#matchMode[matchType];
 		checkbox.tabIndex = -1;
-		// TODO is this the correct event to use? should "change" be used instead?
-		checkbox.addEventListener("click", () => {
+		checkbox.addEventListener("change", () => {
 			onActivated(matchType, checkbox.checked);
 		});
 		checkbox.addEventListener("keydown", event => {
@@ -210,17 +220,9 @@ class TermOptionList {
 		this.#optionList.focus();
 	}
 
-	close (moveFocus: boolean) {
-		const input = document.querySelector(`#${EleID.BAR} .${EleClass.OPENED_MENU}`) as HTMLElement | null;
-		if (input) {
-			if (moveFocus) {
-				input.focus();
-			}
-		} else if (moveFocus) {
-			const focus = document.activeElement as HTMLElement | null;
-			if (this.#optionList.contains(focus)) {
-				focus?.blur();
-			}
+	close (focusMenuOpener: boolean) {
+		if (focusMenuOpener) {
+			this.#toolbarInterface.focusMenuOpener();
 		}
 		this.#controlInterface.classListToggle(EleClass.MENU_OPEN, false);
 	}

@@ -215,12 +215,15 @@ class TermInput {
 	}
 
 	unfocus () {
-		console.log("unfocusing...");
 		this.#input.blur();
 	}
 
-	isFocused (): boolean {
+	hasFocus (): boolean {
 		return document.activeElement === this.#input;
+	}
+
+	isEventTarget (target: EventTarget): boolean {
+		return this.#input === target;
 	}
 
 	classListToggle (token: string, force?: boolean) {

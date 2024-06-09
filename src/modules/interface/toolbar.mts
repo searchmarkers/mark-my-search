@@ -45,10 +45,8 @@ interface AbstractToolbar extends ToolbarTermControlInterface, ToolbarControlBut
 	remove: () => void
 }
 
-interface ToolbarTermControlInterface extends ToolbarTermInputInterface {
+interface ToolbarTermControlInterface extends ToolbarTermInputInterface, ToolbarTermOptionListInterface {
 	getTermControlIndex: (control: TermAbstractControl) => number | null
-
-	forgetOpenedMenu: () => void
 }
 
 interface ToolbarTermInputInterface {
@@ -64,6 +62,12 @@ interface ToolbarTermInputInterface {
 	selectTermInput: (termIndex: number, shiftCaret?: "right" | "left") => void
 }
 
+interface ToolbarTermOptionListInterface {
+	focusMenuOpener: () => void
+
+	forgetMenuOpener: () => void
+}
+
 interface ToolbarControlButtonInterface {
 	setCollapsed: (collapsed: boolean) => void
 }
@@ -74,5 +78,6 @@ export type {
 	AbstractToolbar,
 	ToolbarTermControlInterface,
 	ToolbarTermInputInterface,
+	ToolbarTermOptionListInterface,
 	ToolbarControlButtonInterface,
 };

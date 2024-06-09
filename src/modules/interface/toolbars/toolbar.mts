@@ -29,7 +29,7 @@ class Toolbar implements AbstractToolbar {
 	readonly #bar: HTMLElement;
 	readonly #sections: Readonly<Record<ToolbarSection, HTMLElement>>;
 	readonly #controls: Readonly<Record<ControlButtonName, Control>>;
-	readonly #termControls: Array<{ token: string, control: TermReplaceControl }> = [];
+	readonly #termControls: Array<TermReplaceControl> = [];
 	readonly #termAppendControl: TermAppendControl;
 	// TODO why is the toolbar in charge of the scroll gutter??
 	readonly #scrollGutter: HTMLElement;
@@ -52,11 +52,6 @@ class Toolbar implements AbstractToolbar {
 		this.#controlsInfo = controlsInfo;
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
-		// TODO this used to run before the toolbar was removed, determining whether it was focused (so should be re-focused);
-		// may or may not be needed again
-		//const focusingControlAppend = document.activeElement && document.activeElement.tagName === "INPUT"
-		//	&& document.activeElement.closest(`#${EleID.BAR}`);
-		//
 		this.#bar = document.createElement("div");
 		this.#bar.id = EleID.BAR;
 		this.updateBarVisibility();
@@ -104,10 +99,10 @@ class Toolbar implements AbstractToolbar {
 				// Special case to specifically focus the term append input, in case the button is hidden.
 				if (control && !event.shiftKey && index === this.#termControls.length - 1) {
 					event.preventDefault();
-					this.#termAppendControl.focusInput();
+					this.#selectionReturn.target = this.#termAppendControl.focusInput();
 					return;
 				}
-				if (!(event.shiftKey ? control === this.#termControls[0].control : control === this.#termAppendControl)) {
+				if (!(event.shiftKey ? control === this.#termControls[0] : control === this.#termAppendControl)) {
 					return;
 				}
 				event.preventDefault();
@@ -148,7 +143,8 @@ class Toolbar implements AbstractToolbar {
 			this.#bar.appendChild(this.#sections[sectionName]);
 		}
 		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termSetter, doPhrasesMatchTerms);
-		this.#controls = { // The order of properties determines the order of insertion into (sections of) the toolbar.
+		this.#controls = {
+			// The order of properties determines the order of insertion into (sections of) the toolbar.
 			toggleBarCollapsed: (
 				this.createAndInsertControl("toggleBarCollapsed", ToolbarSection.LEFT)
 			),
@@ -170,67 +166,62 @@ class Toolbar implements AbstractToolbar {
 			),
 		};
 		terms.forEach(term => {
-			this.#termControls.push({
-				token: this.#termTokens.get(term),
-				control: new TermReplaceControl(term,
-					commands, controlsInfo,
-					this, this.#termSetter, this.#termTokens, this.#highlighter,
-				),
-			});
+			this.#termControls.push(new TermReplaceControl(term,
+				commands, controlsInfo,
+				this, this.#termSetter, this.#termTokens, this.#highlighter,
+			));
 		});
 		this.refreshTermControls();
 		this.#scrollGutter = document.createElement("div");
 		this.#scrollGutter.id = EleID.MARKER_GUTTER;
-		// TODO make this functional again
-		//if (focusingControlAppend) {
-		//	const input = this.#controls.appendTerm.querySelector("input");
-		//	if (input) {
-		//		input.focus();
-		//		input.select();
-		//	}
-		//}
 	}
 
 	setCollapsed (collapsed: boolean) {
 		this.#bar.classList.toggle(EleClass.COLLAPSED, collapsed);
 	}
 
-	forgetOpenedMenu () {
-		document.querySelectorAll(`#${EleID.BAR} .${EleClass.OPENED_MENU}`).forEach(input => {
-			input.classList.remove(EleClass.OPENED_MENU);
-		});
+	forgetMenuOpener () {
+		for (const control of this.#termControls) {
+			control.classListToggle(EleClass.OPENED_MENU, false);
+		}
+		this.#termAppendControl.classListToggle(EleClass.OPENED_MENU, false);
+	}
+
+	focusMenuOpener () {
+		for (const control of this.#termControls) {
+			if (control.classListContains(EleClass.OPENED_MENU)) {
+				this.#selectionReturn.target = control.focusInput();
+				return;
+			}
+		}
+		if (this.#termAppendControl.classListContains(EleClass.OPENED_MENU)) {
+			this.#selectionReturn.target = this.#termAppendControl.focusInput();
+		}
 	}
 
 	appendTerm (term: MatchTerm, commands: BrowserCommands) {
-		this.#termControls.push({
-			token: this.#termTokens.get(term),
-			control: new TermReplaceControl(term,
-				commands, this.#controlsInfo,
-				this, this.#termSetter, this.#termTokens, this.#highlighter,
-			),
-		});
+		this.#termControls.push(new TermReplaceControl(term,
+			commands, this.#controlsInfo,
+			this, this.#termSetter, this.#termTokens, this.#highlighter,
+		));
 		this.refreshTermControls();
 	}
 
 	insertTerm (term: MatchTerm, index: number, commands: BrowserCommands) {
-		this.#termControls.splice(index, 0, {
-			token: this.#termTokens.get(term),
-			control: new TermReplaceControl(term,
-				commands, this.#controlsInfo,
-				this, this.#termSetter, this.#termTokens, this.#highlighter,
-			),
-		});
+		this.#termControls.splice(index, 0, new TermReplaceControl(term,
+			commands, this.#controlsInfo,
+			this, this.#termSetter, this.#termTokens, this.#highlighter,
+		));
 		this.refreshTermControls();
 	}
 
 	replaceTerm (term: MatchTerm, termOld: MatchTerm | number) {
 		if (typeof termOld === "number") {
-			this.#termControls[termOld].control.replaceTerm(term);
+			this.#termControls[termOld].replaceTerm(term);
 		} else {
-			const index = this.#termControls.findIndex(
-				({ token }) => token === this.#termTokens.get(term)
-			);
-			this.#termControls[index].control.replaceTerm(term);
+			const termToken = this.#termTokens.get(term);
+			const index = this.#termControls.findIndex(control => control.getTermToken() === termToken);
+			this.#termControls[index].replaceTerm(term);
 		}
 	}
 
@@ -238,48 +229,48 @@ class Toolbar implements AbstractToolbar {
 	replaceTerms (terms: ReadonlyArray<MatchTerm>, commands: BrowserCommands) {
 		this.#termControls.splice(0);
 		for (const term of terms) {
-			this.#termControls.push({
-				token: this.#termTokens.get(term),
-				control: new TermReplaceControl(term,
-					commands, this.#controlsInfo,
-					this, this.#termSetter, this.#termTokens, this.#highlighter,
-				),
-			});
+			this.#termControls.push(new TermReplaceControl(term,
+				commands, this.#controlsInfo,
+				this, this.#termSetter, this.#termTokens, this.#highlighter,
+			));
 		}
 		this.refreshTermControls();
 	}
 
 	// TODO ensure that focus is handled correctly
 	removeTerm (term: MatchTerm | number) {
-		const index = typeof term === "number"
-			? term
-			: this.#termControls.findIndex(
-				({ token }) => token === this.#termTokens.get(term)
-			);
-		this.#termControls.splice(index, 1);
+		if (typeof term === "number") {
+			this.#termControls.splice(term, 1);
+		} else {
+			const termToken = this.#termTokens.get(term);
+			const index = this.#termControls.findIndex(control => control.getTermToken() === termToken);
+			this.#termControls.splice(index, 1);
+		}
 		this.refreshTermControls();
 	}
 
 	updateTermStatus (term: MatchTerm) {
 		const termToken = this.#termTokens.get(term);
 		this.#termControls
-			.find(({ token }) => token === termToken)
-			?.control.updateStatus();
+			.find(control => control.getTermToken() === termToken)
+			?.updateStatus();
 	}
 
 	indicateTerm (term: MatchTerm | null) {
 		this.#sections.terms.classList.remove(this.#indicatedClassToken ?? "");
 		if (term) {
-			this.#indicatedClassToken = getControlPadClass(this.#termControls.findIndex(
-				({ token }) => token === this.#termTokens.get(term)
-			));
+			const termToken = this.#termTokens.get(term);
+			const termControl = this.#termControls.findIndex(control =>
+				control.getTermToken() === termToken
+			);
+			this.#indicatedClassToken = getControlPadClass(termControl);
 			this.#sections.terms.classList.add(this.#indicatedClassToken);
 		}
 	}
 
 	refreshTermControls () {
 		this.#sections.terms.replaceChildren();
-		for (const { control } of this.#termControls) {
+		for (const control of this.#termControls) {
 			control.appendTo(this.#sections.terms);
 		}
 	}
@@ -289,7 +280,7 @@ class Toolbar implements AbstractToolbar {
 	}
 
 	getTermControlIndex (control: TermReplaceControl): number | null {
-		const index = this.#termControls.map(({ control }) => control).indexOf(control);
+		const index = this.#termControls.indexOf(control);
 		if (index === -1) {
 			return null;
 		}
@@ -299,7 +290,7 @@ class Toolbar implements AbstractToolbar {
 	selectTermInput (termIndex: number, shiftCaret?: "right" | "left") {
 		termIndex = Math.max(0, Math.min(termIndex, this.#termControls.length));
 		if (termIndex < this.#termControls.length) {
-			this.#termControls[termIndex].control.selectInput(shiftCaret);
+			this.#termControls[termIndex].selectInput(shiftCaret);
 		} else {
 			this.#termAppendControl.selectInput(shiftCaret);
 		}
@@ -307,7 +298,7 @@ class Toolbar implements AbstractToolbar {
 
 	focusTermInput (termIndex: number | null) {
 		if (typeof termIndex === "number" && termIndex < this.#termControls.length) {
-			this.#selectionReturn.target = this.#termControls[termIndex].control.focusInput();
+			this.#selectionReturn.target = this.#termControls[termIndex].focusInput();
 		} else {
 			this.#selectionReturn.target = this.#termAppendControl.focusInput();
 		}
@@ -325,7 +316,7 @@ class Toolbar implements AbstractToolbar {
 			}
 		}
 		let i = 0;
-		for (const { control } of this.#termControls) {
+		for (const control of this.#termControls) {
 			const focusArea = control.getFocusArea();
 			if (focusArea !== "none") {
 				return { control, termIndex: i, focusArea };

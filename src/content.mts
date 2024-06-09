@@ -373,7 +373,6 @@ interface TermAppender {
 		let toolbar: AbstractToolbar | null = null;
 		return (createIfNull) => {
 			if (createIfNull && !toolbar) {
-				console.log("toolbar");
 				toolbar = new Toolbar([],
 					commands, hues,
 					controlsInfo,
@@ -408,7 +407,6 @@ interface TermAppender {
 		if (queuingPromise) {
 			await queuingPromise;
 		}
-		console.log(message);
 		styleElementsInsert();
 		if (message.highlighter !== undefined) {
 			highlighter.current?.endHighlighting();

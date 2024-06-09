@@ -34,7 +34,9 @@ class TermAppendControl implements TermAbstractControl {
 			this.#input.appendTo(pad);
 			const revealButton = this.#optionList.createRevealButton();
 			revealButton.addEventListener("click", () => {
-				this.#input.classListToggle(EleClass.OPENED_MENU, true);
+				if (this.#input.hasFocus()) {
+					this.#input.classListToggle(EleClass.OPENED_MENU, true);
+				}
 			});
 			pad.appendChild(revealButton);
 			this.#optionList.appendTo(container);
@@ -55,15 +57,12 @@ class TermAppendControl implements TermAbstractControl {
 			this.matchMode,
 			controlsInfo,
 			this,
+			toolbarInterface,
 		);
 		if (controlContainerTemp) {
 			setUpControl(controlContainerTemp);
 		}
 		this.updateMatchModeClassList();
-	}
-
-	forgetToolbarOpenedMenu () {
-		this.#toolbarInterface.forgetOpenedMenu();
 	}
 
 	getInputValue () {
@@ -87,7 +86,7 @@ class TermAppendControl implements TermAbstractControl {
 	}
 
 	getFocusArea (): ControlFocusArea {
-		if (this.#input.isFocused()) {
+		if (this.#input.hasFocus()) {
 			return "input";
 		}
 		return "none";
