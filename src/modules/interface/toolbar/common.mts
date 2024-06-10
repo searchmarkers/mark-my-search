@@ -64,6 +64,8 @@ const getControlClass = (controlName: ControlButtonName) => EleClass.CONTROL + "
 
 const getControlPadClass = (index: number) => EleClass.CONTROL_PAD + "-" + index.toString();
 
+const passKeyEvent = (event: KeyboardEvent) => event.ctrlKey || event.metaKey || event.altKey;
+
 export {
 	type BarLook,
 	type BrowserCommands,
@@ -71,5 +73,6 @@ export {
 	getTermCommands,
 	getMatchModeOptionClass, getMatchModeFromClassList, applyMatchModeToClassList,
 	getInputIdSequential,
-	getControlClass as getControlClass, getControlPadClass,
+	getControlClass, getControlPadClass,
+	passKeyEvent,
 };

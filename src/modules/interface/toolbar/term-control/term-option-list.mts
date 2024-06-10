@@ -1,6 +1,6 @@
 import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.mjs";
-import { getMatchModeOptionClass, getInputIdSequential } from "/dist/modules/interface/toolbar/common.mjs";
+import { getMatchModeOptionClass, getInputIdSequential, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchMode } from "/dist/modules/match-term.mjs";
 import { EleClass } from "/dist/modules/common.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
@@ -57,6 +57,9 @@ class TermOptionList {
 			});
 		})();
 		const stopKeyEvent = (event: KeyboardEvent) => {
+			if (passKeyEvent(event)) {
+				return;
+			}
 			event.stopPropagation();
 			if (event.key === "Tab") {
 				return;
@@ -64,6 +67,9 @@ class TermOptionList {
 			event.preventDefault();
 		};
 		const handleKeyEvent = (event: KeyboardEvent) => {
+			if (passKeyEvent(event)) {
+				return;
+			}
 			stopKeyEvent(event);
 			if (event.key === "Escape") {
 				this.close(true);
@@ -81,15 +87,17 @@ class TermOptionList {
 				} else {
 					// TODO move to the menu of the next term
 				}
-			} else if (/\b\w\b/.test(event.key)) {
-				options.some(option => {
-					if (option.title.toLowerCase()[0] === event.key) {
+			} else if (event.key.length === 1 && /\w/.test(event.key)) {
+				const toggledOption = options.some(option => {
+					if (option.title.toLowerCase()[0] === event.key.toLowerCase()) {
 						option.toggle();
 						return true;
 					}
 					return false;
 				});
-				this.close(true);
+				if (toggledOption && !event.shiftKey) {
+					this.close(true);
+				}
 			}
 		};
 		this.#optionList.addEventListener("keydown", handleKeyEvent);

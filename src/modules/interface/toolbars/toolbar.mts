@@ -4,7 +4,7 @@ import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-c
 import { TermReplaceControl } from "/dist/modules/interface/toolbar/term-controls/replace.mjs";
 import { TermAppendControl } from "/dist/modules/interface/toolbar/term-controls/append.mjs";
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
-import { getControlPadClass } from "/dist/modules/interface/toolbar/common.mjs";
+import { getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
@@ -90,6 +90,9 @@ class Toolbar implements AbstractToolbar {
 			event.preventDefault();
 		});
 		this.#bar.addEventListener("keydown", event => {
+			if (passKeyEvent(event)) {
+				return;
+			}
 			if (event.key === "Tab") { // This is the only key that will escape term inputs; the rest are blocked automatically.
 				event.stopPropagation();
 				const { control, termIndex: index, focusArea } = this.getFocusedTermControl(true);
@@ -121,9 +124,15 @@ class Toolbar implements AbstractToolbar {
 			}
 		});
 		this.#bar.addEventListener("keyup", event => {
+			if (passKeyEvent(event)) {
+				return;
+			}
 			event.stopPropagation();
 		});
 		this.#bar.addEventListener("keypress", event => {
+			if (passKeyEvent(event)) {
+				return;
+			}
 			event.stopPropagation();
 		});
 		if (controlsInfo.highlightsShown) {
