@@ -230,6 +230,7 @@ class TermReplaceControl implements TermAbstractControl {
 		this.#input.setTerm(term);
 		this.#optionList.setMatchMode(term.matchMode);
 		this.#control.classList.add(getTermClass(this.#term, this.#termTokens));
+		this.updateMatchModeClassList();
 	}
 
 	classListToggle (token: string, force?: boolean) {
