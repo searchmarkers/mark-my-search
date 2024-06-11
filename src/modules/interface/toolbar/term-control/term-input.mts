@@ -114,27 +114,11 @@ class TermInput {
 				return;
 			}}
 		});
-		input.addEventListener("keyup", event => {
-			event.stopPropagation();
-			if (event.key === "Tab") {
-				input.select();
-			}
-		});
-		// Potential future improvement to mitigate cross-browser quirk where the first time an input is focused, it cannot be selected.
-		//input.addEventListener("focusin", () => {
-		//	setTimeout(() => {
-		//		input.select();
-		//	});
-		//});
 		let inputSize = 0;
 		new ResizeObserver(entries => {
 			const inputSizeNew = entries[0]?.contentBoxSize[0]?.inlineSize ?? 0;
-			if (inputSizeNew !== inputSize) {
-				if (inputSizeNew > 0) {
-					this.resetValue();
-				} else {
-					controlInterface.commit();
-				}
+			if (inputSizeNew !== inputSize && inputSizeNew === 0) {
+				controlInterface.commit();
 			}
 			inputSize = inputSizeNew;
 		}).observe(input);
@@ -177,6 +161,7 @@ class TermInput {
 
 	setTerm (term: MatchTerm) {
 		this.#term = term;
+		this.resetValue();
 	}
 
 	getValue (): string {
@@ -198,11 +183,6 @@ class TermInput {
 			this.#input.setSelectionRange(caretPosition, caretPosition);
 		} else {
 			this.#input.select();
-			if (document.getSelection()?.toString() === this.#input.value) {
-				setTimeout(() => {
-					this.#input.select();
-				});
-			}
 		}
 		return returnTarget;
 	}
