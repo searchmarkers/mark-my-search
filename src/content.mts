@@ -100,6 +100,7 @@ const refreshTermControlsAndStartHighlighting = (
 	hues: TermHues,
 ) => {
 	// TODO this function is better! but not good enough
+	toolbar.updateControlVisibility("replaceTerms");
 	if (update && update.term) {
 		if (update.termIndex === termsOld.length) {
 			toolbar.appendTerm(update.term, commands);
