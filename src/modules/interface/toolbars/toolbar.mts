@@ -1,4 +1,8 @@
-import type { AbstractToolbar, ControlButtonName, SelectionReturnTarget } from "/dist/modules/interface/toolbar.mjs";
+import type {
+	SelectionReturnTarget, ControlButtonName,
+	AbstractToolbar,
+	ToolbarControlButtonInterface, ToolbarTermControlInterface,
+} from "/dist/modules/interface/toolbar.mjs";
 import { Control, type ControlButtonInfo } from "/dist/modules/interface/toolbar/control.mjs";
 import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.mjs";
 import { TermReplaceControl } from "/dist/modules/interface/toolbar/term-controls/replace.mjs";
@@ -19,7 +23,7 @@ enum ToolbarSection {
 
 const toolbarSectionNames = [ ToolbarSection.LEFT, ToolbarSection.TERMS, ToolbarSection.RIGHT ] as const;
 
-class Toolbar implements AbstractToolbar {
+class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarControlButtonInterface {
 	readonly #controlsInfo: ControlsInfo;
 	readonly #termSetter: TermSetter;
 	readonly #doPhrasesMatchTerms: DoPhrasesMatchTerms;
@@ -54,7 +58,9 @@ class Toolbar implements AbstractToolbar {
 		this.#highlighter = highlighter;
 		this.#bar = document.createElement("div");
 		this.#bar.id = EleID.BAR;
-		this.updateBarVisibility();
+		this.updateHighlightsShownFlag();
+		this.updateVisibility();
+		this.updateCollapsed();
 		// Inputs should not be focusable unless user has already focused bar. (1)
 		const inputsSetFocusable = (focusable: boolean) => {
 			this.#bar.querySelectorAll(`input.${EleClass.CONTROL_INPUT}`).forEach((input: HTMLElement) => {
@@ -142,9 +148,6 @@ class Toolbar implements AbstractToolbar {
 			}
 			event.stopPropagation();
 		});
-		if (controlsInfo.highlightsShown) {
-			this.#bar.classList.add(EleClass.HIGHLIGHTS_SHOWN);
-		}
 		this.#sections = {
 			left: document.createElement("span"),
 			terms: document.createElement("span"),
@@ -195,10 +198,6 @@ class Toolbar implements AbstractToolbar {
 	getTermAbstractControls (): Array<TermAbstractControl> {
 		const array: Array<TermAbstractControl> = [];
 		return array.concat(this.#termControls).concat(this.#termAppendControl);
-	}
-
-	setCollapsed (collapsed: boolean) {
-		this.#bar.classList.toggle(EleClass.COLLAPSED, collapsed);
 	}
 
 	setAutofocusable (autofocus: boolean) {
@@ -389,12 +388,20 @@ class Toolbar implements AbstractToolbar {
 		}
 	}
 
-	toggleBarHidden (force?: boolean) {
-		this.#bar.classList.toggle(EleClass.BAR_HIDDEN, force);
+	updateHighlightsShownFlag () {
+		this.#bar.classList.toggle(EleClass.HIGHLIGHTS_SHOWN, this.#controlsInfo.highlightsShown);
 	}
 
-	updateBarVisibility () {
+	updateVisibility () {
 		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModifyEnabled);
+	}
+
+	updateCollapsed () {
+		this.#bar.classList.toggle(EleClass.COLLAPSED, this.#controlsInfo.barCollapsed);
+	}
+
+	toggleHidden (force?: boolean) {
+		this.#bar.classList.toggle(EleClass.BAR_HIDDEN, force);
 	}
 
 	updateControlVisibility (controlName: ControlButtonName) {
@@ -430,7 +437,7 @@ class Toolbar implements AbstractToolbar {
 						barCollapsedOn: controlsInfo.barCollapsed,
 					},
 				});
-				this.setCollapsed(controlsInfo.barCollapsed);
+				this.updateCollapsed();
 			},
 		}; case "disableTabResearch": return {
 			path: "/icons/close.svg",

@@ -10,7 +10,7 @@ type SelectionReturnTarget = Readonly<{
 
 type ControlButtonName = keyof ConfigBarControlsShown
 
-interface AbstractToolbar extends ToolbarTermControlInterface, ToolbarControlButtonInterface {
+interface AbstractToolbar {
 	appendTerm: (term: MatchTerm, commands: BrowserCommands) => void
 
 	insertTerm: (term: MatchTerm, index: number, commands: BrowserCommands) => void
@@ -30,9 +30,13 @@ interface AbstractToolbar extends ToolbarTermControlInterface, ToolbarControlBut
 
 	focusTermInput: (termIndex: number | null) => void
 
-	toggleBarHidden: (force?: boolean) => void
+	updateHighlightsShownFlag: () => void
 
-	updateBarVisibility: () => void
+	updateVisibility: () => void
+
+	updateCollapsed: () => void
+
+	toggleHidden: (force?: boolean) => void
 
 	updateControlVisibility: (controlName: ControlButtonName) => void
 
@@ -78,9 +82,7 @@ interface ToolbarTermInputInterface extends ToolbarTermComponentInterface {
 
 interface ToolbarTermOptionListInterface extends ToolbarTermComponentInterface {}
 
-interface ToolbarControlButtonInterface {
-	setCollapsed: (collapsed: boolean) => void
-}
+interface ToolbarControlButtonInterface {}
 
 export type {
 	SelectionReturnTarget,

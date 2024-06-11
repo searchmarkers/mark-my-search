@@ -4,7 +4,7 @@ import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
+import { type TermHues, EleID } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
@@ -99,26 +99,21 @@ const refreshTermControlsAndStartHighlighting = (
 	commands: BrowserCommandsReadonly,
 	hues: TermHues,
 ) => {
-	// TODO fix this abomination of a function
-	if (document.getElementById(EleID.BAR)) {
-		if (update && update.term) {
-			if (update.termIndex === termsOld.length) {
-				toolbar.appendTerm(update.term, commands);
-			} else {
-				toolbar.replaceTerm(update.term, update.termIndex);
-			}
-		} else if (update && !update.term) {
-			toolbar.removeTerm(update.termIndex);
-			highlighter.current?.undoHighlights([ termsOld[update.termIndex] ]);
-			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-			toolbar.insertIntoDocument();
-			highlighter.current?.countMatches(); // TODO this method should be handled by the engine, and not exposed
-			return;
-		} else if (!update) {
-			highlighter.current?.undoHighlights();
-			toolbar.replaceTerms(terms, commands);
+	// TODO this function is better! but not good enough
+	if (update && update.term) {
+		if (update.termIndex === termsOld.length) {
+			toolbar.appendTerm(update.term, commands);
+		} else {
+			toolbar.replaceTerm(update.term, update.termIndex);
 		}
-	} else {
+	} else if (update && !update.term) {
+		toolbar.removeTerm(update.termIndex);
+		highlighter.current?.undoHighlights([ termsOld[update.termIndex] ]);
+		Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+		toolbar.insertIntoDocument();
+		highlighter.current?.countMatches(); // TODO this method should be handled by the engine, and not exposed
+		return;
+	} else if (!update) {
 		highlighter.current?.undoHighlights();
 		toolbar.replaceTerms(terms, commands);
 	}
@@ -201,7 +196,7 @@ const produceEffectOnCommandFn = function* (
 		focusedIdx = getFocusedIdx(focusedIdx);
 		switch (commandInfo.type) {
 		case "toggleBar": {
-			getToolbar(false)?.toggleBarHidden();
+			getToolbar(false)?.toggleHidden();
 			break;
 		} case "toggleSelect": {
 			selectModeFocus = !selectModeFocus;
@@ -286,7 +281,7 @@ interface TermAppender {
 	const updateTermStatus = (term: MatchTerm) => getToolbar(false)?.updateTermStatus(term);
 	const termSetterInternal: TermSetter = {
 		setTerms: termsNew => {
-			if (itemsMatch(terms, termsNew, termEquals) && (terms.length > 0 || document.getElementById(EleID.BAR))) {
+			if (itemsMatch(terms, termsNew, termEquals)) {
 				return;
 			}
 			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
@@ -445,7 +440,7 @@ interface TermAppender {
 		}
 		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 			controlsInfo.pageModifyEnabled = message.enablePageModify;
-			getToolbar(false)?.updateBarVisibility();
+			getToolbar(false)?.updateVisibility();
 			if (!controlsInfo.pageModifyEnabled) {
 				highlighter.current?.endHighlighting();
 			}
@@ -491,11 +486,11 @@ interface TermAppender {
 		(message.commands ?? []).forEach(command => {
 			produceEffectOnCommand.next(command);
 		});
-		getToolbar(false)?.updateControlVisibility("replaceTerms");
-		const bar = document.getElementById(EleID.BAR);
-		if (bar) {
-			bar.classList.toggle(EleClass.HIGHLIGHTS_SHOWN, controlsInfo.highlightsShown);
-			bar.classList.toggle(EleClass.COLLAPSED, controlsInfo.barCollapsed);
+		const toolbar = getToolbar(false);
+		if (toolbar) {
+			toolbar.updateHighlightsShownFlag();
+			toolbar.updateCollapsed();
+			toolbar.updateControlVisibility("replaceTerms");
 		}
 		})();
 	};
