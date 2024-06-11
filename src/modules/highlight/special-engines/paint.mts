@@ -42,14 +42,14 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		this.hues = hues;
 		this.insertHelperElements();
 		window.addEventListener("focusin", this.onFocusIn);
-		window.addEventListener("mouseover", this.onHover);
+		window.addEventListener("pointerover", this.onHover);
 		window.addEventListener("input", this.onInput);
 	}
 
 	endHighlighting () {
 		this.terms = [];
 		window.removeEventListener("focusin", this.onFocusIn);
-		window.removeEventListener("mouseover", this.onHover);
+		window.removeEventListener("pointerover", this.onHover);
 		window.removeEventListener("input", this.onInput);
 		this.removeHelperElements();
 	}
@@ -104,7 +104,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		}
 	};
 
-	onHover = (event: MouseEvent) => {
+	onHover = (event: PointerEvent) => {
 		//console.log("mouse enter", event.target, event.relatedTarget);
 		if (event.target) {
 			if (this.handles(event.target as Element)) {

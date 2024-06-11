@@ -72,7 +72,8 @@ class TermOptionList {
 			}
 			stopKeyEvent(event);
 			if (event.key === "Escape") {
-				this.close(true);
+				this.#toolbarInterface.focusLastFocusedInput();
+				this.close();
 			} else if (event.key.startsWith("Arrow")) {
 				if (event.key === "ArrowUp" || event.key === "ArrowDown") {
 					const down = event.key === "ArrowDown";
@@ -96,7 +97,8 @@ class TermOptionList {
 					return false;
 				});
 				if (toggledOption && !event.shiftKey) {
-					this.close(true);
+					this.#toolbarInterface.focusLastFocusedInput();
+					this.close();
 				}
 			}
 		};
@@ -106,50 +108,83 @@ class TermOptionList {
 			options.forEach(option => option.makeFocusable(true));
 		});
 		this.#optionList.addEventListener("focusout", event => {
-			this.#optionList.removeAttribute("tabindex");
 			const newFocus = event.relatedTarget as Element | null;
-			console.log(newFocus);
+			this.#optionList.removeAttribute("tabindex");
 			if (this.#optionList.contains(newFocus)) {
 				return;
 			}
 			for (const option of options) {
 				option.makeFocusable(false);
 			}
-			if (newFocus?.classList.contains(EleClass.CONTROL_REVEAL)) {
-				this.close(false);
-			} else {
-				this.close(true);
-			}
+			this.close();
 		});
 	}
 
-	createRevealButton (): HTMLButtonElement {
+	// Also known as the "reveal button".
+	createFullTriggerButton (): HTMLButtonElement {
 		const button = document.createElement("button");
 		button.type = "button";
 		button.classList.add(EleClass.CONTROL_BUTTON, EleClass.CONTROL_REVEAL);
 		button.tabIndex = -1;
 		button.disabled = !this.#controlsInfo.barLook.showRevealIcon;
-		button.addEventListener("mousedown", () => {
-			if (this.isOpen()) {
-				this.#optionList.dataset.mousedownClosed = "";
-				this.close(true);
-			}
-		});
-		button.addEventListener("click", () => {
-			if ("mousedownClosed" in this.#optionList.dataset) {
-				delete this.#optionList.dataset.mousedownClosed;
-			} else {
-				this.open();
-			}
-		});
-		button.addEventListener("mouseleave", () => {
-			delete this.#optionList.dataset.mousedownClosed;
-		});
+		this.makeElementFullTrigger(button);
 		const image = document.createElement("img");
 		image.src = chrome.runtime.getURL("/icons/reveal.svg");
 		image.draggable = false;
 		button.appendChild(image);
 		return button;
+	}
+
+	makeElementFullTrigger (element: HTMLElement) {
+		let pointerHeldDown = false;
+		let pointerHeldDownJustClosed = false;
+		element.addEventListener("pointerdown", () => {
+			pointerHeldDown = true;
+			if (this.isOpen()) {
+				pointerHeldDownJustClosed = true;
+				this.#optionList.dataset.pointerdownClosed = "";
+				this.close();
+			}
+		});
+		element.addEventListener("pointerup", () => {
+			if (!pointerHeldDown) {
+				return;
+			}
+			if (!pointerHeldDownJustClosed) {
+				this.open();
+			}
+		});
+		window.addEventListener("pointerup", () => {
+			if (!pointerHeldDown) {
+				return;
+			}
+			pointerHeldDown = false;
+			pointerHeldDownJustClosed = false;
+			if (!this.isOpen()) {
+				this.#toolbarInterface.focusLastFocusedInput();
+			}
+		});
+	}
+
+	makeElementPulldownTrigger (element: HTMLElement) {
+		let pointerHeldDown = false;
+		let pointerHoverKnown = false;
+		element.addEventListener("pointerdown", () => {
+			pointerHeldDown = true;
+		});
+		element.addEventListener("pointerup", () => {
+			pointerHoverKnown = true;
+		});
+		window.addEventListener("pointerup", () => {
+			if (!pointerHeldDown) {
+				return;
+			}
+			pointerHeldDown = false;
+			if (!pointerHoverKnown) {
+				this.#toolbarInterface.focusLastFocusedInput();
+			}
+			pointerHoverKnown = false;
+		});
 	}
 
 	/**
@@ -184,12 +219,12 @@ class TermOptionList {
 		});
 		const label = document.createElement("span");
 		label.textContent = text;
-		option.addEventListener("mousedown", event => {
+		option.addEventListener("pointerdown", event => {
 			// Prevent the menu from perceiving a loss in focus (and closing) the second time an option is clicked.
 			// TODO why does that happen?
 			event.preventDefault();
 		});
-		option.addEventListener("mouseup", () => {
+		option.addEventListener("pointerup", () => {
 			if (!option.closest(`.${EleClass.MENU_OPEN}`)) {
 				// For when the user 'pulls down' the menu and releases over the option.
 				checkbox.click();
@@ -226,10 +261,7 @@ class TermOptionList {
 		this.#optionList.focus();
 	}
 
-	close (focusMenuOpener: boolean) {
-		if (focusMenuOpener) {
-			this.#toolbarInterface.focusMenuOpener();
-		}
+	close () {
 		this.#controlInterface.classListToggle(EleClass.MENU_OPEN, false);
 	}
 	

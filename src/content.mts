@@ -234,12 +234,6 @@ const produceEffectOnCommandFn = function* (
 	}
 };
 
-const onWindowMouseUp = () => {
-	if (document.activeElement && document.activeElement.classList.contains(EleClass.CONTROL_REVEAL)) {
-		(document.querySelector(`#${EleID.BAR} .${EleClass.WAS_FOCUSED}`) as HTMLElement | null)?.focus();
-	}
-};
-
 interface TermSetter extends TermReplacer, TermAppender {
 	setTerms: (termsNew: ReadonlyArray<MatchTerm>) => void;
 }
@@ -298,7 +292,6 @@ interface TermAppender {
 			}
 			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
 			terms.splice(0, terms.length, ...termsNew);
-			window.addEventListener("mouseup", onWindowMouseUp);
 			refreshTermControlsAndStartHighlighting(
 				termsOld,
 				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
@@ -318,7 +311,6 @@ interface TermAppender {
 			} else {
 				terms.splice(termIndex, 1);
 			}
-			window.addEventListener("mouseup", onWindowMouseUp);
 			refreshTermControlsAndStartHighlighting(
 				termsOld,
 				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
@@ -334,7 +326,6 @@ interface TermAppender {
 		appendTerm: term => {
 			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
 			terms.push(term);
-			window.addEventListener("mouseup", onWindowMouseUp);
 			refreshTermControlsAndStartHighlighting(
 				termsOld,
 				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
@@ -490,7 +481,6 @@ interface TermAppender {
 		}
 		if (message.deactivate) {
 			//removeTermsAndDeactivate();
-			window.removeEventListener("mouseup", onWindowMouseUp);
 			highlighter.current?.endHighlighting();
 			terms.splice(0);
 			getToolbar(false)?.remove();

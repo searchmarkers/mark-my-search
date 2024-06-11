@@ -48,10 +48,20 @@ interface AbstractToolbar extends ToolbarTermControlInterface, ToolbarControlBut
 interface ToolbarTermControlInterface extends ToolbarTermInputInterface, ToolbarTermOptionListInterface {
 	getTermControlIndex: (control: TermAbstractControl) => number | null
 
-	markMenuOpener: (eventTarget: EventTarget) => void
+	setAutofocusable: (autofocus: boolean) => void
 }
 
-interface ToolbarTermInputInterface {
+interface ToolbarTermComponentInterface {
+	hasLastFocusedInput: () => boolean
+
+	markLastFocusedInput: (focus: EventTarget) => void
+
+	forgetLastFocusedInput: () => void
+
+	focusLastFocusedInput: () => void
+}
+
+interface ToolbarTermInputInterface extends ToolbarTermComponentInterface {
 	getTermCount: () => number
 
 	getTermControlIndex: (control: TermControlInputInterface) => number | null
@@ -64,11 +74,7 @@ interface ToolbarTermInputInterface {
 	selectTermInput: (termIndex: number, shiftCaret?: "right" | "left") => void
 }
 
-interface ToolbarTermOptionListInterface {
-	focusMenuOpener: () => void
-
-	forgetMenuOpener: () => void
-}
+interface ToolbarTermOptionListInterface extends ToolbarTermComponentInterface {}
 
 interface ToolbarControlButtonInterface {
 	setCollapsed: (collapsed: boolean) => void

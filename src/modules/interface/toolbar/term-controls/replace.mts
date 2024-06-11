@@ -1,5 +1,5 @@
 import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.mjs";
-import type { ToolbarTermControlInterface } from "/dist/modules/interface/toolbar.mjs";
+import type { SelectionReturnTarget, ToolbarTermControlInterface } from "/dist/modules/interface/toolbar.mjs";
 import { TermInput } from "/dist/modules/interface/toolbar/term-control/term-input.mjs";
 import { TermOptionList } from "/dist/modules/interface/toolbar/term-control/term-option-list.mjs";
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
@@ -59,14 +59,9 @@ class TermReplaceControl implements TermAbstractControl {
 			toolbarInterface,
 		);
 		this.#optionList.setMatchMode(this.#term.matchMode);
-		const revealButton = this.#optionList.createRevealButton();
-		revealButton.addEventListener("focusin", event => {
-			if (event.relatedTarget) {
-				toolbarInterface.markMenuOpener(event.relatedTarget);
-			}
-		});
 		this.#controlPad = document.createElement("span");
 		this.#controlPad.classList.add(EleClass.CONTROL_PAD, EleClass.DISABLED);
+		const revealButton = this.#optionList.createFullTriggerButton();
 		this.#controlPad.appendChild(revealButton);
 		this.#controlContent = document.createElement("button");
 		this.#controlContent.type = "button";
@@ -74,17 +69,22 @@ class TermReplaceControl implements TermAbstractControl {
 		this.#controlContent.tabIndex = -1;
 		this.#controlContent.textContent = this.#term.phrase;
 		this.#controlContent.addEventListener("click", () => {
+			if (toolbarInterface.hasLastFocusedInput()) {
+				toolbarInterface.setAutofocusable(false);
+			}
 			highlighter.current?.stepToNextOccurrence(false, false, this.#term);
 		});
-		this.#controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
+		this.#controlContent.addEventListener("pointerover", () => { // FIXME this is not screenreader friendly.
 			this.updateTooltip(commands);
 		});
+		this.#optionList.makeElementPulldownTrigger(this.#controlContent);
 		this.#controlPad.appendChild(this.#controlContent);
 		const editButton = document.createElement("button");
 		editButton.type = "button";
 		editButton.classList.add(EleClass.CONTROL_BUTTON, EleClass.CONTROL_EDIT);
 		editButton.tabIndex = -1;
 		editButton.disabled = !controlsInfo.barLook.showEditIcon;
+		this.#optionList.makeElementPulldownTrigger(editButton);
 		const editChangeImage = document.createElement("img");
 		editChangeImage.classList.add(EleClass.PRIMARY);
 		editChangeImage.src = chrome.runtime.getURL("/icons/edit.svg");
@@ -113,27 +113,28 @@ class TermReplaceControl implements TermAbstractControl {
 		return this.#input.getValue();
 	}
 
-	inputOpenedMenu (): boolean {
-		return this.#input.classListContains(EleClass.MENU_OPENER);
+	inputIsLastFocused (): boolean {
+		return this.#input.classListContains(EleClass.LAST_FOCUSED);
 	}
 
-	markInputOpenedMenu (value: boolean) {
+	markInputAsLastFocused (value: boolean) {
 		if (value) {
-			this.#toolbarInterface.forgetMenuOpener();
+			this.#toolbarInterface.forgetLastFocusedInput();
 		}
-		this.#input.classListToggle(EleClass.MENU_OPENER, value);
+		this.#input.classListToggle(EleClass.LAST_FOCUSED, value);
 	}
 
 	inputIsEventTarget (target: EventTarget): boolean {
 		return this.#input.isEventTarget(target);
 	}
 
-	selectInput (shiftCaret?: "right" | "left") {
-		this.#input.select(shiftCaret);
+	selectInput (shiftCaret?: "right" | "left"): SelectionReturnTarget | null {
+		this.markInputAsLastFocused(false);
+		return this.#input.select(shiftCaret);
 	}
 
-	focusInput () {
-		this.markInputOpenedMenu(false);
+	focusInput (): SelectionReturnTarget {
+		this.markInputAsLastFocused(false);
 		return this.#input.focus();
 	}
 
@@ -159,7 +160,6 @@ class TermReplaceControl implements TermAbstractControl {
 	 */
 	commit (inputValue?: string) {
 		inputValue ??= this.#input.getValue();
-		this.#input.resetValue();
 		// TODO standard method of avoiding race condition (arising from calling termsSet, which immediately updates controls)
 		const index = this.#toolbarInterface.getTermControlIndex(this);
 		if (index === null) {

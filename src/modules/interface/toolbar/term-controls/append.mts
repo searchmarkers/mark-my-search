@@ -32,12 +32,7 @@ class TermAppendControl implements TermAbstractControl {
 		const setUpControl = (container: HTMLElement) => {
 			const pad = container.querySelector(`.${EleClass.CONTROL_PAD}`) as HTMLElement;
 			this.#input.appendTo(pad);
-			const revealButton = this.#optionList.createRevealButton();
-			revealButton.addEventListener("focusin", event => {
-				if (event.relatedTarget) {
-					toolbarInterface.markMenuOpener(event.relatedTarget);
-				}
-			});
+			const revealButton = this.#optionList.createFullTriggerButton();
 			pad.appendChild(revealButton);
 			this.#optionList.appendTo(container);
 		};
@@ -69,15 +64,15 @@ class TermAppendControl implements TermAbstractControl {
 		return this.#input.getValue();
 	}
 
-	inputOpenedMenu (): boolean {
-		return this.#input.classListContains(EleClass.MENU_OPENER);
+	inputIsLastFocused (): boolean {
+		return this.#input.classListContains(EleClass.LAST_FOCUSED);
 	}
 
-	markInputOpenedMenu (value: boolean) {
+	markInputAsLastFocused (value: boolean) {
 		if (value) {
-			this.#toolbarInterface.forgetMenuOpener();
+			this.#toolbarInterface.forgetLastFocusedInput();
 		}
-		this.#input.classListToggle(EleClass.MENU_OPENER, value);
+		this.#input.classListToggle(EleClass.LAST_FOCUSED, value);
 	}
 
 	inputIsEventTarget (target: EventTarget): boolean {
@@ -85,11 +80,12 @@ class TermAppendControl implements TermAbstractControl {
 	}
 
 	selectInput (shiftCaret?: "right" | "left") {
+		this.focusInput();
 		this.#input.select(shiftCaret);
 	}
 
 	focusInput () {
-		this.markInputOpenedMenu(false);
+		this.markInputAsLastFocused(false);
 		return this.#input.focus();
 	}
 

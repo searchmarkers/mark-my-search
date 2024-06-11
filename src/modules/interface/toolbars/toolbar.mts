@@ -69,23 +69,30 @@ class Toolbar implements AbstractToolbar {
 			inputsSetFocusable(true);
 		});
 		this.#bar.addEventListener("focusout", event => {
-			this.returnSelectionToDocument(!!event.relatedTarget);
-			// Only if focus is not moving (and has not already moved) somewhere else within the bar.
-			if (!this.#bar.contains(event.relatedTarget as Node) && !this.#bar.contains(document.activeElement)) {
-				inputsSetFocusable(false);
+			const newFocus = event.relatedTarget as Element | null;
+			if (!this.#bar.contains(newFocus)) {
+				if (this.hasLastFocusedInput()) {
+					if (!this.#bar.classList.contains(EleClass.BAR_NO_AUTOFOCUS)) {
+						this.focusLastFocusedInput();
+					}
+				} else {
+					this.returnSelectionToDocument(!!event.relatedTarget);
+					inputsSetFocusable(false);
+				}
 			}
 		});
-		const updateInputsFocused = () => {
-			// Causes the last focused input to be forgotten, as long as the user is not currently interacting with the bar.
-			// If the user is interacting with the bar, the information may be needed for restoring (or preparing to restore) focus.
-			if (!document.querySelector(`#${EleID.BAR}:active`)) {
-				this.#bar.querySelectorAll(`.${EleClass.WAS_FOCUSED}`).forEach(input => {
-					input.classList.remove(EleClass.WAS_FOCUSED);
-				});
+		this.#bar.addEventListener("pointerdown", event => {
+			const target = event.target as Element | null;
+			if (this.#bar.contains(target)) {
+				this.#bar.classList.remove(EleClass.BAR_NO_AUTOFOCUS);
 			}
-		};
-		this.#bar.addEventListener("mousedown", updateInputsFocused);
-		this.#bar.addEventListener("mouseup", updateInputsFocused);
+		});
+		this.#bar.addEventListener("pointerleave", () => {
+			if (!this.#bar.contains(document.activeElement) && this.#bar.classList.contains(EleClass.BAR_NO_AUTOFOCUS)) {
+				this.#bar.classList.remove(EleClass.BAR_NO_AUTOFOCUS);
+				this.forgetLastFocusedInput();
+			}
+		});
 		this.#bar.addEventListener("contextmenu", event => {
 			event.preventDefault();
 		});
@@ -194,24 +201,37 @@ class Toolbar implements AbstractToolbar {
 		this.#bar.classList.toggle(EleClass.COLLAPSED, collapsed);
 	}
 
-	markMenuOpener (eventTarget: EventTarget) {
+	setAutofocusable (autofocus: boolean) {
+		this.#bar.classList.toggle(EleClass.BAR_NO_AUTOFOCUS, !autofocus);
+	}
+
+	hasLastFocusedInput (): boolean {
 		for (const termControl of this.getTermAbstractControls()) {
-			if (termControl.inputIsEventTarget(eventTarget)) {
-				termControl.markInputOpenedMenu(true);
+			if (termControl.inputIsLastFocused()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	markLastFocusedInput (focus: EventTarget) {
+		for (const termControl of this.getTermAbstractControls()) {
+			if (termControl.inputIsEventTarget(focus)) {
+				termControl.markInputAsLastFocused(true);
 				return;
 			}
 		}
 	}
 
-	forgetMenuOpener () {
+	forgetLastFocusedInput () {
 		for (const termControl of this.getTermAbstractControls()) {
-			termControl.markInputOpenedMenu(false);
+			termControl.markInputAsLastFocused(false);
 		}
 	}
 
-	focusMenuOpener () {
+	focusLastFocusedInput () {
 		for (const termControl of this.getTermAbstractControls()) {
-			if (termControl.inputOpenedMenu()) {
+			if (termControl.inputIsLastFocused()) {
 				this.#selectionReturn.setTargetIfValid(termControl.focusInput());
 				return;
 			}
@@ -305,7 +325,7 @@ class Toolbar implements AbstractToolbar {
 	selectTermInput (termIndex: number, shiftCaret?: "right" | "left") {
 		termIndex = Math.max(0, Math.min(termIndex, this.#termControls.length));
 		if (termIndex < this.#termControls.length) {
-			this.#termControls[termIndex].selectInput(shiftCaret);
+			this.#selectionReturn.setTargetIfValid(this.#termControls[termIndex].selectInput(shiftCaret));
 		} else {
 			this.#termAppendControl.selectInput(shiftCaret);
 		}
@@ -454,9 +474,8 @@ class Toolbar implements AbstractToolbar {
 class ToolbarSelectionReturnManager {
 	#target: SelectionReturnTarget | null = null;
 
-	setTargetIfValid (target: SelectionReturnTarget) {
-		if (target.element && target.element.closest(`#${EleID.BAR}`)) {
-			this.#target = null;
+	setTargetIfValid (target: SelectionReturnTarget | null) {
+		if (!target?.element || (target.element && target.element.closest(`#${EleID.BAR}`))) {
 			return;
 		}
 		this.#target = target;

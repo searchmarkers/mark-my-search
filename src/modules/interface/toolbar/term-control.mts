@@ -4,9 +4,9 @@ import type { ControlFocusArea } from "/dist/modules/interface/toolbar/common.mj
 interface TermAbstractControl extends TermControlInputInterface, TermControlOptionListInterface {
 	getInputValue: () => string
 
-	inputOpenedMenu: () => boolean
+	inputIsLastFocused: () => boolean
 
-	markInputOpenedMenu: (value: boolean) => void
+	markInputAsLastFocused: (value: boolean) => void
 
 	inputIsEventTarget: (target: EventTarget) => boolean
 

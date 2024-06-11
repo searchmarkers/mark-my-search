@@ -110,6 +110,7 @@ const EleClass = (() => {
 	return {
 		HIGHLIGHTS_SHOWN: wrap("highlights-shown"),
 		BAR_HIDDEN: wrap("bar-hidden"),
+		BAR_NO_AUTOFOCUS: wrap("bar-no-autofocus"),
 		CONTROL: wrap("control"),
 		CONTROL_PAD: wrap("control-pad"),
 		CONTROL_INPUT: wrap("control-input"),
@@ -125,9 +126,8 @@ const EleClass = (() => {
 		FOCUS_REVERT: wrap("focus-revert"),
 		REMOVE: wrap("remove"),
 		DISABLED: wrap("disabled"),
-		WAS_FOCUSED: wrap("was-focused"),
+		LAST_FOCUSED: wrap("last-focused"),
 		MENU_OPEN: wrap("menu-open"),
-		MENU_OPENER: wrap("menu-opener"),
 		COLLAPSED: wrap("collapsed"),
 		UNCOLLAPSIBLE: wrap("collapsed-impossible"),
 		MATCH_REGEX: wrap("match-regex"),

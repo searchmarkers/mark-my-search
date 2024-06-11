@@ -68,6 +68,14 @@ class TermInput {
 				}
 			});
 		}).observe(input);
+		input.addEventListener("focus", () => {
+			toolbarInterface.forgetLastFocusedInput();
+		});
+		input.addEventListener("blur", event => {
+			if ((event.relatedTarget as Element | null)?.closest(`#${EleID.BAR}`)) {
+				toolbarInterface.markLastFocusedInput(input);
+			}
+		});
 		input.addEventListener("keydown", event => {
 			if (event.key === "Tab") {
 				return; // Must be caught by the bar to be handled independently.
@@ -89,18 +97,18 @@ class TermInput {
 			}
 			case "ArrowLeft":
 			case "ArrowRight": {
-				this.tryShiftTermFocus((event.key === "ArrowRight") ? "right" : "left", event.preventDefault);
+				this.tryShiftTermFocus((event.key === "ArrowRight") ? "right" : "left", () => event.preventDefault());
 				return;
 			}
 			case "ArrowUp":
 			case "ArrowDown": {
-				this.tryShiftTermFocus((event.key === "ArrowUp") ? 0 : toolbarInterface.getTermCount(), event.preventDefault);
+				this.tryShiftTermFocus((event.key === "ArrowUp") ? 0 : toolbarInterface.getTermCount(), () => event.preventDefault());
 				return;
 			}
 			case " ": {
 				if (event.shiftKey) {
 					event.preventDefault();
-					input.classList.add(EleClass.MENU_OPENER);
+					input.classList.add(EleClass.LAST_FOCUSED);
 					controlInterface.openOptionList();
 				}
 				return;
@@ -118,12 +126,6 @@ class TermInput {
 		//		input.select();
 		//	});
 		//});
-		input.addEventListener("focusout", event => {
-			const newFocus = event.relatedTarget as Element | null;
-			if (newFocus?.closest(`#${EleID.BAR}`)) {
-				input.classList.add(EleClass.WAS_FOCUSED);
-			}
-		});
 		let inputSize = 0;
 		new ResizeObserver(entries => {
 			const inputSizeNew = entries[0]?.contentBoxSize[0]?.inlineSize ?? 0;
@@ -151,19 +153,25 @@ class TermInput {
 		shiftTarget: "right" | "left" | number,
 		onBeforeShift: () => void,
 	) {
-		const index = this.#toolbarInterface.getTermControlIndex(this.#controlInterface);
+		const index = this.#toolbarInterface.getTermControlIndex(this.#controlInterface)
+			?? this.#toolbarInterface.getTermCount();
 		if (index === null
 			|| this.#input.selectionStart !== this.#input.selectionEnd
-			|| this.#input.selectionStart !== (shiftTarget === "right" ? this.#input.value.length : 0)
+			|| this.#input.selectionStart !== ((shiftTarget === "left" || shiftTarget === 0) ? 0 : this.#input.value.length)
 		) {
 			return;
 		}
 		onBeforeShift();
 		const targetIndex = typeof shiftTarget === "number" ? shiftTarget : (index + (shiftTarget === "right" ? 1 : -1));
-		if (index === targetIndex) {
+		if (index === targetIndex || targetIndex === -1 || targetIndex > this.#toolbarInterface.getTermCount()) {
 			this.#controlInterface.commit();
 		} else {
-			this.#toolbarInterface.selectTermInput(targetIndex, typeof shiftTarget === "string" ? shiftTarget : undefined);
+			this.#toolbarInterface.selectTermInput(
+				targetIndex,
+				typeof shiftTarget === "string"
+					? (shiftTarget === "left" ? "right" : "left")
+					: (shiftTarget === 0 ? "right" : "left"),
+			);
 		}
 	}
 
@@ -183,10 +191,10 @@ class TermInput {
 	 * Focuses and selects the text of the input. Note that focus causes a term input to be visible.
 	 * @param shiftCaret If supplied, whether to shift the caret to the "right" or the "left". If unsupplied, all text is selected.
 	 */
-	select (shiftCaret?: "right" | "left") {
-		this.#input.focus();
+	select (shiftCaret?: "right" | "left"): SelectionReturnTarget | null {
+		const returnTarget = document.activeElement !== this.#input ? this.focus() : null;
 		if (shiftCaret) {
-			const caretPosition = shiftCaret === "right" ? 0 : -1;
+			const caretPosition = shiftCaret === "left" ? 0 : -1;
 			this.#input.setSelectionRange(caretPosition, caretPosition);
 		} else {
 			this.#input.select();
@@ -196,13 +204,14 @@ class TermInput {
 				});
 			}
 		}
+		return returnTarget;
 	}
 
 	focus (): SelectionReturnTarget {
 		const selection = getSelection() as Selection;
 		const activeElementOriginal = document.activeElement as HTMLElement;
 		const selectionRangesOriginal = Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i));
-		this.select();
+		this.#input.focus();
 		return {
 			element: activeElementOriginal,
 			selectionRanges: selectionRangesOriginal,
