@@ -389,6 +389,10 @@ class Toolbar implements AbstractToolbar {
 		}
 	}
 
+	toggleBarHidden (force?: boolean) {
+		this.#bar.classList.toggle(EleClass.BAR_HIDDEN, force);
+	}
+
 	updateBarVisibility () {
 		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModifyEnabled);
 	}

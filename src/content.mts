@@ -201,8 +201,7 @@ const produceEffectOnCommandFn = function* (
 		focusedIdx = getFocusedIdx(focusedIdx);
 		switch (commandInfo.type) {
 		case "toggleBar": {
-			const bar = document.getElementById(EleID.BAR) as HTMLElement;
-			bar.classList.toggle(EleClass.BAR_HIDDEN);
+			getToolbar(false)?.toggleBarHidden();
 			break;
 		} case "toggleSelect": {
 			selectModeFocus = !selectModeFocus;

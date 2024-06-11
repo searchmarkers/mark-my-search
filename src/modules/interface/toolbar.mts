@@ -29,7 +29,9 @@ interface AbstractToolbar extends ToolbarTermControlInterface, ToolbarControlBut
 	indicateTerm: (term: MatchTerm | null) => void
 
 	focusTermInput: (termIndex: number | null) => void
-	
+
+	toggleBarHidden: (force?: boolean) => void
+
 	updateBarVisibility: () => void
 
 	updateControlVisibility: (controlName: ControlButtonName) => void
