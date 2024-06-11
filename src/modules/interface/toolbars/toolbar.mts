@@ -148,6 +148,9 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			}
 			event.stopPropagation();
 		});
+		this.#bar.addEventListener("dragstart", event => {
+			event.preventDefault();
+		});
 		this.#sections = {
 			left: document.createElement("span"),
 			terms: document.createElement("span"),
