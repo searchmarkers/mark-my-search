@@ -136,55 +136,88 @@ class TermOptionList {
 	}
 
 	makeElementFullTrigger (element: HTMLElement) {
-		let pointerHeldDown = false;
-		let pointerHeldDownJustClosed = false;
+		element.classList.add(EleClass.OPTION_LIST_PULLDOWN);
+		let pressedOnElement = false;
+		let pressedOnElement_closedMenu = false;
+		/**
+		 * Called at the start of a click OR the start of a pull.
+		 */
 		element.addEventListener("pointerdown", () => {
-			pointerHeldDown = true;
+			pressedOnElement = true;
+			element.addEventListener("pointerup", onElementPointerUp);
+			window.addEventListener("pointerup", onWindowPointerUp);
 			if (this.isOpen()) {
-				pointerHeldDownJustClosed = true;
+				pressedOnElement_closedMenu = true;
 				this.#optionList.dataset.pointerdownClosed = "";
 				this.close();
 			}
 		});
-		element.addEventListener("pointerup", () => {
-			if (!pointerHeldDown) {
+		/**
+		 * Called at the end of a click OR due to unrelated user action,
+		 * BEFORE window's pointer up event.
+		 */
+		const onElementPointerUp = () => {
+			if (!pressedOnElement) {
 				return;
 			}
-			if (!pointerHeldDownJustClosed) {
+			if (!pressedOnElement_closedMenu) {
 				this.open();
 			}
-		});
-		window.addEventListener("pointerup", () => {
-			if (!pointerHeldDown) {
+		};
+		/**
+		 * Called at the end of a click OR the end of a pull OR due to unrelated user action,
+		 * AFTER element's pointer up event.
+		 */
+		const onWindowPointerUp = () => {
+			if (!pressedOnElement) {
 				return;
 			}
-			pointerHeldDown = false;
-			pointerHeldDownJustClosed = false;
+			pressedOnElement = false;
+			element.removeEventListener("pointerup", onElementPointerUp);
+			window.removeEventListener("pointerup", onWindowPointerUp);
+			pressedOnElement_closedMenu = false;
 			if (!this.isOpen()) {
 				this.#toolbarInterface.focusLastFocusedInput();
 			}
-		});
+		};
 	}
 
 	makeElementPulldownTrigger (element: HTMLElement) {
-		let pointerHeldDown = false;
-		let pointerHoverKnown = false;
+		element.classList.add(EleClass.OPTION_LIST_PULLDOWN);
+		let pressedOnElement = false;
+		let justReleasedOnElement = false;
+		/**
+		 * Called at the start of a click OR the start of a pull.
+		 */
 		element.addEventListener("pointerdown", () => {
-			pointerHeldDown = true;
+			pressedOnElement = true;
+			element.addEventListener("pointerup", onElementPointerUp);
+			window.addEventListener("pointerup", onWindowPointerUp);
 		});
-		element.addEventListener("pointerup", () => {
-			pointerHoverKnown = true;
-		});
-		window.addEventListener("pointerup", () => {
-			if (!pointerHeldDown) {
+		/**
+		 * Called at the end of a click OR due to unrelated user action,
+		 * BEFORE window's pointer up event.
+		 */
+		const onElementPointerUp = () => {
+			justReleasedOnElement = true;
+		};
+		/**
+		 * Called at the end of a click OR the end of a pull OR due to unrelated user action,
+		 * AFTER element's pointer up event.
+		 */
+		const onWindowPointerUp = () => {
+			if (!pressedOnElement) {
+				justReleasedOnElement = false;
 				return;
 			}
-			pointerHeldDown = false;
-			if (!pointerHoverKnown) {
+			pressedOnElement = false;
+			element.removeEventListener("pointerup", onElementPointerUp);
+			window.removeEventListener("pointerup", onWindowPointerUp);
+			if (!justReleasedOnElement) {
 				this.#toolbarInterface.focusLastFocusedInput();
 			}
-			pointerHoverKnown = false;
-		});
+			justReleasedOnElement = false;
+		};
 	}
 
 	/**

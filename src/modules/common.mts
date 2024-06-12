@@ -120,6 +120,7 @@ const EleClass = (() => {
 		CONTROL_EDIT: wrap("control-edit"),
 		OPTION_LIST: wrap("options"),
 		OPTION: wrap("option"),
+		OPTION_LIST_PULLDOWN: wrap("options-pulldown"),
 		TERM: wrap("term"),
 		FOCUS: wrap("focus"),
 		FOCUS_CONTAINER: wrap("focus-contain"),

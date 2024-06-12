@@ -192,7 +192,7 @@ const fillContent = (
 /* || Term Pulldown */
 
 #${EleID.BAR} {
-	& .${EleClass.CONTROL}:active .${EleClass.CONTROL_PAD}:not(:hover) ~ .${EleClass.OPTION_LIST},
+	& .${EleClass.CONTROL}:has(.${EleClass.OPTION_LIST_PULLDOWN}:active:not(:hover)) .${EleClass.OPTION_LIST},
 	& .${EleClass.MENU_OPEN} .${EleClass.OPTION_LIST} {
 		display: flex;
 	}
