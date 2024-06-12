@@ -179,22 +179,22 @@ const styleElementsCleanup = () => {
  * Returns a generator function to consume individual command objects and produce their desired effect.
  * @param terms Terms being controlled, highlighted, and jumped to.
  */
-const produceEffectOnCommandFn = function* (
+const respondToCommand_factory = (
 	terms: Array<MatchTerm>,
 	termSetter: TermSetter,
 	controlsInfo: ControlsInfo,
 	getToolbar: GetToolbar,
 	highlighter: Highlighter,
-) {
+) => {
 	let selectModeFocus = false;
-	let focusedIdx = 0;
-	while (true) {
-		const commandInfo: CommandInfo = yield;
-		if (!commandInfo) {
-			continue; // Requires an initial empty call before working (TODO solve this issue).
+	let focusedIdx: number | null = null;
+	return (commandInfo: CommandInfo) => {
+		if (commandInfo.termIdx !== undefined) {
+			focusedIdx = commandInfo.termIdx;
 		}
-		const getFocusedIdx = (idx: number) => Math.min(terms.length - 1, idx);
-		focusedIdx = getFocusedIdx(focusedIdx);
+		if (focusedIdx !== null && focusedIdx >= terms.length) {
+			focusedIdx = null;
+		}
 		switch (commandInfo.type) {
 		case "toggleBar": {
 			getToolbar(false)?.toggleHidden();
@@ -213,20 +213,23 @@ const produceEffectOnCommandFn = function* (
 			break;
 		} case "advanceGlobal": {
 			focusReturnToDocument();
-			const term = selectModeFocus ? terms[focusedIdx] : null;
+			const term = (selectModeFocus && focusedIdx !== null) ? terms[focusedIdx] : null;
 			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
 			getToolbar(false)?.focusTermInput(commandInfo.termIdx ?? null);
 			break;
 		} case "selectTerm": {
+			if (focusedIdx === null) {
+				break;
+			}
 			getToolbar(false)?.indicateTerm(terms[focusedIdx]);
 			if (!selectModeFocus) {
 				highlighter.current?.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
 			break;
 		}}
-	}
+	};
 };
 
 interface TermSetter extends TermReplacer, TermAppender {
@@ -369,8 +372,7 @@ interface TermAppender {
 			return toolbar as Toolbar;
 		};
 	})();
-	const produceEffectOnCommand = produceEffectOnCommandFn(terms, termSetter, controlsInfo, getToolbar, highlighter);
-	produceEffectOnCommand.next(); // Requires an initial empty call before working (TODO otherwise mitigate).
+	const respondToCommand = respondToCommand_factory(terms, termSetter, controlsInfo, getToolbar, highlighter);
 	const getDetails = (request: Message.TabDetailsRequest) => ({
 		terms: request.termsFromSelection ? getTermsFromSelection(termTokens) : undefined,
 		highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
@@ -485,7 +487,7 @@ interface TermAppender {
 			termSetterInternal.setTerms(message.terms);
 		}
 		(message.commands ?? []).forEach(command => {
-			produceEffectOnCommand.next(command);
+			respondToCommand(command);
 		});
 		const toolbar = getToolbar(false);
 		if (toolbar) {

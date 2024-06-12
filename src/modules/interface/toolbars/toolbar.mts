@@ -296,7 +296,9 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	}
 
 	indicateTerm (term: MatchTerm | null) {
-		this.#sections.terms.classList.remove(this.#indicatedClassToken ?? "");
+		if (this.#indicatedClassToken) {
+			this.#sections.terms.classList.remove(this.#indicatedClassToken);
+		}
 		if (term) {
 			const termToken = this.#termTokens.get(term);
 			const termControl = this.#termControls.findIndex(control => control.getTermToken() === termToken);
