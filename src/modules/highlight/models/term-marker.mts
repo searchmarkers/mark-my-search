@@ -11,7 +11,7 @@ interface AbstractTermMarker {
 		terms: Array<MatchTerm>,
 		termTokens: TermTokens,
 		hues: TermHues,
-		highlightedElements: Array<HTMLElement>,
+		highlightedElements: Iterable<HTMLElement>,
 	) => void
 
 	// TODO document

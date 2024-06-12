@@ -87,40 +87,47 @@ class PaintEngine implements AbstractEngine {
 		this.method = method;
 		this.getCSS = method.getCSS;
 		this.requestRefreshIndicators = requestCallFn(
-			() => this.termMarkers.insert(terms, termTokens, hues, Array.from(this.method.getHighlightedElements())),
+			() => {
+				this.termMarkers.insert(terms, termTokens, hues, Array.from(this.method.getHighlightedElements()));
+			},
 			200, 2000,
 		);
-		this.requestRefreshTermControls = requestCallFn(() => (
-			terms.forEach(term => updateTermStatus(term))
-		), 50, 500);
+		this.requestRefreshTermControls = requestCallFn(
+			() => {
+				terms.forEach(term => updateTermStatus(term));
+			},
+			50, 500,
+		);
 		this.flowMonitor = new FlowMonitor(
 			terms,
 			termPatterns,
-			(element): TreeCache => ({
-				id: "",
-				styleRuleIdx: -1,
-				isHighlightable: this.method.highlightables.checkElement(element),
-				flows: [],
-			}),
-			() => this.countMatches(),
-			ancestor => {
-				const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
-				this.styleUpdates.observe(ancestorHighlightable);
-				const highlighting = ancestorHighlightable[CACHE] as TreeCache ?? {
+			{
+				createElementCache: (element): TreeCache => ({
 					id: "",
 					styleRuleIdx: -1,
-					isHighlightable: true,
+					isHighlightable: this.method.highlightables.checkElement(element),
 					flows: [],
-				};
-				ancestorHighlightable[CACHE] = highlighting;
-				//console.log(highlighting);
-				if (highlighting.id === "") {
-					highlighting.id = highlightingId.next().value;
-					// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
-					// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
-					ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
-				}
-				this.method.highlightables.markElementsUpTo(ancestor);
+				}),
+				onHighlightingUpdated: () => this.countMatches(),
+				onNewHighlightedAncestor: ancestor => {
+					const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
+					this.styleUpdates.observe(ancestorHighlightable);
+					const highlighting = ancestorHighlightable[CACHE] as TreeCache ?? {
+						id: "",
+						styleRuleIdx: -1,
+						isHighlightable: true,
+						flows: [],
+					};
+					ancestorHighlightable[CACHE] = highlighting;
+					//console.log(highlighting);
+					if (highlighting.id === "") {
+						highlighting.id = highlightingId.next().value;
+						// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
+						// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
+						ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
+					}
+					this.method.highlightables.markElementsUpTo(ancestor);
+				},
 			},
 		);
 		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);

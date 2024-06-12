@@ -117,16 +117,22 @@ class ElementEngine implements AbstractEngine {
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
-		this.requestRefreshIndicators = requestCallFn(() => (
-			this.termMarkers.insert(terms, termTokens, hues, Array.from(document.body.querySelectorAll(terms
-				.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
-				.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, termTokens)}`)
-				.join(", ")
-			) as NodeListOf<HTMLElement>))
-		), 50, 500);
-		this.requestRefreshTermControls = requestCallFn(() => (
-			terms.forEach(term => updateTermStatus(term))
-		), 50, 500);
+		this.requestRefreshIndicators = requestCallFn(
+			() => {
+				this.termMarkers.insert(terms, termTokens, hues, document.body.querySelectorAll(terms
+					.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
+					.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, termTokens)}`)
+					.join(", ")
+				) as NodeListOf<HTMLElement>);
+			},
+			50, 500,
+		);
+		this.requestRefreshTermControls = requestCallFn(
+			() => {
+				terms.forEach(term => updateTermStatus(term));
+			},
+			50, 500,
+		);
 		this.mutationUpdates = getMutationUpdates(this.getMutationUpdatesObserver(terms));
 		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}

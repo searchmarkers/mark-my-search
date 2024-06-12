@@ -1,5 +1,8 @@
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import type {
+	TreeCache, CachingElement, CachingHTMLElement,
+} from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { type BaseFlow, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
@@ -11,26 +14,28 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 
 	readonly onHighlightingUpdated: () => void = () => undefined;
 
-	readonly onNewHighlightedAncestor?: (ancestor: Element) => void = () => undefined;
+	readonly onNewHighlightedAncestor?: (ancestor: HTMLElement) => void = () => undefined;
 
-	readonly onBoxesInfoPopulated?: (element: Element) => void;
-	readonly onBoxesInfoRemoved?: (element: Element) => void;
+	readonly onBoxesInfoPopulated?: (element: CachingHTMLElement) => void;
+	readonly onBoxesInfoRemoved?: (element: CachingHTMLElement) => void;
 
 	constructor (
 		terms: Array<MatchTerm>,
 		termPatterns: TermPatterns,
-		createElementCache: (element: Element) => TreeCache<Flow>,
-		onHighlightingUpdated: () => void,
-		onNewHighlightedAncestor?: (ancestor: Element) => void,
-		onBoxesInfoPopulated?: (element: Element & { [CACHE]: TreeCache<Flow> }) => void,
-		onBoxesInfoRemoved?: (element: Element & { [CACHE]: TreeCache<Flow> }) => void,
+		functions: {
+			createElementCache: (element: Element) => TreeCache<Flow>,
+			onHighlightingUpdated: () => void,
+			onNewHighlightedAncestor?: (ancestor: HTMLElement) => void,
+			onBoxesInfoPopulated?: (element: CachingHTMLElement) => void,
+			onBoxesInfoRemoved?: (element: CachingHTMLElement) => void,
+		},
 	) {
 		this.mutationObserver = this.getMutationUpdatesObserver(terms, termPatterns);
-		this.createElementCache = createElementCache;
-		this.onHighlightingUpdated = onHighlightingUpdated;
-		this.onNewHighlightedAncestor = onNewHighlightedAncestor;
-		this.onBoxesInfoPopulated = onBoxesInfoPopulated;
-		this.onBoxesInfoRemoved = onBoxesInfoRemoved;
+		this.createElementCache = functions.createElementCache;
+		this.onHighlightingUpdated = functions.onHighlightingUpdated;
+		this.onNewHighlightedAncestor = functions.onNewHighlightedAncestor;
+		this.onBoxesInfoPopulated = functions.onBoxesInfoPopulated;
+		this.onBoxesInfoRemoved = functions.onBoxesInfoRemoved;
 	}
 
 	getMutationUpdatesObserver (terms: Array<MatchTerm>, termPatterns: TermPatterns) {
@@ -65,7 +70,7 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 				}
 				for (const node of mutation.removedNodes) {
 					if (node.nodeType === Node.ELEMENT_NODE) {
-						this.removeFlows(node as Element);
+						this.removeFlows(node as HTMLElement);
 					}
 				}
 			}
@@ -75,7 +80,11 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 		});
 	}
 
-	generateBoxesInfoForFlowOwnersFromContent (terms: Array<MatchTerm>, termPatterns: TermPatterns, element: Element) {
+	generateBoxesInfoForFlowOwnersFromContent (
+		terms: Array<MatchTerm>,
+		termPatterns: TermPatterns,
+		element: HTMLElement,
+	) {
 		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		if (highlightTags.flow.has(element.tagName)) {
@@ -87,7 +96,11 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 		}
 	}
 
-	generateBoxesInfoForFlowOwners (terms: Array<MatchTerm>, termPatterns: TermPatterns, node: Node) {
+	generateBoxesInfoForFlowOwners (
+		terms: Array<MatchTerm>,
+		termPatterns: TermPatterns,
+		node: Node,
+	) {
 		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		const parent = node.parentElement;
@@ -124,7 +137,11 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 		}
 	}
 
-	generateBoxesInfo (terms: Array<MatchTerm>, termPatterns: TermPatterns, flowOwner: Element) {
+	generateBoxesInfo (
+		terms: Array<MatchTerm>,
+		termPatterns: TermPatterns,
+		flowOwner: HTMLElement,
+	) {
 		if (!flowOwner.firstChild)
 			return;
 		const breaksFlow = !highlightTags.flow.has(flowOwner.tagName);
@@ -140,22 +157,22 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 	 * Removes the flows cache from all descendant elements (inclusive).
 	 * @param element The ancestor below which to forget flows.
 	 */
-	removeFlows (ancestor: Element) {
+	removeFlows (ancestor: HTMLElement) {
 		if (highlightTags.reject.has(ancestor.tagName)) {
 			return;
 		}
 		if (CACHE in ancestor) {
-			this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(ancestor);
+			this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(ancestor as CachingHTMLElement);
 			delete ancestor[CACHE];
 		}
 		const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, (element: Element) =>
 			highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 		);
-		let element: Element;
+		let element: HTMLElement;
 		// eslint-disable-next-line no-cond-assign
-		while (element = walker.nextNode() as Element) {
+		while (element = walker.nextNode() as HTMLElement) {
 			if (CACHE in element) {
-				this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(element);
+				this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(element as CachingHTMLElement);
 				delete element[CACHE];
 			}
 		}
@@ -171,11 +188,10 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 				(CACHE in element) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
 			)
 		);
-		type HighlightingElement = Element & { [CACHE]: TreeCache }
-		let element: HighlightingElement;
+		let element: CachingElement;
 		if (terms) {
 			// eslint-disable-next-line no-cond-assign
-			while (element = walker.nextNode() as HighlightingElement) {
+			while (element = walker.nextNode() as CachingElement) {
 				element[CACHE].flows = element[CACHE].flows.filter(flow => {
 					flow.boxesInfo = flow.boxesInfo.filter(boxInfo =>
 						!terms.includes(boxInfo.term) // TODO-REMOVE this used to compare tokens
@@ -188,7 +204,7 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 			}
 		} else {
 			// eslint-disable-next-line no-cond-assign
-			while (element = walker.nextNode() as HighlightingElement) {
+			while (element = walker.nextNode() as CachingElement) {
 				delete (element as Element)[CACHE];
 			}
 		}
@@ -201,9 +217,9 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 	 */
 	flowCacheWithBoxesInfo (terms: Array<MatchTerm>, termPatterns: TermPatterns, textFlow: Array<Text>) {
 		const text = textFlow.map(node => node.textContent).join("");
-		const getAncestorCommon = (ancestor: Element, node: Node): Element =>
-			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as Element, node);
-		const ancestor = getAncestorCommon(textFlow[0].parentElement as Element, textFlow.at(-1) as Text);
+		const getAncestorCommon = (ancestor: HTMLElement, node: Node): HTMLElement =>
+			ancestor.contains(node) ? ancestor : getAncestorCommon(ancestor.parentElement as HTMLElement, node);
+		const ancestor = getAncestorCommon(textFlow[0].parentElement as HTMLElement, textFlow.at(-1) as Text);
 		let ancestorHighlighting = ancestor[CACHE] as TreeCache<Flow> | undefined;
 		// TODO check that the types used make sense (Flow, BaseFlow, BoxInfo, BaseBoxInfo)
 		const flow: BaseFlow<true> = {
@@ -218,7 +234,7 @@ class FlowMonitor<Flow = BaseFlow<true>> implements AbstractFlowMonitor {
 			ancestorHighlighting.flows.push(flow as Flow);
 			ancestor[CACHE] = ancestorHighlighting;
 		}
-		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(ancestor);
+		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(ancestor as CachingHTMLElement);
 		if (flow.boxesInfo.length > 0) {
 			this.onNewHighlightedAncestor && this.onNewHighlightedAncestor(ancestor);
 		}
@@ -272,4 +288,8 @@ const getTextFlows = (
 	return textFlows;
 };
 
-export { FlowMonitor };
+export {
+	type CachingElement as ElementWithCache,
+	type CachingHTMLElement as HTMLElementWithCache,
+	FlowMonitor,
+};

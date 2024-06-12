@@ -6,7 +6,7 @@ interface AbstractFlowMonitor {
 	generateBoxesInfo: (
 		terms: Array<MatchTerm>,
 		termPatterns: TermPatterns,
-		flowOwner: Element,
+		flowOwner: HTMLElement,
 	) => void
 
 	removeBoxesInfo: (

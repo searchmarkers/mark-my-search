@@ -8,7 +8,7 @@ import {
 } from "/dist/modules/common.mjs";
 
 class TermMarker implements AbstractTermMarker {
-	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Array<HTMLElement>) {
+	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Iterable<HTMLElement>) {
 		if (terms.length === 0) {
 			return; // No terms results in an empty selector, which is not allowed.
 		}

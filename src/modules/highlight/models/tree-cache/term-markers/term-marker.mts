@@ -4,7 +4,7 @@ import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, getElementYRelative, type TermHues, getTermClass } from "/dist/modules/common.mjs";
 
 class TermMarker implements AbstractTermMarker {
-	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Array<HTMLElement>) {
+	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Iterable<HTMLElement>) {
 		if (terms.length === 0) {
 			return; // Efficient escape in case of no possible markers to be inserted.
 		}
