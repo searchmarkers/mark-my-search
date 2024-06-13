@@ -105,6 +105,13 @@ class ExtendedHighlightRegistry {
 	}
 }
 
+type HighlightStyle = {
+	opacity: number
+	lineThickness: number
+	lineStyle: "dotted" | "dashed" | "solid" | "double" | "wavy"
+	textColor?: string
+}
+
 class HighlightEngine implements AbstractEngine {
 	readonly termOccurrences: AbstractTermCounter = new TermCounter();
 	readonly termWalker: AbstractTermWalker = new TermWalker();
@@ -121,6 +128,17 @@ class HighlightEngine implements AbstractEngine {
 
 	readonly highlights = new ExtendedHighlightRegistry();
 	readonly highlightedElements: Set<CachingHTMLElement> = new Set();
+	
+	static readonly hueCycleStyles: Array<HighlightStyle> = [
+		{ opacity: 0.7, lineThickness: 0, lineStyle: "solid", textColor: "black" },
+		{ opacity: 0.4, lineThickness: 2, lineStyle: "dotted" },
+		{ opacity: 0.4 ,lineThickness: 2, lineStyle: "dashed" },
+		{ opacity: 0.4, lineThickness: 2, lineStyle: "solid" },
+		{ opacity: 0.2, lineThickness: 3, lineStyle: "dotted" },
+		{ opacity: 0.2,lineThickness: 3, lineStyle: "dashed" },
+		{ opacity: 0.2, lineThickness: 3, lineStyle: "solid" },
+		{ opacity: 0.5, lineThickness: 1, lineStyle: "wavy" },
+	];
 
 	constructor (
 		terms: Array<MatchTerm>,
@@ -182,13 +200,19 @@ class HighlightEngine implements AbstractEngine {
 		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
 			const term = terms[termIndex];
 			const hue = hues[termIndex % hues.length];
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			const cycle = Math.floor(termIndex / hues.length);
+			const {
+				opacity,
+				lineThickness,
+				lineStyle,
+				textColor,
+			} = HighlightEngine.hueCycleStyles[Math.min(cycle, HighlightEngine.hueCycleStyles.length - 1)];
 			return (`
 #${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.termTokens.get(term))}) {
-	background-color: hsl(${hue} 70% 70% / 0.7);
-	color: black;
-	/* text-decoration to indicate cycle */
+	background-color: hsl(${hue} 70% 70% / ${opacity});
+	${textColor ? `color: ${textColor};` : ""}
+	${lineThickness ? `text-decoration: ${lineThickness}px hsl(${hue} 100% 35%) ${lineStyle} underline;` : ""}
+	${lineThickness ? `text-decoration-skip-ink: none;` : ""}
 }`
 			);
 		},
