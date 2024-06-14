@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.14.2",
+	"version": "2.0.0",
 
 	"browser_specific_settings": { "gecko": { "id": "mark-my-search@searchmarkers.github.io" } },
 
@@ -28,25 +28,14 @@
 	],
 
 	"background": {
-		"scripts": [
-			"/dist/include/utility.js",
-			"/dist/include/pattern-stem.js",
-			"/dist/include/pattern-diacritic.js",
-			"/dist/include/util-privileged.js",
-			"/dist/include/storage.js",
-			"/dist/background.js"
-		]
+		"type": "module",
+		"scripts": [ "/dist/background.mjs" ]
 	},
 
 	"content_scripts": [
 		{
 			"matches": [ "*://*/*" ],
-			"js": [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
-				"/dist/content.js"
-			],
+			"js": [ "/dist/content-entry.js" ],
 			"run_at": "document_start"
 		}
 	],
@@ -65,17 +54,10 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
+				"/icons/*.svg",
 				"/dist/paint.js",
-				"/icons/mms.svg",
-				"/icons/arrow.svg",
-				"/icons/close.svg",
-				"/icons/search.svg",
-				"/icons/show.svg",
-				"/icons/refresh.svg",
-				"/icons/create.svg",
-				"/icons/delete.svg",
-				"/icons/edit.svg",
-				"/icons/reveal.svg"
+				"/dist/content.mjs",
+				"/dist/modules/*.mjs"
 			],
 			"matches": [ "*://*/*" ]
 		}
