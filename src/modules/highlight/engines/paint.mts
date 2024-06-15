@@ -21,11 +21,11 @@ import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs"
 import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
-import { EleID, type TermHues } from "/dist/modules/common.mjs";
+import { EleID, type RContainer, type WContainer, createContainer } from "/dist/modules/common.mjs";
 
 type TreeCache = {
 	id: string
-	styleRuleIdx: number
+	styleRuleIdx?: number
 	isHighlightable: boolean
 } & Cache.TreeCache<Flow>
 
@@ -34,6 +34,10 @@ type Flow = BaseFlow<true, BoxInfoBoxes>
 type BoxInfo = BaseBoxInfo<true, BoxInfoBoxes>
 
 type BoxInfoBoxes = { boxes: Array<Box> }
+
+type CachingElement<HasCache = false> = Cache.BaseCachingElement<TreeCache, HasCache>
+
+type CachingHTMLElement<HasCache = false> = Cache.BaseCachingHTMLElement<TreeCache, HasCache>
 
 type Box = {
 	token: string
@@ -45,7 +49,7 @@ type Box = {
 
 type StyleRuleInfo = {
 	rule: string
-	element: Element
+	element: CachingElement<true>
 }
 
 class PaintEngine implements AbstractEngine {
@@ -56,18 +60,23 @@ class PaintEngine implements AbstractEngine {
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
+	readonly updateTermStatus: UpdateTermStatus;
+
 	readonly method: AbstractMethod;
 
 	readonly flowMonitor: AbstractFlowMonitor;
 
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	readonly elementsVisible: Set<Element> = new Set();
+	readonly elementsVisible: Set<CachingElement> = new Set();
 	readonly shiftObserver: ResizeObserver;
 	readonly visibilityObserver: IntersectionObserver;
 	readonly styleUpdates: ReturnType<typeof getStyleUpdates>;
 
 	readonly specialHighlighter: AbstractSpecialEngine;
+
+	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
+	readonly hues: WContainer<ReadonlyArray<number>>;
 
 	/**
 	 * 
@@ -75,8 +84,6 @@ class PaintEngine implements AbstractEngine {
 	 * @param methodPreference 
 	 */
 	constructor (
-		terms: Array<MatchTerm>,
-		hues: TermHues,
 		updateTermStatus: UpdateTermStatus,
 		method: AbstractMethod,
 		termTokens: TermTokens,
@@ -84,49 +91,53 @@ class PaintEngine implements AbstractEngine {
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
+		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
+		const hues = createContainer<ReadonlyArray<number>>([]);
+		this.terms = terms;
+		this.hues = hues;
+		this.updateTermStatus = updateTermStatus;
 		this.method = method;
 		this.getCSS = method.getCSS;
 		this.requestRefreshIndicators = requestCallFn(
 			() => {
-				this.termMarkers.insert(terms, termTokens, hues, Array.from(this.method.getHighlightedElements()));
+				this.termMarkers.insert(terms.current, this.termTokens, hues.current, this.method.getHighlightedElements());
 			},
 			200, 2000,
 		);
 		this.requestRefreshTermControls = requestCallFn(
 			() => {
-				terms.forEach(term => updateTermStatus(term));
+				for (const term of terms.current) {
+					updateTermStatus(term);
+				}
 			},
 			50, 500,
 		);
-		this.flowMonitor = new FlowMonitor(
+		this.flowMonitor = new FlowMonitor<BoxInfoBoxes, TreeCache>(
 			terms,
 			termPatterns,
 			{
-				createElementCache: (element): TreeCache => ({
+				createElementCache: element => ({
 					id: "",
-					styleRuleIdx: -1,
-					isHighlightable: this.method.highlightables.checkElement(element),
+					isHighlightable: this.method.isElementHighlightable(element),
 					flows: [],
 				}),
 				onHighlightingUpdated: () => this.countMatches(),
 				onNewHighlightedAncestor: ancestor => {
-					const ancestorHighlightable = this.method.highlightables.findAncestor(ancestor);
-					this.styleUpdates.observe(ancestorHighlightable);
-					const highlighting = ancestorHighlightable[CACHE] as TreeCache ?? {
+					const ancestorHighlightable = this.method.findHighlightableAncestor(ancestor) as CachingElement<true>;
+					ancestorHighlightable[CACHE] ??= {
 						id: "",
-						styleRuleIdx: -1,
 						isHighlightable: true,
 						flows: [],
 					};
-					ancestorHighlightable[CACHE] = highlighting;
+					this.styleUpdates.observe(ancestorHighlightable);
 					//console.log(highlighting);
-					if (highlighting.id === "") {
-						highlighting.id = highlightingId.next().value;
+					if (ancestorHighlightable[CACHE].id === "") {
+						ancestorHighlightable[CACHE].id = highlightingId.next().value;
 						// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
 						// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
-						ancestorHighlightable.setAttribute("markmysearch-h_id", highlighting.id);
+						ancestorHighlightable.setAttribute("markmysearch-h_id", ancestorHighlightable[CACHE].id);
 					}
-					this.method.highlightables.markElementsUpTo(ancestor);
+					this.method.markElementsUpToHighlightable(ancestor);
 				},
 			},
 		);
@@ -157,20 +168,22 @@ class PaintEngine implements AbstractEngine {
 	}
 
 	startHighlighting (
-		terms: Array<MatchTerm>,
-		termsToHighlight: Array<MatchTerm>,
-		termsToPurge: Array<MatchTerm>,
-		hues: Array<number>,
+		terms: ReadonlyArray<MatchTerm>,
+		termsToHighlight: ReadonlyArray<MatchTerm>,
+		termsToPurge: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
 		this.flowMonitor.removeBoxesInfo(termsToPurge); // BoxInfo stores highlighting, so this effectively 'undoes' highlights.
 		// MAIN
+		this.terms.assign(terms);
+		this.hues.assign(hues);
 		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
 		this.styleUpdate(
 			Array.from(new Set(
-				Array.from(this.elementsVisible).map(element => this.method.highlightables.findAncestor(element))
+				Array.from(this.elementsVisible).map(element => this.method.findHighlightableAncestor(element))
 			)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
 		);
 		this.specialHighlighter.startHighlighting(terms, hues);
@@ -181,38 +194,44 @@ class PaintEngine implements AbstractEngine {
 		this.styleUpdates.disconnectAll();
 		this.undoHighlights();
 		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
-		document.body.querySelectorAll("[markmysearch-h_id]").forEach(element => {
+		for (const element of document.body.querySelectorAll("[markmysearch-h_id]")) {
 			element.removeAttribute("markmysearch-h_id");
-		});
+		}
 		this.method.endHighlighting();
 		this.specialHighlighter.endHighlighting();
 		this.termWalker.cleanup();
 	}
 
-	undoHighlights (terms?: Array<MatchTerm>) {
+	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
 		this.flowMonitor.removeBoxesInfo(terms);
 	}
 
-	getStyleRules (root: Element, recurse: boolean, terms: Array<MatchTerm>, hues: Array<number>) {
-		this.method.tempReplaceContainers(root, recurse);
+	getStyleRules (
+		root: CachingElement,
+		recurse: boolean,
+		terms: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
+	): Array<StyleRuleInfo> {
+		if (CACHE in root) {
+			this.method.tempReplaceContainers(root, recurse);
+		}
 		const styleRules: Array<StyleRuleInfo> = [];
-		// 'root' must have [elementInfo].
 		this.collectStyleRules(root, recurse, new Range(), styleRules, terms, hues);
 		return styleRules;
 	}
 
 	collectStyleRules (
-		ancestor: Element,
+		ancestor: CachingElement,
 		recurse: boolean,
 		range: Range,
 		styleRules: Array<StyleRuleInfo>,
-		terms: Array<MatchTerm>,
-		hues: Array<number>,
+		terms: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
 	) {
 		if (ancestor && CACHE in ancestor) {
 			styleRules.push({
 				rule: this.method.constructHighlightStyleRule(
-					(ancestor[CACHE] as TreeCache).id,
+					ancestor[CACHE].id,
 					getBoxesOwned(this.termTokens, ancestor),
 					terms,
 					hues,
@@ -221,44 +240,38 @@ class PaintEngine implements AbstractEngine {
 			});
 		}
 		if (recurse) {
-			const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, (element: Element) =>
-				highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+			const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, element =>
+				highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 			);
-			let child: Element;
+			let child: CachingElement;
 			// eslint-disable-next-line no-cond-assign
-			while (child = walker.nextNode() as Element) {
-				if (CACHE in child) {
-					styleRules.push({
-						rule: this.method.constructHighlightStyleRule(
-							(child[CACHE] as TreeCache).id,
-							getBoxesOwned(this.termTokens, child),
-							terms,
-							hues,
-						),
-						element: child,
-					});
-				}
+			while (child = walker.nextNode() as CachingElement) if (CACHE in child) {
+				styleRules.push({
+					rule: this.method.constructHighlightStyleRule(
+						child[CACHE].id,
+						getBoxesOwned(this.termTokens, child),
+						terms,
+						hues,
+					),
+					element: child,
+				});
 			}
 		}
 	}
 	
-	styleUpdate (styleRules: Array<StyleRuleInfo>) {
+	styleUpdate (styleRules: ReadonlyArray<StyleRuleInfo>) {
 		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
-		styleRules.forEach(({ rule, element }) => {
-			const highlighting = element[CACHE] as TreeCache | undefined;
-			if (!highlighting) {
-				return;
-			}
-			if (highlighting.styleRuleIdx === -1) {
-				highlighting.styleRuleIdx = styleSheet.cssRules.length;
+		for (const { rule, element } of styleRules) {
+			if (element[CACHE].styleRuleIdx === undefined) {
+				element[CACHE].styleRuleIdx = styleSheet.cssRules.length;
 			} else {
-				if (styleSheet.cssRules.item(highlighting.styleRuleIdx)?.cssText === rule) {
-					return;
+				if (styleSheet.cssRules.item(element[CACHE].styleRuleIdx)?.cssText === rule) {
+					continue;
 				}
-				styleSheet.deleteRule(highlighting.styleRuleIdx);
+				styleSheet.deleteRule(element[CACHE].styleRuleIdx);
 			}
-			styleSheet.insertRule(rule, highlighting.styleRuleIdx);
-		});
+			styleSheet.insertRule(rule, element[CACHE].styleRuleIdx);
+		}
 	}
 
 	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
@@ -269,26 +282,24 @@ class PaintEngine implements AbstractEngine {
 		return focus;
 	}
 
-	getShiftAndVisibilityObservers (terms: Array<MatchTerm>, hues: Array<number>) {
-		const shiftObserver = new ResizeObserver(entries => {
-			const styleRules: Array<StyleRuleInfo> = entries.flatMap(entry =>
-				this.getStyleRules(this.method.highlightables.findAncestor(entry.target), true, terms, hues)
-			);
-			if (styleRules.length) {
-				this.styleUpdate(styleRules);
-			}
-		});
+	getShiftAndVisibilityObservers (
+		terms: RContainer<ReadonlyArray<MatchTerm>>,
+		hues: RContainer<ReadonlyArray<number>>,
+	) {
 		const visibilityObserver = new IntersectionObserver(entries => {
-			let styleRules: Array<StyleRuleInfo> = [];
-			entries.forEach(entry => {
+			let styleRules: ReadonlyArray<StyleRuleInfo> = [];
+			for (const entry of entries as Array<{ isIntersecting: boolean, target: CachingElement }>) {
 				if (entry.isIntersecting) {
 					//console.log(entry.target, "intersecting");
 					if (CACHE in entry.target) {
 						this.elementsVisible.add(entry.target);
 						shiftObserver.observe(entry.target);
-						styleRules = styleRules.concat(
-							this.getStyleRules(this.method.highlightables.findAncestor(entry.target), false, terms, hues)
-						);
+						styleRules = styleRules.concat(this.getStyleRules(
+							this.method.findHighlightableAncestor(entry.target),
+							false,
+							terms.current,
+							hues.current,
+						));
 					}
 				} else {
 					//console.log(entry.target, "not intersecting");
@@ -298,16 +309,31 @@ class PaintEngine implements AbstractEngine {
 					this.elementsVisible.delete(entry.target);
 					shiftObserver.unobserve(entry.target);
 				}
-			});
-			if (styleRules.length) {
+			}
+			if (styleRules.length > 0) {
 				this.styleUpdate(styleRules);
 			}
 		}, { rootMargin: "400px" });
+		const shiftObserver = new ResizeObserver(entries => {
+			const styleRules: Array<StyleRuleInfo> = entries.flatMap(entry =>
+				this.getStyleRules(
+					this.method.findHighlightableAncestor(entry.target as CachingElement),
+					true,
+					terms.current,
+					hues.current,
+				)
+			);
+			if (styleRules.length > 0) {
+				this.styleUpdate(styleRules);
+			}
+		});
 		return { shiftObserver, visibilityObserver };
 	}
 }
 
 export {
 	type TreeCache, type Flow, type BoxInfo, type BoxInfoBoxes, type Box,
+	type CachingElement,
+	type CachingHTMLElement,
 	PaintEngine,
 };

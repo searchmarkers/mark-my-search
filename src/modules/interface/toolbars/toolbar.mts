@@ -4,14 +4,14 @@ import type {
 	ToolbarControlButtonInterface, ToolbarTermControlInterface,
 } from "/dist/modules/interface/toolbar.mjs";
 import { Control, type ControlButtonInfo } from "/dist/modules/interface/toolbar/control.mjs";
-import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.mjs";
+import type { TermAbstractControl, TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import { TermReplaceControl } from "/dist/modules/interface/toolbar/term-controls/replace.mjs";
 import { TermAppendControl } from "/dist/modules/interface/toolbar/term-controls/append.mjs";
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import { type TermHues, EleID, EleClass } from "/dist/modules/common.mjs";
+import { EleID, EleClass } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
@@ -44,7 +44,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	constructor (
 		terms: ReadonlyArray<MatchTerm>,
 		commands: BrowserCommands,
-		hues: TermHues,
+		hues: ReadonlyArray<number>,
 		controlsInfo: ControlsInfo,
 		termSetter: TermSetter,
 		doPhrasesMatchTerms: DoPhrasesMatchTerms,
@@ -63,13 +63,14 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		this.updateCollapsed();
 		// Inputs should not be focusable unless user has already focused bar. (1)
 		const inputsSetFocusable = (focusable: boolean) => {
-			this.#bar.querySelectorAll(`input.${EleClass.CONTROL_INPUT}`).forEach((input: HTMLElement) => {
+			const inputs = this.#bar.querySelectorAll(`input.${EleClass.CONTROL_INPUT}`) as NodeListOf<HTMLInputElement>;
+			for (const input of inputs) {
 				if (focusable) {
 					input.removeAttribute("tabindex");
 				} else {
 					input.tabIndex = -1;
 				}
-			});
+			}
 		};
 		this.#bar.addEventListener("focusin", () => {
 			inputsSetFocusable(true);
@@ -318,8 +319,8 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		return this.#termControls.length;
 	}
 
-	getTermControlIndex (control: TermReplaceControl): number | null {
-		const index = this.#termControls.indexOf(control);
+	getTermControlIndex (control: TermControlOptionListInterface): number | null {
+		const index = this.#termControls.indexOf(control as TermReplaceControl);
 		if (index === -1) {
 			return null;
 		}

@@ -1,7 +1,9 @@
-type Highlightables = Readonly<{
-	checkElement: (node: Node) => boolean
+import type { CachingElement } from "/dist/modules/highlight/engines/paint.mjs";
 
-	findAncestor: <T extends Element>(element: T) => T
+interface Highlightables {
+	isElementHighlightable: (element: Element) => boolean
+
+	findHighlightableAncestor: (element: CachingElement) => CachingElement
 
 	/**
 	 * From the element specified (included) to its highest ancestor element (not included),
@@ -9,7 +11,7 @@ type Highlightables = Readonly<{
 	 * This allows them to be selected in CSS.
 	 * @param element The lowest descendant to be marked of the highlightable element.
 	 */
-	markElementsUpTo: (element: Element) => void
-}>
+	markElementsUpToHighlightable: (element: Element) => void
+}
 
 export type { Highlightables };

@@ -1,16 +1,16 @@
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
 interface AbstractFlowMonitor {
-	mutationObserver: MutationObserver;
+	mutationObserver: MutationObserver
 
 	generateBoxesInfo: (
-		terms: Array<MatchTerm>,
+		terms: ReadonlyArray<MatchTerm>,
 		termPatterns: TermPatterns,
 		flowOwner: HTMLElement,
 	) => void
 
 	removeBoxesInfo: (
-		terms?: Array<MatchTerm>,
+		terms?: ReadonlyArray<MatchTerm>,
 		root?: HTMLElement,
 	) => void
 }

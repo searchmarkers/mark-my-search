@@ -834,12 +834,14 @@ textarea
 		}, 1000);
 	};
 
-	const clearAlerts = (parent: HTMLElement, classNames: Array<Page.AlertType> = []) =>
-		parent.querySelectorAll(classNames.length
+	const clearAlerts = (parent: HTMLElement, classNames: Array<Page.AlertType> = []) => {
+		for (const alert of parent.querySelectorAll(classNames.length
 			? `.alert:is(${classNames.map(className => `.${className}`).join(", ")})`
 			: ".alert"
-		).forEach((alert: HTMLElement) => clearAlert(alert))
-	;
+		) as NodeListOf<HTMLElement>) {
+			clearAlert(alert);
+		}
+	};
 
 	const createSection = (() => {
 		const insertLabel = (container: HTMLElement, labelInfo: Page.InteractionInfo["label"], containerIndex: number) => {
@@ -947,8 +949,8 @@ textarea
 						if (textbox.parentElement) {
 							// Parent is a list container because getArrayForList exists
 							textboxInfo.list.setArray(
-								Array.from(textbox.parentElement.children)
-									.map((textbox: HTMLInputElement) => textbox.value)
+								Array.from(textbox.parentElement.children as HTMLCollectionOf<HTMLInputElement>)
+									.map(textbox => textbox.value)
 									.filter(value => !!value),
 								getObjectIndex(),
 							);
@@ -1208,7 +1210,7 @@ textarea
 				messageBox.classList.add("message");
 				messageBox.placeholder = submitterInfo.message.placeholder;
 				messageBox.spellcheck = true;
-				messageBox.addEventListener("keypress", (event: KeyboardEvent) => {
+				(messageBox as HTMLElement).addEventListener("keypress", event => {
 					if (event.key === "Enter" && (messageInfo.singleline || event.ctrlKey)) {
 						button.click();
 					}

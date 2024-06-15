@@ -15,7 +15,10 @@ import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
-import { EleID, EleClass, AtRuleID, elementsPurgeClass, type TermHues, getTermClass } from "/dist/modules/common.mjs";
+import {
+	EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass,
+	type RContainer, type WContainer, createContainer,
+} from "/dist/modules/common.mjs";
 
 /**
  * Determines whether or not the highlighting algorithm should be run on an element.
@@ -26,6 +29,19 @@ import { EleID, EleClass, AtRuleID, elementsPurgeClass, type TermHues, getTermCl
 const canHighlightElement = (rejectSelector: string, element: Element): boolean =>
 	!element.closest(rejectSelector) && element.tagName !== HIGHLIGHT_TAG_UPPER
 ;
+
+type Properties = { [ELEMENT_JUST_HIGHLIGHTED]: boolean }
+
+type PropertiesElement<HasProperties = false> = BasePropertiesElement<Element, HasProperties>
+
+type PropertiesHTMLElement<HasProperties = false> = BasePropertiesElement<HTMLElement, HasProperties>
+
+type BasePropertiesElement<E extends Element, HasProperties = false> = E & (HasProperties extends true
+	? Properties
+	: (Properties | Record<never, never>)
+)
+
+type UnknownPropertiesHTMLElement = HTMLElement & { [ELEMENT_JUST_HIGHLIGHTED]: boolean | undefined }
 
 const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
 
@@ -38,8 +54,8 @@ interface FlowNodeListItem {
  * Singly linked list implementation for efficient highlight matching of DOM node 'flow' groups.
  */
 class FlowNodeList {
-	first: FlowNodeListItem | null;
-	last: FlowNodeListItem | null;
+	first: FlowNodeListItem | null = null;
+	last: FlowNodeListItem | null = null;
 
 	push (value: Text) {
 		if (this.last) {
@@ -108,19 +124,25 @@ class ElementEngine implements AbstractEngine {
 
 	readonly specialHighlighter: AbstractSpecialEngine;
 
+	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
+	readonly hues: WContainer<ReadonlyArray<number>>;
+
 	constructor (
-		terms: Array<MatchTerm>,
-		hues: TermHues,
 		updateTermStatus: UpdateTermStatus,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
+		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
+		const hues = createContainer<ReadonlyArray<number>>([]);
+		this.terms = terms;
+		this.hues = hues;
 		this.requestRefreshIndicators = requestCallFn(
 			() => {
-				this.termMarkers.insert(terms, termTokens, hues, document.body.querySelectorAll(terms
-					.slice(0, hues.length) // The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
+				this.termMarkers.insert(terms.current, termTokens, hues.current, document.body.querySelectorAll(terms.current
+					// The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
+					.slice(0, hues.current.length)
 					.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, termTokens)}`)
 					.join(", ")
 				) as NodeListOf<HTMLElement>);
@@ -129,7 +151,9 @@ class ElementEngine implements AbstractEngine {
 		);
 		this.requestRefreshTermControls = requestCallFn(
 			() => {
-				terms.forEach(term => updateTermStatus(term));
+				for (const term of terms.current) {
+					updateTermStatus(term);
+				}
 			},
 			50, 500,
 		);
@@ -151,7 +175,7 @@ ${HIGHLIGHT_TAG} {
 }`
 			);
 		},
-		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
+		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
 			const term = terms[termIndex];
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
@@ -176,10 +200,10 @@ ${HIGHLIGHT_TAG} {
 	}
 
 	startHighlighting (
-		terms: Array<MatchTerm>,
-		termsToHighlight: Array<MatchTerm>,
-		termsToPurge: Array<MatchTerm>,
-		hues: Array<number>,
+		terms: ReadonlyArray<MatchTerm>,
+		termsToHighlight: ReadonlyArray<MatchTerm>,
+		termsToPurge: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
@@ -202,7 +226,7 @@ ${HIGHLIGHT_TAG} {
 	 * @param terms The terms associated with the highlights to remove. If `undefined`, all highlights are removed.
 	 * @param root A root node under which to remove highlights.
 	 */
-	undoHighlights (terms?: Array<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
+	undoHighlights (terms?: ReadonlyArray<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
 		if (terms && !terms.length)
 			return; // Optimization for removing 0 terms
 		const classNames = terms?.map(term => getTermClass(term, this.termTokens));
@@ -256,7 +280,7 @@ ${HIGHLIGHT_TAG} {
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as FlowNodeListItem;
 			}
 			const parent = node.parentElement as Element;
-			parent[ELEMENT_JUST_HIGHLIGHTED] = true;
+			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
 			// update: Text after Highlight Element
 			if (end < text.length) {
 				node.textContent = text.substring(end);
@@ -301,7 +325,7 @@ ${HIGHLIGHT_TAG} {
 			highlight.appendChild(textEndNode);
 			textAfterNode.textContent = text.substring(end);
 			parent.insertBefore(highlight, textAfterNode);
-			parent[ELEMENT_JUST_HIGHLIGHTED] = true;
+			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
 			const textEndNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textEndNode);
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
@@ -316,7 +340,7 @@ ${HIGHLIGHT_TAG} {
 		 * @param terms Terms to find and highlight.
 		 * @param nodeItems A singly linked list of consecutive text nodes to highlight inside.
 		 */
-		const highlightInBlock = (terms: Array<MatchTerm>, nodeItems: FlowNodeList) => {
+		const highlightInBlock = (terms: ReadonlyArray<MatchTerm>, nodeItems: FlowNodeList) => {
 			const textFlow = nodeItems.getText();
 			for (const term of terms) {
 				let nodeItemPrevious: FlowNodeListItem | null = null;
@@ -367,7 +391,7 @@ ${HIGHLIGHT_TAG} {
 		 * @param visitSiblings Whether to visit the siblings of the root node.
 		 */
 		const insertHighlights = (
-			terms: Array<MatchTerm>,
+			terms: ReadonlyArray<MatchTerm>,
 			node: Node,
 			nodeItems: FlowNodeList,
 			visitSiblings = true,
@@ -401,7 +425,7 @@ ${HIGHLIGHT_TAG} {
 			} while (node && visitSiblings);
 		};
 
-		return (terms: Array<MatchTerm>, rootNode: Node) => {
+		return (terms: ReadonlyArray<MatchTerm>, rootNode: Node) => {
 			if (rootNode.nodeType === Node.TEXT_NODE) {
 				const nodeItems = new FlowNodeList();
 				nodeItems.push(rootNode as Text);
@@ -425,7 +449,7 @@ ${HIGHLIGHT_TAG} {
 		return focus;
 	}
 
-	getMutationUpdatesObserver (terms: Array<MatchTerm>) {
+	getMutationUpdatesObserver (terms: RContainer<ReadonlyArray<MatchTerm>>) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		const elements: Set<HTMLElement> = new Set();
 		let periodDateLast = 0;
@@ -436,7 +460,7 @@ ${HIGHLIGHT_TAG} {
 			highlightIsPending = false;
 			for (const element of elements) {
 				this.undoHighlights(undefined, element);
-				this.generateTermHighlightsUnderNode(terms, element);
+				this.generateTermHighlightsUnderNode(terms.current, element);
 			}
 			periodHighlightCount += elements.size;
 			elements.clear();
@@ -467,7 +491,7 @@ ${HIGHLIGHT_TAG} {
 					? mutation.target.parentElement as HTMLElement
 					: mutation.target as HTMLElement;
 				if (element) {
-					if (element[ELEMENT_JUST_HIGHLIGHTED]) {
+					if ((element as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED]) {
 						elementsJustHighlighted.add(element);
 					} else if (canHighlightElement(rejectSelector, element)) {
 						elements.add(element);
@@ -475,7 +499,7 @@ ${HIGHLIGHT_TAG} {
 				}
 			}
 			for (const element of elementsJustHighlighted) {
-				delete element[ELEMENT_JUST_HIGHLIGHTED];
+				delete (element as UnknownPropertiesHTMLElement)[ELEMENT_JUST_HIGHLIGHTED];
 			}
 			if (elements.size) {
 				// TODO improve this algorithm

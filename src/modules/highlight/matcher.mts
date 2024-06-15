@@ -1,42 +1,42 @@
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
-type BoxInfoExt = Record<string | never, unknown>
-
-type BaseFlow<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
+type BaseFlow<WithNode extends boolean, BoxInfoExt extends BoxInfoExtension = Record<never, never>> = {
 	text: string
-	boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExtension>>
+	boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExt>>
 }
 
-type BaseBoxInfo<WithNode extends boolean, BoxInfoExtension extends BoxInfoExt = Record<never, never>> = {
+type BaseBoxInfo<WithNode extends boolean, BoxInfoExt extends BoxInfoExtension = Record<never, never>> = {
 	term: MatchTerm
 	start: number
 	end: number
-} & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExtension>
+} & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExt>
+
+type BoxInfoExtension = Record<string | never, unknown>
 
 const matchInText = (
-	terms: Array<MatchTerm>,
+	terms: ReadonlyArray<MatchTerm>,
 	termPatterns: TermPatterns,
 	text: string,
 ): Array<BaseBoxInfo<false>> => {
 	const boxesInfo: Array<BaseBoxInfo<false>> = [];
 	for (const term of terms) {
-		for (const match of text.matchAll(termPatterns.get(term))) {
+		for (const match of text.matchAll(termPatterns.get(term))) if (match.index !== undefined) {
 			boxesInfo.push({
 				term,
-				start: match.index as number,
-				end: (match.index as number) + match[0].length,
+				start: match.index,
+				end: match.index + match[0].length,
 			});
 		}
 	}
 	return boxesInfo;
 };
 
-const matchInTextFlow = (
-	terms: Array<MatchTerm>,
+const matchInTextFlow = <BoxInfo extends BaseBoxInfo<true>>(
+	terms: ReadonlyArray<MatchTerm>,
 	termPatterns: TermPatterns,
 	text: string,
-	textFlow: Array<Text>,
-): Array<BaseBoxInfo<true>> => {
+	textFlow: ReadonlyArray<Text>,
+): Array<BoxInfo> => {
 	const boxesInfo: Array<BaseBoxInfo<true>> = [];
 	for (const term of terms) {
 		let i = 0;
@@ -70,7 +70,7 @@ const matchInTextFlow = (
 			}
 		}
 	}
-	return boxesInfo;
+	return boxesInfo as Array<BoxInfo>; // Extensions to box info contain only optional properties, so this assumption is safe.
 };
 
 export {

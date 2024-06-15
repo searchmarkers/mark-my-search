@@ -605,10 +605,10 @@ label[for]:hover
 						hues: {
 							label: "Highlight colour hue values",
 							type: PreferenceType.ARRAY_NUMBER,
-							getPreviewElement: (huesString: string) => {
+							getPreviewElement: huesString => {
 								const container = document.createElement("div");
 								container.classList.add(OptionSpecialClass.HIGHLIGHT_COLORS);
-								for (const hue of huesString.split(",").map(hueString => parseInt(hueString))) {
+								for (const hue of (huesString as string).split(",").map(hueString => parseInt(hueString))) {
 									const colorElement = document.createElement("div");
 									colorElement.style.setProperty("--hue", hue.toString());
 									container.appendChild(colorElement);

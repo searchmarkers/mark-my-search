@@ -1,7 +1,6 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
-import type { TreeCache, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { Box, CachingElement, CachingHTMLElement } from "/dist/modules/highlight/engines/paint.mjs";
 import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
@@ -15,11 +14,15 @@ class ElementMethod implements AbstractMethod {
 		this.termTokens = termTokens;
 	}
 
-	readonly highlightables: Highlightables = {
-		checkElement: () => true,
-		findAncestor: <T extends Element> (element: T) => element,
-		markElementsUpTo: () => undefined,
-	};
+	isElementHighlightable () {
+		return true;
+	}
+
+	findHighlightableAncestor (element: CachingElement): CachingElement {
+		return element;
+	}
+
+	markElementsUpToHighlightable () {}
 
 	readonly getCSS: EngineCSS = {
 		misc: () => {
@@ -47,7 +50,7 @@ border-radius: 2px;
 			);
 		},
 		termHighlights: () => "",
-		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
+		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
 			const term = terms[termIndex];
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
@@ -62,7 +65,9 @@ border-radius: 2px;
 	endHighlighting () {}
 
 	getHighlightedElements () {
-		return document.body.querySelectorAll("[markmysearch-h_id]") as NodeListOf<HTMLElement>;
+		return document.body.querySelectorAll(
+			"[markmysearch-h_id]",
+		) as NodeListOf<CachingHTMLElement<true>>;
 	}
 
 	getElementDrawId (highlightId: string) {
@@ -75,34 +80,33 @@ border-radius: 2px;
 		}) !important; background-repeat: no-repeat !important; }`;
 	}
 
-	tempReplaceContainers (root: Element, recurse: boolean) {
+	tempReplaceContainers (root: CachingElement<true>, recurse: boolean) {
 		// This whole operation is plagued with issues. Containers will almost never get deleted when they should
 		// (e.g. when all terms have been removed or highlighting is disabled), and removing an individual term does not
 		// result in the associated elements being deleted. TODO
 		const containers: Array<Element> = [];
-		this.collectElements(root, recurse, containers);
+		this.collectElements(root, recurse, containers, new Range());
 		const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
-		containers.forEach(container => {
+		for (const container of containers) {
 			const containerExisting = document.getElementById(container.id);
 			if (containerExisting) {
 				containerExisting.remove();
 			}
 			parent.appendChild(container);
-		});
+		}
 	}
 	
 	collectElements (
-		element: Element,
+		element: CachingElement<true>,
 		recurse: boolean,
 		containers: Array<Element>,
-		range = new Range(),
+		range: Range,
 	) {
 		const boxes: Array<Box> = getBoxesOwned(this.termTokens, element);
 		if (boxes.length) {
-			const highlighting = element[CACHE] as TreeCache;
 			const container = document.createElement("div");
-			container.id = this.getElementDrawId(highlighting.id);
-			boxes.forEach(box => {
+			container.id = this.getElementDrawId(element[CACHE].id);
+			for (const box of boxes) {
 				const element = document.createElement("div");
 				element.style.position = "absolute"; // Should it be "fixed"? Should it be applied in a stylesheet?
 				element.style.left = box.x.toString() + "px";
@@ -111,7 +115,7 @@ border-radius: 2px;
 				element.style.height = box.height.toString() + "px";
 				element.classList.add(EleClass.TERM, getTermTokenClass(box.token));
 				container.appendChild(element);
-			});
+			}
 			const boxRightmost = boxes.reduce((box, boxCurrent) =>
 				box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent
 			);
@@ -123,14 +127,14 @@ border-radius: 2px;
 			containers.push(container);
 		}
 		if (recurse) {
-			for (const child of element.children) if (CACHE in child) {
+			for (const child of element.children as HTMLCollectionOf<CachingElement>) if (CACHE in child) {
 				this.collectElements(child, recurse, containers, range);
 			}
 		}
 	}
 
-	tempRemoveDrawElement (element: Element) {
-		document.getElementById(this.getElementDrawId((element[CACHE] as TreeCache).id))?.remove();
+	tempRemoveDrawElement (element: CachingElement<true>) {
+		document.getElementById(this.getElementDrawId(element[CACHE].id))?.remove();
 	}
 }
 

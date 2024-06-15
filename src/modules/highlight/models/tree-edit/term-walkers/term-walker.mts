@@ -125,13 +125,18 @@ class TermWalker implements AbstractTermWalker {
 					: selectionFocus.parentElement,
 			) : undefined;
 		const walkSelectionFocusContainer = { accept: false };
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			element.tagName === HIGHLIGHT_TAG_UPPER
-			&& (termSelector ? element.classList.contains(termSelector) : true)
-			&& isVisible(element)
-			&& (getContainerBlock(element) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
-				? NodeFilter.FILTER_ACCEPT
-				: NodeFilter.FILTER_SKIP);
+		const walker = document.createTreeWalker(
+			document.body,
+			NodeFilter.SHOW_ELEMENT,
+			(element =>
+				element.tagName === HIGHLIGHT_TAG_UPPER
+				&& (termSelector ? element.classList.contains(termSelector) : true)
+				&& isVisible(element)
+				&& (getContainerBlock(element) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
+					? NodeFilter.FILTER_ACCEPT
+					: NodeFilter.FILTER_SKIP
+			) as ((element: HTMLElement) => number) as (node: Node) => number,
+		);
 		walker.currentNode = selectionFocus ? selectionFocus : document.body;
 		const { elementSelected, container } = this.selectNextElement(reverse, walker, walkSelectionFocusContainer);
 		if (!elementSelected || !container) {
@@ -141,9 +146,9 @@ class TermWalker implements AbstractTermWalker {
 		if (selection) {
 			selection.setBaseAndExtent(elementSelected, 0, elementSelected, 0);
 		}
-		document.body.querySelectorAll(`.${EleClass.REMOVE}`).forEach((element: HTMLElement) => {
+		for (const element of document.body.querySelectorAll(`.${EleClass.REMOVE}`)) {
 			element.remove();
-		});
+		}
 		return elementSelected;
 	}
 
@@ -208,12 +213,16 @@ class TermWalker implements AbstractTermWalker {
 		if (document.activeElement) {
 			(document.activeElement as HTMLElement).blur();
 		}
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, (element: HTMLElement) =>
-			(element.parentElement as Element).closest(HIGHLIGHT_TAG)
-				? NodeFilter.FILTER_REJECT
-				: (element.tagName === HIGHLIGHT_TAG_UPPER && isVisible(element))
-					? NodeFilter.FILTER_ACCEPT
-					: NodeFilter.FILTER_SKIP
+		const walker = document.createTreeWalker(
+			document.body,
+			NodeFilter.SHOW_ELEMENT,
+			(element =>
+				(element.parentElement as Element).closest(HIGHLIGHT_TAG)
+					? NodeFilter.FILTER_REJECT
+					: (element.tagName === HIGHLIGHT_TAG_UPPER && isVisible(element))
+						? NodeFilter.FILTER_ACCEPT
+						: NodeFilter.FILTER_SKIP
+			) as ((element: HTMLElement) => number) as (node: Node) => number,
 		);
 		walker.currentNode = nodeCurrent;
 		const element = walker[reverse ? "previousNode" : "nextNode"]() as HTMLElement | null;
@@ -237,11 +246,12 @@ const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = docume
 	if (!root.parentNode) {
 		return;
 	}
-	root.parentNode.querySelectorAll(`.${EleClass.FOCUS_REVERT}`)
-		.forEach((element: HTMLElement) => {
-			element.tabIndex = -1;
-			element.classList.remove(EleClass.FOCUS_REVERT);
-		});
+	for (const element of root.parentNode.querySelectorAll(
+		`.${EleClass.FOCUS_REVERT}`,
+	) as NodeListOf<HTMLElement>) {
+		element.tabIndex = -1;
+		element.classList.remove(EleClass.FOCUS_REVERT);
+	}
 };
 
 export { TermWalker };

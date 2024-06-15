@@ -4,7 +4,7 @@ import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { type TermHues, EleID } from "/dist/modules/common.mjs";
+import { EleID } from "/dist/modules/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
@@ -27,7 +27,7 @@ interface ControlsInfo {
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	barCollapsed: boolean
-	termsOnHold: Array<MatchTerm>
+	termsOnHold: ReadonlyArray<MatchTerm>
 	barControlsShown: ConfigValues["barControlsShown"]
 	barLook: ConfigValues["barLook"]
 	matchMode: Readonly<MatchMode>
@@ -51,9 +51,9 @@ const focusReturnToDocument = (): boolean => {
  * @returns The extracted terms, split at some separator and some punctuation characters,
  * with some other punctuation characters removed.
  */
-const getTermsFromSelection = (termTokens: TermTokens) => {
+const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm> => {
 	const selection = getSelection();
-	const terms: Array<MatchTerm> = [];
+	const termsMut: Array<MatchTerm> = [];
 	if (selection && selection.anchorNode) {
 		const termsAll = (() => {
 			const string = selection.toString();
@@ -68,15 +68,15 @@ const getTermsFromSelection = (termTokens: TermTokens) => {
 			.map(phrase => phrase.replace(/\p{Other}/gu, ""))
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
 		const termSelectors: Set<string> = new Set();
-		termsAll.forEach(term => {
+		for (const term of termsAll) {
 			const token = termTokens.get(term);
 			if (!termSelectors.has(token)) {
 				termSelectors.add(token);
-				terms.push(term);
+				termsMut.push(term);
 			}
-		});
+		}
 	}
-	return terms;
+	return termsMut;
 };
 
 /**
@@ -97,7 +97,7 @@ const refreshTermControlsAndStartHighlighting = (
 	toolbar: AbstractToolbar,
 	highlighter: Highlighter,
 	commands: BrowserCommandsReadonly,
-	hues: TermHues,
+	hues: ReadonlyArray<number>,
 ) => {
 	// TODO this function is better! but not good enough
 	toolbar.updateControlVisibility("replaceTerms");
@@ -132,9 +132,9 @@ const refreshTermControlsAndStartHighlighting = (
 	// Give the interface a chance to redraw before performing [expensive] highlighting.
 	setTimeout(() => {
 		highlighter.current?.startHighlighting(
-			terms as Array<MatchTerm>,
-			termsToHighlight as Array<MatchTerm>,
-			termsToPurge as Array<MatchTerm>,
+			terms,
+			termsToHighlight,
+			termsToPurge,
 			hues,
 		);
 	});
@@ -180,7 +180,7 @@ const styleElementsCleanup = () => {
  * @param terms Terms being controlled, highlighted, and jumped to.
  */
 const respondToCommand_factory = (
-	terms: Array<MatchTerm>,
+	terms: ReadonlyArray<MatchTerm>,
 	termSetter: TermSetter,
 	controlsInfo: ControlsInfo,
 	getToolbar: GetToolbar,
@@ -248,8 +248,8 @@ interface TermAppender {
 	// Can't remove controls because a script may be left behind from the last install, and start producing unhandled errors. FIXME
 	//controlsRemove();
 	const commands: BrowserCommands = [];
-	const terms: Array<MatchTerm> = [];
-	const hues: TermHues = [];
+	let terms: ReadonlyArray<MatchTerm> = [];
+	let hues: ReadonlyArray<number> = [];
 	const termTokens = new TermTokens();
 	const termPatterns = new TermPatterns();
 	const controlsInfo: ControlsInfo = { // Unless otherwise indicated, the values assigned here are arbitrary and to be overridden.
@@ -288,11 +288,11 @@ interface TermAppender {
 			if (itemsMatch(terms, termsNew, termEquals)) {
 				return;
 			}
-			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
-			terms.splice(0, terms.length, ...termsNew);
+			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
+			terms = termsNew;
 			refreshTermControlsAndStartHighlighting(
 				termsOld,
-				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+				[ ...terms ],
 				null,
 				termTokens,
 				controlsInfo,
@@ -303,15 +303,17 @@ interface TermAppender {
 			);
 		},
 		replaceTerm: (term, termIndex) => {
-			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
+			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			if (term) {
-				terms[termIndex] = term;
+				const termsNew = terms as Array<MatchTerm>;
+				termsNew[termIndex] = term;
+				terms = termsNew;
 			} else {
-				terms.splice(termIndex, 1);
+				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
 			refreshTermControlsAndStartHighlighting(
 				termsOld,
-				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+				terms,
 				{ term, termIndex },
 				termTokens,
 				controlsInfo,
@@ -322,11 +324,11 @@ interface TermAppender {
 			);
 		},
 		appendTerm: term => {
-			const termsOld = terms.slice() as ReadonlyArray<MatchTerm>;
-			terms.push(term);
+			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
+			terms = terms.concat(term);
 			refreshTermControlsAndStartHighlighting(
 				termsOld,
-				terms as ReadonlyArray<MatchTerm>, // TODO the readonly here is currently not meaningful
+				terms,
 				{ term, termIndex: termsOld.length },
 				termTokens,
 				controlsInfo,
@@ -403,8 +405,6 @@ interface TermAppender {
 				queuingPromise = enginePromise;
 				const { HighlightEngine } = await enginePromise;
 				highlighter.current = new HighlightEngine(
-					terms,
-					hues,
 					updateTermStatus,
 					termTokens,
 					termPatterns,
@@ -420,8 +420,6 @@ interface TermAppender {
 				);
 				const { PaintEngine } = await enginePromise;
 				highlighter.current = new PaintEngine(
-					terms,
-					hues,
 					updateTermStatus,
 					await methodPromise,
 					termTokens,
@@ -432,8 +430,6 @@ interface TermAppender {
 				queuingPromise = enginePromise;
 				const { ElementEngine } = await enginePromise;
 				highlighter.current = new ElementEngine(
-					terms,
-					hues,
 					updateTermStatus,
 					termTokens,
 					termPatterns,
@@ -449,20 +445,19 @@ interface TermAppender {
 			}
 		}
 		if (message.extensionCommands) {
-			commands.splice(0);
-			message.extensionCommands.forEach(command => commands.push(command));
+			commands.splice(0, commands.length, ...message.extensionCommands);
 		}
-		Object.entries(message.barControlsShown ?? {})
-			.forEach(([ controlName, value ]: [ ControlButtonName, boolean ]) => {
-				controlsInfo.barControlsShown[controlName] = value;
+		if (message.barControlsShown) {
+			controlsInfo.barControlsShown = message.barControlsShown;
+			for (const controlName of Object.keys(message.barControlsShown) as Array<ControlButtonName>) {
 				getToolbar(false)?.updateControlVisibility(controlName);
-			});
-		Object.entries(message.barLook ?? {}).forEach(([ key, value ]) => {
-			controlsInfo.barLook[key] = value;
-		});
+			}
+		}
+		if (message.barLook) {
+			controlsInfo.barLook = message.barLook;
+		}
 		if (message.highlightLook) {
-			hues.splice(0);
-			message.highlightLook.hues.forEach(hue => hues.push(hue));
+			hues = [ ...message.highlightLook.hues ];
 		}
 		if (message.matchMode) {
 			controlsInfo.matchMode = message.matchMode;
@@ -479,16 +474,18 @@ interface TermAppender {
 		if (message.deactivate) {
 			//removeTermsAndDeactivate();
 			highlighter.current?.endHighlighting();
-			terms.splice(0);
+			terms = [];
 			getToolbar(false)?.remove();
 			styleElementsCleanup();
 		}
 		if (message.terms) {
 			termSetterInternal.setTerms(message.terms);
 		}
-		(message.commands ?? []).forEach(command => {
-			respondToCommand(command);
-		});
+		if (message.commands) {
+			for (const command of message.commands) {
+				respondToCommand(command);
+			}
+		}
 		const toolbar = getToolbar(false);
 		if (toolbar) {
 			toolbar.updateHighlightsShownFlag();
@@ -526,9 +523,9 @@ interface TermAppender {
 						chrome.runtime.onMessage.removeListener(messageHandleHighlightUninitialized);
 						chrome.runtime.onMessage.addListener(messageHandleHighlight);
 						messageHandleHighlight(message, sender, sendResponse);
-						messageQueue.forEach(messageInfo => {
+						for (const messageInfo of messageQueue) {
 							messageHandleHighlight(messageInfo.message, messageInfo.sender, messageInfo.sendResponse);
-						});
+						}
 					};
 					if (document.body) {
 						initialize();
