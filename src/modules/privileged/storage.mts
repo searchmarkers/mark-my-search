@@ -1,6 +1,6 @@
 import type { MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
 import { SearchSite } from "/dist/modules/search-site.mjs";
-import type { Engine, PaintEngineMethod } from "/dist/modules/common.mjs";
+import type { Engine, PaintEngineMethod, Entries } from "/dist/modules/common.mjs";
 import { log, assert, compatibility } from "/dist/modules/common.mjs";
 
 chrome.storage = compatibility.browser === "chromium"
@@ -170,7 +170,7 @@ type URLFilter = Array<{
 
 type TermList = {
 	name: string
-	terms: Array<MatchTerm>
+	terms: ReadonlyArray<MatchTerm>
 	urlFilter: URLFilter
 }
 
@@ -187,7 +187,7 @@ enum ThemeVariant {
 }
 
 interface ResearchInstance {
-	terms: Array<MatchTerm>
+	terms: ReadonlyArray<MatchTerm>
 	highlightsShown: boolean
 	barCollapsed: boolean
 	enabled: boolean
@@ -449,7 +449,7 @@ const bankDefault: BankValues = {
 
 export abstract class Bank {
 	static async set (bank: Partial<BankValues>) {
-		Object.entries(bank).forEach(([ key, value ]) => {
+		(Object.entries as Entries)(bank).forEach(<K extends BankKey>([ key, value ]: [ K, BankValues[K] ]) => {
 			bankCache[key] = value;
 		});
 		await chrome.storage.session.set(bank);
@@ -458,18 +458,19 @@ export abstract class Bank {
 	static async get <T extends BankKey>(keys: Array<T>): Promise<{ [P in T]: BankValues[P] }> {
 		// TODO investigate flattening storage of research instances (one level)
 		const bank = {} as { [P in T]: BankValues[P] };
-		const keysToGet: Array<BankKey> = keys.filter(key => {
+		const keysToGet = keys.filter(key => {
 			if (bankCache[key] !== undefined) {
 				bank[key] = bankCache[key] as BankValues[T];
 				return false;
 			}
 			return true;
 		});
-		await chrome.storage.session.get(keysToGet).then((bankStore: BankValues) => {
-			keysToGet.forEach(<K extends T>(key: K) => {
+		await chrome.storage.session.get(keysToGet).then(store => {
+			const bankStore = store as BankValues;
+			for (const key of keysToGet) {
 				bankCache[key] = bankStore[key] ?? Object.assign({}, bankDefault[key]);
-				bank[key] = bankCache[key] as BankValues[K];
-			});
+				bank[key] = bankCache[key] as BankValues[typeof key];
+			}
 		});
 		return bank;
 	}
@@ -477,7 +478,7 @@ export abstract class Bank {
 
 chrome.storage.session.onChanged.addListener(changes => {
 	// TODO check that the change was not initiated from the same script?
-	for (const [ key, value ] of Object.entries(changes)) {
+	for (const [ key, value ] of (Object.entries as Entries)(changes as Record<BankKey, chrome.storage.StorageChange>)) {
 		bankCache[key] = value.newValue;
 	}
 });
@@ -537,7 +538,7 @@ export abstract class Config {
 		const storageAreaKeys: Record<StorageAreaName, Array<string>> = { local: [], sync: [] };
 		const keyObjectEntries = (typeof keyObject === "object"
 			? Object.entries(keyObject)
-			: Object.keys(configSchema).map((key: ConfigK) => [ key, true ])) as Array<[ ConfigK, Array<string> | true ]>;
+			: (Object.keys(configSchema) as Array<ConfigK>).map(key => [ key, true ])) as Array<[ ConfigK, Array<string> | true ]>;
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
 			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {

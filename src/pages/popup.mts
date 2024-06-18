@@ -32,7 +32,9 @@ const loadPopup = (() => {
 					const matchMode = Object.assign({}, termList.terms[objectIndex].matchMode) as MatchMode;
 					matchMode[mode] = checked;
 					const term = new MatchTerm(termList.terms[objectIndex].phrase, matchMode);
-					termList.terms[objectIndex] = term;
+					const terms = [ ...termList.terms ];
+					terms[objectIndex] = term;
+					termList.terms = terms;
 					Config.set(config);
 				});
 			},
@@ -413,7 +415,9 @@ const loadPopup = (() => {
 														Config.get({ termListOptions: [ "termLists" ] }).then(config => {
 															const termList = config.termListOptions.termLists[containerIndex];
 															const term = new MatchTerm(text, termList.terms[objectIndex].matchMode);
-															termList.terms[objectIndex] = term;
+															const terms = [ ...termList.terms ];
+															terms[objectIndex] = term;
+															termList.terms = terms;
 															Config.set(config);
 														});
 													},

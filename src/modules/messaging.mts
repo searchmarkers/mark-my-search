@@ -4,10 +4,10 @@ import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 type Tab = {
 	getDetails?: TabDetailsRequest
-	commands?: Array<CommandInfo>
-	extensionCommands?: Array<chrome.commands.Command>
-	terms?: Array<MatchTerm>
-	termsOnHold?: Array<MatchTerm>
+	commands?: ReadonlyArray<CommandInfo>
+	extensionCommands?: ReadonlyArray<chrome.commands.Command>
+	terms?: ReadonlyArray<MatchTerm>
+	termsOnHold?: ReadonlyArray<MatchTerm>
 	deactivate?: boolean
 	enablePageModify?: boolean
 	toggleHighlightsOn?: boolean
@@ -25,14 +25,14 @@ type TabDetailsRequest = {
 }
 
 type TabResponse = {
-	terms?: Array<MatchTerm>
+	terms?: ReadonlyArray<MatchTerm>
 	highlightsShown?: boolean
 }
 
 type Background<WithId = false> = {
-	highlightCommands?: Array<CommandInfo>
+	highlightCommands?: ReadonlyArray<CommandInfo>
 	initializationGet?: boolean
-	terms?: Array<MatchTerm>
+	terms?: ReadonlyArray<MatchTerm>
 	termsSend?: boolean
 	deactivateTabResearch?: boolean
 	performSearch?: boolean

@@ -1,5 +1,5 @@
 import { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import { type TermHues, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
+import { EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 import { getControlClass, getControlPadClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
@@ -13,7 +13,7 @@ import { Z_INDEX_MAX } from "/dist/modules/common.mjs";
 const fillContent = (
 	terms: ReadonlyArray<MatchTerm>,
 	termTokens: TermTokens,
-	hues: TermHues,
+	hues: ReadonlyArray<number>,
 	barLook: ControlsInfo["barLook"],
 	highlighter: Highlighter,
 ) => {
@@ -330,7 +330,8 @@ ${highlighter.current?.getCSS.misc() ?? ""}
 
 /**/`
 	;
-	terms.forEach((term, i) => {
+	for (let i = 0; i < terms.length; i++) {
+		const term = terms[i];
 		const hue = hues[i % hues.length];
 		const cycle = Math.floor(i / hues.length);
 		style.textContent += makeImportant(`
@@ -382,7 +383,7 @@ ${highlighter.current?.getCSS.termHighlight(terms, hues, i) ?? ""}
 
 /**/
 		`);
-	});
+	}
 };
 
 export { fillContent as fillContent };

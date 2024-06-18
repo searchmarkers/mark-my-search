@@ -1,5 +1,5 @@
 import type { BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
-import type { TermAbstractControl, TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
+import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import type { ConfigBarControlsShown } from "/dist/modules/privileged/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
@@ -52,7 +52,7 @@ interface AbstractToolbar {
 }
 
 interface ToolbarTermControlInterface extends ToolbarTermInputInterface, ToolbarTermOptionListInterface {
-	getTermControlIndex: (control: TermAbstractControl) => number | null
+	getTermControlIndex: (control: TermControlInputInterface) => number | null
 
 	setAutofocusable: (autofocus: boolean) => void
 }

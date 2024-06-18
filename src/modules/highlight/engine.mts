@@ -36,15 +36,15 @@ interface AbstractEngine {
 	 * @param termsToPurge Terms for which to remove previous highlights.
 	 */
 	startHighlighting: (
-		terms: Array<MatchTerm>,
-		termsToHighlight: Array<MatchTerm>,
-		termsToPurge: Array<MatchTerm>,
-		hues: Array<number>,
+		terms: ReadonlyArray<MatchTerm>,
+		termsToHighlight: ReadonlyArray<MatchTerm>,
+		termsToPurge: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
 	) => void
 	
 	// TODO document
 	undoHighlights: (
-		terms?: Array<MatchTerm> | undefined,
+		terms?: ReadonlyArray<MatchTerm> | undefined,
 	) => void
 
 	// TODO document

@@ -1,5 +1,4 @@
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import type { TermHues } from "/dist/modules/common.mjs";
 
 interface AbstractTermMarker {
 	/**
@@ -8,9 +7,9 @@ interface AbstractTermMarker {
 	 * @param hues Color hues for term styles to cycle through.
 	 */
 	insert: (
-		terms: Array<MatchTerm>,
+		terms: ReadonlyArray<MatchTerm>,
 		termTokens: TermTokens,
-		hues: TermHues,
+		hues: ReadonlyArray<number>,
 		highlightedElements: Iterable<HTMLElement>,
 	) => void
 

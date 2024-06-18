@@ -1,10 +1,18 @@
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { type TreeCache, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import { type CachingHTMLElement, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import { EleID, getElementYRelative, type TermHues, getTermClass } from "/dist/modules/common.mjs";
+import { EleID, getElementYRelative, getTermClass } from "/dist/modules/common.mjs";
+
+type Flow = BaseFlow<false>
 
 class TermMarker implements AbstractTermMarker {
-	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Iterable<HTMLElement>) {
+	insert (
+		terms: ReadonlyArray<MatchTerm>,
+		termTokens: TermTokens,
+		hues: ReadonlyArray<number>,
+		highlightedElements: Iterable<CachingHTMLElement<Flow>>,
+	) {
 		if (terms.length === 0) {
 			return; // Efficient escape in case of no possible markers to be inserted.
 		}
@@ -12,10 +20,10 @@ class TermMarker implements AbstractTermMarker {
 		const termsAllowed = new Set(terms.slice(0, hues.length));
 		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		let markersHtml = "";
-		for (const element of highlightedElements) {
-			const terms = new Set((element[CACHE] as TreeCache | undefined)?.flows.flatMap(flow =>
+		for (const element of highlightedElements) if (CACHE in element) {
+			const terms = new Set(element[CACHE].flows.flatMap(flow =>
 				flow.boxesInfo.filter(boxInfo => termsAllowed.has(boxInfo.term)).map(boxInfo => boxInfo.term)
-			) ?? []);
+			));
 			const yRelative = getElementYRelative(element);
 			// TODO use single marker with custom style
 			markersHtml += Array.from(terms).map((term, i) => `<div class="${

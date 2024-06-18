@@ -1,6 +1,6 @@
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
-import type { TreeCache, Flow, Box } from "/dist/modules/highlight/engines/paint.mjs";
+import type { Flow, Box, CachingElement } from "/dist/modules/highlight/engines/paint.mjs";
 import type { TermTokens } from "/dist/modules/match-term.mjs";
 
 const getBoxesOwned = (
@@ -9,13 +9,13 @@ const getBoxesOwned = (
 	range = new Range(),
 ): Array<Box> => {
 	let boxes = getBoxes(termTokens, owner, owner, range);
-	const walker = document.createTreeWalker(owner, NodeFilter.SHOW_ELEMENT, (element: Element) =>
-		highlightTags.reject.has(element.tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+	const walker = document.createTreeWalker(owner, NodeFilter.SHOW_ELEMENT, element =>
+		highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 	);
-	let child: Element;
+	let child: CachingElement;
 	// eslint-disable-next-line no-cond-assign
-	while (child = walker.nextNode() as Element) {
-		if (CACHE in child && !(child[CACHE] as TreeCache).isHighlightable) {
+	while (child = walker.nextNode() as CachingElement) {
+		if (CACHE in child && !child[CACHE].isHighlightable) {
 			boxes = boxes.concat(getBoxes(termTokens, owner, child, range));
 		}
 	}
@@ -24,21 +24,20 @@ const getBoxesOwned = (
 
 const getBoxes = (
 	termTokens: TermTokens,
-	owner: Element,
-	element?: Element,
+	owner: CachingElement,
+	element?: CachingElement,
 	range = new Range(),
 ) => {
 	element ??= owner;
-	const highlighting = element[CACHE] as TreeCache;
-	if (!highlighting || highlighting.flows.every(flow => flow.boxesInfo.length === 0)) {
+	if (!(CACHE in element) || element[CACHE].flows.every(flow => flow.boxesInfo.length === 0)) {
 		return [];
 	}
 	let ownerRects = Array.from(owner.getClientRects());
 	if (!ownerRects.length) {
 		ownerRects = [ owner.getBoundingClientRect() ];
 	}
-	elementPopulateBoxes(highlighting.flows, ownerRects, termTokens, range);
-	return highlighting.flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
+	elementPopulateBoxes(element[CACHE].flows, ownerRects, termTokens, range);
+	return element[CACHE].flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
 };
 
 const elementPopulateBoxes = (
@@ -46,8 +45,8 @@ const elementPopulateBoxes = (
 	elementRects: Array<DOMRect>,
 	termTokens: TermTokens,
 	range = new Range(),
-) =>
-	elementFlows.forEach(flow => flow.boxesInfo.forEach(boxInfo => {
+) => {
+	for (const flow of elementFlows) for (const boxInfo of flow.boxesInfo) {
 		boxInfo.boxes?.splice(0);
 		range.setStart(boxInfo.node, boxInfo.start);
 		range.setEnd(boxInfo.node, boxInfo.end);
@@ -56,7 +55,8 @@ const elementPopulateBoxes = (
 			const textRect = textRects.item(i) as DOMRect;
 			if (i !== 0
 				&& textRect.x === (textRects.item(i - 1) as DOMRect).x
-				&& textRect.y === (textRects.item(i - 1) as DOMRect).y) {
+				&& textRect.y === (textRects.item(i - 1) as DOMRect).y
+			) {
 				continue;
 			}
 			let x = 0;
@@ -79,7 +79,7 @@ const elementPopulateBoxes = (
 				height: Math.round(textRect.height),
 			});
 		}
-	}))
-;
+	}
+};
 
 export { getBoxesOwned };

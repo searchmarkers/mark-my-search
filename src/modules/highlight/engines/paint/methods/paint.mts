@@ -1,6 +1,5 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
-import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { Box, CachingElement, CachingHTMLElement } from "/dist/modules/highlight/engines/paint.mjs";
 import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
@@ -9,13 +8,6 @@ type TermSelectorStyles = Record<string, {
 	hue: number
 	cycle: number
 }>
-
-const markElementsUpTo = (element: Element) => {
-	if (!element.hasAttribute("markmysearch-h_id") && !element.hasAttribute("markmysearch-h_beneath")) {
-		element.setAttribute("markmysearch-h_beneath", "");
-		markElementsUpTo(element.parentElement as Element);
-	}
-};
 
 class PaintMethod implements AbstractMethod {
 	readonly termTokens: TermTokens;
@@ -30,36 +22,45 @@ class PaintMethod implements AbstractMethod {
 		}
 	}
 
-	readonly highlightables: Highlightables = {
-		checkElement: (element: Element) => !element.closest("a"),
-		findAncestor: <T extends Element> (element: T) => {
-			let ancestor = element;
-			// eslint-disable-next-line no-constant-condition
-			while (true) {
-				// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
-				const ancestorUnhighlightable = ancestor.closest("a") as T | null;
-				if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
-					ancestor = ancestorUnhighlightable.parentElement as unknown as T;
-				} else {
-					break;
-				}
+	isElementHighlightable (element: Element) {
+		return !element.closest("a");
+	}
+
+	findHighlightableAncestor (element: CachingElement): CachingElement {
+		let ancestor = element;
+		// eslint-disable-next-line no-constant-condition
+		while (true) {
+			// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
+			const ancestorUnhighlightable = ancestor.closest("a");
+			if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
+				ancestor = ancestorUnhighlightable.parentElement;
+			} else {
+				break;
 			}
-			return ancestor;
-		},
-		markElementsUpTo,
-	};
+		}
+		return ancestor;
+	}
+
+	markElementsUpToHighlightable (element: Element) {
+		if (!element.hasAttribute("markmysearch-h_id")
+			&& !element.hasAttribute("markmysearch-h_beneath")
+		) {
+			element.setAttribute("markmysearch-h_beneath", "");
+			this.markElementsUpToHighlightable(element.parentElement as Element);
+		}
+	}
 
 	readonly getCSS: EngineCSS = {
 		misc: () => "",
 		termHighlights: () => "",
-		termHighlight: (terms: Array<MatchTerm>, hues: number[]) => {
+		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) => {
 			const styles: TermSelectorStyles = {};
-			terms.forEach((term, i) => {
-				styles[this.termTokens.get(term)] = {
+			for (let i = 0; i < terms.length; i++) {
+				styles[this.termTokens.get(terms[i])] = {
 					hue: hues[i % hues.length],
 					cycle: Math.floor(i / hues.length),
 				};
-			});
+			}
 			return (`
 #${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id] {
 & [markmysearch-h_beneath] {
@@ -79,13 +80,15 @@ class PaintMethod implements AbstractMethod {
 	};
 
 	endHighlighting () {
-		document.body.querySelectorAll("[markmysearch-h_beneath]").forEach(element => {
+		for (const element of document.body.querySelectorAll("[markmysearch-h_beneath]")) {
 			element.removeAttribute("markmysearch-h_beneath");
-		});
+		}
 	}
 
 	getHighlightedElements () {
-		return document.body.querySelectorAll("[markmysearch-h_id], [markmysearch-h_beneath]") as NodeListOf<HTMLElement>;
+		return document.body.querySelectorAll(
+			"[markmysearch-h_id], [markmysearch-h_beneath]",
+		) as NodeListOf<CachingHTMLElement<true>>;
 	}
 
 	constructHighlightStyleRule (highlightId: string, boxes: Array<Box>) {

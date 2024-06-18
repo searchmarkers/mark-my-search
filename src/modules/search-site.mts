@@ -4,12 +4,10 @@
 class SearchSite {
 	// All appropriate attributes must be compared in `this.equals`
 	readonly hostname: string;
-	readonly pathname: [ string, string ];
-	readonly param: string;
+	readonly pathname: [ string, string ] | undefined;
+	readonly param: string | undefined;
 
-	constructor (args?: { urlDynamicString: string }) {
-		if (!args)
-			return;
+	constructor (args: { urlDynamicString: string }) {
 		const urlDynamic = new URL(args.urlDynamicString);
 		this.hostname = urlDynamic.hostname;
 		if (urlDynamic.pathname.includes("%s")) {
@@ -38,8 +36,8 @@ class SearchSite {
 					url.pathname.indexOf(this.pathname[0]) + this.pathname[0].length,
 					url.pathname.lastIndexOf(this.pathname[1])).split("+")
 				: null
-			: url.searchParams.has(this.param)
-				? matchOnly ? [] : (url.searchParams.get(this.param) ?? "").split(" ")
+			: url.searchParams.has(this.param ?? "")
+				? matchOnly ? [] : (url.searchParams.get(this.param ?? "") ?? "").split(" ")
 				: null;
 	}
 

@@ -17,7 +17,7 @@ import { log, assert, compatibility, sanitizeForRegex } from "/dist/modules/comm
  */
 const createResearchInstance = async (args: {
 	url?: { stoplist: Array<string>, url: string, engine?: SearchSite }
-	terms?: Array<MatchTerm>
+	terms?: ReadonlyArray<MatchTerm>
 }): Promise<ResearchInstance> => {
 	const config = await Config.get({ showHighlights: [ "default" ], barCollapse: [ "fromSearch" ] });
 	if (args.url) {
@@ -337,7 +337,7 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		const termsFromLists = config.termListOptions.termLists
 			.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 			.flatMap(termList => termList.terms);
-		const getTermsAdditionalDistinct = (terms: Array<MatchTerm>, termsExtra: Array<MatchTerm>) => termsExtra
+		const getTermsAdditionalDistinct = (terms: ReadonlyArray<MatchTerm>, termsExtra: ReadonlyArray<MatchTerm>) => termsExtra
 			.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
 		const isResearchPage = await Tabs.isTabResearchPage(tabId);
 		const overrideHighlightsShown =
@@ -413,7 +413,7 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		}
 	});
 
-	const pageEventListener = async (tabId: number, changeInfo: browser.tabs._OnUpdatedChangeInfo) => {
+	const pageEventListener = async (tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
 		// Note: emitted events differ between Firefox and Chromium.
 		if (changeInfo.url || changeInfo.status === "loading" || changeInfo.status === "complete") {
 			pageChangeRespond(changeInfo.url ?? (await chrome.tabs.get(tabId)).url ?? "", tabId);
@@ -441,7 +441,7 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
  * @param tabId The ID of a tab from which to take selected terms.
  * @returns The terms extracted if successful, `undefined` otherwise.
  */
-const getTermsSelectedInTab = async (tabId: number): Promise<Array<MatchTerm> | undefined> => {
+const getTermsSelectedInTab = async (tabId: number): Promise<ReadonlyArray<MatchTerm> | undefined> => {
 	log("selection-terms-retrieval start", "");
 	return sendTabMessage(tabId, { getDetails: { termsFromSelection: true } }).then(response => {
 		log("selection-terms-retrieval finish", "", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
@@ -456,7 +456,7 @@ const getTermsSelectedInTab = async (tabId: number): Promise<Array<MatchTerm> | 
  * Activates highlighting within a tab using the current user selection, storing appropriate highlighting information.
  * @param tabId The ID of a tab to be linked and within which to highlight.
  */
-const activateResearchInTab = async (tabId: number, terms: Array<MatchTerm> = []) => {
+const activateResearchInTab = async (tabId: number, terms: ReadonlyArray<MatchTerm> = []) => {
 	log("research-activation start", "", { tabId });
 	const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
 	const bank = await Bank.get([ "researchInstances" ]);
@@ -627,7 +627,7 @@ const handleMessage = async (message: Message.Background<true>): Promise<Message
 	}
 	if (message.performSearch) {
 		const bank = await Bank.get([ "researchInstances" ]);
-		(chrome.search["search"] as typeof browser.search.search)({
+		(chrome.search as typeof browser.search).search({
 			query: bank.researchInstances[tabId].terms.map(term => term.phrase).join(" "),
 			tabId,
 		});

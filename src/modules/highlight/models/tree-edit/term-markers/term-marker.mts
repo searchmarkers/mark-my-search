@@ -4,11 +4,16 @@ import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import {
 	EleID, EleClass,
 	getElementYRelative, elementsPurgeClass,
-	type TermHues, getTermClass, getTermClassToken,
+	getTermClass, getTermClassToken,
 } from "/dist/modules/common.mjs";
 
 class TermMarker implements AbstractTermMarker {
-	insert (terms: Array<MatchTerm>, termTokens: TermTokens, hues: TermHues, highlightedElements: Iterable<HTMLElement>) {
+	insert (
+		terms: ReadonlyArray<MatchTerm>,
+		termTokens: TermTokens,
+		hues: ReadonlyArray<number>,
+		highlightedElements: Iterable<HTMLElement>,
+	) {
 		if (terms.length === 0) {
 			return; // No terms results in an empty selector, which is not allowed.
 		}

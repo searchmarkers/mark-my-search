@@ -67,7 +67,9 @@ const compatibility: {
 		paintEngine: {
 			paintMethod: !!globalThis.CSS?.paintWorklet,
 			// `element()` might be defined anyway, could have false negatives.
-			elementMethod: !!globalThis.document && !!globalThis.document["mozSetImageElement"],
+			elementMethod: (!!globalThis.document
+				&& !!(globalThis.document as Document & { mozSetImageElement: unknown }).mozSetImageElement
+			),
 		},
 		highlightEngine: !!globalThis.CSS?.highlights,
 	},
@@ -207,18 +209,16 @@ const elementsPurgeClass = (
 	)
 ;
 
-const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
+const focusClosest = <E extends HTMLElement>(element: E, filter: (element: E) => boolean) => {
 	element.focus({ preventScroll: true }); // TODO use focusElement function instead (rename the function too)
 	if (document.activeElement !== element) {
 		if (filter(element)) {
-			focusClosest(element.parentElement as HTMLElement, filter);
+			focusClosest(element.parentElement as E, filter);
 		} else if (document.activeElement) {
 			(document.activeElement as HTMLElement).blur();
 		}
 	}
 };
-
-type TermHues = Array<number>
 
 const getTermClass = (term: MatchTerm, termTokens: TermTokens): string => EleClass.TERM + "-" + termTokens.get(term);
 
@@ -233,6 +233,42 @@ const getIdSequential = (function* () {
 	}
 })();
 
+interface RWContainer<T> extends RContainer<T>, WContainer<T> {
+	current: T,
+}
+
+interface RContainer<T> {
+	readonly current: T,
+}
+
+interface WContainer<T> {
+	readonly assign: (item: T) => void;
+}
+
+const createContainer = <T,>(current: T): RWContainer<T> => {
+	const container: RWContainer<T> = {
+		current,
+		assign: (item) => {
+			container.current = item;
+		}
+	};
+	return container;
+};
+
+// From https://stackoverflow.com/a/76176570. TODO understand how this works
+
+type FromEntries = <const T extends ReadonlyArray<readonly [PropertyKey, unknown]>>(
+	entries: T
+) => { [K in T[number] as K[0]]: K[1] }
+
+// Experimental
+type A<T> = T extends undefined ? never : T
+type B<T extends [ unknown, unknown ]> = T extends ([ infer R1, infer R2 | undefined ]) ? [ R1, R2 ] : T
+
+type Entries = <T extends Record<PropertyKey, unknown>>(
+	obj: T
+) => Array<B<A<{ [K in keyof T]: [K, T[K]] }[keyof T]>>>
+
 /**
  * Compares two arrays using an item comparison function.
  * @param as An array of items of a single type.
@@ -244,30 +280,6 @@ const getIdSequential = (function* () {
 const itemsMatch = <T,> (as: ReadonlyArray<T>, bs: ReadonlyArray<T>, compare = (a: T, b: T) => a === b) =>
 	as.length === bs.length && as.every((a, i) => compare(a, bs[i]))
 ;
-
-const { objectSetValue, objectGetValue } = (() => {
-	const objectSetGetValue = (object: Record<string, unknown>, key: string, value: unknown, set = true) => {
-		if (key.includes(".")) {
-			return objectSetValue(
-				object[key.slice(0, key.indexOf("."))] as Record<string, unknown>,
-				key.slice(key.indexOf(".") + 1),
-				value,
-			);
-		} else {
-			if (set) {
-				object[key] = value;
-			}
-			return object[key];
-		}
-	};
-
-	return {
-		objectSetValue: (object: Record<string, unknown>, key: string, value: unknown) =>
-			objectSetGetValue(object, key, value),
-		objectGetValue: (object: Record<string, unknown>, key: string) =>
-			objectSetGetValue(object, key, undefined, false),
-	};
-})();
 
 /**
  * Sanitizes a string for regex use by escaping all potential regex control characters.
@@ -288,8 +300,10 @@ export {
 	EleID, EleClass, AtRuleID,
 	getElementTagsSet,
 	getNodeFinal, isVisible, getElementYRelative, elementsPurgeClass, focusClosest,
-	type TermHues, getTermClass, getTermTokenClass, getTermClassToken,
+	getTermClass, getTermTokenClass, getTermClassToken,
 	getIdSequential,
-	itemsMatch, objectSetValue, objectGetValue,
+	type RWContainer, type RContainer, type WContainer, createContainer,
+	type FromEntries, type Entries,
+	itemsMatch,
 	sanitizeForRegex,
 };

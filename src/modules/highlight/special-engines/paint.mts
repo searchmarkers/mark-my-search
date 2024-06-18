@@ -20,8 +20,8 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	readonly termPatterns: TermPatterns;
 
 	readonly method: UrlMethod;
-	terms: Array<MatchTerm> = [];
-	hues: Array<number> = [];
+	terms: ReadonlyArray<MatchTerm> = [];
+	hues: ReadonlyArray<number> = [];
 	readonly styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
 	readonly elementsInfo: Map<Element, {
@@ -34,7 +34,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		this.method = new UrlMethod(termTokens);
 	}
 
-	startHighlighting (terms: Array<MatchTerm>, hues: Array<number>) {
+	startHighlighting (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
 		// Clean up.
 		this.endHighlighting();
 		// MAIN
@@ -69,22 +69,25 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	}
 
 	removeHelperElements () {
-		document.querySelectorAll(
-			`#${EleID.STYLE_PAINT_SPECIAL}, #${EleID.ELEMENT_CONTAINER_SPECIAL}`
-		).forEach(element => element.remove()); // Why can't I use Element.prototype.remove directly? ("does not implement" error)
+		for (const element of document.querySelectorAll(
+			`#${EleID.STYLE_PAINT_SPECIAL}, #${EleID.ELEMENT_CONTAINER_SPECIAL}`,
+		)) {
+			element.remove();
+		}
 	}
 
-	getFlow (terms: Array<MatchTerm>, input: HTMLInputElement) {
+	getFlow (terms: ReadonlyArray<MatchTerm>, input: HTMLInputElement) {
+		// TODO is this method needed? why not use a common matching function?
 		const flow: Flow = {
 			text: input.value,
 			boxesInfo: [],
 		};
 		for (const term of terms) {
-			for (const match of flow.text.matchAll(this.termPatterns.get(term))) {
+			for (const match of flow.text.matchAll(this.termPatterns.get(term))) if (match.index !== undefined) {
 				flow.boxesInfo.push({
 					term,
-					start: match.index as number,
-					end: (match.index as number) + match[0].length,
+					start: match.index,
+					end: match.index + match[0].length,
 					boxes: [],
 				});
 			}
@@ -117,7 +120,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		}
 	};
 
-	onInput = (event: InputEvent) => {
+	onInput = (event: Event) => {
 		if (!event.target || !this.handles(event.target as Element)) {
 			return;
 		}
@@ -125,7 +128,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		this.highlight("focused", this.terms, this.hues);
 	};
 
-	highlight (highlightCtx: HighlightContext, terms: Array<MatchTerm>, hues: Array<number>) {
+	highlight (highlightCtx: HighlightContext, terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
 		const element = document.querySelector(contextCSS[highlightCtx]);
 		const value = (element as HTMLInputElement | null)?.value;
 		if (value === undefined) {
@@ -138,13 +141,22 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		this.styleUpdate({ [highlightCtx]: "" });
 	}
 
-	constructHighlightStyleRule = (highlightCtx: HighlightContext, terms: Array<MatchTerm>, hues: Array<number>, text: string) => (
-		`#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${contextCSS[highlightCtx]} { background-image: ${
+	constructHighlightStyleRule (
+		highlightCtx: HighlightContext,
+		terms: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
+		text: string,
+	): string {
+		return `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${contextCSS[highlightCtx]} { background-image: ${
 			this.constructHighlightStyleRuleUrl(terms, hues, text)
-		} !important; background-repeat: no-repeat !important; }`
-	);
+		} !important; background-repeat: no-repeat !important; }`;
+	}
 
-	constructHighlightStyleRuleUrl (terms: Array<MatchTerm>, hues: Array<number>, text: string) {
+	constructHighlightStyleRuleUrl (
+		terms: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
+		text: string,
+	): string {
 		if (!terms.length) {
 			return "url()";
 		}
@@ -162,12 +174,12 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 
 	styleUpdate (styleRules: Partial<StyleRulesInfo>) {
 		const style = document.getElementById(EleID.STYLE_PAINT_SPECIAL) as HTMLStyleElement;
-		Object.keys(contextCSS).forEach(highlightContext => {
+		for (const highlightContext of Object.keys(contextCSS) as Array<HighlightContext>) {
 			const rule = styleRules[highlightContext];
 			if (rule !== undefined) {
 				this.styleRules[highlightContext] = rule;
 			}
-		});
+		}
 		const styleContent = Object.values(this.styleRules).join("\n");
 		if (styleContent !== style.textContent) {
 			style.textContent = styleContent;

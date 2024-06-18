@@ -1,7 +1,7 @@
 import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import type { CachingHTMLElement } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import type { TreeCache, CachingHTMLElement } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
@@ -18,7 +18,7 @@ import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import type { UpdateTermStatus } from "/dist/content.mjs";
-import { EleID, EleClass, type TermHues } from "/dist/modules/common.mjs";
+import { EleID, EleClass, type WContainer, createContainer } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<true, BoxInfoRange>
 
@@ -127,7 +127,10 @@ class HighlightEngine implements AbstractEngine {
 	readonly specialHighlighter: AbstractSpecialEngine;
 
 	readonly highlights = new ExtendedHighlightRegistry();
-	readonly highlightedElements: Set<CachingHTMLElement> = new Set();
+	readonly highlightedElements: Set<CachingHTMLElement<Flow>> = new Set();
+
+	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
+	readonly hues: WContainer<ReadonlyArray<number>>;
 	
 	static readonly hueCycleStyles: Array<HighlightStyle> = [
 		{ opacity: 0.7, lineThickness: 0, lineStyle: "solid", textColor: "black" },
@@ -141,27 +144,31 @@ class HighlightEngine implements AbstractEngine {
 	];
 
 	constructor (
-		terms: Array<MatchTerm>,
-		hues: TermHues,
 		updateTermStatus: UpdateTermStatus,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
+		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
+		const hues = createContainer<ReadonlyArray<number>>([]);
+		this.terms = terms;
+		this.hues = hues;
 		this.requestRefreshIndicators = requestCallFn(
 			() => {
-				this.termMarkers.insert(terms, termTokens, hues, this.highlightedElements);
+				this.termMarkers.insert(terms.current, termTokens, hues.current, this.highlightedElements);
 			},
 			200, 2000,
 		);
 		this.requestRefreshTermControls = requestCallFn(
 			() => {
-				terms.forEach(term => updateTermStatus(term));
+				for (const term of terms.current) {
+					updateTermStatus(term);
+				}
 			},
 			50, 500,
 		);
-		this.flowMonitor = new FlowMonitor<Flow>(
+		this.flowMonitor = new FlowMonitor<Flow, TreeCache<Flow>>(
 			terms,
 			termPatterns,
 			{
@@ -197,7 +204,7 @@ class HighlightEngine implements AbstractEngine {
 	readonly getCSS: EngineCSS = {
 		misc: () => "",
 		termHighlights: () => "",
-		termHighlight: (terms: Array<MatchTerm>, hues: Array<number>, termIndex: number) => {
+		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
 			const term = terms[termIndex];
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
@@ -229,16 +236,20 @@ class HighlightEngine implements AbstractEngine {
 	}
 
 	startHighlighting (
-		terms: Array<MatchTerm>,
-		termsToHighlight: Array<MatchTerm>,
-		termsToPurge: Array<MatchTerm>,
-		hues: Array<number>,
+		terms: ReadonlyArray<MatchTerm>,
+		termsToHighlight: ReadonlyArray<MatchTerm>,
+		termsToPurge: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
 		this.mutationUpdates.disconnect();
 		this.undoHighlights(termsToPurge);
 		// MAIN
-		terms.forEach(term => this.highlights.set(this.termTokens.get(term), new ExtendedHighlight()));
+		this.terms.assign(terms);
+		this.hues.assign(hues);
+		for (const term of terms) {
+			this.highlights.set(this.termTokens.get(term), new ExtendedHighlight());
+		}
 		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
 		this.specialHighlighter.startHighlighting(terms, hues);
@@ -251,10 +262,12 @@ class HighlightEngine implements AbstractEngine {
 		this.termWalker.cleanup();
 	}
 
-	undoHighlights (terms?: Array<MatchTerm>) {
+	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
 		this.flowMonitor.removeBoxesInfo(terms);
 		if (terms) {
-			terms.forEach(term => this.highlights.delete(this.termTokens.get(term)));
+			for (const term of terms) {
+				this.highlights.delete(this.termTokens.get(term));
+			}
 		} else {
 			this.highlights.clear();
 		}
