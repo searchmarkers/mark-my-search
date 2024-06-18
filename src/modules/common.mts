@@ -52,29 +52,6 @@ const getObjectStringLog = (object: Record<string, unknown>): string =>
 
 type Browser = "firefox" | "chromium"
 
-const compatibility: {
-	browser: Browser
-	highlight: {
-		paintEngine: {
-			paintMethod: boolean
-			elementMethod: boolean
-		}
-		highlightEngine: boolean
-	}
-} = {
-	browser: globalThis.browser ? "firefox" : "chromium",
-	highlight: {
-		paintEngine: {
-			paintMethod: !!globalThis.CSS?.paintWorklet,
-			// `element()` might be defined anyway, could have false negatives.
-			elementMethod: (!!globalThis.document
-				&& !!(globalThis.document as Document & { mozSetImageElement: unknown }).mozSetImageElement
-			),
-		},
-		highlightEngine: !!globalThis.CSS?.highlights,
-	},
-};
-
 type Engine =
 	| "ELEMENT"
 	| "PAINT"
@@ -86,6 +63,51 @@ type PaintEngineMethod =
 	| "element"
 	| "url"
 ;
+
+class Compatibility {
+	readonly browser: Browser = globalThis.browser ? "firefox" : "chromium";
+
+	#highlighting: HighlightingCompatibility | null = null;
+	get highlighting (): HighlightingCompatibility {
+		if (!this.#highlighting) {
+			this.#highlighting = new HighlightingCompatibility();
+		}
+		return this.#highlighting;
+	}
+}
+
+class HighlightingCompatibility {
+	readonly engines: Readonly<Record<Engine, boolean>>;
+	readonly engineFallback: Engine = "ELEMENT";
+	readonly paintEngineMethods: Readonly<Record<PaintEngineMethod, boolean>>;
+	readonly paintEngineMethodFallback: PaintEngineMethod = "url";
+
+	constructor () {
+		this.engines = {
+			ELEMENT: true,
+			PAINT: true,
+			HIGHLIGHT: !!globalThis.CSS?.highlights,
+		};
+		this.paintEngineMethods = {
+			paint: !!globalThis.CSS?.paintWorklet,
+			// `element()` might be defined anyway, could have false negatives.
+			element: (!!globalThis.document
+				&& !!(globalThis.document as Document & { mozSetImageElement: unknown }).mozSetImageElement
+			),
+			url: true,
+		};
+	}
+	
+	engineToUse (preference: Engine) {
+		return this.engines[preference] ? preference : this.engineFallback;
+	}
+
+	paintEngineMethodToUse (preference: PaintEngineMethod) {
+		return this.paintEngineMethods[preference] ? preference : this.paintEngineMethodFallback;
+	}
+}
+
+const compatibility = new Compatibility();
 
 const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
 

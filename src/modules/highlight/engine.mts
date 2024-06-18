@@ -1,34 +1,30 @@
 import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
-import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { Engine } from "/dist/modules/common.mjs";
 
-type Highlighter = { current?: AbstractEngine }
+interface AbstractEngine
+extends HighlighterCSSInterface, HighlightingInterface, HighlighterCounterInterface, HighlighterWalkerInterface {
+	readonly class: Engine
+	readonly model: "tree-edit" | "tree-cache"
 
-type HighlighterProcess =
-	| "refreshTermControls"
-	| "refreshIndicators"
-;
+	//termWalker: AbstractTermWalker
+	//termMarkers: AbstractTermMarker
+}
 
-type EngineCSS = Readonly<{
+
+interface HighlighterCSSInterface {
+	getCSS: EngineCSS
+
+	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
+}
+
+interface EngineCSS {
 	misc: () => string
 	termHighlights: () => string
 	termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => string
-}>
+}
 
-interface AbstractEngine {
-	termOccurrences: AbstractTermCounter
-	termWalker: AbstractTermWalker
-	termMarkers: AbstractTermMarker
-
-	getCSS: EngineCSS
-
-	// TODO document
-	getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
-
-	// TODO document
-	countMatches: () => void
-
+interface HighlightingInterface {
 	/**
 	 * Removes previous highlighting, then highlights the document using the terms supplied.
 	 * Disables then restarts continuous highlighting.
@@ -41,15 +37,21 @@ interface AbstractEngine {
 		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) => void
-	
-	// TODO document
+
 	undoHighlights: (
 		terms?: ReadonlyArray<MatchTerm> | undefined,
 	) => void
 
-	// TODO document
 	endHighlighting: () => void
 
+	countMatches: () => void
+}
+
+interface HighlighterCounterInterface {
+	termOccurrences: AbstractTermCounter
+}
+
+interface HighlighterWalkerInterface {
 	/**
 	 * Moves to the next (downwards) occurrence of a term in the document, beginning from the current selection position.
 	 * If an occurrence is successfully focused, the corresponding term marker in the scrollbar will be raised.
@@ -66,7 +68,10 @@ interface AbstractEngine {
 	) => HTMLElement | null
 }
 
-export {
-	type Highlighter, type HighlighterProcess,
-	type AbstractEngine, type EngineCSS,
+export type {
+	AbstractEngine,
+	HighlighterCSSInterface, EngineCSS,
+	HighlightingInterface,
+	HighlighterCounterInterface,
+	HighlighterWalkerInterface,
 };

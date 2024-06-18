@@ -6,14 +6,14 @@ import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/
 import { applyMatchModeToClassList, getTermCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
 import { EleClass, getTermClass } from "/dist/modules/common.mjs";
-import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
+import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/engine.mjs";
 import type { TermReplacer, ControlsInfo } from "/dist/content.mjs";
 
 class TermReplaceControl implements TermAbstractControl {
 	readonly #toolbarInterface: ToolbarTermControlInterface;
 	readonly #termReplacer: TermReplacer;
 	readonly #termTokens: TermTokens;
-	readonly #highlighter: Highlighter;
+	readonly #highlighter: HighlighterCounterInterface & HighlighterWalkerInterface;
 
 	readonly #input: TermInput;
 	readonly #optionList: TermOptionList;
@@ -37,7 +37,7 @@ class TermReplaceControl implements TermAbstractControl {
 		toolbarInterface: ToolbarTermControlInterface,
 		termReplacer: TermReplacer,
 		termTokens: TermTokens,
-		highlighter: Highlighter,
+		highlighter: HighlighterCounterInterface & HighlighterWalkerInterface,
 	) {
 		this.#toolbarInterface = toolbarInterface;
 		this.#termReplacer = termReplacer;
@@ -72,7 +72,7 @@ class TermReplaceControl implements TermAbstractControl {
 			if (toolbarInterface.hasLastFocusedInput()) {
 				toolbarInterface.setAutofocusable(false);
 			}
-			highlighter.current?.stepToNextOccurrence(false, false, this.#term);
+			highlighter.stepToNextOccurrence(false, false, this.#term);
 		});
 		this.#controlContent.addEventListener("pointerover", () => { // FIXME this is not screenreader friendly.
 			this.updateTooltip(commands);
@@ -182,7 +182,7 @@ class TermReplaceControl implements TermAbstractControl {
 	updateStatus () {
 		this.#controlPad.classList.toggle(
 			EleClass.DISABLED,
-			!this.#highlighter.current?.termOccurrences.exists(this.#term, this.#termTokens),
+			!this.#highlighter.termOccurrences.exists(this.#term, this.#termTokens),
 		);
 	}
 
@@ -197,7 +197,7 @@ class TermReplaceControl implements TermAbstractControl {
 		}
 		const { [index]: commandObject } = getTermCommands(commands);
 		const { down: command, up: commandReverse } = commandObject ?? { down: "", up: "" };
-		const occurrenceCount = this.#highlighter.current?.termOccurrences.countBetter(this.#term, this.#termTokens) ?? 0;
+		const occurrenceCount = this.#highlighter.termOccurrences.countBetter(this.#term, this.#termTokens) ?? 0;
 		const matchesString = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page`;
 		if (occurrenceCount > 0 && command && commandReverse) {
 			const commandString = (occurrenceCount === 1)

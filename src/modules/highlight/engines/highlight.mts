@@ -1,6 +1,4 @@
 import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import type { TreeCache, CachingHTMLElement } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
@@ -113,6 +111,9 @@ type HighlightStyle = {
 }
 
 class HighlightEngine implements AbstractEngine {
+	readonly class = "HIGHLIGHT";
+	readonly model = "tree-cache";
+
 	readonly termOccurrences: AbstractTermCounter = new TermCounter();
 	readonly termWalker: AbstractTermWalker = new TermWalker();
 	readonly termMarkers: AbstractTermMarker = new TermMarker();
@@ -123,8 +124,6 @@ class HighlightEngine implements AbstractEngine {
 	readonly flowMonitor: AbstractFlowMonitor;
 
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
-
-	readonly specialHighlighter: AbstractSpecialEngine;
 
 	readonly highlights = new ExtendedHighlightRegistry();
 	readonly highlightedElements: Set<CachingHTMLElement<Flow>> = new Set();
@@ -198,7 +197,6 @@ class HighlightEngine implements AbstractEngine {
 			},
 		);
 		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);
-		this.specialHighlighter = new PaintSpecialEngine(this.termTokens, this.termPatterns);
 	}
 
 	readonly getCSS: EngineCSS = {
@@ -252,13 +250,11 @@ class HighlightEngine implements AbstractEngine {
 		}
 		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
 		this.termWalker.cleanup();
 	}
 

@@ -12,7 +12,7 @@ import { getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolba
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
-import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
+import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/engine.mjs";
 import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 enum ToolbarSection {
@@ -28,7 +28,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	readonly #termSetter: TermSetter;
 	readonly #doPhrasesMatchTerms: DoPhrasesMatchTerms;
 	readonly #termTokens: TermTokens;
-	readonly #highlighter: Highlighter;
+	readonly #highlighter: HighlighterCounterInterface & HighlighterWalkerInterface;
 
 	readonly #bar: HTMLElement;
 	readonly #sections: Readonly<Record<ToolbarSection, HTMLElement>>;
@@ -49,7 +49,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		termSetter: TermSetter,
 		doPhrasesMatchTerms: DoPhrasesMatchTerms,
 		termTokens: TermTokens,
-		highlighter: Highlighter,
+		highlighter: HighlighterCounterInterface & HighlighterWalkerInterface,
 	) {
 		this.#termSetter = termSetter;
 		this.#doPhrasesMatchTerms = doPhrasesMatchTerms;

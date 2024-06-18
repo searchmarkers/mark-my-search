@@ -1,7 +1,5 @@
 import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
 import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
@@ -113,6 +111,9 @@ class FlowNodeList {
 }
 
 class ElementEngine implements AbstractEngine {
+	readonly class = "ELEMENT";
+	readonly model = "tree-edit";
+
 	readonly termOccurrences: AbstractTermCounter = new TermCounter();
 	readonly termWalker: AbstractTermWalker = new TermWalker();
 	readonly termMarkers: AbstractTermMarker = new TermMarker();
@@ -121,8 +122,6 @@ class ElementEngine implements AbstractEngine {
 	readonly termPatterns: TermPatterns;
 
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
-
-	readonly specialHighlighter: AbstractSpecialEngine;
 
 	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
 	readonly hues: WContainer<ReadonlyArray<number>>;
@@ -158,7 +157,6 @@ class ElementEngine implements AbstractEngine {
 			50, 500,
 		);
 		this.mutationUpdates = getMutationUpdates(this.getMutationUpdatesObserver(terms));
-		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
 	readonly getCSS: EngineCSS = {
@@ -211,13 +209,11 @@ ${HIGHLIGHT_TAG} {
 		// MAIN
 		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
 	}
 
 	/**

@@ -1,7 +1,5 @@
 import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type * as Cache from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
@@ -53,6 +51,9 @@ type StyleRuleInfo = {
 }
 
 class PaintEngine implements AbstractEngine {
+	readonly class = "PAINT";
+	readonly model = "tree-cache";
+
 	readonly termOccurrences: AbstractTermCounter = new TermCounter();
 	readonly termWalker: AbstractTermWalker = new TermWalker();
 	readonly termMarkers: AbstractTermMarker = new TermMarker();
@@ -73,8 +74,6 @@ class PaintEngine implements AbstractEngine {
 	readonly visibilityObserver: IntersectionObserver;
 	readonly styleUpdates: ReturnType<typeof getStyleUpdates>;
 
-	readonly specialHighlighter: AbstractSpecialEngine;
-
 	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
 	readonly hues: WContainer<ReadonlyArray<number>>;
 
@@ -84,18 +83,18 @@ class PaintEngine implements AbstractEngine {
 	 * @param methodPreference 
 	 */
 	constructor (
-		updateTermStatus: UpdateTermStatus,
 		method: AbstractMethod,
+		updateTermStatus: UpdateTermStatus,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
+		this.updateTermStatus = updateTermStatus;
 		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 		const hues = createContainer<ReadonlyArray<number>>([]);
 		this.terms = terms;
 		this.hues = hues;
-		this.updateTermStatus = updateTermStatus;
 		this.method = method;
 		this.getCSS = method.getCSS;
 		this.requestRefreshIndicators = requestCallFn(
@@ -152,7 +151,6 @@ class PaintEngine implements AbstractEngine {
 				yield (i++).toString();
 			}
 		})();
-		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
 	readonly getCSS: EngineCSS;
@@ -186,7 +184,6 @@ class PaintEngine implements AbstractEngine {
 				Array.from(this.elementsVisible).map(element => this.method.findHighlightableAncestor(element))
 			)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
 		);
-		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
@@ -198,7 +195,6 @@ class PaintEngine implements AbstractEngine {
 			element.removeAttribute("markmysearch-h_id");
 		}
 		this.method.endHighlighting();
-		this.specialHighlighter.endHighlighting();
 		this.termWalker.cleanup();
 	}
 
