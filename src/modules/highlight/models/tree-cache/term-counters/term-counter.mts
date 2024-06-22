@@ -1,4 +1,4 @@
-import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/term-counter.mjs";
 import { type CachingElement, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";

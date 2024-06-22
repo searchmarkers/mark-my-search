@@ -6,7 +6,7 @@ import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/
 import { applyMatchModeToClassList, getTermCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
 import { EleClass, getTermClass } from "/dist/modules/common.mjs";
-import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/engine.mjs";
+import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.mjs";
 import type { TermReplacer, ControlsInfo } from "/dist/content.mjs";
 
 class TermReplaceControl implements TermAbstractControl {
@@ -182,7 +182,7 @@ class TermReplaceControl implements TermAbstractControl {
 	updateStatus () {
 		this.#controlPad.classList.toggle(
 			EleClass.DISABLED,
-			!this.#highlighter.termOccurrences.exists(this.#term, this.#termTokens),
+			!this.#highlighter.termCounter.exists(this.#term),
 		);
 	}
 
@@ -197,7 +197,7 @@ class TermReplaceControl implements TermAbstractControl {
 		}
 		const { [index]: commandObject } = getTermCommands(commands);
 		const { down: command, up: commandReverse } = commandObject ?? { down: "", up: "" };
-		const occurrenceCount = this.#highlighter.termOccurrences.countBetter(this.#term, this.#termTokens) ?? 0;
+		const occurrenceCount = this.#highlighter.termCounter.countBetter(this.#term);
 		const matchesString = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page`;
 		if (occurrenceCount > 0 && command && commandReverse) {
 			const commandString = (occurrenceCount === 1)

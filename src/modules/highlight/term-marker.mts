@@ -1,4 +1,4 @@
-import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractTermMarker {
 	/**
@@ -8,7 +8,6 @@ interface AbstractTermMarker {
 	 */
 	insert: (
 		terms: ReadonlyArray<MatchTerm>,
-		termTokens: TermTokens,
 		hues: ReadonlyArray<number>,
 		highlightedElements: Iterable<HTMLElement>,
 	) => void
@@ -16,7 +15,6 @@ interface AbstractTermMarker {
 	// TODO document
 	raise: (
 		term: MatchTerm | null,
-		termTokens: TermTokens,
 		container: HTMLElement,
 	) => void
 }

@@ -1,4 +1,4 @@
-import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/term-marker.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import {
@@ -8,15 +8,17 @@ import {
 } from "/dist/modules/common.mjs";
 
 class TermMarker implements AbstractTermMarker {
+	#termTokens: TermTokens;
+	
+	constructor (termTokens: TermTokens) {
+		this.#termTokens = termTokens;
+	}
+
 	insert (
 		terms: ReadonlyArray<MatchTerm>,
-		termTokens: TermTokens,
 		hues: ReadonlyArray<number>,
 		highlightedElements: Iterable<HTMLElement>,
 	) {
-		if (terms.length === 0) {
-			return; // No terms results in an empty selector, which is not allowed.
-		}
 		const regexMatchTermSelector = new RegExp(`\\b${EleClass.TERM}(?:-\\w+)+\\b`);
 		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		const containersInfo: Array<{
@@ -52,13 +54,13 @@ class TermMarker implements AbstractTermMarker {
 		gutter.innerHTML = markersHtml;
 	}
 
-	raise (term: MatchTerm | null, termTokens: TermTokens, container: HTMLElement) {
+	raise (term: MatchTerm | null, container: HTMLElement) {
 		const scrollMarkerGutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
 		elementsPurgeClass(EleClass.FOCUS, scrollMarkerGutter);
 		[6, 5, 4, 3, 2].some(precisionFactor => {
 			const precision = 10**precisionFactor;
 			const scrollMarker = scrollMarkerGutter.querySelector(
-				`${term ? `.${getTermClass(term, termTokens)}` : ""}[top^="${
+				`${term ? `.${getTermClass(term, this.#termTokens)}` : ""}[top^="${
 					Math.trunc(getElementYRelative(container) * precision) / precision
 				}"]`
 			) as HTMLElement | null;

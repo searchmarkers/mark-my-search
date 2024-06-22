@@ -12,7 +12,7 @@ import { getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolba
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
-import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/engine.mjs";
+import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.mjs";
 import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 enum ToolbarSection {

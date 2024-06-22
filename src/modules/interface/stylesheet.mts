@@ -308,13 +308,13 @@ const fillContent = (
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }
-${highlighter.getCSS.termHighlights() ?? ""}
+${highlighter.getCSS.termHighlights()}
 
 /**/
 
 `) + `
 
-${highlighter.getCSS.misc() ?? ""}
+${highlighter.getCSS.misc()}
 
 /* || Transitions */
 
@@ -337,7 +337,7 @@ ${highlighter.getCSS.misc() ?? ""}
 		style.textContent += makeImportant(`
 /* || Term Highlight */
 
-${highlighter.getCSS.termHighlight(terms, hues, i) ?? ""}
+${highlighter.getCSS.termHighlight(terms, hues, i)}
 
 /**/
 

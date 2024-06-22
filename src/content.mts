@@ -79,28 +79,16 @@ const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm>
 	return termsMut;
 };
 
-/**
- * Inserts the toolbar with term controls and begins continuously highlighting terms in the document.
- * All controls necessary are first removed.
- * Highlighting refreshes may be whole or partial depending on which terms changed.
- * TODO document params
- */
-const refreshTermControlsAndStartHighlighting = (
+const updateToolbar = (
 	termsOld: ReadonlyArray<MatchTerm>,
 	terms: ReadonlyArray<MatchTerm>,
 	update: {
 		term: MatchTerm | null
 		termIndex: number
 	} | null,
-	termTokens: TermTokens,
-	controlsInfo: ControlsInfo,
 	toolbar: AbstractToolbar,
-	highlighter: AbstractEngineManager,
 	commands: BrowserCommandsReadonly,
-	hues: ReadonlyArray<number>,
 ) => {
-	// TODO this function is better! but not good enough
-	toolbar.updateControlVisibility("replaceTerms");
 	if (update && update.term) {
 		if (update.termIndex === termsOld.length) {
 			toolbar.appendTerm(update.term, commands);
@@ -109,35 +97,31 @@ const refreshTermControlsAndStartHighlighting = (
 		}
 	} else if (update && !update.term) {
 		toolbar.removeTerm(update.termIndex);
-		highlighter.undoHighlights([ termsOld[update.termIndex] ]);
-		Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-		toolbar.insertIntoDocument();
-		highlighter.countMatches(); // TODO this method should be handled by the engine, and not exposed
-		return;
 	} else if (!update) {
-		highlighter.undoHighlights();
 		toolbar.replaceTerms(terms, commands);
 	}
-	Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+	toolbar.updateControlVisibility("replaceTerms");
 	toolbar.insertIntoDocument();
-	if (!controlsInfo.pageModifyEnabled) {
-		return;
-	}
+};
+
+const startHighlighting = (
+	termsOld: ReadonlyArray<MatchTerm>,
+	terms: ReadonlyArray<MatchTerm>,
+	highlighter: AbstractEngineManager,
+	hues: ReadonlyArray<number>,
+) => {
 	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term =>
 		!termsOld.find(termOld => termEquals(term, termOld))
 	);
 	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(term =>
 		!terms.find(termOld => termEquals(term, termOld))
 	);
-	// Give the interface a chance to redraw before performing [expensive] highlighting.
-	setTimeout(() => {
-		highlighter.startHighlighting(
-			terms,
-			termsToHighlight,
-			termsToPurge,
-			hues,
-		);
-	});
+	highlighter.startHighlighting(
+		terms,
+		termsToHighlight,
+		termsToPurge,
+		hues,
+	);
 };
 
 /**
@@ -290,17 +274,12 @@ interface TermAppender {
 			}
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = termsNew;
-			refreshTermControlsAndStartHighlighting(
-				termsOld,
-				[ ...terms ],
-				null,
-				termTokens,
-				controlsInfo,
-				getToolbar(true),
-				highlighter,
-				commands,
-				hues,
-			);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			updateToolbar(termsOld, terms, null, getToolbar(true), commands);
+			// Give the interface a chance to redraw before performing highlighting.
+			setTimeout(() => {
+				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
+			});
 		},
 		replaceTerm: (term, termIndex) => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
@@ -311,32 +290,22 @@ interface TermAppender {
 			} else {
 				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
-			refreshTermControlsAndStartHighlighting(
-				termsOld,
-				terms,
-				{ term, termIndex },
-				termTokens,
-				controlsInfo,
-				getToolbar(true),
-				highlighter,
-				commands,
-				hues,
-			);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(true), commands);
+			// Give the interface a chance to redraw before performing highlighting.
+			setTimeout(() => {
+				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
+			});
 		},
 		appendTerm: term => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = terms.concat(term);
-			refreshTermControlsAndStartHighlighting(
-				termsOld,
-				terms,
-				{ term, termIndex: termsOld.length },
-				termTokens,
-				controlsInfo,
-				getToolbar(true),
-				highlighter,
-				commands,
-				hues,
-			);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(true), commands);
+			// Give the interface a chance to redraw before performing highlighting.
+			setTimeout(() => {
+				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
+			});
 		},
 	};
 	const termSetter: TermSetter = {
