@@ -1,7 +1,7 @@
 import { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 import { getControlClass, getControlPadClass } from "/dist/modules/interface/toolbar/common.mjs";
-import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
+import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
 import { Z_INDEX_MAX } from "/dist/modules/common.mjs";
 
@@ -15,7 +15,7 @@ const fillContent = (
 	termTokens: TermTokens,
 	hues: ReadonlyArray<number>,
 	barLook: ControlsInfo["barLook"],
-	highlighter: Highlighter,
+	highlighter: HighlighterCSSInterface,
 ) => {
 	const style = document.getElementById(EleID.STYLE) as HTMLStyleElement;
 	const makeImportant = (styleText: string): string =>
@@ -308,13 +308,13 @@ const fillContent = (
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }
-${highlighter.current?.getCSS.termHighlights() ?? ""}
+${highlighter.getCSS.termHighlights()}
 
 /**/
 
 `) + `
 
-${highlighter.current?.getCSS.misc() ?? ""}
+${highlighter.getCSS.misc()}
 
 /* || Transitions */
 
@@ -337,7 +337,7 @@ ${highlighter.current?.getCSS.misc() ?? ""}
 		style.textContent += makeImportant(`
 /* || Term Highlight */
 
-${highlighter.current?.getCSS.termHighlight(terms, hues, i) ?? ""}
+${highlighter.getCSS.termHighlight(terms, hues, i)}
 
 /**/
 
@@ -352,7 +352,7 @@ ${highlighter.current?.getCSS.termHighlight(terms, hues, i) ?? ""}
 /* || Term Control Buttons */
 
 #${EleID.BAR_TERMS} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
-	background: ${highlighter.current?.getTermBackgroundStyle(
+	background: ${highlighter.getTermBackgroundStyle(
 		`hsl(${hue} 70% 70% / ${barLook.opacityTerm})`,
 		`hsl(${hue} 70% 88% / ${barLook.opacityTerm})`,
 		cycle,
@@ -360,7 +360,7 @@ ${highlighter.current?.getCSS.termHighlight(terms, hues, i) ?? ""}
 }
 
 #${EleID.BAR}.${EleClass.DISABLED} #${EleID.BAR_TERMS} .${getTermClass(term, termTokens)} .${EleClass.CONTROL_PAD} {
-	background: ${highlighter.current?.getTermBackgroundStyle(
+	background: ${highlighter.getTermBackgroundStyle(
 		`hsl(${hue} 70% 70% / min(${barLook.opacityTerm}, 0.4))`,
 		`hsl(${hue} 70% 88% / min(${barLook.opacityTerm}, 0.4))`,
 		cycle,

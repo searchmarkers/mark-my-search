@@ -1,24 +1,13 @@
-import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
+import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
 import type { TreeCache, CachingHTMLElement } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
-import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
-import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { TermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs";
-import { TermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs";
-import { TermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
-import { requestCallFn } from "/dist/modules/call-requester.mjs";
-import type { UpdateTermStatus } from "/dist/content.mjs";
-import { EleID, EleClass, type WContainer, createContainer } from "/dist/modules/common.mjs";
+import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
+import { EleID, EleClass, createContainer } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<true, BoxInfoRange>
 
@@ -112,10 +101,9 @@ type HighlightStyle = {
 	textColor?: string
 }
 
-class HighlightEngine implements AbstractEngine {
-	readonly termOccurrences: AbstractTermCounter = new TermCounter();
-	readonly termWalker: AbstractTermWalker = new TermWalker();
-	readonly termMarkers: AbstractTermMarker = new TermMarker();
+class HighlightEngine implements AbstractTreeCacheEngine {
+	readonly class = "HIGHLIGHT";
+	readonly model = "tree-cache";
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
@@ -124,13 +112,11 @@ class HighlightEngine implements AbstractEngine {
 
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	readonly specialHighlighter: AbstractSpecialEngine;
-
 	readonly highlights = new ExtendedHighlightRegistry();
 	readonly highlightedElements: Set<CachingHTMLElement<Flow>> = new Set();
 
-	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
-	readonly hues: WContainer<ReadonlyArray<number>>;
+	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
+	readonly hues = createContainer<ReadonlyArray<number>>([]);
 	
 	static readonly hueCycleStyles: Array<HighlightStyle> = [
 		{ opacity: 0.7, lineThickness: 0, lineStyle: "solid", textColor: "black" },
@@ -144,36 +130,17 @@ class HighlightEngine implements AbstractEngine {
 	];
 
 	constructor (
-		updateTermStatus: UpdateTermStatus,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
-		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
-		const hues = createContainer<ReadonlyArray<number>>([]);
-		this.terms = terms;
-		this.hues = hues;
-		this.requestRefreshIndicators = requestCallFn(
-			() => {
-				this.termMarkers.insert(terms.current, termTokens, hues.current, this.highlightedElements);
-			},
-			200, 2000,
-		);
-		this.requestRefreshTermControls = requestCallFn(
-			() => {
-				for (const term of terms.current) {
-					updateTermStatus(term);
-				}
-			},
-			50, 500,
-		);
 		this.flowMonitor = new FlowMonitor<Flow, TreeCache<Flow>>(
-			terms,
+			this.terms,
 			termPatterns,
+			this.highlightingUpdatedListeners,
 			{
 				createElementCache: () => ({ flows: [] }),
-				onHighlightingUpdated: () => this.countMatches(),
 				onBoxesInfoPopulated: element => {
 					this.highlightedElements.add(element);
 					for (const flow of element[CACHE].flows) {
@@ -198,10 +165,9 @@ class HighlightEngine implements AbstractEngine {
 			},
 		);
 		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);
-		this.specialHighlighter = new PaintSpecialEngine(this.termTokens, this.termPatterns);
 	}
 
-	readonly getCSS: EngineCSS = {
+	readonly getCSS = {
 		misc: () => "",
 		termHighlights: () => "",
 		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
@@ -227,14 +193,6 @@ class HighlightEngine implements AbstractEngine {
 
 	readonly getTermBackgroundStyle = TermCSS.getFlatStyle;
 
-	readonly requestRefreshIndicators: Generator;
-	readonly requestRefreshTermControls: Generator;
-
-	countMatches () {
-		this.requestRefreshIndicators.next();
-		this.requestRefreshTermControls.next();
-	}
-
 	startHighlighting (
 		terms: ReadonlyArray<MatchTerm>,
 		termsToHighlight: ReadonlyArray<MatchTerm>,
@@ -252,14 +210,11 @@ class HighlightEngine implements AbstractEngine {
 		}
 		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
-		this.termWalker.cleanup();
 	}
 
 	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
@@ -273,12 +228,14 @@ class HighlightEngine implements AbstractEngine {
 		}
 	}
 
-	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
-		const focus = this.termWalker.step(reverse, stepNotJump, term, this.termTokens);
-		if (focus) {
-			this.termMarkers.raise(term, this.termTokens, getContainerBlock(focus));
-		}
-		return focus;
+	getHighlightedElements (): Iterable<HTMLElement> {
+		return this.highlightedElements;
+	}
+
+	readonly highlightingUpdatedListeners = new Set<Generator>();
+
+	registerHighlightingUpdatedListener (listener: Generator) {
+		this.highlightingUpdatedListeners.add(listener);
 	}
 }
 

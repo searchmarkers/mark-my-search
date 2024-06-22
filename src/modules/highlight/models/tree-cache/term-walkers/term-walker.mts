@@ -1,7 +1,7 @@
-import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/term-walker.mjs";
 import { type CachingHTMLElement, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
-import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false>
@@ -11,7 +11,6 @@ class TermWalker implements AbstractTermWalker {
 		reverse: boolean,
 		stepNotJump: boolean,
 		term: MatchTerm | null,
-		termTokens: TermTokens,
 		nodeStart?: Node,
 	): CachingHTMLElement<Flow> | null {
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
@@ -53,7 +52,7 @@ class TermWalker implements AbstractTermWalker {
 		const element = walker[nextNodeMethod]() as CachingHTMLElement<Flow> | null;
 		if (!element) {
 			if (!nodeStart) {
-				this.step(reverse, stepNotJump, term, termTokens, nodeBegin);
+				this.step(reverse, stepNotJump, term, nodeBegin);
 			}
 			return null;
 		}

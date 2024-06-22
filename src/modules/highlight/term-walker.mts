@@ -1,4 +1,4 @@
-import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractTermWalker {
 	/**
@@ -12,7 +12,6 @@ interface AbstractTermWalker {
 		reverse: boolean,
 		stepNotJump: boolean,
 		term: MatchTerm | null,
-		termTokens: TermTokens,
 	) => HTMLElement | null
 	
 	cleanup: () => void

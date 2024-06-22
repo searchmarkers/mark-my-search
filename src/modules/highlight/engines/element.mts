@@ -1,24 +1,10 @@
-import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
+import type { AbstractTreeEditEngine } from "/dist/modules/highlight/models/tree-edit.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
-import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
-import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { TermCounter } from "/dist/modules/highlight/models/tree-edit/term-counters/term-counter.mjs";
-import { TermWalker } from "/dist/modules/highlight/models/tree-edit/term-walkers/term-walker.mjs";
-import { TermMarker } from "/dist/modules/highlight/models/tree-edit/term-markers/term-marker.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
-import { requestCallFn } from "/dist/modules/call-requester.mjs";
-import type { UpdateTermStatus } from "/dist/content.mjs";
-import {
-	EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass,
-	type RContainer, type WContainer, createContainer,
-} from "/dist/modules/common.mjs";
+import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
+import { EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass, createContainer } from "/dist/modules/common.mjs";
 
 /**
  * Determines whether or not the highlighting algorithm should be run on an element.
@@ -112,56 +98,28 @@ class FlowNodeList {
 	}
 }
 
-class ElementEngine implements AbstractEngine {
-	readonly termOccurrences: AbstractTermCounter = new TermCounter();
-	readonly termWalker: AbstractTermWalker = new TermWalker();
-	readonly termMarkers: AbstractTermMarker = new TermMarker();
+class ElementEngine implements AbstractTreeEditEngine {
+	readonly class = "ELEMENT";
+	readonly model = "tree-edit";
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	readonly specialHighlighter: AbstractSpecialEngine;
-
-	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
-	readonly hues: WContainer<ReadonlyArray<number>>;
+	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
+	readonly hues = createContainer<ReadonlyArray<number>>([]);
 
 	constructor (
-		updateTermStatus: UpdateTermStatus,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
-		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
-		const hues = createContainer<ReadonlyArray<number>>([]);
-		this.terms = terms;
-		this.hues = hues;
-		this.requestRefreshIndicators = requestCallFn(
-			() => {
-				this.termMarkers.insert(terms.current, termTokens, hues.current, document.body.querySelectorAll(terms.current
-					// The scroll markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms
-					.slice(0, hues.current.length)
-					.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, termTokens)}`)
-					.join(", ")
-				) as NodeListOf<HTMLElement>);
-			},
-			50, 500,
-		);
-		this.requestRefreshTermControls = requestCallFn(
-			() => {
-				for (const term of terms.current) {
-					updateTermStatus(term);
-				}
-			},
-			50, 500,
-		);
-		this.mutationUpdates = getMutationUpdates(this.getMutationUpdatesObserver(terms));
-		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
+		this.mutationUpdates = getMutationUpdates(this.getMutationUpdatesObserver());
 	}
 
-	readonly getCSS: EngineCSS = {
+	readonly getCSS = {
 		misc: () => "",
 		termHighlights: () => {
 			return (`
@@ -191,33 +149,23 @@ ${HIGHLIGHT_TAG} {
 
 	readonly getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
-	readonly requestRefreshIndicators: Generator;
-	readonly requestRefreshTermControls: Generator;
-
-	countMatches () {
-		this.requestRefreshIndicators.next();
-		this.requestRefreshTermControls.next();
-	}
-
 	startHighlighting (
 		terms: ReadonlyArray<MatchTerm>,
 		termsToHighlight: ReadonlyArray<MatchTerm>,
 		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) {
-		// Clean up.
 		this.mutationUpdates.disconnect();
 		this.undoHighlights(termsToPurge);
-		// MAIN
-		this.generateTermHighlightsUnderNode(termsToHighlight.length ? termsToHighlight : terms, document.body);
+		this.terms.assign(terms);
+		this.hues.assign(hues);
+		this.generateTermHighlightsUnderNode(termsToHighlight, document.body);
 		this.mutationUpdates.observe();
-		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.undoHighlights();
-		this.specialHighlighter.endHighlighting();
 	}
 
 	/**
@@ -227,8 +175,9 @@ ${HIGHLIGHT_TAG} {
 	 * @param root A root node under which to remove highlights.
 	 */
 	undoHighlights (terms?: ReadonlyArray<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
-		if (terms && !terms.length)
+		if (terms && !terms.length) {
 			return; // Optimization for removing 0 terms
+		}
 		const classNames = terms?.map(term => getTermClass(term, this.termTokens));
 		const highlights = Array.from(root.querySelectorAll(
 			classNames ? `${HIGHLIGHT_TAG}.${classNames.join(`, ${HIGHLIGHT_TAG}.`)}` : HIGHLIGHT_TAG
@@ -245,7 +194,23 @@ ${HIGHLIGHT_TAG} {
 		}
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER, root);
 		elementsPurgeClass(EleClass.FOCUS, root);
-		this.termWalker.cleanup();
+	}
+
+	getHighlightedElements (): Iterable<HTMLElement> {
+		return this.getHighlightedElementsForTerms(this.terms.current);
+	}
+
+	getHighlightedElementsForTerms (terms: ReadonlyArray<MatchTerm>): Iterable<HTMLElement> {
+		return terms.length === 0 ? [] : document.body.querySelectorAll(terms
+			.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, this.termTokens)}`)
+			.join(", ")
+		);
+	}
+
+	readonly highlightingUpdatedListeners = new Set<Generator>();
+
+	registerHighlightingUpdatedListener (listener: Generator) {
+		this.highlightingUpdatedListeners.add(listener);
 	}
 
 	/**
@@ -437,19 +402,13 @@ ${HIGHLIGHT_TAG} {
 					highlightInBlock(terms, nodeItems);
 				}
 			}
-			this.countMatches();
+			for (const listener of this.highlightingUpdatedListeners) {
+				listener.next();
+			}
 		};
 	})();
 
-	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
-		const focus = this.termWalker.step(reverse, stepNotJump, term, this.termTokens);
-		if (focus) {
-			this.termMarkers.raise(term, this.termTokens, getContainerBlock(focus));
-		}
-		return focus;
-	}
-
-	getMutationUpdatesObserver (terms: RContainer<ReadonlyArray<MatchTerm>>) {
+	getMutationUpdatesObserver () {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		const elements: Set<HTMLElement> = new Set();
 		let periodDateLast = 0;
@@ -460,7 +419,7 @@ ${HIGHLIGHT_TAG} {
 			highlightIsPending = false;
 			for (const element of elements) {
 				this.undoHighlights(undefined, element);
-				this.generateTermHighlightsUnderNode(terms.current, element);
+				this.generateTermHighlightsUnderNode(this.terms.current, element);
 			}
 			periodHighlightCount += elements.size;
 			elements.clear();
@@ -514,6 +473,9 @@ ${HIGHLIGHT_TAG} {
 				highlightElementsThrottled();
 			}
 			//mutationUpdates.observe();
+			for (const listener of this.highlightingUpdatedListeners) {
+				listener.next();
+			}
 		});
 	}
 }

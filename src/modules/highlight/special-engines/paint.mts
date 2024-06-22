@@ -2,7 +2,7 @@ import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engi
 import type { BoxInfoBoxes, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
 import { type BaseFlow, type BaseBoxInfo, matchInText } from "/dist/modules/highlight/matcher.mjs";
-import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getElementTagsSet } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false, BoxInfoBoxes>

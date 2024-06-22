@@ -1,27 +1,17 @@
-import type { AbstractEngine, EngineCSS } from "/dist/modules/highlight/engine.mjs";
+import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import { PaintSpecialEngine } from "/dist/modules/highlight/special-engines/paint.mjs";
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
+import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
 import type * as Cache from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
-import type { AbstractTermCounter } from "/dist/modules/highlight/models/term-counter.mjs";
-import type { AbstractTermWalker } from "/dist/modules/highlight/models/term-walker.mjs";
-import type { AbstractTermMarker } from "/dist/modules/highlight/models/term-marker.mjs";
-import { TermCounter } from "/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs";
-import { TermWalker } from "/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs";
-import { TermMarker } from "/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { getMutationUpdates, getStyleUpdates } from "/dist/modules/highlight/page-updates.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
-import type { MatchTerm, TermPatterns, TermTokens } from "/dist/modules/match-term.mjs";
-import { requestCallFn } from "/dist/modules/call-requester.mjs";
-import type { UpdateTermStatus } from "/dist/content.mjs";
-import { EleID, type RContainer, type WContainer, createContainer } from "/dist/modules/common.mjs";
+import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
+import { EleID, createContainer } from "/dist/modules/common.mjs";
 
 type TreeCache = {
 	id: string
@@ -52,15 +42,12 @@ type StyleRuleInfo = {
 	element: CachingElement<true>
 }
 
-class PaintEngine implements AbstractEngine {
-	readonly termOccurrences: AbstractTermCounter = new TermCounter();
-	readonly termWalker: AbstractTermWalker = new TermWalker();
-	readonly termMarkers: AbstractTermMarker = new TermMarker();
+class PaintEngine implements AbstractTreeCacheEngine {
+	readonly class = "PAINT";
+	readonly model = "tree-cache";
 
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
-
-	readonly updateTermStatus: UpdateTermStatus;
 
 	readonly method: AbstractMethod;
 
@@ -73,10 +60,8 @@ class PaintEngine implements AbstractEngine {
 	readonly visibilityObserver: IntersectionObserver;
 	readonly styleUpdates: ReturnType<typeof getStyleUpdates>;
 
-	readonly specialHighlighter: AbstractSpecialEngine;
-
-	readonly terms: WContainer<ReadonlyArray<MatchTerm>>;
-	readonly hues: WContainer<ReadonlyArray<number>>;
+	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
+	readonly hues = createContainer<ReadonlyArray<number>>([]);
 
 	/**
 	 * 
@@ -84,44 +69,25 @@ class PaintEngine implements AbstractEngine {
 	 * @param methodPreference 
 	 */
 	constructor (
-		updateTermStatus: UpdateTermStatus,
 		method: AbstractMethod,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
-		const terms = createContainer<ReadonlyArray<MatchTerm>>([]);
-		const hues = createContainer<ReadonlyArray<number>>([]);
-		this.terms = terms;
-		this.hues = hues;
-		this.updateTermStatus = updateTermStatus;
 		this.method = method;
+		this.getHighlightedElements = method.getHighlightedElements;
 		this.getCSS = method.getCSS;
-		this.requestRefreshIndicators = requestCallFn(
-			() => {
-				this.termMarkers.insert(terms.current, this.termTokens, hues.current, this.method.getHighlightedElements());
-			},
-			200, 2000,
-		);
-		this.requestRefreshTermControls = requestCallFn(
-			() => {
-				for (const term of terms.current) {
-					updateTermStatus(term);
-				}
-			},
-			50, 500,
-		);
 		this.flowMonitor = new FlowMonitor<BoxInfoBoxes, TreeCache>(
-			terms,
+			this.terms,
 			termPatterns,
+			this.highlightingUpdatedListeners,
 			{
 				createElementCache: element => ({
 					id: "",
 					isHighlightable: this.method.isElementHighlightable(element),
 					flows: [],
 				}),
-				onHighlightingUpdated: () => this.countMatches(),
 				onNewHighlightedAncestor: ancestor => {
 					const ancestorHighlightable = this.method.findHighlightableAncestor(ancestor) as CachingElement<true>;
 					ancestorHighlightable[CACHE] ??= {
@@ -142,7 +108,7 @@ class PaintEngine implements AbstractEngine {
 			},
 		);
 		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);
-		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers(terms, hues);
+		const { shiftObserver, visibilityObserver } = this.getShiftAndVisibilityObservers();
 		this.shiftObserver = shiftObserver;
 		this.visibilityObserver = visibilityObserver;
 		this.styleUpdates = getStyleUpdates(this.elementsVisible, this.shiftObserver, this.visibilityObserver);
@@ -152,20 +118,11 @@ class PaintEngine implements AbstractEngine {
 				yield (i++).toString();
 			}
 		})();
-		this.specialHighlighter = new PaintSpecialEngine(termTokens, termPatterns);
 	}
 
 	readonly getCSS: EngineCSS;
 
 	readonly getTermBackgroundStyle = TermCSS.getHorizontalStyle;
-
-	readonly requestRefreshIndicators: Generator;
-	readonly requestRefreshTermControls: Generator;
-
-	countMatches () {
-		this.requestRefreshIndicators.next();
-		this.requestRefreshTermControls.next();
-	}
 
 	startHighlighting (
 		terms: ReadonlyArray<MatchTerm>,
@@ -186,24 +143,25 @@ class PaintEngine implements AbstractEngine {
 				Array.from(this.elementsVisible).map(element => this.method.findHighlightableAncestor(element))
 			)).flatMap(ancestor => this.getStyleRules(ancestor, false, terms, hues))
 		);
-		this.specialHighlighter.startHighlighting(terms, hues);
 	}
 
 	endHighlighting () {
 		this.mutationUpdates.disconnect();
 		this.styleUpdates.disconnectAll();
-		this.undoHighlights();
+		this.flowMonitor.removeBoxesInfo();
 		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
 		for (const element of document.body.querySelectorAll("[markmysearch-h_id]")) {
 			element.removeAttribute("markmysearch-h_id");
 		}
 		this.method.endHighlighting();
-		this.specialHighlighter.endHighlighting();
-		this.termWalker.cleanup();
 	}
 
-	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
-		this.flowMonitor.removeBoxesInfo(terms);
+	readonly getHighlightedElements: () => Iterable<HTMLElement>;
+
+	readonly highlightingUpdatedListeners = new Set<Generator>();
+
+	registerHighlightingUpdatedListener (listener: Generator) {
+		this.highlightingUpdatedListeners.add(listener);
 	}
 
 	getStyleRules (
@@ -274,18 +232,7 @@ class PaintEngine implements AbstractEngine {
 		}
 	}
 
-	stepToNextOccurrence (reverse: boolean, stepNotJump: boolean, term: MatchTerm | null): HTMLElement | null {
-		const focus = this.termWalker.step(reverse, stepNotJump, term, this.termTokens);
-		if (focus) {
-			this.termMarkers.raise(term, this.termTokens, getContainerBlock(focus));
-		}
-		return focus;
-	}
-
-	getShiftAndVisibilityObservers (
-		terms: RContainer<ReadonlyArray<MatchTerm>>,
-		hues: RContainer<ReadonlyArray<number>>,
-	) {
+	getShiftAndVisibilityObservers () {
 		const visibilityObserver = new IntersectionObserver(entries => {
 			let styleRules: ReadonlyArray<StyleRuleInfo> = [];
 			for (const entry of entries as Array<{ isIntersecting: boolean, target: CachingElement }>) {
@@ -297,8 +244,8 @@ class PaintEngine implements AbstractEngine {
 						styleRules = styleRules.concat(this.getStyleRules(
 							this.method.findHighlightableAncestor(entry.target),
 							false,
-							terms.current,
-							hues.current,
+							this.terms.current,
+							this.hues.current,
 						));
 					}
 				} else {
@@ -319,8 +266,8 @@ class PaintEngine implements AbstractEngine {
 				this.getStyleRules(
 					this.method.findHighlightableAncestor(entry.target as CachingElement),
 					true,
-					terms.current,
-					hues.current,
+					this.terms.current,
+					this.hues.current,
 				)
 			);
 			if (styleRules.length > 0) {

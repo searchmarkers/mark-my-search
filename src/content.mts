@@ -5,12 +5,11 @@ import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID } from "/dist/modules/common.mjs";
-import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import * as PaintMethodLoader from "/dist/modules/highlight/engines/paint/method-loader.mjs";
+import { type AbstractEngineManager, EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
 import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
 import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
 import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
-import { assert, compatibility, itemsMatch } from "/dist/modules/common.mjs";
+import { assert, itemsMatch } from "/dist/modules/common.mjs";
 
 type GetToolbar = (<CreateIfNull extends boolean>
 	(createIfNull: CreateIfNull) => CreateIfNull extends true ? AbstractToolbar : (AbstractToolbar | null)
@@ -33,6 +32,7 @@ interface ControlsInfo {
 	matchMode: Readonly<MatchMode>
 }
 
+// TODO put in toolbar
 /**
  * Safely removes focus from the toolbar, returning it to the current document.
  * @returns `true` if focus was changed (i.e. it was in the toolbar), `false` otherwise.
@@ -79,28 +79,16 @@ const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm>
 	return termsMut;
 };
 
-/**
- * Inserts the toolbar with term controls and begins continuously highlighting terms in the document.
- * All controls necessary are first removed.
- * Highlighting refreshes may be whole or partial depending on which terms changed.
- * TODO document params
- */
-const refreshTermControlsAndStartHighlighting = (
+const updateToolbar = (
 	termsOld: ReadonlyArray<MatchTerm>,
 	terms: ReadonlyArray<MatchTerm>,
 	update: {
 		term: MatchTerm | null
 		termIndex: number
 	} | null,
-	termTokens: TermTokens,
-	controlsInfo: ControlsInfo,
 	toolbar: AbstractToolbar,
-	highlighter: Highlighter,
 	commands: BrowserCommandsReadonly,
-	hues: ReadonlyArray<number>,
 ) => {
-	// TODO this function is better! but not good enough
-	toolbar.updateControlVisibility("replaceTerms");
 	if (update && update.term) {
 		if (update.termIndex === termsOld.length) {
 			toolbar.appendTerm(update.term, commands);
@@ -109,35 +97,31 @@ const refreshTermControlsAndStartHighlighting = (
 		}
 	} else if (update && !update.term) {
 		toolbar.removeTerm(update.termIndex);
-		highlighter.current?.undoHighlights([ termsOld[update.termIndex] ]);
-		Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-		toolbar.insertIntoDocument();
-		highlighter.current?.countMatches(); // TODO this method should be handled by the engine, and not exposed
-		return;
 	} else if (!update) {
-		highlighter.current?.undoHighlights();
 		toolbar.replaceTerms(terms, commands);
 	}
-	Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+	toolbar.updateControlVisibility("replaceTerms");
 	toolbar.insertIntoDocument();
-	if (!controlsInfo.pageModifyEnabled) {
-		return;
-	}
+};
+
+const startHighlighting = (
+	termsOld: ReadonlyArray<MatchTerm>,
+	terms: ReadonlyArray<MatchTerm>,
+	highlighter: AbstractEngineManager,
+	hues: ReadonlyArray<number>,
+) => {
 	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term =>
 		!termsOld.find(termOld => termEquals(term, termOld))
 	);
 	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(term =>
 		!terms.find(termOld => termEquals(term, termOld))
 	);
-	// Give the interface a chance to redraw before performing [expensive] highlighting.
-	setTimeout(() => {
-		highlighter.current?.startHighlighting(
-			terms,
-			termsToHighlight,
-			termsToPurge,
-			hues,
-		);
-	});
+	highlighter.startHighlighting(
+		terms,
+		termsToHighlight,
+		termsToPurge,
+		hues,
+	);
 };
 
 /**
@@ -184,7 +168,7 @@ const respondToCommand_factory = (
 	termSetter: TermSetter,
 	controlsInfo: ControlsInfo,
 	getToolbar: GetToolbar,
-	highlighter: Highlighter,
+	highlighter: AbstractEngineManager,
 ) => {
 	let selectModeFocus = false;
 	let focusedIdx: number | null = null;
@@ -209,12 +193,12 @@ const respondToCommand_factory = (
 			if (focusReturnToDocument()) {
 				break;
 			}
-			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, true, null);
+			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, true, null);
 			break;
 		} case "advanceGlobal": {
 			focusReturnToDocument();
 			const term = (selectModeFocus && focusedIdx !== null) ? terms[focusedIdx] : null;
-			highlighter.current?.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
+			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
 			getToolbar(false)?.focusTermInput(commandInfo.termIdx ?? null);
@@ -225,7 +209,7 @@ const respondToCommand_factory = (
 			}
 			getToolbar(false)?.indicateTerm(terms[focusedIdx]);
 			if (!selectModeFocus) {
-				highlighter.current?.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
+				highlighter.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
 			break;
 		}}
@@ -281,8 +265,8 @@ interface TermAppender {
 			diacritics: false,
 		},
 	};
-	const highlighter: Highlighter = {};
 	const updateTermStatus = (term: MatchTerm) => getToolbar(false)?.updateTermStatus(term);
+	const highlighter: AbstractEngineManager = new EngineManager(updateTermStatus, termTokens, termPatterns);
 	const termSetterInternal: TermSetter = {
 		setTerms: termsNew => {
 			if (itemsMatch(terms, termsNew, termEquals)) {
@@ -290,17 +274,12 @@ interface TermAppender {
 			}
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = termsNew;
-			refreshTermControlsAndStartHighlighting(
-				termsOld,
-				[ ...terms ],
-				null,
-				termTokens,
-				controlsInfo,
-				getToolbar(true),
-				highlighter,
-				commands,
-				hues,
-			);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			updateToolbar(termsOld, terms, null, getToolbar(true), commands);
+			// Give the interface a chance to redraw before performing highlighting.
+			setTimeout(() => {
+				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
+			});
 		},
 		replaceTerm: (term, termIndex) => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
@@ -311,32 +290,22 @@ interface TermAppender {
 			} else {
 				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
-			refreshTermControlsAndStartHighlighting(
-				termsOld,
-				terms,
-				{ term, termIndex },
-				termTokens,
-				controlsInfo,
-				getToolbar(true),
-				highlighter,
-				commands,
-				hues,
-			);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(true), commands);
+			// Give the interface a chance to redraw before performing highlighting.
+			setTimeout(() => {
+				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
+			});
 		},
 		appendTerm: term => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = terms.concat(term);
-			refreshTermControlsAndStartHighlighting(
-				termsOld,
-				terms,
-				{ term, termIndex: termsOld.length },
-				termTokens,
-				controlsInfo,
-				getToolbar(true),
-				highlighter,
-				commands,
-				hues,
-			);
+			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(true), commands);
+			// Give the interface a chance to redraw before performing highlighting.
+			setTimeout(() => {
+				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
+			});
 		},
 	};
 	const termSetter: TermSetter = {
@@ -399,49 +368,18 @@ interface TermAppender {
 		}
 		styleElementsInsert();
 		if (message.highlighter !== undefined) {
-			highlighter.current?.endHighlighting();
-			if (message.highlighter.engine === "HIGHLIGHT" && compatibility.highlight.highlightEngine) {
-				const enginePromise = import("/dist/modules/highlight/engines/highlight.mjs");
-				queuingPromise = enginePromise;
-				const { HighlightEngine } = await enginePromise;
-				highlighter.current = new HighlightEngine(
-					updateTermStatus,
-					termTokens,
-					termPatterns,
-				);
-			} else if (message.highlighter.engine === "PAINT" && compatibility.highlight.paintEngine) {
-				const enginePromise = import("/dist/modules/highlight/engines/paint.mjs");
-				const methodPromise = PaintMethodLoader.loadMethod(
-					message.highlighter.paintEngine.method,
-					termTokens,
-				);
-				queuingPromise = new Promise<void>(resolve =>
-					enginePromise.then(() => methodPromise.then(() => resolve()))
-				);
-				const { PaintEngine } = await enginePromise;
-				highlighter.current = new PaintEngine(
-					updateTermStatus,
-					await methodPromise,
-					termTokens,
-					termPatterns,
-				);
-			} else {
-				const enginePromise = import("/dist/modules/highlight/engines/element.mjs");
-				queuingPromise = enginePromise;
-				const { ElementEngine } = await enginePromise;
-				highlighter.current = new ElementEngine(
-					updateTermStatus,
-					termTokens,
-					termPatterns,
-				);
-			}
+			highlighter.removeEngine();
+			highlighter.signalPaintEngineMethod(message.highlighter.paintEngine.method);
+			queuingPromise = highlighter.setEngine(message.highlighter.engine);
+			await queuingPromise;
 			queuingPromise = undefined;
+			highlighter.applyEngine();
 		}
 		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 			controlsInfo.pageModifyEnabled = message.enablePageModify;
 			getToolbar(false)?.updateVisibility();
 			if (!controlsInfo.pageModifyEnabled) {
-				highlighter.current?.endHighlighting();
+				highlighter.removeEngine();
 			}
 		}
 		if (message.extensionCommands) {
@@ -473,12 +411,13 @@ interface TermAppender {
 		}
 		if (message.deactivate) {
 			//removeTermsAndDeactivate();
-			highlighter.current?.endHighlighting();
+			highlighter.endHighlighting();
 			terms = [];
 			getToolbar(false)?.remove();
 			styleElementsCleanup();
 		}
 		if (message.terms) {
+			// TODO make sure same MatchTerm objects are used for terms which are equivalent
 			termSetterInternal.setTerms(message.terms);
 		}
 		if (message.commands) {

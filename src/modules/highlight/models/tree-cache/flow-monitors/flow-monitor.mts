@@ -20,7 +20,7 @@ implements AbstractFlowMonitor {
 
 	readonly createElementCache: (element: Element) => TC;
 
-	readonly onHighlightingUpdated: () => void;
+	readonly highlightingUpdatedListeners: Set<Generator>;
 
 	readonly onNewHighlightedAncestor?: (ancestor: BCachingHTMLElement<TC, true>) => void;
 
@@ -30,17 +30,17 @@ implements AbstractFlowMonitor {
 	constructor (
 		terms: RContainer<ReadonlyArray<MatchTerm>>,
 		termPatterns: TermPatterns,
+		highlightingUpdatedListeners: Set<Generator>,
 		functions: {
 			createElementCache: (element: Element) => TC,
-			onHighlightingUpdated: () => void,
 			onNewHighlightedAncestor?: (ancestor: BCachingHTMLElement<TC, true>) => void,
 			onBoxesInfoPopulated?: (element: BCachingHTMLElement<TC, true>) => void,
 			onBoxesInfoRemoved?: (element: BCachingHTMLElement<TC, true>) => void,
 		},
 	) {
 		this.mutationObserver = this.getMutationUpdatesObserver(terms, termPatterns);
+		this.highlightingUpdatedListeners = highlightingUpdatedListeners;
 		this.createElementCache = functions.createElementCache;
-		this.onHighlightingUpdated = functions.onHighlightingUpdated;
 		this.onNewHighlightedAncestor = functions.onNewHighlightedAncestor;
 		this.onBoxesInfoPopulated = functions.onBoxesInfoPopulated;
 		this.onBoxesInfoRemoved = functions.onBoxesInfoRemoved;
@@ -163,7 +163,9 @@ implements AbstractFlowMonitor {
 		) {
 			this.flowCacheWithBoxesInfo(terms, termPatterns, textFlows[i]);
 		}
-		this.onHighlightingUpdated();
+		for (const listener of this.highlightingUpdatedListeners) {
+			listener.next();
+		}
 	}
 
 	/**
@@ -220,6 +222,9 @@ implements AbstractFlowMonitor {
 			while (element = walker.nextNode() as BCachingElement<TC, true>) {
 				delete (element as UnknownCachingHTMLElement)[CACHE];
 			}
+		}
+		for (const listener of this.highlightingUpdatedListeners) {
+			listener.next();
 		}
 	}
 
