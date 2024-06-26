@@ -17,7 +17,7 @@ enum ConfigContext {
 type ResearchInstances = Record<number, ResearchInstance>
 type SearchSites = Record<string, SearchSite>
 
-type BankValues = {
+interface BankValues {
 	researchInstances: ResearchInstances
 	engines: SearchSites
 }
@@ -90,7 +90,7 @@ export class StoreListInterface<T> {
 	}
 }
 
-type ConfigBarControlsShown<Context = ConfigContext.INTERFACE> = {
+interface ConfigBarControlsShown<Context = ConfigContext.INTERFACE> {
 	toggleBarCollapsed: StoreImmediate<boolean, Context>
 	disableTabResearch: StoreImmediate<boolean, Context>
 	performSearch: StoreImmediate<boolean, Context>
@@ -98,7 +98,7 @@ type ConfigBarControlsShown<Context = ConfigContext.INTERFACE> = {
 	appendTerm: StoreImmediate<boolean, Context>
 	replaceTerms: StoreImmediate<boolean, Context>
 }
-type ConfigBarLook<Context = ConfigContext.INTERFACE> = {
+interface ConfigBarLook<Context = ConfigContext.INTERFACE> {
 	showEditIcon: StoreImmediate<boolean, Context>
 	showRevealIcon: StoreImmediate<boolean, Context>
 	fontSize: StoreImmediate<string, Context>
@@ -106,20 +106,20 @@ type ConfigBarLook<Context = ConfigContext.INTERFACE> = {
 	opacityTerm: StoreImmediate<number, Context>
 	borderRadius: StoreImmediate<string, Context>
 }
-type ConfigHighlightLook<Context = ConfigContext.INTERFACE> = {
+interface ConfigHighlightLook<Context = ConfigContext.INTERFACE> {
 	hues: StoreImmediate<Array<number>, Context>
 }
-type ConfigHighlighter<Context = ConfigContext.INTERFACE> = {
+interface ConfigHighlighter<Context = ConfigContext.INTERFACE> {
 	engine: StoreImmediate<Engine, Context>
 	paintEngine: StoreImmediate<PaintEngineConfig, Context>
 }
-type ConfigURLFilters<Context = ConfigContext.INTERFACE> = {
+interface ConfigURLFilters<Context = ConfigContext.INTERFACE> {
 	noPageModify: StoreImmediate<URLFilter, Context>
 	noHighlight: StoreImmediate<URLFilter, Context>
 	nonSearch: StoreImmediate<URLFilter, Context>
 }
 
-type ConfigValues<Context = ConfigContext.INTERFACE> = {
+interface ConfigValues<Context = ConfigContext.INTERFACE> {
 	theme: {
 		edition: StoreImmediate<ThemeEdition, Context>
 		variant: StoreImmediate<ThemeVariant, Context>
@@ -168,7 +168,7 @@ type URLFilter = Array<{
 	pathname: string,
 }>
 
-type TermList = {
+interface TermList {
 	name: string
 	terms: ReadonlyArray<MatchTerm>
 	urlFilter: URLFilter
@@ -479,6 +479,7 @@ export abstract class Bank {
 chrome.storage.session.onChanged.addListener(changes => {
 	// TODO check that the change was not initiated from the same script?
 	for (const [ key, value ] of (Object.entries as Entries)(changes as Record<BankKey, chrome.storage.StorageChange>)) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		bankCache[key] = value.newValue;
 	}
 });
@@ -510,6 +511,7 @@ export abstract class Config {
 		const storageAreaValues: Record<StorageAreaName, Record<string, unknown>> = { local: {}, sync: {} };
 		for (const [ configKey, group ] of Object.entries(config)) {
 			for (const [ groupKey, value ] of Object.entries(group)) {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				const storageValues = valueSchema.sync ? storageAreaValues.sync : storageAreaValues.local;
 				const key = configKey + "." + groupKey;
@@ -542,6 +544,7 @@ export abstract class Config {
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
 			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				const storageKeys = valueSchema.sync ? storageAreaKeys.sync : storageAreaKeys.local;
 				storageKeys.push(configKey + "." + groupKey);
@@ -563,6 +566,7 @@ export abstract class Config {
 			for (const [ configKey, groupInfo ] of keyObjectEntries) {
 				const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 				for (const groupKey of groupKeys) {
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 					storageAreaKeys[valueSchema.sync ? "sync" : "local"].push(configKey + "." + groupKey);
 				}
@@ -583,6 +587,7 @@ export abstract class Config {
 					pendingCount++;
 					(config[configKey] as unknown) ??= {} as StoreGroup;
 					const key = configKey + "." + groupKey;
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 					const value = (await (valueSchema.sync ? storageAreaPromises.sync : storageAreaPromises.local))[key];
 					switch (valueSchema.type) {
@@ -625,6 +630,7 @@ export abstract class Config {
 			(config[configKey] as unknown) = {} as StoreGroup;
 			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				switch (valueSchema.type) {
 				case StoreType.IMMEDIATE: {
@@ -646,6 +652,7 @@ export abstract class Config {
 			(configTypes[configKey] as unknown) = {} as StoreGroup;
 			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				configTypes[configKey][groupKey] = valueSchema.type;
 			}
@@ -703,6 +710,7 @@ const migrations: Record<number, Record<number, (storage: StorageObject, areaNam
 			} case "sync": {
 				if (old.highlightMethod && typeof old.highlightMethod === "object") {
 					config.highlightLook ??= {};
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					config.highlightLook.hues = old.highlightMethod["hues"];
 					config.highlighter ??= {};
 					config.highlighter.engine = old.highlightMethod["paintReplaceByClassic"] !== false ? "ELEMENT" : "PAINT";
@@ -716,9 +724,11 @@ const migrations: Record<number, Record<number, (storage: StorageObject, areaNam
 				if (old.autoFindOptions && typeof old.autoFindOptions === "object") {
 					config.autoFindOptions ??= {};
 					const searchParams = Config.getDefault({ autoFindOptions: [ "searchParams" ] }).autoFindOptions.searchParams;
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 					searchParams.setList(old.autoFindOptions["searchParams"] ?? []);
 					config.autoFindOptions.searchParams = searchParams;
 					const stoplist = Config.getDefault({ autoFindOptions: [ "stoplist" ] }).autoFindOptions.stoplist;
+					// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 					stoplist.setList(old.autoFindOptions["stoplist"] ?? []);
 					config.autoFindOptions.stoplist = stoplist;
 				}
@@ -791,6 +801,7 @@ const storageInitializeArea = async (areaName: StorageAreaName) => {
 	const storageArea: chrome.storage.StorageArea = chrome.storage[areaName];
 	const version1Key = KEYS.reservedFor[areaName].schemaVersion1;
 	const storageSpecial = await storageArea.get([ "schemaVersion", KEYS.special.schemaVersion ]);
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 	const versionValue = storageSpecial[KEYS.special.schemaVersion] ?? (storageSpecial[version1Key] ? 1 : undefined);
 	const schemaVersion = (typeof versionValue === "number") ? versionValue : 0;
 	if (schemaVersion === SCHEMA_VERSION) {

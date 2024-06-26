@@ -90,7 +90,7 @@ const generatePattern = (term: MatchTerm): RegExp => {
 };
 
 class TermTokens {
-	readonly #termTokens: WeakMap<MatchTerm, string> = new WeakMap();
+	readonly #termTokens = new WeakMap<MatchTerm, string>();
 	readonly #tokenBaseCounts: Record<string, number> = {};
 
 	get (term: MatchTerm): string {
@@ -105,7 +105,7 @@ class TermTokens {
 }
 
 class TermPatterns {
-	readonly #termPatterns: WeakMap<MatchTerm, RegExp> = new WeakMap();
+	readonly #termPatterns = new WeakMap<MatchTerm, RegExp>();
 
 	get (term: MatchTerm): RegExp {
 		const pattern = this.#termPatterns.get(term);

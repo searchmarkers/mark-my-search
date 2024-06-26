@@ -3,7 +3,7 @@ import type { HighlightTagName } from "/dist/modules/highlight/models/tree-edit/
 
 const HIGHLIGHT_TAG: HighlightTagName = "mms-h";
 
-type HighlightTags = {
+interface HighlightTags {
 	reject: ReadonlySet<string>,
 	flow: ReadonlySet<string>,
 }

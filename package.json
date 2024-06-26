@@ -1,6 +1,7 @@
 {
 	"name": "mark-my-search",
 	"displayName": "Mark My Search",
+	"type": "module",
 	"scripts": {
 		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
 		"scripts-build": "rm --recursive dist; tsc --project tsconfig.json",
@@ -24,12 +25,12 @@
 	},
 	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
 	"devDependencies": {
-		"inkscape": "3.1.1",
-		"@types/firefox-webext-browser": "120.0.0",
 		"@types/chrome": "0.0.253",
-		"@typescript-eslint/eslint-plugin": "6.13.1",
-		"@typescript-eslint/parser": "6.13.1",
-		"eslint": "8.54.0",
+		"@types/firefox-webext-browser": "120.0.0",
+		"typescript-eslint": "8.0.0-alpha.30",
+		"eslint": "9.5.0",
+		"globals": "^15.6.0",
+		"inkscape": "3.1.1",
 		"typescript": "5.3.2"
 	}
 }

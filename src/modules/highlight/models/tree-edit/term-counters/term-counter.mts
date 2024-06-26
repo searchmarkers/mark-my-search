@@ -9,9 +9,11 @@ class TermCounter implements AbstractTermCounter {
 		this.#termTokens = termTokens;
 	}
 
-	readonly countBetter = this.countFaster;
+	countBetter (term: MatchTerm): number {
+		return this.countFaster(term);
+	}
 
-	countFaster (term: MatchTerm) {
+	countFaster (term: MatchTerm): number {
 		// This is an unstable heuristic: the more highlight elements are split, the more it overpredicts.
 		const occurrences = document.body.getElementsByClassName(getTermClass(term, this.#termTokens));
 		//const matches = occurrences.map(occurrence => occurrence.textContent).join("").match(term.pattern);
@@ -19,7 +21,7 @@ class TermCounter implements AbstractTermCounter {
 		return occurrences.length;
 	}
 
-	exists (term: MatchTerm) {
+	exists (term: MatchTerm): boolean {
 		return document.body.getElementsByClassName(getTermClass(term, this.#termTokens)).length > 0;
 	}
 }

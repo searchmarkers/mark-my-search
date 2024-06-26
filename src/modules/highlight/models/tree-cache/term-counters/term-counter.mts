@@ -7,7 +7,11 @@ import type { MatchTerm } from "/dist/modules/match-term.mjs";
 type Flow = BaseFlow<false>
 
 class TermCounter implements AbstractTermCounter {
-	countBetter (term: MatchTerm) {
+	countBetter (term: MatchTerm): number {
+		return this.countFaster(term);
+	}
+
+	countFaster (term: MatchTerm): number {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
 			highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 		);
@@ -26,9 +30,7 @@ class TermCounter implements AbstractTermCounter {
 		return count;
 	}
 
-	readonly countFaster = this.countBetter;
-
-	exists (term: MatchTerm) {
+	exists (term: MatchTerm): boolean {
 		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
 			highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 		);

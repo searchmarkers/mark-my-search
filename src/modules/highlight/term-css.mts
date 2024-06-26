@@ -12,9 +12,14 @@ const getDiagonalStyle = (colorA: string, colorB: string, cycle: number) => {
 const getHorizontalStyle = (colorA: string, colorB: string, cycle: number) => {
 	const isAboveStyleLevel = (level: number) => cycle >= level;
 	return isAboveStyleLevel(1)
-		? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2).fill("").map((v, i) =>
-			(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA) + `${Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100}%`
-		)})`
+		? `linear-gradient(${Array(Math.floor(cycle/2 + 1.5) * 2)
+			.fill("")
+			.map((v, i) => (
+				(Math.floor(i / 2) % 2 == cycle % 2 ? colorB : colorA)
+				+ (Math.floor((i + 1) / 2)/(Math.floor((cycle + 1) / 2) + 1) * 100) + "%"
+			))
+			.join(", ")
+		})`
 		: colorA;
 };
 

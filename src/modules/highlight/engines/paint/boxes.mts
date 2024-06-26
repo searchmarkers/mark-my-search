@@ -52,10 +52,10 @@ const elementPopulateBoxes = (
 		range.setEnd(boxInfo.node, boxInfo.end);
 		const textRects = range.getClientRects();
 		for (let i = 0; i < textRects.length; i++) {
-			const textRect = textRects.item(i) as DOMRect;
+			const textRect = textRects.item(i)!;
 			if (i !== 0
-				&& textRect.x === (textRects.item(i - 1) as DOMRect).x
-				&& textRect.y === (textRects.item(i - 1) as DOMRect).y
+				&& textRect.x === textRects.item(i - 1)!.x
+				&& textRect.y === textRects.item(i - 1)!.y
 			) {
 				continue;
 			}

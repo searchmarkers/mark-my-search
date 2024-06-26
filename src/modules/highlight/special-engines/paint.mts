@@ -24,9 +24,9 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	hues: ReadonlyArray<number> = [];
 	readonly styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
-	readonly elementsInfo: Map<Element, {
+	readonly elementsInfo = new Map<Element, {
 		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
-	}> = new Map();
+	}>();
 
 	constructor (termTokens: TermTokens, termPatterns: TermPatterns) {
 		this.termTokens = termTokens;
@@ -130,11 +130,10 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 
 	highlight (highlightCtx: HighlightContext, terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
 		const element = document.querySelector(contextCSS[highlightCtx]);
-		const value = (element as HTMLInputElement | null)?.value;
-		if (value === undefined) {
+		if (!(element instanceof HTMLInputElement)) {
 			return;
 		}
-		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(highlightCtx, terms, hues, value) });
+		this.styleUpdate({ [highlightCtx]: this.constructHighlightStyleRule(highlightCtx, terms, hues, element.value) });
 	}
 
 	unhighlight (highlightCtx: HighlightContext) {

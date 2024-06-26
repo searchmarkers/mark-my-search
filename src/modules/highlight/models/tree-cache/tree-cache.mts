@@ -1,6 +1,6 @@
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 
-type TreeCache<Flow extends BaseFlow<false>> = {
+interface TreeCache<Flow extends BaseFlow<false>> {
 	flows: Array<Flow>
 }
 

@@ -10,11 +10,9 @@ import { type BaseFlow, type BaseBoxInfo, matchInTextFlow } from "/dist/modules/
 import { MatchTerm, type TermPatterns } from "/dist/modules/match-term.mjs";
 import { type RContainer } from "/dist/modules/common.mjs";
 
-type Flow<BoxInfoExt extends BoxInfoExtension> = BaseFlow<true, BoxInfoExt>
+type Flow<BoxInfoExt> = BaseFlow<true, BoxInfoExt>
 
-type BoxInfoExtension = Record<string | never, unknown>
-
-class FlowMonitor<BoxInfoExt extends BoxInfoExtension, TC extends TreeCache<Flow<BoxInfoExt>>>
+class FlowMonitor<BoxInfoExt, TC extends TreeCache<Flow<BoxInfoExt>>>
 implements AbstractFlowMonitor {
 	readonly mutationObserver: MutationObserver;
 
@@ -50,7 +48,7 @@ implements AbstractFlowMonitor {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			// TODO optimise
-			const elementsAffected: Set<HTMLElement> = new Set();
+			const elementsAffected = new Set<HTMLElement>();
 			//const elementsAdded: Set<HTMLElement> = new Set();
 			for (const mutation of mutations) {
 				if (mutation.type === "characterData"
@@ -177,7 +175,7 @@ implements AbstractFlowMonitor {
 			return;
 		}
 		if (CACHE in ancestor) {
-			this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(ancestor);
+			if (this.onBoxesInfoRemoved) this.onBoxesInfoRemoved(ancestor);
 			delete (ancestor as UnknownCachingHTMLElement)[CACHE];
 		}
 		const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, element =>
@@ -187,7 +185,7 @@ implements AbstractFlowMonitor {
 		// eslint-disable-next-line no-cond-assign
 		while (element = walker.nextNode() as BCachingHTMLElement<TC>) {
 			if (CACHE in element) {
-				this.onBoxesInfoRemoved && this.onBoxesInfoRemoved(element);
+				if (this.onBoxesInfoRemoved) this.onBoxesInfoRemoved(element);
 				delete (element as UnknownCachingHTMLElement)[CACHE];
 			}
 		}
@@ -250,7 +248,7 @@ implements AbstractFlowMonitor {
 		};
 		const ancestor = getAncestorCommon(
 			textFlow[0].parentElement as BCachingHTMLElement<TC>,
-			textFlow.at(-1) as Text,
+			textFlow.at(-1)!,
 		) as BCachingHTMLElement<TC, true>; // This will be enforced in a moment by assigning the element's cache.
 		if (ancestor === null) {
 			console.warn("Unexpected condition: Common ancestor not found.", textFlow);
@@ -263,9 +261,9 @@ implements AbstractFlowMonitor {
 		};
 		ancestor[CACHE] ??= this.createElementCache(ancestor);
 		ancestor[CACHE].flows.push(flow);
-		this.onBoxesInfoPopulated && this.onBoxesInfoPopulated(ancestor);
+		if (this.onBoxesInfoPopulated) this.onBoxesInfoPopulated(ancestor);
 		if (flow.boxesInfo.length > 0) {
-			this.onNewHighlightedAncestor && this.onNewHighlightedAncestor(ancestor);
+			if (this.onNewHighlightedAncestor) this.onNewHighlightedAncestor(ancestor);
 		}
 	}
 }
@@ -314,7 +312,7 @@ const populateTextFlows = (node: Node, textFlows: Array<Array<Text>>, textFlow: 
 				}
 			}
 		}
-		node = node.nextSibling as ChildNode; // May be null (checked by loop condition).
+		node = node.nextSibling!; // May be null (checked by loop condition).
 	} while (node);
 };
 

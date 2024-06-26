@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 //import { isWindowInFrame } from "/dist/modules/page/build.mjs";
 import type { StoreImmediate, StoreList, ConfigValues, ConfigKey } from "/dist/modules/privileged/storage.mjs";
 import { StoreType, StoreListInterface, Config } from "/dist/modules/privileged/storage.mjs";
@@ -19,7 +20,7 @@ type OptionsInfo = Array<{
 	}}>
 }>
 
-type Preference = {
+interface Preference {
 	label: string
 	tooltip?: string
 	type: PreferenceType
@@ -62,7 +63,7 @@ enum PreferenceType {
 	ARRAY_NUMBER,
 }
 
-type OptionsConfig = {
+interface OptionsConfig {
 	height?: number
 	width?: number
 }
@@ -497,7 +498,7 @@ label[for]:hover
 					(value) => { valuesCurrent[optionKey][preferenceKey] = value; },
 					() => valuesCurrent[optionKey][preferenceKey],
 					Config.getDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
-					Config.getType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
+					Config.getType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StoreType,
 					() => config[optionKey][preferenceKey],
 				);
 			}

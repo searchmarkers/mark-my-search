@@ -30,7 +30,7 @@ class TermAppendControl implements TermAbstractControl {
 		this.matchMode = Object.assign({}, controlsInfo.matchMode);
 		let controlContainerTemp: HTMLElement | undefined = undefined;
 		const setUpControl = (container: HTMLElement) => {
-			const pad = container.querySelector(`.${EleClass.CONTROL_PAD}`) as HTMLElement;
+			const pad = container.querySelector(`.${EleClass.CONTROL_PAD}`)! as HTMLElement;
 			this.#input.appendTo(pad);
 			const revealButton = this.#optionList.createFullTriggerButton();
 			pad.appendChild(revealButton);
