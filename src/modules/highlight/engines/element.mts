@@ -16,7 +16,7 @@ const canHighlightElement = (rejectSelector: string, element: Element): boolean 
 	!element.closest(rejectSelector) && element.tagName !== HIGHLIGHT_TAG_UPPER
 ;
 
-type Properties = { [ELEMENT_JUST_HIGHLIGHTED]: boolean }
+interface Properties { [ELEMENT_JUST_HIGHLIGHTED]: boolean }
 
 type PropertiesElement<HasProperties = false> = BasePropertiesElement<Element, HasProperties>
 
@@ -78,9 +78,9 @@ class FlowNodeList {
 		let text = "";
 		let current = this.first;
 		do {
-			text += (current as FlowNodeListItem).value.textContent;
+			text += current!.value.textContent;
 		// eslint-disable-next-line no-cond-assign
-		} while (current = (current as FlowNodeListItem).next);
+		} while (current = current!.next);
 		return text;
 	}
 
@@ -90,11 +90,11 @@ class FlowNodeList {
 	}
 
 	*[Symbol.iterator] () {
-		let current = this.first;
+		let current = this.first!;
 		do {
-			yield current as FlowNodeListItem;
+			yield current;
 		// eslint-disable-next-line no-cond-assign
-		} while (current = (current as FlowNodeListItem).next);
+		} while (current = current.next!);
 	}
 }
 
@@ -242,7 +242,7 @@ ${HIGHLIGHT_TAG} {
 			const text = node.textContent ?? "";
 			if (text.length === 0) {
 				node.remove();
-				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as FlowNodeListItem;
+				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
 			const parent = node.parentElement as Element;
 			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
@@ -281,7 +281,7 @@ ${HIGHLIGHT_TAG} {
 			const text = textAfterNode.textContent ?? "";
 			if (text.length === 0) {
 				textAfterNode.parentElement?.removeChild(textAfterNode);
-				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first) as FlowNodeListItem;
+				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
 			const parent = textAfterNode.parentNode as Node;
 			const textEndNode = document.createTextNode(text.substring(start, end));
@@ -309,19 +309,18 @@ ${HIGHLIGHT_TAG} {
 			const textFlow = nodeItems.getText();
 			for (const term of terms) {
 				let nodeItemPrevious: FlowNodeListItem | null = null;
-				let nodeItem = nodeItems.first as FlowNodeListItem;
+				let nodeItem = nodeItems.first!;
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
 				for (const match of textFlow.matchAll(this.termPatterns.get(term))) {
-					let highlightStart = match.index as number;
+					let highlightStart = match.index!;
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next as FlowNodeListItem;
+						nodeItem = nodeItem.next!;
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
-					// eslint-disable-next-line no-constant-condition
 					while (true) {
 						// TODO join together nodes where possible
 						// TODO investigate why, under some circumstances, new empty highlight elements keep being produced
@@ -340,7 +339,7 @@ ${HIGHLIGHT_TAG} {
 							break;
 						}
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next as FlowNodeListItem;
+						nodeItem = nodeItem.next!;
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -386,7 +385,7 @@ ${HIGHLIGHT_TAG} {
 					nodeItems.push(node as Text);
 					break;
 				}}
-				node = node.nextSibling as ChildNode; // May be null (checked by loop condition)
+				node = node.nextSibling!; // May be null (checked by loop condition)
 			} while (node && visitSiblings);
 		};
 
@@ -410,7 +409,7 @@ ${HIGHLIGHT_TAG} {
 
 	getMutationUpdatesObserver () {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		const elements: Set<HTMLElement> = new Set();
+		const elements = new Set<HTMLElement>();
 		let periodDateLast = 0;
 		let periodHighlightCount = 0;
 		let throttling = false;
@@ -444,10 +443,10 @@ ${HIGHLIGHT_TAG} {
 		};
 		return new MutationObserver(mutations => {
 			//mutationUpdates.disconnect();
-			const elementsJustHighlighted: Set<HTMLElement> = new Set();
+			const elementsJustHighlighted = new Set<HTMLElement>();
 			for (const mutation of mutations) {
 				const element = mutation.target.nodeType === Node.TEXT_NODE
-					? mutation.target.parentElement as HTMLElement
+					? mutation.target.parentElement!
 					: mutation.target as HTMLElement;
 				if (element) {
 					if ((element as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED]) {

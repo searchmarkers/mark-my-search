@@ -30,7 +30,7 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 						.find(commandOther => commandOther.name === details?.command?.name)?.shortcut?.split("+") ?? []
 				).join("+") : undefined,
 			forInput: details?.command?.name && (chrome.commands["update"] || (globalThis["browser"] && browser.commands["update"]))
-				? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details?.command?.name as string)
+				? (input, getText, setFloatingText) => forInput(input, getText, setFloatingText, details!.command!.name!)
 				: undefined,
 		},
 		input: {

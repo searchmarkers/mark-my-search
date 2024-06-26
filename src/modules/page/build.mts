@@ -6,7 +6,7 @@ import * as EmailJS from "/lib/email.min.js";
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 namespace Page {
-	export type InteractionInfo = {
+	export interface InteractionInfo {
 		className: string
 		list?: {
 			getLength: () => Promise<number>
@@ -66,19 +66,19 @@ namespace Page {
 	}
 	// eslint-disable-next-line @typescript-eslint/no-namespace
 	export namespace Interaction {
-		export type ObjectRowInfo = {
+		export interface ObjectRowInfo {
 			className: string
 			key: string
 			label?: InteractionInfo["label"]
 			textbox?: InteractionInfo["textbox"]
 			input?: InteractionInfo["input"]
 		}
-		export type ObjectColumnInfo = {
+		export interface ObjectColumnInfo {
 			className: string
 			rows: Array<ObjectRowInfo>
 		}
 		export type SubmitterLoad = (setEnabled: (enabled: boolean) => void) => void
-		export type SubmitterInfo = {
+		export interface SubmitterInfo {
 			text: string
 			id?: string
 			onLoad?: SubmitterLoad
@@ -110,14 +110,14 @@ namespace Page {
 			containerIndex: number,
 			store: boolean,
 		) => void
-		export type InputInfo = {
+		export interface InputInfo {
 			autoId?: string
 			getType?: InputFetch
 			onLoad?: InputLoad
 			onChange?: InputToggle
 		}
 	}
-	export type SectionInfo = {
+	export interface SectionInfo {
 		className?: string
 		title?: {
 			text: string
@@ -125,7 +125,7 @@ namespace Page {
 		}
 		interactions: Array<InteractionInfo>
 	}
-	export type PanelInfo = {
+	export interface PanelInfo {
 		className: string
 		name: {
 			text: string
@@ -138,7 +138,7 @@ namespace Page {
 		| "textArray"
 		| "textNumber"
 	)
-	export type AlertInfo = {
+	export interface AlertInfo {
 		text: string
 		timeout?: number
 	}
@@ -149,7 +149,7 @@ namespace Page {
 	)
 }
 
-type FormField = {
+interface FormField {
 	question: string
 	response: string
 }
@@ -170,8 +170,8 @@ export const isWindowInFrame = () => (
 export const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const bank = await Bank.get([ "researchInstances" ]);
-	const phrases = bank.researchInstances[tab.id as number]
-		? bank.researchInstances[tab.id as number].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+	const phrases = bank.researchInstances[tab.id!]
+		? bank.researchInstances[tab.id!].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
 	const message = {
 		addon_version: Manifest.getVersion(),
@@ -211,7 +211,7 @@ export const forInput = (input: HTMLInputElement, getText: (() => Promise<string
 		input.value = "";
 	});
 	const useMacKeys = navigator["userAgentData"]
-		? navigator["userAgentData"].platform === "macOS"
+		? (navigator["userAgentData"] as { platform: string }).platform === "macOS"
 		: navigator.platform.toLowerCase().includes("mac");
 	const getKeyName = (keyLetter: string) => (Object.entries({
 		" ": "Space",
@@ -260,7 +260,7 @@ export const forInput = (input: HTMLInputElement, getText: (() => Promise<string
 	};
 	const modifiersUpdate = (event: KeyboardEvent) => {
 		Object.keys(modifiers).forEach(mod => {
-			modifiers[mod] = event[`${mod}Key`];
+			modifiers[mod] = event[`${mod}Key`] as boolean;
 		});
 	};
 	const inputUpdate = () => {
@@ -308,7 +308,7 @@ export const forInput = (input: HTMLInputElement, getText: (() => Promise<string
 			shortcut: input.value,
 		});
 		if (input.value) {
-			const container = input.parentElement?.parentElement?.parentElement as HTMLElement; // Hack
+			const container = input.parentElement!.parentElement!.parentElement!; // Hack
 			const warning = container.querySelector(".warning");
 			const text = "If a shortcut doesn't work, it might already be used by another add-on.";
 			if (!warning || warning.textContent !== text) {
@@ -396,7 +396,7 @@ export const pageInsertWarning = (container: HTMLElement, text: string) => {
 };
 
 export const pageFocusScrollContainer = () => {
-	(document.querySelector(".container.panel") as HTMLElement).focus();
+	(document.querySelector(".container.panel")! as HTMLElement).focus();
 };
 
 export const pageReload = () => {
@@ -720,10 +720,10 @@ textarea
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const focusActivePanel = () => {
-		const frame = document.querySelector("#frame") as HTMLElement;
+		const frame = document.querySelector("#frame")!;
 		const className = getPanelClassName(Array.from(frame.classList));
-		const inputFirst = document.querySelector(`.panel.${className} input`) as HTMLInputElement | null;
-		if (inputFirst) {
+		const inputFirst = document.querySelector(`.panel.${className} input`);
+		if (inputFirst instanceof HTMLInputElement) {
 			inputFirst.focus();
 			if (inputFirst.type === "text") {
 				inputFirst.select();
@@ -743,7 +743,7 @@ textarea
 			if (tabNext) {
 				return tabNext;
 			} if (cycle) {
-				return (tab.parentElement as HTMLElement)[toRight ? "firstElementChild" : "lastElementChild"] as HTMLElement;
+				return tab.parentElement![toRight ? "firstElementChild" : "lastElementChild"] as HTMLElement;
 			} else {
 				return null;
 			}
@@ -752,14 +752,14 @@ textarea
 	};
 
 	const handleTabs = () => {
-		const frame = document.getElementById("frame") as HTMLElement;
+		const frame = document.getElementById("frame")!;
 		document.addEventListener("keydown", event => {
 			if (event.ctrlKey || event.metaKey) {
 				return;
 			}
 			const shiftTab = (toRight: boolean, cycle: boolean) => {
 				const currentTab = document
-					.querySelector(`.container.tab .${getPanelClassName(Array.from(frame.classList))}`) as HTMLButtonElement;
+					.querySelector(`.container.tab .${getPanelClassName(Array.from(frame.classList))}`)! as HTMLButtonElement;
 				shiftTabFromTab(currentTab, toRight, cycle);
 			};
 			if (event.key === "PageDown") {
@@ -874,7 +874,7 @@ textarea
 			}
 			label.classList.add("label");
 			const onChangeInternal = () => {
-				labelInfo.setText ? labelInfo.setText((label as HTMLInputElement).value, containerIndex) : undefined;
+				if (labelInfo.setText) labelInfo.setText((label as HTMLInputElement).value, containerIndex);
 			};
 			if (labelInfo.setText) {
 				const labelTextbox = label as HTMLInputElement;
@@ -1042,10 +1042,10 @@ textarea
 				} else {
 					objectInfo.columns.forEach(columnInfo => insertColumn(columnInfo));
 				}
-				const inputMain = objectElement.querySelector("input") as HTMLInputElement;
+				const inputMain = objectElement.querySelector("input")!;
 				let newElementQueued = false;
 				inputMain.addEventListener("input", () => {
-					if (inputMain.value && ((container.lastElementChild as HTMLInputElement).querySelector("input") as HTMLInputElement).value && !newElementQueued) {
+					if (inputMain.value && ((container.lastElementChild as HTMLInputElement).querySelector("input")!).value && !newElementQueued) {
 						newElementQueued = true;
 						getArray().then(async array => {
 							array.push(objectInfo.list.getNew(inputMain.value));
@@ -1138,7 +1138,7 @@ textarea
 			}
 			container.appendChild(button);
 			let getMessageText = () => "";
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			let allowInputs = (allowed = true) => {};
 			button.addEventListener("click", () => {
 				button.disabled = true;
@@ -1279,12 +1279,12 @@ textarea
 				insertNote(interaction, interactionInfo.note);
 				insertInput(interaction, interactionInfo.input, inputId, () => index, 0);
 			};
-			const labelTextbox = interaction.querySelector("input") as HTMLInputElement;
+			const labelTextbox = interaction.querySelector("input")!;
 			if (interactionInfo.list) {
 				const listInfo = interactionInfo.list;
 				const onChangeInternal = (commitIfEmpty = false) => {
 					index = Array.from(container.children).indexOf(interaction);
-					if (labelTextbox.value && ((container.lastElementChild as HTMLElement).querySelector("input") as HTMLInputElement).value) {
+					if (labelTextbox.value && ((container.lastElementChild as HTMLElement).querySelector("input")!).value) {
 						listInfo.pushWithName(labelTextbox.value).then(() => {
 							insertBody();
 							insertInteraction(container, interactionInfo);
@@ -1415,8 +1415,8 @@ textarea
 
 	const insertAndManageContent = (panelsInfo: Array<Page.PanelInfo>) => {
 		document.body.appendChild(createFrameStructure());
-		const panelContainer = document.querySelector(".container.panel") as HTMLElement;
-		const tabContainer = document.querySelector(".container.tab") as HTMLElement;
+		const panelContainer = document.querySelector(".container.panel")!;
+		const tabContainer = document.querySelector(".container.tab")!;
 		panelsInfo.forEach(panelInfo => {
 			const panel = document.createElement("div");
 			panel.classList.add("panel", panelInfo.className);
@@ -1439,7 +1439,7 @@ textarea
 		});
 		// TODO handle multiple tabs correctly
 		// TODO visual indication of letter
-		const lettersTaken: Set<string> = new Set();
+		const lettersTaken = new Set<string>();
 		const info: Array<{ letter: string, inputInfo?: Page.Interaction.InputInfo }> = panelsInfo.flatMap(panelInfo => panelInfo.sections.flatMap(sectionInfo =>
 			sectionInfo.interactions
 				.map(interactionInfo => {
@@ -1520,7 +1520,7 @@ body {
 			const hash = (new URL(location.href)).hash;
 			const tabButton = hash.length ? document.getElementById(hash.slice(1)) : getTabs()[0];
 			if (tabButton) {
-				const frame = document.getElementById("frame") as HTMLElement;
+				const frame = document.getElementById("frame")!;
 				frame.classList.forEach(className => {
 					if (classNameIsPanel(className)) {
 						frame.classList.remove(className);

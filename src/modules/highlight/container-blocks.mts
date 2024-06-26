@@ -13,7 +13,7 @@ const containerBlockSelector = `:not(${Array.from(highlightTags.flow).join(", ")
  */
 const getContainerBlock = (element: HTMLElement): HTMLElement =>
 	// Always returns an element since "body" is not a flow tag.
-	element.closest(containerBlockSelector) as HTMLElement
+	element.closest(containerBlockSelector)!
 ;
 
 export { containerBlockSelector, getContainerBlock };

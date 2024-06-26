@@ -28,7 +28,6 @@ class PaintMethod implements AbstractMethod {
 
 	findHighlightableAncestor (element: CachingElement): CachingElement {
 		let ancestor = element;
-		// eslint-disable-next-line no-constant-condition
 		while (true) {
 			// Anchors cannot (yet) be highlighted directly inside, due to security concerns with CSS Paint.
 			const ancestorUnhighlightable = ancestor.closest("a");

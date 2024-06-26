@@ -19,7 +19,7 @@ class TermMarker implements AbstractTermMarker {
 		highlightedElements: Iterable<CachingHTMLElement<Flow>>,
 	) {
 		const termsSet = new Set(terms);
-		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
+		const gutter = document.getElementById(EleID.MARKER_GUTTER)!;
 		let markersHtml = "";
 		for (const element of highlightedElements) if (CACHE in element) {
 			const highlightedTerms = new Set(element[CACHE].flows.flatMap(flow =>
@@ -27,9 +27,11 @@ class TermMarker implements AbstractTermMarker {
 			));
 			const yRelative = getElementYRelative(element);
 			// TODO use single marker with custom style
-			markersHtml += Array.from(highlightedTerms).map((term, i) => `<div class="${
-				getTermClass(term, this.#termTokens)
-			}" top="${yRelative}" style="top: ${yRelative * 100}%; padding-left: ${i * 5}px; z-index: ${i * -1}"></div>`);
+			markersHtml += Array.from(highlightedTerms)
+				.map((term, i) => `<div class="${
+					getTermClass(term, this.#termTokens)
+				}" top="${yRelative}" style="top: ${yRelative * 100}%; padding-left: ${i * 5}px; z-index: ${i * -1}"></div>`)
+				.join("");
 		}
 		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
 		gutter.innerHTML = markersHtml;

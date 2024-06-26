@@ -188,9 +188,9 @@ class TermInput {
 	}
 
 	focus (): SelectionReturnTarget {
-		const selection = getSelection() as Selection;
 		const activeElementOriginal = document.activeElement as HTMLElement;
-		const selectionRangesOriginal = Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i));
+		const selection = getSelection();
+		const selectionRangesOriginal = selection && Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i));
 		this.#input.focus();
 		return {
 			element: activeElementOriginal,

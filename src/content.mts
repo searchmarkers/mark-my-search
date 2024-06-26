@@ -39,8 +39,8 @@ interface ControlsInfo {
  */
 const focusReturnToDocument = (): boolean => {
 	const activeElement = document.activeElement;
-	if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${EleID.BAR}`)) {
-		(activeElement as HTMLInputElement).blur();
+	if (activeElement instanceof HTMLInputElement && activeElement.closest(`#${EleID.BAR}`)) {
+		activeElement.blur();
 		return true;
 	}
 	return false;
@@ -67,7 +67,7 @@ const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm>
 		})()
 			.map(phrase => phrase.replace(/\p{Other}/gu, ""))
 			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-		const termSelectors: Set<string> = new Set();
+		const termSelectors = new Set<string>();
 		for (const term of termsAll) {
 			const token = termTokens.get(term);
 			if (!termSelectors.has(token)) {
@@ -150,8 +150,8 @@ const styleElementsCleanup = () => {
 	if (style && style.textContent !== "") {
 		style.textContent = "";
 	}
-	const stylePaint = document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement | null;
-	if (stylePaint && stylePaint.sheet) {
+	const stylePaint = document.getElementById(EleID.STYLE_PAINT);
+	if (stylePaint instanceof HTMLStyleElement && stylePaint.sheet) {
 		while (stylePaint.sheet.cssRules.length) {
 			stylePaint.sheet.deleteRule(0);
 		}
@@ -216,16 +216,16 @@ const respondToCommand_factory = (
 	};
 };
 
-interface TermSetter extends TermReplacer, TermAppender {
-	setTerms: (termsNew: ReadonlyArray<MatchTerm>) => void;
+interface TermSetter<Async = true> extends TermReplacer<Async>, TermAppender<Async> {
+	setTerms: (termsNew: ReadonlyArray<MatchTerm>) => Async extends true ? Promise<void> : void;
 }
 
-interface TermReplacer {
-	replaceTerm: (term: MatchTerm | null, index: number) => void;
+interface TermReplacer<Async = true> {
+	replaceTerm: (term: MatchTerm | null, index: number) => Async extends true ? Promise<void> : void;
 }
 
-interface TermAppender {
-	appendTerm: (term: MatchTerm) => void;
+interface TermAppender<Async = true> {
+	appendTerm: (term: MatchTerm) => Async extends true ? Promise<void> : void;
 }
 
 (() => {
@@ -267,7 +267,7 @@ interface TermAppender {
 	};
 	const updateTermStatus = (term: MatchTerm) => getToolbar(false)?.updateTermStatus(term);
 	const highlighter: AbstractEngineManager = new EngineManager(updateTermStatus, termTokens, termPatterns);
-	const termSetterInternal: TermSetter = {
+	const termSetterInternal: TermSetter<false> = {
 		setTerms: termsNew => {
 			if (itemsMatch(terms, termsNew, termEquals)) {
 				return;
@@ -284,7 +284,7 @@ interface TermAppender {
 		replaceTerm: (term, termIndex) => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			if (term) {
-				const termsNew = terms as Array<MatchTerm>;
+				const termsNew = [ ...terms ];
 				termsNew[termIndex] = term;
 				terms = termsNew;
 			} else {

@@ -13,13 +13,13 @@ type Flow = BaseFlow<true, BoxInfoRange>
 
 type BoxInfo = BaseBoxInfo<true, BoxInfoRange>
 
-type BoxInfoRange = { range: AbstractRange }
+interface BoxInfoRange { range: AbstractRange }
 
 const getName = (termToken: string) => "markmysearch-" + termToken;
 
 class ExtendedHighlight {
 	readonly highlight: Highlight;
-	readonly boxInfoRanges: Map<BoxInfo, AbstractRange> = new Map();
+	readonly boxInfoRanges = new Map<BoxInfo, AbstractRange>();
 
 	constructor (...initialRanges: Array<AbstractRange>) {
 		this.highlight = new Highlight(...initialRanges);
@@ -61,8 +61,8 @@ class ExtendedHighlight {
 }
 
 class ExtendedHighlightRegistry {
-	readonly registry = CSS.highlights as HighlightRegistry;
-	readonly map: Map<string, ExtendedHighlight> = new Map();
+	readonly registry = CSS.highlights!;
+	readonly map = new Map<string, ExtendedHighlight>();
 
 	get size () {
 		return this.map.size;
@@ -94,7 +94,7 @@ class ExtendedHighlightRegistry {
 	}
 }
 
-type HighlightStyle = {
+interface HighlightStyle {
 	opacity: number
 	lineThickness: number
 	lineStyle: "dotted" | "dashed" | "solid" | "double" | "wavy"
@@ -113,7 +113,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
 	readonly highlights = new ExtendedHighlightRegistry();
-	readonly highlightedElements: Set<CachingHTMLElement<Flow>> = new Set();
+	readonly highlightedElements = new Set<CachingHTMLElement<Flow>>();
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);

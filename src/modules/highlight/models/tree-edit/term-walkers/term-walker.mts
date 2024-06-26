@@ -70,11 +70,11 @@ class TermWalker implements AbstractTermWalker {
 				}
 			}
 		}
-		const container = getContainerBlock(elementTerm.parentElement as HTMLElement);
+		const container = getContainerBlock(elementTerm.parentElement!);
 		container.classList.add(EleClass.FOCUS_CONTAINER);
 		elementTerm.classList.add(EleClass.FOCUS);
 		elementToSelect = Array.from(container.getElementsByTagName(HIGHLIGHT_TAG))
-			.every(thisElement => getContainerBlock(thisElement.parentElement as HTMLElement) === container)
+			.every(thisElement => getContainerBlock(thisElement.parentElement!) === container)
 			? container
 			: elementTerm;
 		if (elementToSelect.tabIndex === -1) {
@@ -109,8 +109,8 @@ class TermWalker implements AbstractTermWalker {
 			.getElementsByClassName(EleClass.FOCUS_CONTAINER)[0] as HTMLElement;
 		const selection = document.getSelection();
 		const activeElement = document.activeElement;
-		if (activeElement && activeElement.tagName === "INPUT" && activeElement.closest(`#${EleID.BAR}`)) {
-			(activeElement as HTMLInputElement).blur();
+		if (activeElement instanceof HTMLInputElement && activeElement.closest(`#${EleID.BAR}`)) {
+			activeElement.blur();
 		}
 		const selectionFocus = selection && (!activeElement
 			|| activeElement === document.body || !document.body.contains(activeElement)
@@ -161,31 +161,35 @@ class TermWalker implements AbstractTermWalker {
 		highlight: HTMLElement,
 		node: Node,
 		nextSiblingMethod: "nextSibling" | "previousSibling"
-	) {
-		return node[nextSiblingMethod]
-			? (node[nextSiblingMethod] as Node).nodeType === Node.ELEMENT_NODE
-				? (node[nextSiblingMethod] as HTMLElement).tagName === HIGHLIGHT_TAG_UPPER
-					? this.getSiblingHighlightFinal(node[nextSiblingMethod] as HTMLElement, node[nextSiblingMethod] as HTMLElement,
-						nextSiblingMethod)
-					: highlight
-				: (node[nextSiblingMethod] as Node).nodeType === Node.TEXT_NODE
-					? (node[nextSiblingMethod] as Text).textContent === ""
-						? this.getSiblingHighlightFinal(highlight, node[nextSiblingMethod] as Text, nextSiblingMethod)
-						: highlight
-					: highlight
-			: highlight;
+	): HTMLElement {
+		const nextSibling = node[nextSiblingMethod];
+		if (!nextSibling) {
+			return highlight;
+		}
+		if (nextSibling instanceof HTMLElement) {
+			if (nextSibling.tagName === HIGHLIGHT_TAG_UPPER) {
+				return this.getSiblingHighlightFinal(nextSibling, nextSibling, nextSiblingMethod);
+			}
+			return highlight;
+		} else if (nextSibling instanceof Text) {
+			if (nextSibling.textContent === "") {
+				return this.getSiblingHighlightFinal(highlight, nextSibling, nextSiblingMethod);
+			}
+			return highlight;
+		}
+		return highlight;
 	}
 
-	getTopLevelHighlight (element: Element) {
+	getTopLevelHighlight (element: Element): Element {
 		const closestHighlight = (element.parentElement as Element).closest(HIGHLIGHT_TAG);
 		return closestHighlight ? this.getTopLevelHighlight(closestHighlight) : element;
 	}
 
 	stepToElement (element: HTMLElement) {
-		element = this.getTopLevelHighlight(element);
+		element = this.getTopLevelHighlight(element) as HTMLElement;
 		const elementFirst = this.getSiblingHighlightFinal(element, element, "previousSibling");
 		const elementLast = this.getSiblingHighlightFinal(element, element, "nextSibling");
-		(getSelection() as Selection).setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
+		getSelection()?.setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
 		element.scrollIntoView({ block: "center" });
 	}
 
@@ -222,7 +226,7 @@ class TermWalker implements AbstractTermWalker {
 			document.body,
 			NodeFilter.SHOW_ELEMENT,
 			(element =>
-				(element.parentElement as Element).closest(HIGHLIGHT_TAG)
+				element.parentElement!.closest(HIGHLIGHT_TAG)
 					? NodeFilter.FILTER_REJECT
 					: (element.tagName === HIGHLIGHT_TAG_UPPER && isVisible(element))
 						? NodeFilter.FILTER_ACCEPT

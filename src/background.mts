@@ -528,7 +528,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 		(chrome.action["openPopup"] ?? (() => undefined))();
 	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-	const tabId = tab.id as number; // `tab.id` is always defined for this case.
+	const tabId = tab.id!; // `tab.id` is always defined for this case.
 	const commandInfo = parseCommand(commandString);
 	switch (commandInfo.type) {
 	case "openPopup": {
@@ -666,8 +666,14 @@ const handleMessage = async (message: Message.Background<true>): Promise<Message
 
 chrome.runtime.onMessage.addListener((message: Message.Background, sender, sendResponse) => {
 	(async () => {
-		message.tabId ??= sender.tab?.id ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id;
-		handleMessage(message as Message.Background<true>).then(sendResponse);
+		const messageWithTabId: Message.Background<true> = ("tabId" in message
+			? message
+			: {
+				...message,
+				tabId: sender.tab?.id ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id ?? NaN,
+			}
+		);
+		handleMessage(messageWithTabId).then(sendResponse);
 	})();
 	return true;
 });

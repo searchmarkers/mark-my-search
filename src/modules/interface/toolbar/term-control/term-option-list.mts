@@ -90,7 +90,7 @@ class TermOptionList {
 				}
 			} else if (event.key.length === 1 && /\w/.test(event.key)) {
 				const toggledOption = options.some(option => {
-					if (option.title.toLowerCase()[0] === event.key.toLowerCase()) {
+					if (option.title.toLowerCase().startsWith(event.key.toLowerCase())) {
 						option.toggle();
 						return true;
 					}

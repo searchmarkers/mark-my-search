@@ -3,7 +3,7 @@ import { getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
 import { EleClass } from "/dist/modules/common.mjs";
 import type { DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
-type ControlButtonInfo = {
+interface ControlButtonInfo {
 	controlClasses?: Array<typeof EleClass[keyof typeof EleClass]>
 	buttonClasses?: Array<typeof EleClass[keyof typeof EleClass]>
 	path?: string
@@ -21,7 +21,7 @@ class Control {
 	// TODO do not expose this; remove attribute
 	readonly button: HTMLButtonElement;
 
-	readonly #name: string;
+	readonly #name: ControlButtonName;
 
 	/**
 	 * Creates a control.

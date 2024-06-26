@@ -1,17 +1,21 @@
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
-type BaseFlow<WithNode extends boolean, BoxInfoExt extends BoxInfoExtension = Record<never, never>> = {
+interface BaseFlow<WithNode extends boolean, BoxInfoExt = Record<never, never>> {
 	text: string
 	boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExt>>
 }
 
-type BaseBoxInfo<WithNode extends boolean, BoxInfoExt extends BoxInfoExtension = Record<never, never>> = {
+interface MainBaseBoxInfo {
 	term: MatchTerm
 	start: number
 	end: number
-} & (WithNode extends true ? { node: Text } : Record<never, never>) & Partial<BoxInfoExt>
+}
 
-type BoxInfoExtension = Record<string | never, unknown>
+type BaseBoxInfo<WithNode extends boolean, BoxInfoExt = Record<never, never>> = (
+	MainBaseBoxInfo
+	& (WithNode extends true ? { node: Text } : Record<never, never>)
+	& Partial<BoxInfoExt>
+)
 
 const matchInText = (
 	terms: ReadonlyArray<MatchTerm>,
@@ -44,14 +48,13 @@ const matchInTextFlow = <BoxInfo extends BaseBoxInfo<true>>(
 		let textStart = 0;
 		let textEnd = node.length;
 		for (const match of text.matchAll(termPatterns.get(term))) {
-			const highlightStart = match.index as number;
+			const highlightStart = match.index!;
 			const highlightEnd = highlightStart + match[0].length;
 			while (textEnd <= highlightStart) {
 				node = textFlow[++i];
 				textStart = textEnd;
 				textEnd += node.length;
 			}
-			// eslint-disable-next-line no-constant-condition
 			while (true) {
 				// Register as much of this highlight that fits into this node.
 				boxesInfo.push({

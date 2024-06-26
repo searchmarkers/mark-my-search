@@ -14,8 +14,8 @@ registerPaint("markmysearch-highlights", class {
 		geom: PaintSize,
 		properties: StylePropertyMapReadOnly,
 	) {
-		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles")?.toString() || "{}") as TermSelectorStyles;
-		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() || "[]") as Array<Box>;
+		const selectorStyles = JSON.parse(properties.get("--markmysearch-styles")?.toString() ?? "{}") as TermSelectorStyles;
+		const boxes = JSON.parse(properties.get("--markmysearch-boxes")?.toString() ?? "[]") as Array<Box>;
 		for (const box of boxes) {
 			const style = selectorStyles[box.token];
 			if (!style) {

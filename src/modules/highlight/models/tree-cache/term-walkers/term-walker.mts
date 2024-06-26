@@ -14,12 +14,10 @@ class TermWalker implements AbstractTermWalker {
 		nodeStart?: Node,
 	): CachingHTMLElement<Flow> | null {
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
-		const selection = document.getSelection() as Selection;
-		const bar = document.getElementById(EleID.BAR) as HTMLElement;
 		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
-		const nodeSelected = selection ? selection.anchorNode : null;
+		const nodeSelected = getSelection()?.anchorNode;
 		const nodeFocused = document.activeElement
-			? (document.activeElement === document.body || bar.contains(document.activeElement))
+			? (document.activeElement === document.body || document.activeElement.closest(`${EleID.BAR}`))
 				? null
 				: document.activeElement as HTMLElement
 			: null;
@@ -60,7 +58,7 @@ class TermWalker implements AbstractTermWalker {
 			element.classList.add(EleClass.FOCUS_CONTAINER);
 		}
 		focusClosest(element, element => CACHE in element && element[CACHE].flows.length > 0);
-		selection.setBaseAndExtent(element, 0, element, 0);
+		getSelection()?.setBaseAndExtent(element, 0, element, 0);
 		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });
 		return element;
 	}

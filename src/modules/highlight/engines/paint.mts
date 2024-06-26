@@ -23,13 +23,13 @@ type Flow = BaseFlow<true, BoxInfoBoxes>
 
 type BoxInfo = BaseBoxInfo<true, BoxInfoBoxes>
 
-type BoxInfoBoxes = { boxes: Array<Box> }
+interface BoxInfoBoxes { boxes: Array<Box> }
 
 type CachingElement<HasCache = false> = Cache.BaseCachingElement<TreeCache, HasCache>
 
 type CachingHTMLElement<HasCache = false> = Cache.BaseCachingHTMLElement<TreeCache, HasCache>
 
-type Box = {
+interface Box {
 	token: string
 	x: number
 	y: number
@@ -37,7 +37,7 @@ type Box = {
 	height: number
 }
 
-type StyleRuleInfo = {
+interface StyleRuleInfo {
 	rule: string
 	element: CachingElement<true>
 }
@@ -55,7 +55,7 @@ class PaintEngine implements AbstractTreeCacheEngine {
 
 	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
 
-	readonly elementsVisible: Set<CachingElement> = new Set();
+	readonly elementsVisible = new Set<CachingElement>();
 	readonly shiftObserver: ResizeObserver;
 	readonly visibilityObserver: IntersectionObserver;
 	readonly styleUpdates: ReturnType<typeof getStyleUpdates>;
@@ -218,7 +218,7 @@ class PaintEngine implements AbstractTreeCacheEngine {
 	}
 	
 	styleUpdate (styleRules: ReadonlyArray<StyleRuleInfo>) {
-		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet as CSSStyleSheet;
+		const styleSheet = (document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement).sheet!;
 		for (const { rule, element } of styleRules) {
 			if (element[CACHE].styleRuleIdx === undefined) {
 				element[CACHE].styleRuleIdx = styleSheet.cssRules.length;

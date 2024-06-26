@@ -20,7 +20,7 @@ class TermMarker implements AbstractTermMarker {
 		highlightedElements: Iterable<HTMLElement>,
 	) {
 		const regexMatchTermSelector = new RegExp(`\\b${EleClass.TERM}(?:-\\w+)+\\b`);
-		const gutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
+		const gutter = document.getElementById(EleID.MARKER_GUTTER)!;
 		const containersInfo: Array<{
 			container: HTMLElement
 			termsAdded: Set<string>
@@ -29,7 +29,7 @@ class TermMarker implements AbstractTermMarker {
 		for (const highlight of highlightedElements) {
 			const container = getContainerBlock(highlight);
 			const containerIdx = containersInfo.findIndex(containerInfo => container.contains(containerInfo.container));
-			const className = (highlight.className.match(regexMatchTermSelector) as RegExpMatchArray)[0];
+			const className = highlight.className.match(regexMatchTermSelector)![0];
 			const yRelative = getElementYRelative(container);
 			let markerCss = `top: ${yRelative * 100}%;`;
 			if (containerIdx !== -1) {
@@ -55,7 +55,7 @@ class TermMarker implements AbstractTermMarker {
 	}
 
 	raise (term: MatchTerm | null, container: HTMLElement) {
-		const scrollMarkerGutter = document.getElementById(EleID.MARKER_GUTTER) as HTMLElement;
+		const scrollMarkerGutter = document.getElementById(EleID.MARKER_GUTTER)!;
 		elementsPurgeClass(EleClass.FOCUS, scrollMarkerGutter);
 		[6, 5, 4, 3, 2].some(precisionFactor => {
 			const precision = 10**precisionFactor;
