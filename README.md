@@ -1,61 +1,51 @@
-__Note from ator-dev:__ Sorry for the dry and verbose README. Since I'm restarting work on this project, I'll (hopefully) get around to making a new one.
-
-Please feel free to contribute to the extension!
-
 # Mark My Search
 
-**Research productivity extension**
+*Mark My Search* is a browser extension that finds and highlights phrases.
 
-**Mark My Search** is a Free and Open Source browser extension to render online research more efficient and effective.
+It takes inspiration from many other extensions, including the now legendary SearchWP add-on for Firefox.
 
-It addresses the growing issue of finding answers to your search queries, speeding up the process of sifting through results and getting you where you need to be once you're there. By highlighting the words you search for across the web, **Mark My Search** lets you instantly know page relevancy, where to find matches, and where your problem is addressed in the most depth.
+**Some of the ways you can use it:**
 
-The extension is instant to install and use, can be personalised to meet your particular needs, and efficiently processes pages to provide the best results with the least disruption possible.
+* A replacement for the browser's find-in-page function (`Ctrl`/`Cmd` + `F`).
+  * *Mark My Search*'s highlighting stays up to date on pages with infinite scrolling and other dynamic content.
+  * You can search for multiple keywords at once.
+  * You can edit advanced matching options for each keyword:  
+    Case sensitivity; Whole words only; [Stemming](https://en.wikipedia.org/wiki/Stemming) mode; [Diacritics](https://en.wikipedia.org/wiki/Diacritic) sensitivity; **[Regex](https://en.wikipedia.org/wiki/Regular_expression) mode**.
+  
+* Finding the relevant parts of a page you visited from web search.
+  * *Mark My Search* highlights keywords from online searches automatically. This setting is on by default, but it can be changed from the startpage or popup.
 
+* Highlighting a set of keywords on certain websites.
+  * *Mark My Search* can store lists of keywords and highlight them automatically on certain websites.
+  * You can configure this in the "Keyword Lists" section of the popup.
 
-## Features and Operation
+**Common problems:**
 
-* Provide a colourful, unobtrusive interface to finding words within a page.
-* Display in realtime which words occur, showing the match count in a tooltip.
-* Highlight all occurrences of your words.
-  * Highlight new occurrences as the page changes.
-* Provide matching options for advanced use.
-  * Optionally match letter case, word stems, whole words only, or diacritics.
-  * Allow custom regular expressions.
-* Recognise a search based on a URL, extracting search terms.
-  * Allow custom 'search engines' to be registered.
-* Allow words to be extracted from selected text.
-* Persist search words through links followed or opened in a new tab.
-* Allow creation, modification, and deletion of terms.
-* Provide a compact scrollbar view of where terms occur in the page.
-* Allow occurrences to be 'jumped' (scrolled) to in either direction by clicking the term buttons.
-  * Provide shortcuts for individual/global jumping, including different 'jump' modes.
-  * Jump to occurrences usefully by 'focusing' whole buttons and links where possible, and otherwise focusing at a sensible point in a block where multiple terms occur.
-* Allow the user to disable auto-highlighting for any period of time.
-* Allow the user to deactivate highlighting on a specific page.
-* Allow websites to be excluded from auto-highlighting or modification.
+* On pages which change frequently, *Mark My Search* can cause slowdown.
+* Very many highlights can cause slowdown.
+* Some pages, especially ones with a lot of Javascript, respond poorly to *Mark My Search*'s highlighting. NOTE: This is a fixable issue that is being worked on!
 
 
-## Advanced Use
+## On-page components
 
-**Mark My Search** provides a small set of tightly scoped features to balance efficiency with power. Advanced users can follow these steps to get more out of the extension.
-
-* Individual term jumping: A convenient shortcut is assigned to jump (scroll) between word occurrences. In Firefox, additional similar shortcuts are provided for jumping to specific terms. In Chromium-based browsers these cannot be assigned automatically, but may be changed at <chrome://extensions/shortcuts>.
-* Individual term jumping (lazy): A shortcut can be assigned to 'toggle select modes', which makes the individual jumping shortcuts choose a term to 'select'. Selected term buttons are highlighted, and the general term jumping shortcut will instead jump to occurrences of this word.
-* Problem reports: You can report problems with the extension, including websites which misbehave when highlighted or where highlighting is incorrect, from the anonymous message field in the popup. Thank you for helping improve the extension!
+* Toolbar (control buttons, keyword controls, add-keyword control)
+  * Keyword counts
+  * Keyword jumping / stepping
+* Highlighting
+* Scrollbar markers
 
 
 ## Compatibility
 
-**Mark My Search** is fully cross-browser. Its source is designed to produce the same experience across all *modern* browsers based on Firefox or Chromium. Any inconsistency between platforms should be considered a bug to be addressed as far as possible.
+**Mark My Search** is fully cross-browser. The source is designed to produce the same experience across all *modern* browsers based on Firefox or Chromium. Currently it is tested against the most recent releases.
 
-* The Manifest V2 branch supports modern Firefox releases. This branch is stable and contains all important features including backports, despite no longer being under active development. It should work on Chromium but is not explicitly tested.
-* The Manifest V3 branch supports recent Chromium releases and very recent Firefox releases (with certain advanced flags enabled). This is being developed for the highest stability and consistency, and will receive all future enhancements and features.
-* Safari will remain unsupported until a developer with an Apple device contributes maintainable compatibility code.
+* The `main` branch uses Manifest V3 and supports recent Firefox and Chromium versions.
+* The `manifest-v2` branch uses Manifest V2 and contains the source for Firefox releases of *Mark My Search*. It will be **deprecated soon** in favour of Manifest V3 on both browsers.
+* Safari is unsupported as I do not have access to an Apple computer.
 
 
 ## Store Listings
 
-* At [Chrome Web Store](https://chrome.google.com/webstore/detail/mark-my-search/lijbnhoniejpjjgemoifpjklobhakinb)
-* At [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/mark-my-search/pgkppfodndbpalojpibdnlcdfcnidemj)
-* At [Firefox Browser Add-ons](https://addons.mozilla.org/en-GB/firefox/addon/mark-my-search/)
+* [Firefox Browser Add-ons](https://addons.mozilla.org/en-GB/firefox/addon/mark-my-search/)
+* [Chrome Web Store](https://chrome.google.com/webstore/detail/mark-my-search/lijbnhoniejpjjgemoifpjklobhakinb)
+* [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/mark-my-search/pgkppfodndbpalojpibdnlcdfcnidemj)
