@@ -1,83 +1,111 @@
+import type { Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
-import type { Flow, Box, CachingElement } from "/dist/modules/highlight/engines/paint.mjs";
 import type { TermTokens } from "/dist/modules/match-term.mjs";
+import type { AllReadonly } from "/dist/modules/common.mjs";
 
-const getBoxesOwned = (
+const getBoxesOwned = <R extends boolean>(
+	owner: HTMLElement,
+	recalculate: R,
+	elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>,
+	spanBoxesMap: (R extends true
+		? Map<Readonly<Span>, Array<Readonly<Box>>>
+		: AllReadonly<Map<Span, Array<Box>>>),
+	highlightables: Highlightables | null,
 	termTokens: TermTokens,
-	owner: Element,
-	range = new Range(),
 ): Array<Box> => {
-	let boxes = getBoxes(termTokens, owner, owner, range);
+	const boxes = getBoxes(owner, owner, recalculate, elementFlowsMap, spanBoxesMap, termTokens);
 	const walker = document.createTreeWalker(owner, NodeFilter.SHOW_ELEMENT, element =>
-		highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+		highlightTags.reject.has(element.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 	);
-	let child: CachingElement;
-	// eslint-disable-next-line no-cond-assign
-	while (child = walker.nextNode() as CachingElement) {
-		if (CACHE in child && !child[CACHE].isHighlightable) {
-			boxes = boxes.concat(getBoxes(termTokens, owner, child, range));
+	if (highlightables) {
+		let child: Node | null;
+		// eslint-disable-next-line no-cond-assign
+		while (child = walker.nextNode()) if (child instanceof HTMLElement) {
+			if (elementFlowsMap.has(child) && !highlightables.isElementHighlightable(child)) {
+				boxes.push(...getBoxes(owner, child, recalculate, elementFlowsMap, spanBoxesMap, termTokens));
+			}
 		}
 	}
 	return boxes;
 };
 
-const getBoxes = (
+const getBoxes = <R extends boolean>(
+	owner: HTMLElement,
+	element: HTMLElement,
+	recalculate: R,
+	elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>,
+	spanBoxesMap: (R extends true
+		? Map<Readonly<Span>, Array<Readonly<Box>>>
+		: AllReadonly<Map<Span, Array<Box>>>),
 	termTokens: TermTokens,
-	owner: CachingElement,
-	element?: CachingElement,
-	range = new Range(),
-) => {
-	element ??= owner;
-	if (!(CACHE in element) || element[CACHE].flows.every(flow => flow.boxesInfo.length === 0)) {
+): Array<Box> => {
+	const elementFlows = elementFlowsMap.get(element);
+	if (!elementFlows || elementFlows.every(flow => flow.spans.length === 0)) {
 		return [];
 	}
 	let ownerRects = Array.from(owner.getClientRects());
 	if (!ownerRects.length) {
 		ownerRects = [ owner.getBoundingClientRect() ];
 	}
-	elementPopulateBoxes(element[CACHE].flows, ownerRects, termTokens, range);
-	return element[CACHE].flows.flatMap(flow => flow.boxesInfo.flatMap(boxInfo => boxInfo.boxes ?? []));
+	if (recalculate) {
+		elementPopulateBoxes(
+			elementFlows,
+			ownerRects,
+			spanBoxesMap as Map<Readonly<Span>, Array<Readonly<Box>>>,
+			termTokens,
+		);
+	}
+	return elementFlows.flatMap(flow => flow.spans.flatMap(span => spanBoxesMap.get(span) ?? []));
 };
 
+const range = new Range();
+
 const elementPopulateBoxes = (
-	elementFlows: Array<Flow>,
+	elementFlows: AllReadonly<Array<Flow>>,
 	elementRects: Array<DOMRect>,
+	spanBoxesMap: Map<Readonly<Span>, Array<Readonly<Box>>>,
 	termTokens: TermTokens,
-	range = new Range(),
 ) => {
-	for (const flow of elementFlows) for (const boxInfo of flow.boxesInfo) {
-		boxInfo.boxes?.splice(0);
-		range.setStart(boxInfo.node, boxInfo.start);
-		range.setEnd(boxInfo.node, boxInfo.end);
-		const textRects = range.getClientRects();
-		for (let i = 0; i < textRects.length; i++) {
-			const textRect = textRects.item(i)!;
-			if (i !== 0
-				&& textRect.x === textRects.item(i - 1)!.x
-				&& textRect.y === textRects.item(i - 1)!.y
-			) {
-				continue;
-			}
-			let x = 0;
-			let y = 0;
-			for (const ownerRect of elementRects) {
-				if (ownerRect.bottom > textRect.top) {
-					x += textRect.x - ownerRect.x;
-					y = textRect.y - ownerRect.y;
-					break;
-				} else {
-					x += ownerRect.width;
+	for (const flow of elementFlows) {
+		for (const span of flow.spans) {
+			const spanBoxes = spanBoxesMap.get(span) ?? [];
+			spanBoxes.splice(0);
+			range.setStart(span.node, span.start);
+			range.setEnd(span.node, span.end);
+			const textRects = range.getClientRects();
+			for (let i = 0; i < textRects.length; i++) {
+				const textRect = textRects.item(i)!;
+				if (i !== 0
+					&& textRect.x === textRects.item(i - 1)!.x
+					&& textRect.y === textRects.item(i - 1)!.y
+				) {
+					continue;
 				}
+				let x = 0;
+				let y = 0;
+				for (const ownerRect of elementRects) {
+					if (ownerRect.bottom > textRect.top) {
+						x += textRect.x - ownerRect.x;
+						y = textRect.y - ownerRect.y;
+						break;
+					} else {
+						x += ownerRect.width;
+					}
+				}
+				spanBoxes.push({
+					token: termTokens.get(span.term),
+					x: Math.round(x),
+					y: Math.round(y),
+					width: Math.round(textRect.width),
+					height: Math.round(textRect.height),
+				});
 			}
-			boxInfo.boxes ??= [];
-			boxInfo.boxes.push({
-				token: termTokens.get(boxInfo.term),
-				x: Math.round(x),
-				y: Math.round(y),
-				width: Math.round(textRect.width),
-				height: Math.round(textRect.height),
-			});
+			if (spanBoxes.length > 0) {
+				spanBoxesMap.set(span, spanBoxes);
+			} else {
+				spanBoxesMap.delete(span);
+			}
 		}
 	}
 };

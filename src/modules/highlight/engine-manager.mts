@@ -1,6 +1,5 @@
 import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
-import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
 import type { AbstractTermCounter } from "/dist/modules/highlight/term-counter.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/term-walker.mjs";
@@ -143,7 +142,7 @@ class EngineManager implements AbstractEngineManager {
 			const termMarker = engineData.termMarker;
 			switch (engine.model) {
 			case "tree-edit": {
-				engine.registerHighlightingUpdatedListener(requestCallFn(
+				engine.addHighlightingUpdatedListener(requestCallFn(
 					() => {
 						// Markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms.
 						const termsAllowed = terms.current.slice(0, hues.current.length);
@@ -153,7 +152,7 @@ class EngineManager implements AbstractEngineManager {
 				));
 				break;
 			} case "tree-cache": {
-				engine.registerHighlightingUpdatedListener(requestCallFn(
+				engine.addHighlightingUpdatedListener(requestCallFn(
 					() => {
 						// Markers are indistinct after the hue limit, and introduce unacceptable lag by ~10 terms.
 						const termsAllowed = terms.current.slice(0, hues.current.length);
@@ -164,7 +163,7 @@ class EngineManager implements AbstractEngineManager {
 				break;
 			}}
 		}
-		engine.registerHighlightingUpdatedListener(requestCallFn(
+		engine.addHighlightingUpdatedListener(requestCallFn(
 			() => {
 				for (const term of terms.current) {
 					this.#updateTermStatus(term);
@@ -178,44 +177,49 @@ class EngineManager implements AbstractEngineManager {
 	async constructEngineData (engineClass: Engine): Promise<EngineData> {
 		switch (engineClass) {
 		case "ELEMENT": {
-			const [ EngineF, TermCounterF, TermWalkerF, TermMarkerF ] = await Promise.all([
+			const [ { ElementEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
 				import("/dist/modules/highlight/engines/element.mjs"),
 				import("/dist/modules/highlight/models/tree-edit/term-counters/term-counter.mjs"),
 				import("/dist/modules/highlight/models/tree-edit/term-walkers/term-walker.mjs"),
 				import("/dist/modules/highlight/models/tree-edit/term-markers/term-marker.mjs"),
 			]);
+			const engine = new ElementEngine(this.#termTokens, this.#termPatterns);
 			return {
-				engine: new EngineF.ElementEngine(this.#termTokens, this.#termPatterns),
-				termCounter: new TermCounterF.TermCounter(this.#termTokens),
-				termWalker: new TermWalkerF.TermWalker(this.#termTokens),
-				termMarker: new TermMarkerF.TermMarker(this.#termTokens),
+				engine,
+				termCounter: new TermCounter(this.#termTokens),
+				termWalker: new TermWalker(this.#termTokens),
+				termMarker: new TermMarker(this.#termTokens),
 			};
 		} case "PAINT": {
-			const [ EngineF, Method, TermCounterF, TermWalkerF, TermMarkerF ] = await Promise.all([
+			const [ { PaintEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
 				import("/dist/modules/highlight/engines/paint.mjs"),
-				this.constructPaintEngineMethod(this.#paintEngineMethodClass),
 				import("/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs"),
 				import("/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs"),
 				import("/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs"),
 			]);
+			const engine = new PaintEngine(
+				await PaintEngine.getMethodModule(this.#paintEngineMethodClass),
+				this.#termTokens, this.#termPatterns,
+			);
 			return {
-				engine: new EngineF.PaintEngine(Method, this.#termTokens, this.#termPatterns),
-				termCounter: new TermCounterF.TermCounter(),
-				termWalker: new TermWalkerF.TermWalker(),
-				termMarker: new TermMarkerF.TermMarker(this.#termTokens),
+				engine,
+				termCounter: new TermCounter(engine.elementFlowsMap),
+				termWalker: new TermWalker(engine.elementFlowsMap),
+				termMarker: new TermMarker(this.#termTokens, engine.elementFlowsMap),
 			};
 		} case "HIGHLIGHT": {
-			const [ EngineF, TermCounterF, TermWalkerF, TermMarkerF ] = await Promise.all([
+			const [ { HighlightEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
 				import("/dist/modules/highlight/engines/highlight.mjs"),
 				import("/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs"),
 				import("/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs"),
 				import("/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs"),
 			]);
+			const engine = new HighlightEngine(this.#termTokens, this.#termPatterns);
 			return {
-				engine: new EngineF.HighlightEngine(this.#termTokens, this.#termPatterns),
-				termCounter: new TermCounterF.TermCounter(),
-				termWalker: new TermWalkerF.TermWalker(),
-				termMarker: new TermMarkerF.TermMarker(this.#termTokens),
+				engine,
+				termCounter: new TermCounter(engine.elementFlowsMap),
+				termWalker: new TermWalker(engine.elementFlowsMap),
+				termMarker: new TermMarker(this.#termTokens, engine.elementFlowsMap),
 			};
 		}}
 	}
@@ -236,23 +240,6 @@ class EngineManager implements AbstractEngineManager {
 		if (this.#engineData?.engine.class === "PAINT") {
 			await this.setEngine("PAINT");
 		}
-	}
-
-	async constructPaintEngineMethod (methodClass: PaintEngineMethod): Promise<AbstractMethod> {
-		switch (methodClass) {
-		case "paint": {
-			return new (await import("/dist/modules/highlight/engines/paint/methods/paint.mjs")).PaintMethod(
-				this.#termTokens,
-			);
-		} case "url": {
-			return new (await import("/dist/modules/highlight/engines/paint/methods/url.mjs")).UrlMethod(
-				this.#termTokens,
-			);
-		} case "element": {
-			return new (await import("/dist/modules/highlight/engines/paint/methods/element.mjs")).ElementMethod(
-				this.#termTokens,
-			);
-		}}
 	}
 
 	async setSpecialEngine () {

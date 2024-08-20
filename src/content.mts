@@ -57,7 +57,7 @@ const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm>
 	if (selection && selection.anchorNode) {
 		const termsAll = (() => {
 			const string = selection.toString();
-			if (/\p{Open_Punctuation}|\p{Close_Punctuation}|\p{Initial_Punctuation}|\p{Final_Punctuation}/.test(string)) {
+			if (/\p{Open_Punctuation}|\p{Close_Punctuation}|\p{Initial_Punctuation}|\p{Final_Punctuation}/u.test(string)) {
 				// If there are brackets or quotes, we just assume it's too complicated to sensibly split up for now.
 				// TODO make this behaviour smarter?
 				return [ string ];

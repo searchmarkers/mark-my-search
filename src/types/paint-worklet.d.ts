@@ -1,4 +1,6 @@
-//interface WorkletGlobalScope {}
+declare namespace CSS {
+	const paintWorklet: Worklet | undefined;
+}
 
 type PaintInstanceConstructor = new () => {
 	paint (ctx: PaintRenderingContext2D, geom: PaintSize, properties: StylePropertyMapReadOnly): void

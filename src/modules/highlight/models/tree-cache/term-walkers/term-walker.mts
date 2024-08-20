@@ -1,18 +1,24 @@
 import type { AbstractTermWalker } from "/dist/modules/highlight/term-walker.mjs";
-import { type CachingHTMLElement, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
+import type { AllReadonly } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false>
 
 class TermWalker implements AbstractTermWalker {
+	#elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+
+	constructor (elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>) {
+		this.#elementFlowsMap = elementFlowsMap;
+	}
+
 	step (
 		reverse: boolean,
 		stepNotJump: boolean,
 		term: MatchTerm | null,
 		nodeStart?: Node,
-	): CachingHTMLElement<Flow> | null {
+	): HTMLElement | null {
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
 		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
 		const nodeSelected = getSelection()?.anchorNode;
@@ -31,23 +37,27 @@ class TermWalker implements AbstractTermWalker {
 			NodeFilter.SHOW_ELEMENT,
 			(term
 				// If a term has been passed, we are looking for elements with at least 1 occurrence of that term.
-				? element => (CACHE in element
-					&& element[CACHE].flows.some(flow => flow.boxesInfo.some(boxInfo => boxInfo.term === term))
+				? (element: HTMLElement) => (
+					this.#elementFlowsMap.get(element)
+						?.some(flow => flow.spans.some(span => span.term === term))
 					&& isVisible(element)
-				) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+				)
+					? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
 				// If NO term has been passed, we are looking for elements with any highlighting.
-				: element => (CACHE in element
-					&& element[CACHE].flows.some(flow => flow.boxesInfo.length > 0)
+				: (element: HTMLElement) => (
+					this.#elementFlowsMap.get(element)
+						?.some(flow => flow.spans.length > 0)
 					&& isVisible(element)
-				) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
-			) as ((element: CachingHTMLElement<Flow>) => number) as (node: Node) => number,
+				)
+					? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+			) as (node: Node) => number,
 		);
 		walker.currentNode = nodeCurrent;
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
 		if (nodeFocused) {
 			nodeFocused.blur();
 		}
-		const element = walker[nextNodeMethod]() as CachingHTMLElement<Flow> | null;
+		const element = walker[nextNodeMethod]() as HTMLElement | null;
 		if (!element) {
 			if (!nodeStart) {
 				this.step(reverse, stepNotJump, term, nodeBegin);
@@ -57,7 +67,7 @@ class TermWalker implements AbstractTermWalker {
 		if (!stepNotJump) {
 			element.classList.add(EleClass.FOCUS_CONTAINER);
 		}
-		focusClosest(element, element => CACHE in element && element[CACHE].flows.length > 0);
+		focusClosest(element, element => (this.#elementFlowsMap.get(element)?.length ?? 0) > 0);
 		getSelection()?.setBaseAndExtent(element, 0, element, 0);
 		element.scrollIntoView({ behavior: stepNotJump ? "auto" : "smooth", block: "center" });
 		return element;

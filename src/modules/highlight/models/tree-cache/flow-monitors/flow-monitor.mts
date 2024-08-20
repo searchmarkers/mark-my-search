@@ -1,50 +1,62 @@
-import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import type {
-	TreeCache,
-	BaseCachingElement as BCachingElement, BaseCachingHTMLElement as BCachingHTMLElement,
-	UnknownCachingHTMLElement,
-} from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
-import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
+import type { Flow, Span, AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import { type BaseFlow, type BaseBoxInfo, matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
+import { matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import { MatchTerm, type TermPatterns } from "/dist/modules/match-term.mjs";
-import { type RContainer } from "/dist/modules/common.mjs";
+import type { RContainer, AllReadonly } from "/dist/modules/common.mjs";
 
-type Flow<BoxInfoExt> = BaseFlow<true, BoxInfoExt>
+class FlowMonitor implements AbstractFlowMonitor {
+	readonly termPatterns: TermPatterns;
 
-class FlowMonitor<BoxInfoExt, TC extends TreeCache<Flow<BoxInfoExt>>>
-implements AbstractFlowMonitor {
 	readonly mutationObserver: MutationObserver;
 
-	readonly createElementCache: (element: Element) => TC;
+	readonly #elementFlowsMap = new Map<HTMLElement, Array<Flow>>();
 
-	readonly highlightingUpdatedListeners: Set<Generator>;
-
-	readonly onNewHighlightedAncestor?: (ancestor: BCachingHTMLElement<TC, true>) => void;
-
-	readonly onBoxesInfoPopulated?: (element: BCachingHTMLElement<TC, true>) => void;
-	readonly onBoxesInfoRemoved?: (element: BCachingHTMLElement<TC, true>) => void;
+	newSpanOwnerListener?: (flowOwner: HTMLElement) => void;
+	spansCreatedListener?: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void;
+	spansRemovedListener?: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void;
+	nonSpanOwnerListener?: (flowOwner: HTMLElement) => void;
+	readonly highlightingUpdatedListeners = new Set<Generator>();
 
 	constructor (
 		terms: RContainer<ReadonlyArray<MatchTerm>>,
 		termPatterns: TermPatterns,
-		highlightingUpdatedListeners: Set<Generator>,
-		functions: {
-			createElementCache: (element: Element) => TC,
-			onNewHighlightedAncestor?: (ancestor: BCachingHTMLElement<TC, true>) => void,
-			onBoxesInfoPopulated?: (element: BCachingHTMLElement<TC, true>) => void,
-			onBoxesInfoRemoved?: (element: BCachingHTMLElement<TC, true>) => void,
-		},
 	) {
-		this.mutationObserver = this.getMutationUpdatesObserver(terms, termPatterns);
-		this.highlightingUpdatedListeners = highlightingUpdatedListeners;
-		this.createElementCache = functions.createElementCache;
-		this.onNewHighlightedAncestor = functions.onNewHighlightedAncestor;
-		this.onBoxesInfoPopulated = functions.onBoxesInfoPopulated;
-		this.onBoxesInfoRemoved = functions.onBoxesInfoRemoved;
+		this.termPatterns = termPatterns;
+		this.mutationObserver = this.getMutationObserver(terms);
 	}
 
-	getMutationUpdatesObserver (terms: RContainer<ReadonlyArray<MatchTerm>>, termPatterns: TermPatterns) {
+	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
+		return this.#elementFlowsMap;
+	}
+
+	setNewSpanOwnerListener (listener: (flowOwner: HTMLElement) => void) {
+		this.newSpanOwnerListener = listener;
+	}
+
+	setSpansCreatedListener (listener: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void) {
+		this.spansCreatedListener = listener;
+	}
+
+	setSpansRemovedListener (listener: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void) {
+		this.spansRemovedListener = listener;
+	}
+
+	setNonSpanOwnerListener (listener: (flowOwner: HTMLElement) => void): void {
+		this.nonSpanOwnerListener = listener;
+	}
+
+	addHighlightingUpdatedListener (listener: Generator) {
+		this.highlightingUpdatedListeners.add(listener);
+	}
+
+	/**
+	 * Returns a MutationObserver which responds to mutations by calling methods
+	 * to update cached highlighting information, based on the elements changed.
+	 * @param terms A live container of the *current terms being highlighted*.
+	 * Highlighting is assumed to be up to date with the current terms.
+	 * @returns The MutationObserver object.
+	 */
+	getMutationObserver (terms: RContainer<ReadonlyArray<MatchTerm>>) {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		return new MutationObserver(mutations => {
 			// TODO optimise
@@ -57,56 +69,50 @@ implements AbstractFlowMonitor {
 				) {
 					elementsAffected.add(mutation.target.parentElement);
 				}
-				for (const node of mutation.addedNodes) if (node.parentElement) {
-					switch (node.nodeType) {
-					case Node.ELEMENT_NODE: {
-						const element = node as HTMLElement;
-						if (canHighlightElement(rejectSelector, element)) {
-							//elementsAdded.add(element);
-							elementsAffected.add(element);
+				for (const node of mutation.addedNodes) {
+					if (node instanceof HTMLElement) {
+						if (canHighlightElement(rejectSelector, node)) {
+							//elementsAdded.add(node);
+							elementsAffected.add(node);
 						}
 						break;
-					}
-					case Node.TEXT_NODE: {
+					} else if (node instanceof Text && node.parentElement) {
 						if (canHighlightElement(rejectSelector, node.parentElement)) {
 							elementsAffected.add(node.parentElement);
 						}
 						break;
-					}}
+					}
 				}
 				for (const node of mutation.removedNodes) {
-					if (node.nodeType === Node.ELEMENT_NODE) {
-						this.removeFlows(node as HTMLElement);
+					if (node instanceof HTMLElement) {
+						this.removeHighlighting(node);
 					}
 				}
 			}
 			for (const element of elementsAffected) {
-				this.generateBoxesInfoForFlowOwnersFromContent(terms.current, termPatterns, element);
+				// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated.
+				// We assume that ALL such flows are incorrect.
+				// TODO avoid recalculating the same box info or flow on the same pass
+				if (highlightTags.flow.has(element.tagName)) {
+					// The element may include non self-contained flows.
+					this.generateBoxesInfoForFlowOwners(terms.current, element);
+				} else {
+					// The element can only include self-contained flows, so flows need only be recalculated below the element.
+					this.generateHighlightSpansFor(terms.current, element);
+				}
 			}
 		});
 	}
 
-	generateBoxesInfoForFlowOwnersFromContent (
-		terms: ReadonlyArray<MatchTerm>,
-		termPatterns: TermPatterns,
-		element: HTMLElement,
-	) {
-		// Text flows have been disrupted inside `element`, so flows which include its content must be recalculated and possibly split.
-		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
-		if (highlightTags.flow.has(element.tagName)) {
-			// The element may include non self-contained flows.
-			this.generateBoxesInfoForFlowOwners(terms, termPatterns, element);
-		} else {
-			// The element can only include self-contained flows, so flows need only be recalculated below the element.
-			this.generateBoxesInfo(terms, termPatterns, element);
-		}
+	observeMutations () {
+		this.mutationObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
 	}
 
-	generateBoxesInfoForFlowOwners (
-		terms: ReadonlyArray<MatchTerm>,
-		termPatterns: TermPatterns,
-		node: Node,
-	) {
+	unobserveMutations () {
+		this.mutationObserver.disconnect();
+	}
+
+	generateBoxesInfoForFlowOwners (terms: ReadonlyArray<MatchTerm>, node: Node) {
 		// Text flows may have been disrupted at `node`, so flows which include it must be recalculated and possibly split.
 		// For safety we assume that ALL existing flows of affected ancestors are incorrect, so each of these must be recalculated.
 		const parent = node.parentElement;
@@ -129,37 +135,33 @@ implements AbstractFlowMonitor {
 			if (breakFirst && breakLast) {
 				// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
 				// ALL flows of descendants are recalculated. See below.
-				this.generateBoxesInfo(terms, termPatterns, parent);
+				this.generateHighlightSpansFor(terms, parent);
 			} else {
 				// The flow containing the node may leave the parent, which we assume disrupted the text flows of an ancestor.
-				this.generateBoxesInfoForFlowOwners(terms, termPatterns, parent);
+				this.generateBoxesInfoForFlowOwners(terms, parent);
 			}
 		} else {
 			// The parent can only include self-contained flows, so flows need only be recalculated below the parent.
 			// ALL flows of descendants are recalculated, but this is only necessary for direct ancestors and descendants of the origin;
 			// example can be seen when loading DuckDuckGo results dynamically. Could be fixed by discarding text flows which start
 			// or end inside elements which do not contain and are not contained by a given element. Will not implement.
-			this.generateBoxesInfo(terms, termPatterns, parent);
+			this.generateHighlightSpansFor(terms, parent);
 		}
 	}
 
-	generateBoxesInfo (
-		terms: ReadonlyArray<MatchTerm>,
-		termPatterns: TermPatterns,
-		flowOwner: HTMLElement,
-	) {
+	generateHighlightSpansFor (terms: ReadonlyArray<MatchTerm>, flowOwner: HTMLElement) {
 		if (!flowOwner.firstChild) {
 			return;
 		}
 		const elementBreaksFlow = !highlightTags.flow.has(flowOwner.tagName);
 		const textFlows = getTextFlows(flowOwner.firstChild);
-		this.removeFlows(flowOwner);
+		this.removeHighlighting(flowOwner);
 		for ( // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
 			let i = (elementBreaksFlow && textFlows[0].length) ? 0 : 1;
 			i < textFlows.length + ((elementBreaksFlow && textFlows.at(-1)?.length) ? 0 : -1);
 			i++
 		) {
-			this.flowCacheWithBoxesInfo(terms, termPatterns, textFlows[i]);
+			this.cacheFlowWithSpans(terms, textFlows[i]);
 		}
 		for (const listener of this.highlightingUpdatedListeners) {
 			listener.next();
@@ -167,59 +169,73 @@ implements AbstractFlowMonitor {
 	}
 
 	/**
-	 * Removes the flows cache from all descendant elements (inclusive).
-	 * @param element The ancestor below which to forget flows.
+	 * Removes highlighting from all descendant elements (inclusive).
+	 * @param ancestor The element below which to remove highlighting.
 	 */
-	removeFlows (ancestor: BCachingHTMLElement<TC>) {
+	removeHighlighting (ancestor: HTMLElement) {
 		if (highlightTags.reject.has(ancestor.tagName)) {
 			return;
 		}
-		if (CACHE in ancestor) {
-			if (this.onBoxesInfoRemoved) this.onBoxesInfoRemoved(ancestor);
-			delete (ancestor as UnknownCachingHTMLElement)[CACHE];
-		}
 		const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_ELEMENT, element =>
-			highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+			highlightTags.reject.has(element.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
 		);
-		let element: BCachingHTMLElement<TC>;
-		// eslint-disable-next-line no-cond-assign
-		while (element = walker.nextNode() as BCachingHTMLElement<TC>) {
-			if (CACHE in element) {
-				if (this.onBoxesInfoRemoved) this.onBoxesInfoRemoved(element);
-				delete (element as UnknownCachingHTMLElement)[CACHE];
+		let element: Node | null = ancestor;
+		do if (element instanceof HTMLElement) {
+			// Delete all flows with highlight spans from the element; if they existed, call appropriate callbacks.
+			const flows = this.#elementFlowsMap.get(element);
+			if (flows) {
+				this.#elementFlowsMap.delete(element);
+				if (this.spansRemovedListener)
+					this.spansRemovedListener(element, flows.flatMap(flow => flow.spans));
+				if (this.nonSpanOwnerListener)
+					this.nonSpanOwnerListener(element);
 			}
-		}
+		// eslint-disable-next-line no-cond-assign
+		} while (element = walker.nextNode());
 	}
 
 	/**
-	 * Remove highlighting information for specific terms.
-	 * @param terms Terms for which to remove highlights. If undefined, all highlights are removed.
+	 * Remove highlighting for specific terms.
+	 * @param terms Terms for which to remove highlight spans. If undefined, all spans are removed.
 	 */
-	removeBoxesInfo (terms?: ReadonlyArray<MatchTerm>) {
-		const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, element =>
-			highlightTags.reject.has((element as Element).tagName) ? NodeFilter.FILTER_REJECT : (
-				CACHE in element ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
-			)
-		);
-		let element: BCachingElement<TC, true>;
+	removeHighlightSpansFor (terms?: ReadonlyArray<MatchTerm>) {
 		if (terms) {
-			// eslint-disable-next-line no-cond-assign
-			while (element = walker.nextNode() as BCachingElement<TC, true>) {
-				element[CACHE].flows = element[CACHE].flows.filter(flow => {
-					flow.boxesInfo = flow.boxesInfo.filter(boxInfo =>
-						!terms.includes(boxInfo.term) // TODO-REMOVE this used to compare tokens
-					);
-					return flow.boxesInfo.length > 0;
+			for (const [ element, flows ] of this.#elementFlowsMap) {
+				const spansRemoved: Array<Span> = [];
+				const flowsNew = flows.filter(flow => {
+					flow.spans = flow.spans.filter(span => {
+						if (terms.includes(span.term)) {
+							spansRemoved.push(span);
+							return false;
+						}
+						return true;
+					});
+					return flow.spans.length > 0;
 				});
-				if (element[CACHE].flows.length === 0) {
-					delete (element as UnknownCachingHTMLElement)[CACHE];
+				if (flowsNew.length > 0) {
+					this.#elementFlowsMap.set(element, flowsNew);
+					if (spansRemoved.length > 0) {
+						if (this.spansRemovedListener)
+							this.spansRemovedListener(element, spansRemoved);
+					}
+				} else {
+					this.#elementFlowsMap.delete(element);
+					if (this.spansRemovedListener)
+						this.spansRemovedListener(element, spansRemoved);
+					if (this.nonSpanOwnerListener)
+						this.nonSpanOwnerListener(element);
 				}
 			}
 		} else {
-			// eslint-disable-next-line no-cond-assign
-			while (element = walker.nextNode() as BCachingElement<TC, true>) {
-				delete (element as UnknownCachingHTMLElement)[CACHE];
+			if (this.spansRemovedListener || this.nonSpanOwnerListener) {
+				for (const [ element, flows ] of this.#elementFlowsMap) {
+					if (this.spansRemovedListener)
+						this.spansRemovedListener(element, flows.flatMap(flow => flow.spans));
+					if (this.nonSpanOwnerListener)
+						this.nonSpanOwnerListener(element);
+				}
 			}
+			this.#elementFlowsMap.clear();
 		}
 		for (const listener of this.highlightingUpdatedListeners) {
 			listener.next();
@@ -231,40 +247,40 @@ implements AbstractFlowMonitor {
 	 * @param terms Terms to find and highlight.
 	 * @param textFlow Consecutive text nodes to highlight inside.
 	 */
-	flowCacheWithBoxesInfo (
-		terms: ReadonlyArray<MatchTerm>,
-		termPatterns: TermPatterns,
-		textFlow: ReadonlyArray<Text>,
-	) {
+	cacheFlowWithSpans (terms: ReadonlyArray<MatchTerm>, textFlow: ReadonlyArray<Text>) {
 		const text = textFlow.map(node => node.textContent).join("");
-		const getAncestorCommon = <E extends HTMLElement>(nodeA_ancestor: E, nodeB: Node): E | null => {
+		const getAncestorCommon = (nodeA_ancestor: HTMLElement, nodeB: Node): HTMLElement | null => {
 			if (nodeA_ancestor.contains(nodeB)) {
 				return nodeA_ancestor;
 			}
 			if (nodeA_ancestor.parentElement) {
-				return getAncestorCommon(nodeA_ancestor.parentElement as E, nodeB);
+				return getAncestorCommon(nodeA_ancestor.parentElement as HTMLElement, nodeB);
 			}
 			return null;
 		};
 		const ancestor = getAncestorCommon(
-			textFlow[0].parentElement as BCachingHTMLElement<TC>,
-			textFlow.at(-1)!,
-		) as BCachingHTMLElement<TC, true>; // This will be enforced in a moment by assigning the element's cache.
+			textFlow[0].parentElement!,
+			textFlow[textFlow.length - 1],
+		)!;
 		if (ancestor === null) {
 			console.warn("Unexpected condition: Common ancestor not found.", textFlow);
 			return;
 		}
-		const flow: Flow<BoxInfoExt> = {
-			text,
-			// Match the terms inside the flow to produce highlighting box info.
-			boxesInfo: matchInTextFlow<BaseBoxInfo<true, BoxInfoExt>>(terms, termPatterns, text, textFlow),
-		};
-		ancestor[CACHE] ??= this.createElementCache(ancestor);
-		ancestor[CACHE].flows.push(flow);
-		if (this.onBoxesInfoPopulated) this.onBoxesInfoPopulated(ancestor);
-		if (flow.boxesInfo.length > 0) {
-			if (this.onNewHighlightedAncestor) this.onNewHighlightedAncestor(ancestor);
+		// TODO should the same function remove the flows, to replace them entirely?
+		// Match the terms inside the flow to produce highlighting box info.
+		const spansCreated = matchInTextFlow(terms, this.termPatterns, text, textFlow);
+		let flows = this.#elementFlowsMap.get(ancestor);
+		if (!flows) {
+			flows = [];
+			this.#elementFlowsMap.set(ancestor, flows);
 		}
+		flows.push({ text, spans: spansCreated });
+		if (flows.length === 1) {
+			if (this.newSpanOwnerListener)
+				this.newSpanOwnerListener(ancestor);
+		}
+		if (this.spansCreatedListener)
+			this.spansCreatedListener(ancestor, spansCreated);
 	}
 }
 

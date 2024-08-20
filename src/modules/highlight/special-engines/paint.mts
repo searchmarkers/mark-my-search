@@ -1,13 +1,13 @@
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import type { BoxInfoBoxes, Box } from "/dist/modules/highlight/engines/paint.mjs";
+import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
-import { type BaseFlow, type BaseBoxInfo, matchInText } from "/dist/modules/highlight/matcher.mjs";
+import { type BaseFlow, type BaseSpan, matchInText } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, getElementTagsSet } from "/dist/modules/common.mjs";
 
-type Flow = BaseFlow<false, BoxInfoBoxes>
+type Flow = BaseFlow<false>
 
-type BoxInfo = BaseBoxInfo<false, BoxInfoBoxes>
+type Span = BaseSpan<false>
 
 const contextCSS = { hovered: ":hover", focused: ":focus" };
 
@@ -80,15 +80,14 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		// TODO is this method needed? why not use a common matching function?
 		const flow: Flow = {
 			text: input.value,
-			boxesInfo: [],
+			spans: [],
 		};
 		for (const term of terms) {
 			for (const match of flow.text.matchAll(this.termPatterns.get(term))) if (match.index !== undefined) {
-				flow.boxesInfo.push({
+				flow.spans.push({
 					term,
 					start: match.index,
 					end: match.index + match[0].length,
-					boxes: [],
 				});
 			}
 		}
@@ -159,12 +158,12 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		if (!terms.length) {
 			return "url()";
 		}
-		const boxes = matchInText(terms, this.termPatterns, text).map((boxInfo): Box => {
+		const boxes = matchInText(terms, this.termPatterns, text).map((span): Box => {
 			return {
-				token: this.termTokens.get(boxInfo.term),
-				x: boxInfo.start * 10,
+				token: this.termTokens.get(span.term),
+				x: span.start * 10,
 				y: 0,
-				width: (boxInfo.end - boxInfo.start) * 10,
+				width: (span.end - span.start) * 10,
 				height: 20,
 			};
 		});
@@ -187,6 +186,6 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 }
 
 export {
-	type Flow, type BoxInfo,
+	type Flow, type Span,
 	PaintSpecialEngine,
 };

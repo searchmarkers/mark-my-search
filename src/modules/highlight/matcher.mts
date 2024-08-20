@@ -1,47 +1,44 @@
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 
-interface BaseFlow<WithNode extends boolean, BoxInfoExt = Record<never, never>> {
+type BaseFlow<WithNode extends boolean> = {
 	text: string
-	boxesInfo: Array<BaseBoxInfo<WithNode, BoxInfoExt>>
+	spans: Array<BaseSpan<WithNode>>
 }
 
-interface MainBaseBoxInfo {
+type BaseSpan<WithNode extends boolean> = {
 	term: MatchTerm
 	start: number
 	end: number
-}
-
-type BaseBoxInfo<WithNode extends boolean, BoxInfoExt = Record<never, never>> = (
-	MainBaseBoxInfo
-	& (WithNode extends true ? { node: Text } : Record<never, never>)
-	& Partial<BoxInfoExt>
+} & (WithNode extends true
+	? { node: Text }
+	: Record<never, never>
 )
 
 const matchInText = (
 	terms: ReadonlyArray<MatchTerm>,
 	termPatterns: TermPatterns,
 	text: string,
-): Array<BaseBoxInfo<false>> => {
-	const boxesInfo: Array<BaseBoxInfo<false>> = [];
+): Array<BaseSpan<false>> => {
+	const spans: Array<BaseSpan<false>> = [];
 	for (const term of terms) {
 		for (const match of text.matchAll(termPatterns.get(term))) if (match.index !== undefined) {
-			boxesInfo.push({
+			spans.push({
 				term,
 				start: match.index,
 				end: match.index + match[0].length,
 			});
 		}
 	}
-	return boxesInfo;
+	return spans;
 };
 
-const matchInTextFlow = <BoxInfo extends BaseBoxInfo<true>>(
+const matchInTextFlow = (
 	terms: ReadonlyArray<MatchTerm>,
 	termPatterns: TermPatterns,
 	text: string,
 	textFlow: ReadonlyArray<Text>,
-): Array<BoxInfo> => {
-	const boxesInfo: Array<BaseBoxInfo<true>> = [];
+): Array<BaseSpan<true>> => {
+	const spans: Array<BaseSpan<true>> = [];
 	for (const term of terms) {
 		let i = 0;
 		let node = textFlow[0];
@@ -57,7 +54,7 @@ const matchInTextFlow = <BoxInfo extends BaseBoxInfo<true>>(
 			}
 			while (true) {
 				// Register as much of this highlight that fits into this node.
-				boxesInfo.push({
+				spans.push({
 					term,
 					node,
 					start: Math.max(0, highlightStart - textStart),
@@ -73,10 +70,10 @@ const matchInTextFlow = <BoxInfo extends BaseBoxInfo<true>>(
 			}
 		}
 	}
-	return boxesInfo as Array<BoxInfo>; // Extensions to box info contain only optional properties, so this assumption is safe.
+	return spans;
 };
 
 export {
-	type BaseFlow, type BaseBoxInfo,
+	type BaseFlow, type BaseSpan,
 	matchInText, matchInTextFlow,
 };

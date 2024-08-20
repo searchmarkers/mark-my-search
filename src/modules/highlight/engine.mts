@@ -10,7 +10,7 @@ interface AbstractEngine extends Highlighter {
 	readonly terms: RContainer<ReadonlyArray<MatchTerm>>;
 	readonly hues: RContainer<ReadonlyArray<number>>;
 
-	registerHighlightingUpdatedListener: (listener: Generator) => void
+	addHighlightingUpdatedListener: (listener: Generator) => void
 
 	getHighlightedElements: () => Iterable<HTMLElement>
 }

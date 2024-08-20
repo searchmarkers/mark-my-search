@@ -277,9 +277,24 @@ const createContainer = <T,>(current: T): RWContainer<T> => {
 	return container;
 };
 
-// From https://stackoverflow.com/a/76176570. TODO understand how this works
+declare const stopReadonly: unique symbol;
 
-type FromEntries = <const T extends ReadonlyArray<readonly [PropertyKey, unknown]>>(
+type AllReadonly<T> = (
+	T extends infer U & { [stopReadonly]: true } ? U
+	: T extends Array<infer V> ? ReadonlyArray<AllReadonly<V>>
+	: T extends Set<infer V> ? ReadonlySet<AllReadonly<V>>
+	: T extends Map<infer K, infer V> ? ReadonlyMap<AllReadonly<K>, AllReadonly<V>>
+	: T extends ReadonlyArray<infer V> ? ReadonlyArray<AllReadonly<V>>
+	: T extends ReadonlySet<infer V> ? ReadonlySet<AllReadonly<V>>
+	: T extends ReadonlyMap<infer K, infer V> ? ReadonlyMap<AllReadonly<K>, AllReadonly<V>>
+	: T extends Record<string | number | symbol, unknown> ? { readonly [P in keyof T]: AllReadonly<T[P]> }
+	: T
+)
+
+type StopReadonly<T> = T & { [stopReadonly]: true }
+
+// From https://stackoverflow.com/a/76176570. TODO understand how this works
+type FromEntries = <const T extends ReadonlyArray<readonly [ PropertyKey, unknown ]>>(
 	entries: T
 ) => { [K in T[number] as K[0]]: K[1] }
 
@@ -325,6 +340,7 @@ export {
 	getTermClass, getTermTokenClass, getTermClassToken,
 	getIdSequential,
 	type RWContainer, type RContainer, type WContainer, createContainer,
+	type AllReadonly, type StopReadonly,
 	type FromEntries, type Entries,
 	itemsMatch,
 	sanitizeForRegex,
