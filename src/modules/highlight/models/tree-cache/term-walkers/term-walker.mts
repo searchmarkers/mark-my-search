@@ -7,7 +7,7 @@ import type { AllReadonly } from "/dist/modules/common.mjs";
 type Flow = BaseFlow<false>
 
 class TermWalker implements AbstractTermWalker {
-	#elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
 	constructor (elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>) {
 		this.#elementFlowsMap = elementFlowsMap;

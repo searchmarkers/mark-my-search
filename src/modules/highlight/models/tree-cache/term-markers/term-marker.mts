@@ -6,11 +6,14 @@ import { EleID, getElementYRelative, getTermClass, type AllReadonly } from "/dis
 type Flow = BaseFlow<false>
 
 class TermMarker implements AbstractTermMarker {
-	#termTokens: TermTokens;
+	readonly #termTokens: TermTokens;
 
-	#elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
-	constructor (termTokens: TermTokens, elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>) {
+	constructor (
+		termTokens: TermTokens,
+		elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>,
+	) {
 		this.#termTokens = termTokens;
 		this.#elementFlowsMap = elementFlowsMap;
 	}

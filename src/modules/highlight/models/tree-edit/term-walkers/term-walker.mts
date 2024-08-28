@@ -6,7 +6,7 @@ import { getTermClass } from "/dist/modules/common.mjs";
 import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass } from "/dist/modules/common.mjs";
 
 class TermWalker implements AbstractTermWalker {
-	#termTokens: TermTokens;
+	readonly #termTokens: TermTokens;
 	
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;

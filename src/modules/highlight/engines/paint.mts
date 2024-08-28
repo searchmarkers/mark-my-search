@@ -1,18 +1,13 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
-import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { AbstractFlowMonitor, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
 import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { BaseFlow, BaseSpan } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, createContainer, type PaintEngineMethod, type AllReadonly } from "/dist/modules/common.mjs";
-
-type Flow = BaseFlow<true>
-
-type Span = BaseSpan<true>
 
 interface Box {
 	token: string
@@ -42,21 +37,22 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 	readonly class = "PAINT";
 	readonly model = "tree-cache";
 
-	readonly termTokens: TermTokens;
-	readonly termPatterns: TermPatterns;
+	readonly #termTokens: TermTokens;
 
-	readonly method: AbstractMethod;
+	readonly #method: AbstractMethod;
 
-	readonly flowMonitor: AbstractFlowMonitor;
+	readonly #flowMonitor: AbstractFlowMonitor;
 
-	readonly elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
-	readonly spanBoxesMap = new Map<Span, Array<Box>>;
-	readonly elementHighlightingIdMap = new Map<HTMLElement, number>();
-	readonly elementStyleRuleMap = new Map<HTMLElement, string>();
+	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+	readonly #spanBoxesMap = new Map<Span, Array<Box>>;
+	readonly #elementHighlightingIdMap = new Map<HTMLElement, number>();
+	readonly #elementStyleRuleMap = new Map<HTMLElement, string>();
 
-	readonly elementsVisible = new Set<HTMLElement>();
-	readonly observeVisibilityChangesFor: ReturnType<typeof this.getVisibilityChangeFns>["observeFor"];
-	readonly unobserveVisibilityChanges: ReturnType<typeof this.getVisibilityChangeFns>["unobserve"];
+	readonly #elementsVisible = new Set<HTMLElement>();
+
+	readonly #highlightingStyleRuleChangedListeners = new Set<HighlightingStyleRuleChangedListener>();
+	readonly #highlightingStyleRuleDeletedListeners = new Set<HighlightingStyleRuleChangedListener>();
+	readonly #highlightingAppliedListeners = new Set<HighlightingAppliedListener>();
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -66,33 +62,32 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
-		this.termTokens = termTokens;
-		this.termPatterns = termPatterns;
-		this.flowMonitor = new FlowMonitor(this.terms, termPatterns);
-		this.flowMonitor.setNewSpanOwnerListener(flowOwner => {
+		this.#termTokens = termTokens;
+		this.#flowMonitor = new FlowMonitor(this.terms, termPatterns);
+		this.#flowMonitor.setNewSpanOwnerListener(flowOwner => {
 			this.observeVisibilityChangesFor(flowOwner);
-			if (!this.elementHighlightingIdMap.has(flowOwner)) {
+			if (!this.#elementHighlightingIdMap.has(flowOwner)) {
 				const id = highlightingId.next().value;
-				this.elementHighlightingIdMap.set(flowOwner, id);
+				this.#elementHighlightingIdMap.set(flowOwner, id);
 				// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
 				// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
 				flowOwner.setAttribute("markmysearch-h_id", id.toString());
 			}
 		});
-		this.flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
+		this.#flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
 			for (const span of spansRemoved) {
-				this.spanBoxesMap.delete(span);
+				this.#spanBoxesMap.delete(span);
 			}
 		});
-		this.flowMonitor.setNonSpanOwnerListener(flowOwner => {
+		this.#flowMonitor.setNonSpanOwnerListener(flowOwner => {
 			// TODO this is done for consistency with the past behaviour; but is it right/necessary?
-			this.elementHighlightingIdMap.delete(flowOwner);
-			this.elementStyleRuleMap.delete(flowOwner);
-			for (const listener of this.highlightingStyleRuleDeletedListeners) {
+			this.#elementHighlightingIdMap.delete(flowOwner);
+			this.#elementStyleRuleMap.delete(flowOwner);
+			for (const listener of this.#highlightingStyleRuleDeletedListeners) {
 				listener(flowOwner);
 			}
 		});
-		this.elementFlowsMap = this.flowMonitor.getElementFlowsMap();
+		this.#elementFlowsMap = this.#flowMonitor.getElementFlowsMap();
 		const method = (() => {
 			switch (methodModule.methodClass) {
 			case "paint": {
@@ -102,19 +97,61 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 			} case "element": {
 				return new methodModule.ElementMethod(
 					termTokens,
-					this.elementFlowsMap,
-					this.spanBoxesMap,
-					this.elementHighlightingIdMap,
+					this.#elementFlowsMap,
+					this.#spanBoxesMap,
+					this.#elementHighlightingIdMap,
 					this,
 				);
 			}}
 		})();
-		this.method = method;
+		this.#method = method;
 		this.getCSS = method.getCSS;
 		{
-			const { observeFor, unobserve } = this.getVisibilityChangeFns();
-			this.observeVisibilityChangesFor = observeFor;
-			this.unobserveVisibilityChanges = unobserve;
+			const visibilityObserver = new IntersectionObserver(entries => {
+				for (const entry of entries) {
+					if (!(entry.target instanceof HTMLElement)) {
+						continue;
+					}
+					if (entry.isIntersecting) {
+						if (this.#elementHighlightingIdMap.has(entry.target)) {
+							this.#elementsVisible.add(entry.target);
+							shiftObserver.observe(entry.target);
+							this.cacheStyleRulesFor(
+								this.#method.highlightables?.findHighlightableAncestor(entry.target) ?? entry.target,
+								false,
+								this.terms.current,
+								this.hues.current,
+							);
+						}
+					} else {
+						this.#elementsVisible.delete(entry.target);
+						shiftObserver.unobserve(entry.target);
+					}
+				}
+				this.applyStyleRules();
+			}, { rootMargin: "400px" });
+			const shiftObserver = new ResizeObserver(entries => {
+				for (const entry of entries) {
+					if (!(entry.target instanceof HTMLElement)) {
+						continue;
+					}
+					this.cacheStyleRulesFor(
+						this.#method.highlightables?.findHighlightableAncestor(entry.target) ?? entry.target,
+						true,
+						this.terms.current,
+						this.hues.current,
+					);
+				}
+				this.applyStyleRules();
+			});
+			this.observeVisibilityChangesFor = (element: HTMLElement) => {
+				visibilityObserver.observe(element);
+			};
+			this.unobserveVisibilityChanges = () => {
+				this.#elementsVisible.clear();
+				shiftObserver.disconnect();
+				visibilityObserver.disconnect();
+			};
 		}
 		const highlightingId = (function* () {
 			let i = 0;
@@ -149,19 +186,19 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
-		this.flowMonitor.unobserveMutations();
-		this.flowMonitor.removeHighlightSpansFor(termsToPurge);
+		this.#flowMonitor.unobserveMutations();
+		this.#flowMonitor.removeHighlightSpansFor(termsToPurge);
 		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
-		this.flowMonitor.generateHighlightSpansFor(terms, document.body);
-		this.flowMonitor.observeMutations();
+		this.#flowMonitor.generateHighlightSpansFor(terms, document.body);
+		this.#flowMonitor.observeMutations();
 		// TODO how are the currently-visible elements known and hence highlighted (when the engine has not been watching them)?
 		// TODO (should visibility changes be unobserved and re-observed?)
-		const highlightables = this.method.highlightables;
+		const highlightables = this.#method.highlightables;
 		const highlightableAncestorsVisible = highlightables
-			? new Set(Array.from(this.elementsVisible).map(element => highlightables.findHighlightableAncestor(element)))
-			: this.elementsVisible;
+			? new Set(Array.from(this.#elementsVisible).map(element => highlightables.findHighlightableAncestor(element)))
+			: this.#elementsVisible;
 		for (const element of highlightableAncestorsVisible) {
 			this.cacheStyleRulesFor(element, false, terms, hues);
 		}
@@ -170,38 +207,17 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 
 	endHighlighting () {
 		this.unobserveVisibilityChanges();
-		this.flowMonitor.unobserveMutations();
-		this.flowMonitor.removeHighlightSpansFor();
+		this.#flowMonitor.unobserveMutations();
+		this.#flowMonitor.removeHighlightSpansFor();
 		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
 		for (const element of document.body.querySelectorAll("[markmysearch-h_id]")) {
 			element.removeAttribute("markmysearch-h_id");
 		}
 	}
 
-	getHighlightedElements () {
-		return this.elementHighlightingIdMap.keys();
-	}
+	readonly observeVisibilityChangesFor: (element: HTMLElement) => void;
 
-	readonly highlightingUpdatedListeners = new Set<Generator>();
-	readonly highlightingStyleRuleChangedListeners = new Set<HighlightingStyleRuleChangedListener>();
-	readonly highlightingStyleRuleDeletedListeners = new Set<HighlightingStyleRuleChangedListener>();
-	readonly highlightingAppliedListeners = new Set<HighlightingAppliedListener>();
-
-	addHighlightingUpdatedListener (listener: Generator) {
-		this.flowMonitor.addHighlightingUpdatedListener(listener);
-	}
-
-	addHighlightingStyleRuleChangedListener (listener: HighlightingStyleRuleChangedListener) {
-		this.highlightingStyleRuleChangedListeners.add(listener);
-	}
-
-	addHighlightingStyleRuleDeletedListener (listener: HighlightingStyleRuleDeletedListener) {
-		this.highlightingStyleRuleDeletedListeners.add(listener);
-	}
-
-	addHighlightingAppliedListener (listener: HighlightingAppliedListener) {
-		this.highlightingAppliedListeners.add(listener);
-	}
+	readonly unobserveVisibilityChanges: () => void;
 
 	cacheStyleRulesFor (
 		highlightableRoot: HTMLElement,
@@ -210,22 +226,22 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		hues: ReadonlyArray<number>,
 	) {
 		// TODO unhighlightable elements should get a style rule which makes their background-color transparent
-		const highlightingId = this.elementHighlightingIdMap.get(highlightableRoot);
+		const highlightingId = this.#elementHighlightingIdMap.get(highlightableRoot);
 		if (highlightingId !== undefined) {
-			this.elementStyleRuleMap.set(highlightableRoot, this.method.constructHighlightStyleRule(
+			this.#elementStyleRuleMap.set(highlightableRoot, this.#method.constructHighlightStyleRule(
 				highlightingId,
 				getBoxesOwned(
 					highlightableRoot,
 					true,
-					this.elementFlowsMap,
-					this.spanBoxesMap,
-					this.method.highlightables ?? null,
-					this.termTokens,
+					this.#elementFlowsMap,
+					this.#spanBoxesMap,
+					this.#method.highlightables ?? null,
+					this.#termTokens,
 				),
 				terms,
 				hues,
 			));
-			for (const listener of this.highlightingStyleRuleChangedListeners) {
+			for (const listener of this.#highlightingStyleRuleChangedListeners) {
 				listener(highlightableRoot);
 			}
 		}
@@ -236,22 +252,22 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 			let descendant: Node | null;
 			// eslint-disable-next-line no-cond-assign
 			while (descendant = walker.nextNode()) if (descendant instanceof HTMLElement) {
-				const highlightingId = this.elementHighlightingIdMap.get(descendant);
+				const highlightingId = this.#elementHighlightingIdMap.get(descendant);
 				if (highlightingId !== undefined) {
-					this.elementStyleRuleMap.set(descendant, this.method.constructHighlightStyleRule(
+					this.#elementStyleRuleMap.set(descendant, this.#method.constructHighlightStyleRule(
 						highlightingId,
 						getBoxesOwned(
 							descendant,
 							true,
-							this.elementFlowsMap,
-							this.spanBoxesMap,
-							this.method.highlightables ?? null,
-							this.termTokens,
+							this.#elementFlowsMap,
+							this.#spanBoxesMap,
+							this.#method.highlightables ?? null,
+							this.#termTokens,
 						),
 						terms,
 						hues,
 					));
-					for (const listener of this.highlightingStyleRuleChangedListeners) {
+					for (const listener of this.#highlightingStyleRuleChangedListeners) {
 						listener(highlightableRoot);
 					}
 				}
@@ -260,66 +276,35 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 	}
 
 	applyStyleRules () {
-		for (const listener of this.highlightingAppliedListeners) {
-			listener(this.elementStyleRuleMap.keys());
+		for (const listener of this.#highlightingAppliedListeners) {
+			listener(this.#elementStyleRuleMap.keys());
 		}
 		const style = document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement;
-		style.textContent = Array.from(this.elementStyleRuleMap.values()).join("\n");
+		style.textContent = Array.from(this.#elementStyleRuleMap.values()).join("\n");
 	}
 
-	// TODO move next to constructor?
-	getVisibilityChangeFns () {
-		const visibilityObserver = new IntersectionObserver(entries => {
-			for (const entry of entries) {
-				if (!(entry.target instanceof HTMLElement)) {
-					continue;
-				}
-				if (entry.isIntersecting) {
-					if (this.elementHighlightingIdMap.has(entry.target)) {
-						this.elementsVisible.add(entry.target);
-						shiftObserver.observe(entry.target);
-						this.cacheStyleRulesFor(
-							this.method.highlightables?.findHighlightableAncestor(entry.target) ?? entry.target,
-							false,
-							this.terms.current,
-							this.hues.current,
-						);
-					}
-				} else {
-					this.elementsVisible.delete(entry.target);
-					shiftObserver.unobserve(entry.target);
-				}
-			}
-			this.applyStyleRules();
-		}, { rootMargin: "400px" });
-		const shiftObserver = new ResizeObserver(entries => {
-			for (const entry of entries) {
-				if (!(entry.target instanceof HTMLElement)) {
-					continue;
-				}
-				this.cacheStyleRulesFor(
-					this.method.highlightables?.findHighlightableAncestor(entry.target) ?? entry.target,
-					true,
-					this.terms.current,
-					this.hues.current,
-				);
-			}
-			this.applyStyleRules();
-		});
-		return {
-			/**
-			 * test
-			 * @param element 
-			 */
-			observeFor: (element: HTMLElement) => {
-				visibilityObserver.observe(element);
-			},
-			unobserve: () => {
-				this.elementsVisible.clear();
-				shiftObserver.disconnect();
-				visibilityObserver.disconnect();
-			},
-		};
+	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
+		return this.#elementFlowsMap;
+	}
+
+	getHighlightedElements (): Iterable<HTMLElement> {
+		return this.#elementHighlightingIdMap.keys();
+	}
+
+	addHighlightingUpdatedListener (listener: Generator) {
+		this.#flowMonitor.addHighlightingUpdatedListener(listener);
+	}
+
+	addHighlightingStyleRuleChangedListener (listener: HighlightingStyleRuleChangedListener) {
+		this.#highlightingStyleRuleChangedListeners.add(listener);
+	}
+
+	addHighlightingStyleRuleDeletedListener (listener: HighlightingStyleRuleDeletedListener) {
+		this.#highlightingStyleRuleDeletedListeners.add(listener);
+	}
+
+	addHighlightingAppliedListener (listener: HighlightingAppliedListener) {
+		this.#highlightingAppliedListeners.add(listener);
 	}
 }
 

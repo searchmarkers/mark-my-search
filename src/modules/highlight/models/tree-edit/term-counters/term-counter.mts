@@ -3,7 +3,7 @@ import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { getTermClass } from "/dist/modules/common.mjs";
 
 class TermCounter implements AbstractTermCounter {
-	#termTokens: TermTokens;
+	readonly #termTokens: TermTokens;
 	
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;
