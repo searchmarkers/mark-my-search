@@ -1,29 +1,31 @@
 import type { AbstractTermMarker } from "/dist/modules/highlight/term-marker.mjs";
-import { type CachingHTMLElement, CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import { EleID, getElementYRelative, getTermClass } from "/dist/modules/common.mjs";
+import { EleID, getElementYRelative, getTermClass, type AllReadonly } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false>
 
 class TermMarker implements AbstractTermMarker {
 	#termTokens: TermTokens;
-	
-	constructor (termTokens: TermTokens) {
+
+	#elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+
+	constructor (termTokens: TermTokens, elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>) {
 		this.#termTokens = termTokens;
+		this.#elementFlowsMap = elementFlowsMap;
 	}
 
 	insert (
 		terms: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
-		highlightedElements: Iterable<CachingHTMLElement<Flow>>,
+		highlightedElements: Iterable<HTMLElement>,
 	) {
 		const termsSet = new Set(terms);
 		const gutter = document.getElementById(EleID.MARKER_GUTTER)!;
 		let markersHtml = "";
-		for (const element of highlightedElements) if (CACHE in element) {
-			const highlightedTerms = new Set(element[CACHE].flows.flatMap(flow =>
-				flow.boxesInfo.filter(boxInfo => termsSet.has(boxInfo.term)).map(boxInfo => boxInfo.term)
+		for (const element of highlightedElements) if (this.#elementFlowsMap.has(element)) {
+			const highlightedTerms = new Set((this.#elementFlowsMap.get(element) ?? []).flatMap(flow =>
+				flow.spans.filter(span => termsSet.has(span.term)).map(span => span.term)
 			));
 			const yRelative = getElementYRelative(element);
 			// TODO use single marker with custom style

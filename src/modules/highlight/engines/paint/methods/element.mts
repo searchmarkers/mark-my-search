@@ -1,28 +1,58 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
-import type { Box, CachingElement, CachingHTMLElement } from "/dist/modules/highlight/engines/paint.mjs";
+import type { HighlightingStyleObserver, Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
-import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { AllReadonly } from "/dist/modules/common.mjs";
 import { Z_INDEX_MIN, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 
 class ElementMethod implements AbstractMethod {
-	readonly termTokens: TermTokens;
+	readonly #termTokens: TermTokens;
 
-	constructor (termTokens: TermTokens) {
-		this.termTokens = termTokens;
+	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+	readonly #spanBoxesMap: AllReadonly<Map<Span, Array<Box>>>;
+	readonly #elementHighlightingIdMap: AllReadonly<Map<HTMLElement, number>>;
+
+	readonly #elementDrawContainerMap = new Map<HTMLElement, HTMLElement>();
+
+	constructor (
+		termTokens: TermTokens,
+		elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>,
+		spanBoxesMap: Map<Readonly<Span>, Array<Readonly<Box>>>,
+		elementHighlightingIdMap: AllReadonly<Map<HTMLElement, number>>,
+		styleObserver: HighlightingStyleObserver,
+	) {
+		this.#termTokens = termTokens;
+		this.#elementFlowsMap = elementFlowsMap;
+		this.#spanBoxesMap = spanBoxesMap;
+		this.#elementHighlightingIdMap = elementHighlightingIdMap;
+		const newlyStyledElements = new Set<HTMLElement>();
+		const newlyUnstyledElements = new Set<HTMLElement>();
+		styleObserver.addHighlightingStyleRuleChangedListener(element => {
+			newlyStyledElements.add(element);
+		});
+		styleObserver.addHighlightingStyleRuleDeletedListener(element => {
+			newlyUnstyledElements.add(element);
+		});
+		styleObserver.addHighlightingAppliedListener(() => {
+			const parent = document.getElementById(EleID.DRAW_CONTAINER)!;
+			for (const element of newlyUnstyledElements) {
+				this.#elementDrawContainerMap.get(element)?.remove();
+				this.#elementDrawContainerMap.delete(element);
+			}
+			for (const element of newlyStyledElements) {
+				this.#elementDrawContainerMap.get(element)?.remove();
+				this.#elementDrawContainerMap.delete(element);
+				const container = this.getDrawElementContainer(element);
+				if (container === null) {
+					continue;
+				}
+				this.#elementDrawContainerMap.set(element, container);
+				parent.appendChild(container);
+			}
+		});
 	}
-
-	isElementHighlightable () {
-		return true;
-	}
-
-	findHighlightableAncestor (element: CachingElement): CachingElement {
-		return element;
-	}
-
-	markElementsUpToHighlightable () {}
 
 	readonly getCSS: EngineCSS = {
 		misc: () => {
@@ -55,86 +85,62 @@ border-radius: 2px;
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
 			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
-				getTermClass(term, this.termTokens)
+				getTermClass(term, this.#termTokens)
 			}`;
-			const backgroundStyle = TermCSS.getHorizontalStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle);
+			const backgroundStyle = TermCSS.getHorizontalStyle(
+				`hsl(${hue} 100% 60% / 0.4)`,
+				`hsl(${hue} 100% 88% / 0.4)`,
+				cycle,
+			);
 			return`${selector} { background: ${backgroundStyle}; }`;
 		},
 	};
 
-	endHighlighting () {}
-
-	getHighlightedElements () {
-		return document.body.querySelectorAll(
-			"[markmysearch-h_id]",
-		) as NodeListOf<CachingHTMLElement<true>>;
-	}
-
-	getElementDrawId (highlightId: string) {
-		return EleID.DRAW_ELEMENT + "-" + highlightId;
-	}
-
-	constructHighlightStyleRule (highlightId: string) {
-		return `body [markmysearch-h_id="${highlightId}"] { background-image: -moz-element(#${
-			this.getElementDrawId(highlightId)
+	constructHighlightStyleRule (highlightingId: number) {
+		return `body [markmysearch-h_id="${highlightingId}"] { background-image: -moz-element(#${
+			EleID.DRAW_ELEMENT + "-" + highlightingId.toString()
 		}) !important; background-repeat: no-repeat !important; }`;
 	}
 
-	tempReplaceContainers (root: CachingElement<true>, recurse: boolean) {
-		// This whole operation is plagued with issues. Containers will almost never get deleted when they should
-		// (e.g. when all terms have been removed or highlighting is disabled), and removing an individual term does not
-		// result in the associated elements being deleted. TODO
-		const containers: Array<Element> = [];
-		this.collectElements(root, recurse, containers, new Range());
-		const parent = document.getElementById(EleID.DRAW_CONTAINER) as Element;
-		for (const container of containers) {
-			const containerExisting = document.getElementById(container.id);
-			if (containerExisting) {
-				containerExisting.remove();
-			}
-			parent.appendChild(container);
+	getDrawElementContainer (element: HTMLElement): HTMLElement | null {
+		const highlightingId = this.#elementHighlightingIdMap.get(element);
+		if (highlightingId === undefined) {
+			return null;
 		}
-	}
-	
-	collectElements (
-		element: CachingElement<true>,
-		recurse: boolean,
-		containers: Array<Element>,
-		range: Range,
-	) {
-		const boxes: Array<Box> = getBoxesOwned(this.termTokens, element);
-		if (boxes.length) {
-			const container = document.createElement("div");
-			container.id = this.getElementDrawId(element[CACHE].id);
-			for (const box of boxes) {
-				const element = document.createElement("div");
-				element.style.position = "absolute"; // Should it be "fixed"? Should it be applied in a stylesheet?
-				element.style.left = box.x.toString() + "px";
-				element.style.top = box.y.toString() + "px";
-				element.style.width = box.width.toString() + "px";
-				element.style.height = box.height.toString() + "px";
-				element.classList.add(EleClass.TERM, getTermTokenClass(box.token));
-				container.appendChild(element);
-			}
-			const boxRightmost = boxes.reduce((box, boxCurrent) =>
-				box && (box.x + box.width > boxCurrent.x + boxCurrent.width) ? box : boxCurrent
-			);
-			const boxDownmost = boxes.reduce((box, boxCurrent) =>
-				box && (box.y + box.height > boxCurrent.y + boxCurrent.height) ? box : boxCurrent
-			);
-			container.style.width = (boxRightmost.x + boxRightmost.width).toString() + "px";
-			container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
-			containers.push(container);
+		const boxes: ReadonlyArray<Box> = getBoxesOwned(
+			element,
+			false,
+			this.#elementFlowsMap,
+			this.#spanBoxesMap,
+			null,
+			this.#termTokens,
+		);
+		if (boxes.length === 0) {
+			return null;
 		}
-		if (recurse) {
-			for (const child of element.children as HTMLCollectionOf<CachingElement>) if (CACHE in child) {
-				this.collectElements(child, recurse, containers, range);
+		const container = document.createElement("div");
+		container.id = EleID.DRAW_ELEMENT + "-" + highlightingId.toString();
+		let boxRightmost = boxes[0];
+		let boxDownmost = boxes[0];
+		for (const box of boxes) {
+			if (box.x + box.width > boxRightmost.x + boxRightmost.width) {
+				boxRightmost = box;
 			}
+			if (box.y + box.height > boxDownmost.y + boxDownmost.height) {
+				boxDownmost = box;
+			}
+			const drawElement = document.createElement("div");
+			drawElement.style.position = "absolute"; // Should it be "fixed"? Should it be applied in a stylesheet?
+			drawElement.style.left = box.x.toString() + "px";
+			drawElement.style.top = box.y.toString() + "px";
+			drawElement.style.width = box.width.toString() + "px";
+			drawElement.style.height = box.height.toString() + "px";
+			drawElement.classList.add(EleClass.TERM, getTermTokenClass(box.token));
+			container.appendChild(drawElement);
 		}
-	}
-
-	tempRemoveDrawElement (element: CachingElement<true>) {
-		document.getElementById(this.getElementDrawId(element[CACHE].id))?.remove();
+		container.style.width = (boxRightmost.x + boxRightmost.width).toString() + "px";
+		container.style.height = (boxDownmost.y + boxDownmost.height).toString() + "px";
+		return container;
 	}
 }
 

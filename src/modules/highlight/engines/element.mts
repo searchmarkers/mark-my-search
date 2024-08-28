@@ -1,7 +1,7 @@
 import type { AbstractTreeEditEngine } from "/dist/modules/highlight/models/tree-edit.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
-import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
+import type { MutationObserverWrapper } from "/dist/modules/highlight/flow-mutation-observer.mjs";
+import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass, createContainer } from "/dist/modules/common.mjs";
@@ -105,7 +105,7 @@ class ElementEngine implements AbstractTreeEditEngine {
 	readonly termTokens: TermTokens;
 	readonly termPatterns: TermPatterns;
 
-	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
+	readonly flowMutations: MutationObserverWrapper;
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -116,7 +116,15 @@ class ElementEngine implements AbstractTreeEditEngine {
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
-		this.mutationUpdates = getMutationUpdates(this.getMutationUpdatesObserver());
+		const mutationObserver = this.getFlowMutationObserver();
+		this.flowMutations = {
+			observeMutations: () => {
+				mutationObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+			},
+			unobserveMutations: () => {
+				mutationObserver.disconnect();
+			},
+		};
 	}
 
 	readonly getCSS = {
@@ -155,16 +163,16 @@ ${HIGHLIGHT_TAG} {
 		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) {
-		this.mutationUpdates.disconnect();
+		this.flowMutations.unobserveMutations();
 		this.undoHighlights(termsToPurge);
 		this.terms.assign(terms);
 		this.hues.assign(hues);
 		this.generateTermHighlightsUnderNode(termsToHighlight, document.body);
-		this.mutationUpdates.observe();
+		this.flowMutations.observeMutations();
 	}
 
 	endHighlighting () {
-		this.mutationUpdates.disconnect();
+		this.flowMutations.unobserveMutations();
 		this.undoHighlights();
 	}
 
@@ -209,7 +217,7 @@ ${HIGHLIGHT_TAG} {
 
 	readonly highlightingUpdatedListeners = new Set<Generator>();
 
-	registerHighlightingUpdatedListener (listener: Generator) {
+	addHighlightingUpdatedListener (listener: Generator) {
 		this.highlightingUpdatedListeners.add(listener);
 	}
 
@@ -407,7 +415,7 @@ ${HIGHLIGHT_TAG} {
 		};
 	})();
 
-	getMutationUpdatesObserver () {
+	getFlowMutationObserver () {
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
 		const elements = new Set<HTMLElement>();
 		let periodDateLast = 0;

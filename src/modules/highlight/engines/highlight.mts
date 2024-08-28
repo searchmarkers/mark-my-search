@@ -1,32 +1,27 @@
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
-import type { TreeCache, CachingHTMLElement } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
-import { CACHE } from "/dist/modules/highlight/models/tree-cache/tree-cache.mjs";
 import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
-import type { BaseFlow, BaseBoxInfo } from "/dist/modules/highlight/matcher.mjs";
-import { getMutationUpdates } from "/dist/modules/highlight/page-updates.mjs";
+import type { BaseFlow, BaseSpan } from "/dist/modules/highlight/matcher.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass, createContainer } from "/dist/modules/common.mjs";
+import { EleID, EleClass, createContainer, type AllReadonly } from "/dist/modules/common.mjs";
 
-type Flow = BaseFlow<true, BoxInfoRange>
+type Flow = BaseFlow<true>
 
-type BoxInfo = BaseBoxInfo<true, BoxInfoRange>
-
-interface BoxInfoRange { range: AbstractRange }
+type Span = BaseSpan<true>
 
 const getName = (termToken: string) => "markmysearch-" + termToken;
 
 class ExtendedHighlight {
 	readonly highlight: Highlight;
-	readonly boxInfoRanges = new Map<BoxInfo, AbstractRange>();
+	readonly spanRangeMap = new Map<Span, AbstractRange>();
 
 	constructor (...initialRanges: Array<AbstractRange>) {
 		this.highlight = new Highlight(...initialRanges);
 	}
 
-	add (value: AbstractRange, boxInfo: BoxInfo) {
-		this.boxInfoRanges.set(boxInfo, value);
+	add (value: AbstractRange, span: Span) {
+		this.spanRangeMap.set(span, value);
 		return this.highlight.add(value);
 	}
 
@@ -35,28 +30,28 @@ class ExtendedHighlight {
 	}
 
 	delete (value: AbstractRange) {
-		const result = Array.from(this.boxInfoRanges.entries()).find(({ 1: range }) => range === value);
+		const result = Array.from(this.spanRangeMap.entries()).find(({ 1: range }) => range === value);
 		if (!result) {
 			return this.highlight.delete(value);
 		}
-		return this.boxInfoRanges.delete(result[0]);
+		return this.spanRangeMap.delete(result[0]);
 	}
 
-	getByBoxInfo (boxInfo: BoxInfo) {
-		return this.boxInfoRanges.get(boxInfo);
+	getBySpan (span: Span) {
+		return this.spanRangeMap.get(span);
 	}
 
-	deleteByBoxInfo (boxInfo: BoxInfo) {
-		const range = this.boxInfoRanges.get(boxInfo);
+	deleteBySpan (span: Span) {
+		const range = this.spanRangeMap.get(span);
 		if (!range) {
 			return false;
 		}
-		this.boxInfoRanges.delete(boxInfo);
+		this.spanRangeMap.delete(span);
 		return this.highlight.delete(range);
 	}
 
-	hasByBoxInfo (boxInfo: BoxInfo) {
-		return this.boxInfoRanges.has(boxInfo);
+	hasBySpan (span: Span) {
+		return this.spanRangeMap.has(span);
 	}
 }
 
@@ -110,10 +105,9 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 
 	readonly flowMonitor: AbstractFlowMonitor;
 
-	readonly mutationUpdates: ReturnType<typeof getMutationUpdates>;
+	readonly elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
 	readonly highlights = new ExtendedHighlightRegistry();
-	readonly highlightedElements = new Set<CachingHTMLElement<Flow>>();
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -135,36 +129,23 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	) {
 		this.termTokens = termTokens;
 		this.termPatterns = termPatterns;
-		this.flowMonitor = new FlowMonitor<Flow, TreeCache<Flow>>(
-			this.terms,
-			termPatterns,
-			this.highlightingUpdatedListeners,
-			{
-				createElementCache: () => ({ flows: [] }),
-				onBoxesInfoPopulated: element => {
-					this.highlightedElements.add(element);
-					for (const flow of element[CACHE].flows) {
-						for (const boxInfo of flow.boxesInfo) {
-							this.highlights.get(this.termTokens.get(boxInfo.term))?.add(new StaticRange({
-								startContainer: boxInfo.node,
-								startOffset: boxInfo.start,
-								endContainer: boxInfo.node,
-								endOffset: boxInfo.end,
-							}), boxInfo);
-						}
-					}
-				},
-				onBoxesInfoRemoved: element => {
-					this.highlightedElements.delete(element);
-					for (const flow of element[CACHE].flows) {
-						for (const boxInfo of flow.boxesInfo) {
-							this.highlights.get(this.termTokens.get(boxInfo.term))?.deleteByBoxInfo(boxInfo);
-						}
-					}
-				},
-			},
-		);
-		this.mutationUpdates = getMutationUpdates(this.flowMonitor.mutationObserver);
+		this.flowMonitor = new FlowMonitor(this.terms, termPatterns);
+		this.flowMonitor.setSpansCreatedListener((flowOwner, spansCreated) => {
+			for (const span of spansCreated) {
+				this.highlights.get(this.termTokens.get(span.term))?.add(new StaticRange({
+					startContainer: span.node,
+					startOffset: span.start,
+					endContainer: span.node,
+					endOffset: span.end,
+				}), span);
+			}
+		});
+		this.flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
+			for (const span of spansRemoved) {
+				this.highlights.get(this.termTokens.get(span.term))?.deleteBySpan(span);
+			}
+		});
+		this.elementFlowsMap = this.flowMonitor.getElementFlowsMap();
 	}
 
 	readonly getCSS = {
@@ -200,7 +181,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
-		this.mutationUpdates.disconnect();
+		this.flowMonitor.unobserveMutations();
 		this.undoHighlights(termsToPurge);
 		// MAIN
 		this.terms.assign(terms);
@@ -208,17 +189,17 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		for (const term of terms) {
 			this.highlights.set(this.termTokens.get(term), new ExtendedHighlight());
 		}
-		this.flowMonitor.generateBoxesInfo(terms, this.termPatterns, document.body);
-		this.mutationUpdates.observe();
+		this.flowMonitor.generateHighlightSpansFor(terms, document.body);
+		this.flowMonitor.observeMutations();
 	}
 
 	endHighlighting () {
-		this.mutationUpdates.disconnect();
+		this.flowMonitor.unobserveMutations();
 		this.undoHighlights();
 	}
 
 	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
-		this.flowMonitor.removeBoxesInfo(terms);
+		this.flowMonitor.removeHighlightSpansFor(terms);
 		if (terms) {
 			for (const term of terms) {
 				this.highlights.delete(this.termTokens.get(term));
@@ -229,17 +210,17 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	}
 
 	getHighlightedElements (): Iterable<HTMLElement> {
-		return this.highlightedElements;
+		return this.elementFlowsMap.keys();
 	}
 
 	readonly highlightingUpdatedListeners = new Set<Generator>();
 
-	registerHighlightingUpdatedListener (listener: Generator) {
+	addHighlightingUpdatedListener (listener: Generator) {
 		this.highlightingUpdatedListeners.add(listener);
 	}
 }
 
 export {
-	type Flow, type BoxInfo,
+	type Flow, type Span,
 	HighlightEngine,
 };
