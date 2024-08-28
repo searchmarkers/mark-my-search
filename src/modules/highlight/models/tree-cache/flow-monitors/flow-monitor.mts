@@ -5,60 +5,36 @@ import { MatchTerm, type TermPatterns } from "/dist/modules/match-term.mjs";
 import type { RContainer, AllReadonly } from "/dist/modules/common.mjs";
 
 class FlowMonitor implements AbstractFlowMonitor {
-	readonly termPatterns: TermPatterns;
+	readonly #termPatterns: TermPatterns;
 
-	readonly mutationObserver: MutationObserver;
+	/**
+	 * A MutationObserver which responds to mutations by calling methods
+	 * to update cached highlighting information, based on the elements changed.
+	 * @returns The MutationObserver object.
+	 */
+	readonly #mutationObserver: MutationObserver;
 
 	readonly #elementFlowsMap = new Map<HTMLElement, Array<Flow>>();
 
-	newSpanOwnerListener?: (flowOwner: HTMLElement) => void;
-	spansCreatedListener?: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void;
-	spansRemovedListener?: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void;
-	nonSpanOwnerListener?: (flowOwner: HTMLElement) => void;
-	readonly highlightingUpdatedListeners = new Set<Generator>();
+	#newSpanOwnerListener?: (flowOwner: HTMLElement) => void;
+	#spansCreatedListener?: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void;
+	#spansRemovedListener?: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void;
+	#nonSpanOwnerListener?: (flowOwner: HTMLElement) => void;
+	readonly #highlightingUpdatedListeners = new Set<Generator>();
 
+	/**
+	 * 
+	 * @param terms A live container of the *current terms being highlighted*.
+	 * Highlighting is assumed to be up to date with the current terms.
+	 * @param termPatterns 
+	 */
 	constructor (
 		terms: RContainer<ReadonlyArray<MatchTerm>>,
 		termPatterns: TermPatterns,
 	) {
-		this.termPatterns = termPatterns;
-		this.mutationObserver = this.getMutationObserver(terms);
-	}
-
-	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
-		return this.#elementFlowsMap;
-	}
-
-	setNewSpanOwnerListener (listener: (flowOwner: HTMLElement) => void) {
-		this.newSpanOwnerListener = listener;
-	}
-
-	setSpansCreatedListener (listener: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void) {
-		this.spansCreatedListener = listener;
-	}
-
-	setSpansRemovedListener (listener: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void) {
-		this.spansRemovedListener = listener;
-	}
-
-	setNonSpanOwnerListener (listener: (flowOwner: HTMLElement) => void): void {
-		this.nonSpanOwnerListener = listener;
-	}
-
-	addHighlightingUpdatedListener (listener: Generator) {
-		this.highlightingUpdatedListeners.add(listener);
-	}
-
-	/**
-	 * Returns a MutationObserver which responds to mutations by calling methods
-	 * to update cached highlighting information, based on the elements changed.
-	 * @param terms A live container of the *current terms being highlighted*.
-	 * Highlighting is assumed to be up to date with the current terms.
-	 * @returns The MutationObserver object.
-	 */
-	getMutationObserver (terms: RContainer<ReadonlyArray<MatchTerm>>) {
+		this.#termPatterns = termPatterns;
 		const rejectSelector = Array.from(highlightTags.reject).join(", ");
-		return new MutationObserver(mutations => {
+		this.#mutationObserver = new MutationObserver(mutations => {
 			// TODO optimise
 			const elementsAffected = new Set<HTMLElement>();
 			//const elementsAdded: Set<HTMLElement> = new Set();
@@ -105,11 +81,11 @@ class FlowMonitor implements AbstractFlowMonitor {
 	}
 
 	observeMutations () {
-		this.mutationObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
+		this.#mutationObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
 	}
 
 	unobserveMutations () {
-		this.mutationObserver.disconnect();
+		this.#mutationObserver.disconnect();
 	}
 
 	generateBoxesInfoForFlowOwners (terms: ReadonlyArray<MatchTerm>, node: Node) {
@@ -163,7 +139,7 @@ class FlowMonitor implements AbstractFlowMonitor {
 		) {
 			this.cacheFlowWithSpans(terms, textFlows[i]);
 		}
-		for (const listener of this.highlightingUpdatedListeners) {
+		for (const listener of this.#highlightingUpdatedListeners) {
 			listener.next();
 		}
 	}
@@ -185,10 +161,10 @@ class FlowMonitor implements AbstractFlowMonitor {
 			const flows = this.#elementFlowsMap.get(element);
 			if (flows) {
 				this.#elementFlowsMap.delete(element);
-				if (this.spansRemovedListener)
-					this.spansRemovedListener(element, flows.flatMap(flow => flow.spans));
-				if (this.nonSpanOwnerListener)
-					this.nonSpanOwnerListener(element);
+				if (this.#spansRemovedListener)
+					this.#spansRemovedListener(element, flows.flatMap(flow => flow.spans));
+				if (this.#nonSpanOwnerListener)
+					this.#nonSpanOwnerListener(element);
 			}
 		// eslint-disable-next-line no-cond-assign
 		} while (element = walker.nextNode());
@@ -215,29 +191,29 @@ class FlowMonitor implements AbstractFlowMonitor {
 				if (flowsNew.length > 0) {
 					this.#elementFlowsMap.set(element, flowsNew);
 					if (spansRemoved.length > 0) {
-						if (this.spansRemovedListener)
-							this.spansRemovedListener(element, spansRemoved);
+						if (this.#spansRemovedListener)
+							this.#spansRemovedListener(element, spansRemoved);
 					}
 				} else {
 					this.#elementFlowsMap.delete(element);
-					if (this.spansRemovedListener)
-						this.spansRemovedListener(element, spansRemoved);
-					if (this.nonSpanOwnerListener)
-						this.nonSpanOwnerListener(element);
+					if (this.#spansRemovedListener)
+						this.#spansRemovedListener(element, spansRemoved);
+					if (this.#nonSpanOwnerListener)
+						this.#nonSpanOwnerListener(element);
 				}
 			}
 		} else {
-			if (this.spansRemovedListener || this.nonSpanOwnerListener) {
+			if (this.#spansRemovedListener || this.#nonSpanOwnerListener) {
 				for (const [ element, flows ] of this.#elementFlowsMap) {
-					if (this.spansRemovedListener)
-						this.spansRemovedListener(element, flows.flatMap(flow => flow.spans));
-					if (this.nonSpanOwnerListener)
-						this.nonSpanOwnerListener(element);
+					if (this.#spansRemovedListener)
+						this.#spansRemovedListener(element, flows.flatMap(flow => flow.spans));
+					if (this.#nonSpanOwnerListener)
+						this.#nonSpanOwnerListener(element);
 				}
 			}
 			this.#elementFlowsMap.clear();
 		}
-		for (const listener of this.highlightingUpdatedListeners) {
+		for (const listener of this.#highlightingUpdatedListeners) {
 			listener.next();
 		}
 	}
@@ -268,7 +244,7 @@ class FlowMonitor implements AbstractFlowMonitor {
 		}
 		// TODO should the same function remove the flows, to replace them entirely?
 		// Match the terms inside the flow to produce highlighting box info.
-		const spansCreated = matchInTextFlow(terms, this.termPatterns, text, textFlow);
+		const spansCreated = matchInTextFlow(terms, this.#termPatterns, text, textFlow);
 		let flows = this.#elementFlowsMap.get(ancestor);
 		if (!flows) {
 			flows = [];
@@ -276,11 +252,35 @@ class FlowMonitor implements AbstractFlowMonitor {
 		}
 		flows.push({ text, spans: spansCreated });
 		if (flows.length === 1) {
-			if (this.newSpanOwnerListener)
-				this.newSpanOwnerListener(ancestor);
+			if (this.#newSpanOwnerListener)
+				this.#newSpanOwnerListener(ancestor);
 		}
-		if (this.spansCreatedListener)
-			this.spansCreatedListener(ancestor, spansCreated);
+		if (this.#spansCreatedListener)
+			this.#spansCreatedListener(ancestor, spansCreated);
+	}
+
+	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
+		return this.#elementFlowsMap;
+	}
+
+	setNewSpanOwnerListener (listener: (flowOwner: HTMLElement) => void) {
+		this.#newSpanOwnerListener = listener;
+	}
+
+	setSpansCreatedListener (listener: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void) {
+		this.#spansCreatedListener = listener;
+	}
+
+	setSpansRemovedListener (listener: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void) {
+		this.#spansRemovedListener = listener;
+	}
+
+	setNonSpanOwnerListener (listener: (flowOwner: HTMLElement) => void): void {
+		this.#nonSpanOwnerListener = listener;
+	}
+
+	addHighlightingUpdatedListener (listener: Generator) {
+		this.#highlightingUpdatedListeners.add(listener);
 	}
 }
 

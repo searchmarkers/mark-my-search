@@ -8,7 +8,7 @@ import {
 } from "/dist/modules/common.mjs";
 
 class TermMarker implements AbstractTermMarker {
-	#termTokens: TermTokens;
+	readonly #termTokens: TermTokens;
 	
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;

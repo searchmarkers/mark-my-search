@@ -102,10 +102,10 @@ class ElementEngine implements AbstractTreeEditEngine {
 	readonly class = "ELEMENT";
 	readonly model = "tree-edit";
 
-	readonly termTokens: TermTokens;
-	readonly termPatterns: TermPatterns;
+	readonly #termTokens: TermTokens;
+	readonly #termPatterns: TermPatterns;
 
-	readonly flowMutations: MutationObserverWrapper;
+	readonly #flowMutations: MutationObserverWrapper;
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -114,10 +114,10 @@ class ElementEngine implements AbstractTreeEditEngine {
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
-		this.termTokens = termTokens;
-		this.termPatterns = termPatterns;
+		this.#termTokens = termTokens;
+		this.#termPatterns = termPatterns;
 		const mutationObserver = this.getFlowMutationObserver();
-		this.flowMutations = {
+		this.#flowMutations = {
 			observeMutations: () => {
 				mutationObserver.observe(document.body, { subtree: true, childList: true, characterData: true });
 			},
@@ -146,8 +146,8 @@ ${HIGHLIGHT_TAG} {
 			const hue = hues[termIndex % hues.length];
 			const cycle = Math.floor(termIndex / hues.length);
 			return (`
-#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term, this.termTokens)},
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term, this.termTokens)} {
+#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)},
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)} {
 	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
 	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
 }`
@@ -163,16 +163,16 @@ ${HIGHLIGHT_TAG} {
 		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) {
-		this.flowMutations.unobserveMutations();
+		this.#flowMutations.unobserveMutations();
 		this.undoHighlights(termsToPurge);
 		this.terms.assign(terms);
 		this.hues.assign(hues);
 		this.generateTermHighlightsUnderNode(termsToHighlight, document.body);
-		this.flowMutations.observeMutations();
+		this.#flowMutations.observeMutations();
 	}
 
 	endHighlighting () {
-		this.flowMutations.unobserveMutations();
+		this.#flowMutations.unobserveMutations();
 		this.undoHighlights();
 	}
 
@@ -186,7 +186,7 @@ ${HIGHLIGHT_TAG} {
 		if (terms && !terms.length) {
 			return; // Optimization for removing 0 terms
 		}
-		const classNames = terms?.map(term => getTermClass(term, this.termTokens));
+		const classNames = terms?.map(term => getTermClass(term, this.#termTokens));
 		const highlights = Array.from(root.querySelectorAll(
 			classNames ? `${HIGHLIGHT_TAG}.${classNames.join(`, ${HIGHLIGHT_TAG}.`)}` : HIGHLIGHT_TAG
 		)).reverse();
@@ -210,7 +210,7 @@ ${HIGHLIGHT_TAG} {
 
 	getHighlightedElementsForTerms (terms: ReadonlyArray<MatchTerm>): Iterable<HTMLElement> {
 		return terms.length === 0 ? [] : document.body.querySelectorAll(terms
-			.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, this.termTokens)}`)
+			.map(term => `${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)}`)
 			.join(", ")
 		);
 	}
@@ -264,7 +264,7 @@ ${HIGHLIGHT_TAG} {
 			// insert: Highlight Element
 			const textHighlightNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
-			highlight.classList.add(getTermClass(term, this.termTokens));
+			highlight.classList.add(getTermClass(term, this.#termTokens));
 			highlight.appendChild(textHighlightNode);
 			parent.insertBefore(highlight, node);
 			const textHighlightNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textHighlightNode);
@@ -294,7 +294,7 @@ ${HIGHLIGHT_TAG} {
 			const parent = textAfterNode.parentNode as Node;
 			const textEndNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
-			highlight.classList.add(getTermClass(term, this.termTokens));
+			highlight.classList.add(getTermClass(term, this.#termTokens));
 			highlight.appendChild(textEndNode);
 			textAfterNode.textContent = text.substring(end);
 			parent.insertBefore(highlight, textAfterNode);
@@ -320,7 +320,7 @@ ${HIGHLIGHT_TAG} {
 				let nodeItem = nodeItems.first!;
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
-				for (const match of textFlow.matchAll(this.termPatterns.get(term))) {
+				for (const match of textFlow.matchAll(this.#termPatterns.get(term))) {
 					let highlightStart = match.index!;
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {

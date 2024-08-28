@@ -1,14 +1,9 @@
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
-import type { AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { AbstractFlowMonitor, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
 import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
-import type { BaseFlow, BaseSpan } from "/dist/modules/highlight/matcher.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, createContainer, type AllReadonly } from "/dist/modules/common.mjs";
-
-type Flow = BaseFlow<true>
-
-type Span = BaseSpan<true>
 
 const getName = (termToken: string) => "markmysearch-" + termToken;
 
@@ -100,14 +95,15 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	readonly class = "HIGHLIGHT";
 	readonly model = "tree-cache";
 
-	readonly termTokens: TermTokens;
-	readonly termPatterns: TermPatterns;
+	readonly #termTokens: TermTokens;
 
-	readonly flowMonitor: AbstractFlowMonitor;
+	readonly #flowMonitor: AbstractFlowMonitor;
 
-	readonly elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
+	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
-	readonly highlights = new ExtendedHighlightRegistry();
+	readonly #highlights = new ExtendedHighlightRegistry();
+
+	readonly #highlightingUpdatedListeners = new Set<Generator>();
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -127,12 +123,11 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
-		this.termTokens = termTokens;
-		this.termPatterns = termPatterns;
-		this.flowMonitor = new FlowMonitor(this.terms, termPatterns);
-		this.flowMonitor.setSpansCreatedListener((flowOwner, spansCreated) => {
+		this.#termTokens = termTokens;
+		this.#flowMonitor = new FlowMonitor(this.terms, termPatterns);
+		this.#flowMonitor.setSpansCreatedListener((flowOwner, spansCreated) => {
 			for (const span of spansCreated) {
-				this.highlights.get(this.termTokens.get(span.term))?.add(new StaticRange({
+				this.#highlights.get(this.#termTokens.get(span.term))?.add(new StaticRange({
 					startContainer: span.node,
 					startOffset: span.start,
 					endContainer: span.node,
@@ -140,12 +135,12 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 				}), span);
 			}
 		});
-		this.flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
+		this.#flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
 			for (const span of spansRemoved) {
-				this.highlights.get(this.termTokens.get(span.term))?.deleteBySpan(span);
+				this.#highlights.get(this.#termTokens.get(span.term))?.deleteBySpan(span);
 			}
 		});
-		this.elementFlowsMap = this.flowMonitor.getElementFlowsMap();
+		this.#elementFlowsMap = this.#flowMonitor.getElementFlowsMap();
 	}
 
 	readonly getCSS = {
@@ -162,7 +157,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 				textColor,
 			} = HighlightEngine.hueCycleStyles[Math.min(cycle, HighlightEngine.hueCycleStyles.length - 1)];
 			return (`
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.termTokens.get(term))}) {
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.#termTokens.get(term))}) {
 	background-color: hsl(${hue} 70% 70% / ${opacity});
 	${textColor ? `color: ${textColor};` : ""}
 	${lineThickness ? `text-decoration: ${lineThickness}px hsl(${hue} 100% 35%) ${lineStyle} underline;` : ""}
@@ -181,42 +176,44 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
-		this.flowMonitor.unobserveMutations();
+		this.#flowMonitor.unobserveMutations();
 		this.undoHighlights(termsToPurge);
 		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
 		for (const term of terms) {
-			this.highlights.set(this.termTokens.get(term), new ExtendedHighlight());
+			this.#highlights.set(this.#termTokens.get(term), new ExtendedHighlight());
 		}
-		this.flowMonitor.generateHighlightSpansFor(terms, document.body);
-		this.flowMonitor.observeMutations();
+		this.#flowMonitor.generateHighlightSpansFor(terms, document.body);
+		this.#flowMonitor.observeMutations();
 	}
 
 	endHighlighting () {
-		this.flowMonitor.unobserveMutations();
+		this.#flowMonitor.unobserveMutations();
 		this.undoHighlights();
 	}
 
 	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
-		this.flowMonitor.removeHighlightSpansFor(terms);
+		this.#flowMonitor.removeHighlightSpansFor(terms);
 		if (terms) {
 			for (const term of terms) {
-				this.highlights.delete(this.termTokens.get(term));
+				this.#highlights.delete(this.#termTokens.get(term));
 			}
 		} else {
-			this.highlights.clear();
+			this.#highlights.clear();
 		}
 	}
 
-	getHighlightedElements (): Iterable<HTMLElement> {
-		return this.elementFlowsMap.keys();
+	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
+		return this.#elementFlowsMap;
 	}
 
-	readonly highlightingUpdatedListeners = new Set<Generator>();
+	getHighlightedElements (): Iterable<HTMLElement> {
+		return this.#elementFlowsMap.keys();
+	}
 
 	addHighlightingUpdatedListener (listener: Generator) {
-		this.highlightingUpdatedListeners.add(listener);
+		this.#highlightingUpdatedListeners.add(listener);
 	}
 }
 

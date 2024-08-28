@@ -203,9 +203,9 @@ class EngineManager implements AbstractEngineManager {
 			);
 			return {
 				engine,
-				termCounter: new TermCounter(engine.elementFlowsMap),
-				termWalker: new TermWalker(engine.elementFlowsMap),
-				termMarker: new TermMarker(this.#termTokens, engine.elementFlowsMap),
+				termCounter: new TermCounter(engine.getElementFlowsMap()),
+				termWalker: new TermWalker(engine.getElementFlowsMap()),
+				termMarker: new TermMarker(this.#termTokens, engine.getElementFlowsMap()),
 			};
 		} case "HIGHLIGHT": {
 			const [ { HighlightEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
@@ -217,9 +217,9 @@ class EngineManager implements AbstractEngineManager {
 			const engine = new HighlightEngine(this.#termTokens, this.#termPatterns);
 			return {
 				engine,
-				termCounter: new TermCounter(engine.elementFlowsMap),
-				termWalker: new TermWalker(engine.elementFlowsMap),
-				termMarker: new TermMarker(this.#termTokens, engine.elementFlowsMap),
+				termCounter: new TermCounter(engine.getElementFlowsMap()),
+				termWalker: new TermWalker(engine.getElementFlowsMap()),
+				termMarker: new TermMarker(this.#termTokens, engine.getElementFlowsMap()),
 			};
 		}}
 	}
