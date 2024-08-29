@@ -11,8 +11,9 @@ import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/inte
 import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
 import { assert, itemsMatch } from "/dist/modules/common.mjs";
 
-type GetToolbar = (<CreateIfNull extends boolean>
-	(createIfNull: CreateIfNull) => CreateIfNull extends true ? AbstractToolbar : (AbstractToolbar | null)
+type GetToolbar<CreateIfNull extends boolean> = (CreateIfNull extends true
+	? () => AbstractToolbar
+	: () => AbstractToolbar | null
 )
 
 type UpdateTermStatus = (term: MatchTerm) => void
@@ -167,7 +168,7 @@ const respondToCommand_factory = (
 	terms: ReadonlyArray<MatchTerm>,
 	termSetter: TermSetter,
 	controlsInfo: ControlsInfo,
-	getToolbar: GetToolbar,
+	getToolbarOrNull: GetToolbar<false>,
 	highlighter: AbstractEngineManager,
 ) => {
 	let selectModeFocus = false;
@@ -181,7 +182,7 @@ const respondToCommand_factory = (
 		}
 		switch (commandInfo.type) {
 		case "toggleBar": {
-			getToolbar(false)?.toggleHidden();
+			getToolbarOrNull()?.toggleHidden();
 			break;
 		} case "toggleSelect": {
 			selectModeFocus = !selectModeFocus;
@@ -201,13 +202,13 @@ const respondToCommand_factory = (
 			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
-			getToolbar(false)?.focusTermInput(commandInfo.termIdx ?? null);
+			getToolbarOrNull()?.focusTermInput(commandInfo.termIdx ?? null);
 			break;
 		} case "selectTerm": {
 			if (focusedIdx === null) {
 				break;
 			}
-			getToolbar(false)?.indicateTerm(terms[focusedIdx]);
+			getToolbarOrNull()?.indicateTerm(terms[focusedIdx]);
 			if (!selectModeFocus) {
 				highlighter.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
 			}
@@ -265,7 +266,7 @@ interface TermAppender<Async = true> {
 			diacritics: false,
 		},
 	};
-	const updateTermStatus = (term: MatchTerm) => getToolbar(false)?.updateTermStatus(term);
+	const updateTermStatus = (term: MatchTerm) => getToolbarOrNull()?.updateTermStatus(term);
 	const highlighter: AbstractEngineManager = new EngineManager(updateTermStatus, termTokens, termPatterns);
 	const termSetterInternal: TermSetter<false> = {
 		setTerms: termsNew => {
@@ -275,7 +276,7 @@ interface TermAppender<Async = true> {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = termsNew;
 			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-			updateToolbar(termsOld, terms, null, getToolbar(true), commands);
+			updateToolbar(termsOld, terms, null, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
 				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
@@ -291,7 +292,7 @@ interface TermAppender<Async = true> {
 				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
 			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(true), commands);
+			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
 				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
@@ -301,7 +302,7 @@ interface TermAppender<Async = true> {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = terms.concat(term);
 			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
-			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(true), commands);
+			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
 				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
@@ -328,19 +329,22 @@ interface TermAppender<Async = true> {
 	);
 	// TODO remove toolbar completely when not in use
 	// use WeakRef?
-	const getToolbar: GetToolbar = (() => {
+	const { getToolbarOrNull, getToolbar } = (() => {
 		// TODO use generator function?
 		let toolbar: AbstractToolbar | null = null;
-		return (createIfNull) => {
-			if (createIfNull && !toolbar) {
-				toolbar = new Toolbar([],
-					commands, hues,
-					controlsInfo,
-					termSetter, doPhrasesMatchTerms,
-					termTokens, highlighter,
-				);
+		return {
+			getToolbarOrNull: () => toolbar,
+			getToolbar: () => {
+				if (!toolbar) {
+					toolbar = new Toolbar([],
+						commands, hues,
+						controlsInfo,
+						termSetter, doPhrasesMatchTerms,
+						termTokens, highlighter,
+					);
+				}
+				return toolbar;
 			}
-			return toolbar as Toolbar;
 		};
 	})();
 	const respondToCommand = respondToCommand_factory(terms, termSetter, controlsInfo, getToolbar, highlighter);
@@ -377,7 +381,7 @@ interface TermAppender<Async = true> {
 		}
 		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
 			controlsInfo.pageModifyEnabled = message.enablePageModify;
-			getToolbar(false)?.updateVisibility();
+			getToolbarOrNull()?.updateVisibility();
 			if (!controlsInfo.pageModifyEnabled) {
 				highlighter.removeEngine();
 			}
@@ -388,7 +392,7 @@ interface TermAppender<Async = true> {
 		if (message.barControlsShown) {
 			controlsInfo.barControlsShown = message.barControlsShown;
 			for (const controlName of Object.keys(message.barControlsShown) as Array<ControlButtonName>) {
-				getToolbar(false)?.updateControlVisibility(controlName);
+				getToolbarOrNull()?.updateControlVisibility(controlName);
 			}
 		}
 		if (message.barLook) {
@@ -413,7 +417,7 @@ interface TermAppender<Async = true> {
 			//removeTermsAndDeactivate();
 			highlighter.endHighlighting();
 			terms = [];
-			getToolbar(false)?.remove();
+			getToolbarOrNull()?.remove();
 			styleElementsCleanup();
 		}
 		if (message.terms) {
@@ -425,7 +429,7 @@ interface TermAppender<Async = true> {
 				respondToCommand(command);
 			}
 		}
-		const toolbar = getToolbar(false);
+		const toolbar = getToolbarOrNull();
 		if (toolbar) {
 			toolbar.updateHighlightsShownFlag();
 			toolbar.updateCollapsed();
