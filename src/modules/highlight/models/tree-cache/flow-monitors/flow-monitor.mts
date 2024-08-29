@@ -99,14 +99,14 @@ class FlowMonitor implements AbstractFlowMonitor {
 			// The parent may include non self-contained flows.
 			const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
 			walker.currentNode = node;
-			let breakFirst: Element | null = walker.previousNode() as Element;
-			while (breakFirst && highlightTags.flow.has(breakFirst.tagName)) {
-				breakFirst = breakFirst !== parent ? walker.previousNode() as Element : null;
+			let breakFirst = walker.previousNode();
+			while (breakFirst && highlightTags.flow.has(breakFirst.nodeName)) {
+				breakFirst = breakFirst !== parent ? walker.previousNode() : null;
 			}
 			walker.currentNode = node.nextSibling ?? node;
-			let breakLast: Element | null = node.nextSibling ? walker.nextNode() as Element : null;
-			while (breakLast && highlightTags.flow.has(breakLast.tagName)) {
-				breakLast = parent.contains(breakLast) ? walker.nextNode() as Element : null;
+			let breakLast = node.nextSibling ? walker.nextNode() : null;
+			while (breakLast && highlightTags.flow.has(breakLast.nodeName)) {
+				breakLast = parent.contains(breakLast) ? walker.nextNode() : null;
 			}
 			if (breakFirst && breakLast) {
 				// The flow containing the node starts and ends within the parent, so flows need only be recalculated below the parent.
@@ -290,7 +290,7 @@ class FlowMonitor implements AbstractFlowMonitor {
  * @param element An element to test for highlighting viability.
  * @returns `true` if determined highlightable, `false` otherwise.
  */
-const canHighlightElement = (rejectSelector: string, element: Element): boolean =>
+const canHighlightElement = (rejectSelector: string, element: HTMLElement): boolean =>
 	!element.closest(rejectSelector)
 ;
 
@@ -310,11 +310,10 @@ const getTextFlows = (node: Node): ReadonlyArray<ReadonlyArray<Text>> => {
  */
 const populateTextFlows = (node: Node, textFlows: Array<Array<Text>>, textFlow: Array<Text>) => {
 	do {
-		if (node.nodeType === Node.TEXT_NODE) {
-			textFlow.push(node as Text);
-		} else if ((node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE)
-			&& !highlightTags.reject.has((node as Element).tagName)) {
-			const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+		if (node instanceof Text) {
+			textFlow.push(node);
+		} else if (node instanceof HTMLElement && !highlightTags.reject.has(node.tagName)) {
+			const breaksFlow = !highlightTags.flow.has(node.tagName);
 			if (breaksFlow && (textFlow.length || textFlows.length === 1)) { // Ensure the first flow is always the one before a break.
 				textFlow = [];
 				textFlows.push(textFlow);

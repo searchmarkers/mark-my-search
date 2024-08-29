@@ -12,17 +12,13 @@ import { EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass, createCont
  * @param element An element to test for highlighting viability.
  * @returns `true` if determined highlightable, `false` otherwise.
  */
-const canHighlightElement = (rejectSelector: string, element: Element): boolean =>
+const canHighlightElement = (rejectSelector: string, element: HTMLElement): boolean =>
 	!element.closest(rejectSelector) && element.tagName !== HIGHLIGHT_TAG_UPPER
 ;
 
 interface Properties { [ELEMENT_JUST_HIGHLIGHTED]: boolean }
 
-type PropertiesElement<HasProperties = false> = BasePropertiesElement<Element, HasProperties>
-
-type PropertiesHTMLElement<HasProperties = false> = BasePropertiesElement<HTMLElement, HasProperties>
-
-type BasePropertiesElement<E extends Element, HasProperties = false> = E & (HasProperties extends true
+type PropertiesHTMLElement<HasProperties = false> = HTMLElement & (HasProperties extends true
 	? Properties
 	: (Properties | Record<never, never>)
 )
@@ -248,12 +244,11 @@ ${HIGHLIGHT_TAG} {
 		): FlowNodeListItem => {
 			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
 			const text = node.textContent ?? "";
-			if (text.length === 0) {
+			if (text.length === 0 || !(node.parentElement instanceof HTMLElement)) {
 				node.remove();
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
-			const parent = node.parentElement as Element;
-			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
+			(node.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
 			// update: Text after Highlight Element
 			if (end < text.length) {
 				node.textContent = text.substring(end);
@@ -266,12 +261,12 @@ ${HIGHLIGHT_TAG} {
 			const highlight = document.createElement(HIGHLIGHT_TAG);
 			highlight.classList.add(getTermClass(term, this.#termTokens));
 			highlight.appendChild(textHighlightNode);
-			parent.insertBefore(highlight, node);
+			node.parentElement.insertBefore(highlight, node);
 			const textHighlightNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textHighlightNode);
 			// insert if exists: Text before Highlight Element
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
-				parent.insertBefore(textStartNode, highlight);
+				node.parentElement.insertBefore(textStartNode, highlight);
 				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
 			}
 			return textHighlightNodeItem;
@@ -287,22 +282,21 @@ ${HIGHLIGHT_TAG} {
 		): FlowNodeListItem => {
 			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
 			const text = textAfterNode.textContent ?? "";
-			if (text.length === 0) {
+			if (text.length === 0 || !(textAfterNode.parentElement instanceof HTMLElement)) {
 				textAfterNode.parentElement?.removeChild(textAfterNode);
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
-			const parent = textAfterNode.parentNode as Node;
 			const textEndNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
 			highlight.classList.add(getTermClass(term, this.#termTokens));
 			highlight.appendChild(textEndNode);
 			textAfterNode.textContent = text.substring(end);
-			parent.insertBefore(highlight, textAfterNode);
-			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
+			textAfterNode.parentElement.insertBefore(highlight, textAfterNode);
+			(textAfterNode.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
 			const textEndNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textEndNode);
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
-				parent.insertBefore(textStartNode, highlight);
+				textAfterNode.parentElement.insertBefore(textStartNode, highlight);
 				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
 			}
 			return textEndNodeItem;
@@ -370,13 +364,11 @@ ${HIGHLIGHT_TAG} {
 		) => {
 			// TODO support for <iframe>?
 			do {
-				switch (node.nodeType) {
-				case Node.ELEMENT_NODE:
-				case Node.DOCUMENT_FRAGMENT_NODE: {
-					if (highlightTags.reject.has((node as Element).tagName)) {
+				if (node instanceof HTMLElement) {
+					if (highlightTags.reject.has(node.tagName)) {
 						break;
 					}
-					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+					const breaksFlow = !highlightTags.flow.has(node.tagName);
 					if (breaksFlow && nodeItems.first) {
 						highlightInBlock(terms, nodeItems);
 						nodeItems.clear();
@@ -389,10 +381,10 @@ ${HIGHLIGHT_TAG} {
 						}
 					}
 					break;
-				} case Node.TEXT_NODE: {
-					nodeItems.push(node as Text);
+				} else if (node instanceof Text) {
+					nodeItems.push(node);
 					break;
-				}}
+				}
 				node = node.nextSibling!; // May be null (checked by loop condition)
 			} while (node && visitSiblings);
 		};

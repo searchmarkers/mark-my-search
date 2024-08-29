@@ -108,9 +108,8 @@ class TermOptionList {
 			options.forEach(option => option.makeFocusable(true));
 		});
 		this.#optionList.addEventListener("focusout", event => {
-			const newFocus = event.relatedTarget as Element | null;
 			this.#optionList.removeAttribute("tabindex");
-			if (this.#optionList.contains(newFocus)) {
+			if (event.relatedTarget instanceof Node && this.#optionList.contains(event.relatedTarget)) {
 				return;
 			}
 			for (const option of options) {

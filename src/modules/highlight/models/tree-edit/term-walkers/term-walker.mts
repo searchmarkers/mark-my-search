@@ -180,9 +180,10 @@ class TermWalker implements AbstractTermWalker {
 		return highlight;
 	}
 
-	getTopLevelHighlight (element: Element): Element {
-		const closestHighlight = (element.parentElement as Element).closest(HIGHLIGHT_TAG);
-		return closestHighlight ? this.getTopLevelHighlight(closestHighlight) : element;
+	getTopLevelHighlight (element: HTMLElement): HTMLElement {
+		const closestHighlight = (element.parentElement instanceof HTMLElement
+			&& (element.parentElement).closest(HIGHLIGHT_TAG));
+		return closestHighlight instanceof HTMLElement ? this.getTopLevelHighlight(closestHighlight) : element;
 	}
 
 	stepToElement (element: HTMLElement) {

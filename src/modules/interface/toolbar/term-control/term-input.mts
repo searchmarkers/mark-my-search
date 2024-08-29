@@ -72,7 +72,7 @@ class TermInput {
 			toolbarInterface.forgetLastFocusedInput();
 		});
 		input.addEventListener("blur", event => {
-			if ((event.relatedTarget as Element | null)?.closest(`#${EleID.BAR}`)) {
+			if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(`#${EleID.BAR}`)) {
 				toolbarInterface.markLastFocusedInput(input);
 			}
 		});

@@ -5,7 +5,7 @@ interface AbstractSpecialEngine {
 
 	endHighlighting: () => void
 
-	handles: (element: Element) => boolean
+	handles: (element: HTMLElement) => boolean
 }
 
 export type { AbstractSpecialEngine };
