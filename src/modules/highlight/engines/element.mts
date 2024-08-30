@@ -6,14 +6,6 @@ import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass, createContainer } from "/dist/modules/common.mjs";
 
-type PropertiesHTMLElement<HasProperties = false> = HTMLElement & {
-	[ELEMENT_JUST_HIGHLIGHTED]: boolean
-} | (HasProperties extends true ? never : Record<never, never>)
-
-type UnknownPropertiesHTMLElement = HTMLElement & { [ELEMENT_JUST_HIGHLIGHTED]: boolean | undefined }
-
-const ELEMENT_JUST_HIGHLIGHTED = "markmysearch__just_highlighted";
-
 class ElementEngine implements AbstractTreeEditEngine {
 	readonly class = "ELEMENT";
 	readonly model = "tree-edit";
@@ -22,6 +14,8 @@ class ElementEngine implements AbstractTreeEditEngine {
 	readonly #termPatterns: TermPatterns;
 
 	readonly #flowMutations: FlowMutationObserver;
+
+	readonly #elementsJustHighlighted = new Set<HTMLElement>();
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -68,22 +62,18 @@ class ElementEngine implements AbstractTreeEditEngine {
 			};
 			const mutationObserver = new MutationObserver(mutations => {
 				//mutationUpdates.disconnect();
-				const elementsJustHighlighted = new Set<HTMLElement>();
 				for (const mutation of mutations) {
 					const element = mutation.target instanceof Node
 						? mutation.target.parentElement
 						: mutation.target;
-					if (element instanceof HTMLElement) {
-						if ((element as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED]) {
-							elementsJustHighlighted.add(element);
-						} else if (this.canHighlightElement(rejectSelector, element)) {
-							elements.add(element);
-						}
+					if (element instanceof HTMLElement
+						&& !this.#elementsJustHighlighted.has(element)
+						&& this.canHighlightElement(rejectSelector, element)
+					) {
+						elements.add(element);
 					}
 				}
-				for (const element of elementsJustHighlighted) {
-					delete (element as UnknownPropertiesHTMLElement)[ELEMENT_JUST_HIGHLIGHTED];
-				}
+				this.#elementsJustHighlighted.clear();
 				if (elements.size) {
 					// TODO improve this algorithm
 					for (const element of elements) {
@@ -231,7 +221,7 @@ ${HIGHLIGHT_TAG} {
 				node.remove();
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
-			(node.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true; // NEXT 1
+			this.#elementsJustHighlighted.add(node.parentElement);
 			// update: Text after Highlight Element
 			if (end < text.length) {
 				node.textContent = text.substring(end);
@@ -275,7 +265,7 @@ ${HIGHLIGHT_TAG} {
 			highlight.appendChild(textEndNode);
 			textAfterNode.textContent = text.substring(end);
 			textAfterNode.parentElement.insertBefore(highlight, textAfterNode);
-			(textAfterNode.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
+			this.#elementsJustHighlighted.add(textAfterNode.parentElement);
 			const textEndNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textEndNode);
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
