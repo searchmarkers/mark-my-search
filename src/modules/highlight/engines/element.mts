@@ -12,17 +12,13 @@ import { EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass, createCont
  * @param element An element to test for highlighting viability.
  * @returns `true` if determined highlightable, `false` otherwise.
  */
-const canHighlightElement = (rejectSelector: string, element: Element): boolean =>
+const canHighlightElement = (rejectSelector: string, element: HTMLElement): boolean =>
 	!element.closest(rejectSelector) && element.tagName !== HIGHLIGHT_TAG_UPPER
 ;
 
 interface Properties { [ELEMENT_JUST_HIGHLIGHTED]: boolean }
 
-type PropertiesElement<HasProperties = false> = BasePropertiesElement<Element, HasProperties>
-
-type PropertiesHTMLElement<HasProperties = false> = BasePropertiesElement<HTMLElement, HasProperties>
-
-type BasePropertiesElement<E extends Element, HasProperties = false> = E & (HasProperties extends true
+type PropertiesHTMLElement<HasProperties = false> = HTMLElement & (HasProperties extends true
 	? Properties
 	: (Properties | Record<never, never>)
 )
@@ -77,10 +73,10 @@ class FlowNodeList {
 	getText () {
 		let text = "";
 		let current = this.first;
-		do {
-			text += current!.value.textContent;
-		// eslint-disable-next-line no-cond-assign
-		} while (current = current!.next);
+		while (current) {
+			text += current.value.textContent;
+			current = current.next;
+		}
 		return text;
 	}
 
@@ -90,11 +86,11 @@ class FlowNodeList {
 	}
 
 	*[Symbol.iterator] () {
-		let current = this.first!;
-		do {
+		let current = this.first;
+		while (current) {
 			yield current;
-		// eslint-disable-next-line no-cond-assign
-		} while (current = current.next!);
+			current = current.next;
+		}
 	}
 }
 
@@ -182,7 +178,7 @@ ${HIGHLIGHT_TAG} {
 	 * @param terms The terms associated with the highlights to remove. If `undefined`, all highlights are removed.
 	 * @param root A root node under which to remove highlights.
 	 */
-	undoHighlights (terms?: ReadonlyArray<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
+	undoHighlights (terms?: ReadonlyArray<MatchTerm>, root: HTMLElement = document.body) {
 		if (terms && !terms.length) {
 			return; // Optimization for removing 0 terms
 		}
@@ -193,12 +189,6 @@ ${HIGHLIGHT_TAG} {
 		// TODO attempt to join text nodes back together
 		for (const highlight of highlights) {
 			highlight.outerHTML = highlight.innerHTML;
-		}
-		if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-			root = (root as DocumentFragment).getRootNode() as HTMLElement;
-			if (root.nodeType === Node.TEXT_NODE) {
-				return;
-			}
 		}
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER, root);
 		elementsPurgeClass(EleClass.FOCUS, root);
@@ -248,12 +238,12 @@ ${HIGHLIGHT_TAG} {
 		): FlowNodeListItem => {
 			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
 			const text = node.textContent ?? "";
-			if (text.length === 0) {
+			if (text.length === 0 || !(node.parentElement instanceof HTMLElement)) {
 				node.remove();
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
-			const parent = node.parentElement as Element;
-			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
+			(node.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true; // NEXT 1
+			// NEXT 0: moving some functions into classes
 			// update: Text after Highlight Element
 			if (end < text.length) {
 				node.textContent = text.substring(end);
@@ -266,12 +256,12 @@ ${HIGHLIGHT_TAG} {
 			const highlight = document.createElement(HIGHLIGHT_TAG);
 			highlight.classList.add(getTermClass(term, this.#termTokens));
 			highlight.appendChild(textHighlightNode);
-			parent.insertBefore(highlight, node);
+			node.parentElement.insertBefore(highlight, node);
 			const textHighlightNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textHighlightNode);
 			// insert if exists: Text before Highlight Element
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
-				parent.insertBefore(textStartNode, highlight);
+				node.parentElement.insertBefore(textStartNode, highlight);
 				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
 			}
 			return textHighlightNodeItem;
@@ -287,22 +277,21 @@ ${HIGHLIGHT_TAG} {
 		): FlowNodeListItem => {
 			// This is necessarily a destructive strategy. Occasional damage to the webpage and its functionality is unavoidable.
 			const text = textAfterNode.textContent ?? "";
-			if (text.length === 0) {
+			if (text.length === 0 || !(textAfterNode.parentElement instanceof HTMLElement)) {
 				textAfterNode.parentElement?.removeChild(textAfterNode);
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
-			const parent = textAfterNode.parentNode as Node;
 			const textEndNode = document.createTextNode(text.substring(start, end));
 			const highlight = document.createElement(HIGHLIGHT_TAG);
 			highlight.classList.add(getTermClass(term, this.#termTokens));
 			highlight.appendChild(textEndNode);
 			textAfterNode.textContent = text.substring(end);
-			parent.insertBefore(highlight, textAfterNode);
-			(parent as PropertiesElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
+			textAfterNode.parentElement.insertBefore(highlight, textAfterNode);
+			(textAfterNode.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
 			const textEndNodeItem = nodeItems.insertItemAfter(nodeItemPrevious, textEndNode);
 			if (start > 0) {
 				const textStartNode = document.createTextNode(text.substring(0, start));
-				parent.insertBefore(textStartNode, highlight);
+				textAfterNode.parentElement.insertBefore(textStartNode, highlight);
 				nodeItems.insertItemAfter(nodeItemPrevious, textStartNode);
 			}
 			return textEndNodeItem;
@@ -317,7 +306,7 @@ ${HIGHLIGHT_TAG} {
 			const textFlow = nodeItems.getText();
 			for (const term of terms) {
 				let nodeItemPrevious: FlowNodeListItem | null = null;
-				let nodeItem = nodeItems.first!;
+				let nodeItem = nodeItems.first!; // This should always be defined.
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
 				for (const match of textFlow.matchAll(this.#termPatterns.get(term))) {
@@ -325,7 +314,7 @@ ${HIGHLIGHT_TAG} {
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next!;
+						nodeItem = nodeItem.next!; // This should always be defined in this context.
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -347,7 +336,7 @@ ${HIGHLIGHT_TAG} {
 							break;
 						}
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next!;
+						nodeItem = nodeItem.next!; // This should always be defined in this context.
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -370,13 +359,11 @@ ${HIGHLIGHT_TAG} {
 		) => {
 			// TODO support for <iframe>?
 			do {
-				switch (node.nodeType) {
-				case Node.ELEMENT_NODE:
-				case Node.DOCUMENT_FRAGMENT_NODE: {
-					if (highlightTags.reject.has((node as Element).tagName)) {
+				if (node instanceof HTMLElement) {
+					if (highlightTags.reject.has(node.tagName)) {
 						break;
 					}
-					const breaksFlow = !highlightTags.flow.has((node as Element).tagName);
+					const breaksFlow = !highlightTags.flow.has(node.tagName);
 					if (breaksFlow && nodeItems.first) {
 						highlightInBlock(terms, nodeItems);
 						nodeItems.clear();
@@ -389,18 +376,18 @@ ${HIGHLIGHT_TAG} {
 						}
 					}
 					break;
-				} case Node.TEXT_NODE: {
-					nodeItems.push(node as Text);
+				} else if (node instanceof Text) {
+					nodeItems.push(node);
 					break;
-				}}
-				node = node.nextSibling!; // May be null (checked by loop condition)
+				}
+				node = node.nextSibling!; // May be null (checked by loop condition).
 			} while (node && visitSiblings);
 		};
 
 		return (terms: ReadonlyArray<MatchTerm>, rootNode: Node) => {
-			if (rootNode.nodeType === Node.TEXT_NODE) {
+			if (rootNode instanceof Text) {
 				const nodeItems = new FlowNodeList();
-				nodeItems.push(rootNode as Text);
+				nodeItems.push(rootNode);
 				highlightInBlock(terms, nodeItems);
 			} else {
 				const nodeItems = new FlowNodeList();
@@ -453,10 +440,10 @@ ${HIGHLIGHT_TAG} {
 			//mutationUpdates.disconnect();
 			const elementsJustHighlighted = new Set<HTMLElement>();
 			for (const mutation of mutations) {
-				const element = mutation.target.nodeType === Node.TEXT_NODE
-					? mutation.target.parentElement!
-					: mutation.target as HTMLElement;
-				if (element) {
+				const element = mutation.target instanceof Node
+					? mutation.target.parentElement
+					: mutation.target;
+				if (element instanceof HTMLElement) {
 					if ((element as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED]) {
 						elementsJustHighlighted.add(element);
 					} else if (canHighlightElement(rejectSelector, element)) {

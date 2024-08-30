@@ -72,7 +72,7 @@ class TermInput {
 			toolbarInterface.forgetLastFocusedInput();
 		});
 		input.addEventListener("blur", event => {
-			if ((event.relatedTarget as Element | null)?.closest(`#${EleID.BAR}`)) {
+			if (event.relatedTarget instanceof HTMLElement && event.relatedTarget.closest(`#${EleID.BAR}`)) {
 				toolbarInterface.markLastFocusedInput(input);
 			}
 		});
@@ -188,12 +188,13 @@ class TermInput {
 	}
 
 	focus (): SelectionReturnTarget {
-		const activeElementOriginal = document.activeElement as HTMLElement;
+		const focusedElementOriginal = (document.activeElement instanceof HTMLElement
+			&& document.activeElement || null);
 		const selection = getSelection();
 		const selectionRangesOriginal = selection && Array(selection.rangeCount).fill(null).map((v, i) => selection.getRangeAt(i));
 		this.#input.focus();
 		return {
-			element: activeElementOriginal,
+			element: focusedElementOriginal,
 			selectionRanges: selectionRangesOriginal,
 		};
 	}

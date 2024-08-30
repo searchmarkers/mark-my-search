@@ -46,7 +46,7 @@ class TermReplaceControl implements TermAbstractControl {
 		this.#term = termParameter;
 		this.#optionList = new TermOptionList(
 			(matchType: string, checked: boolean) => {
-				const matchMode = Object.assign({}, this.#term.matchMode) as MatchMode;
+				const matchMode: MatchMode = Object.assign({}, this.#term.matchMode);
 				matchMode[matchType] = checked;
 				const idx = toolbarInterface.getTermControlIndex(this);
 				if (idx !== null) {

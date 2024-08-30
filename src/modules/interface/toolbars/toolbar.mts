@@ -63,7 +63,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		this.updateCollapsed();
 		// Inputs should not be focusable unless user has already focused bar. (1)
 		const inputsSetFocusable = (focusable: boolean) => {
-			const inputs = this.#bar.querySelectorAll(`input.${EleClass.CONTROL_INPUT}`) as NodeListOf<HTMLInputElement>;
+			const inputs = this.#bar.querySelectorAll<HTMLInputElement>(`input.${EleClass.CONTROL_INPUT}`);
 			for (const input of inputs) {
 				if (focusable) {
 					input.removeAttribute("tabindex");
@@ -76,8 +76,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			inputsSetFocusable(true);
 		});
 		this.#bar.addEventListener("focusout", event => {
-			const newFocus = event.relatedTarget as Element | null;
-			if (!this.#bar.contains(newFocus)) {
+			if (event.relatedTarget instanceof Node && !this.#bar.contains(event.relatedTarget)) {
 				if (this.hasLastFocusedInput()) {
 					if (!this.#bar.classList.contains(EleClass.BAR_NO_AUTOFOCUS)) {
 						this.focusLastFocusedInput();
@@ -89,8 +88,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			}
 		});
 		this.#bar.addEventListener("pointerdown", event => {
-			const target = event.target as Element | null;
-			if (this.#bar.contains(target)) {
+			if (event.target instanceof Node && this.#bar.contains(event.target)) {
 				this.#bar.classList.remove(EleClass.BAR_NO_AUTOFOCUS);
 			}
 		});
@@ -320,7 +318,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	}
 
 	getTermControlIndex (control: TermControlOptionListInterface): number | null {
-		const index = this.#termControls.indexOf(control as TermReplaceControl);
+		const index = this.#termControls.indexOf(control as TermReplaceControl); // TODO improve this logic
 		if (index === -1) {
 			return null;
 		}
@@ -480,8 +478,9 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	}
 
 	remove () {
-		if (document.activeElement && this.#bar.contains(document.activeElement)) {
-			(document.activeElement as HTMLElement).blur(); // Allow focus+selection to be properly restored.
+		if (document.activeElement instanceof HTMLElement && this.#bar.contains(document.activeElement)) {
+			 // Allow focus+selection to be properly restored.
+			document.activeElement.blur();
 		}
 		this.#bar.remove();
 		this.#scrollGutter.remove();

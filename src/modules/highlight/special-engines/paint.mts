@@ -24,7 +24,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	hues: ReadonlyArray<number> = [];
 	readonly styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
-	readonly elementsInfo = new Map<Element, {
+	readonly elementsInfo = new Map<HTMLElement, {
 		properties: Record<string, { get: () => unknown, set: (value: unknown) => unknown }>
 	}>();
 
@@ -57,7 +57,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	handledTags: Array<keyof HTMLElementTagNameMap> = [ "input", "textarea" ];
 	handledTagSelector = this.handledTags.join(", ");
 	handledTagSet = getElementTagsSet(this.handledTags); // Handle <select> elements in future?
-	handles = (element: Element) => this.handledTagSet.has(element.tagName);
+	handles = (element: HTMLElement) => this.handledTagSet.has(element.tagName);
 
 	insertHelperElements () {
 		const style = document.createElement("style");
@@ -95,12 +95,12 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 
 	onFocusIn = (event: FocusEvent) => {
 		//console.log("focus in", event.target, event.relatedTarget);
-		if (event.target) {
-			if (this.handles(event.target as Element)) {
+		if (event.target instanceof HTMLElement) {
+			if (this.handles(event.target)) {
 				this.highlight("focused", this.terms, this.hues);
 			}
-		} else if (event.relatedTarget) {
-			if (this.handles(event.relatedTarget as Element)) {
+		} else if (event.relatedTarget instanceof HTMLElement) {
+			if (this.handles(event.relatedTarget)) {
 				this.unhighlight("focused");
 			}
 		}
@@ -108,22 +108,21 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 
 	onHover = (event: PointerEvent) => {
 		//console.log("mouse enter", event.target, event.relatedTarget);
-		if (event.target) {
-			if (this.handles(event.target as Element)) {
+		if (event.target instanceof HTMLElement) {
+			if (this.handles(event.target)) {
 				this.highlight("hovered", this.terms, this.hues);
 			}
-		} else if (event.relatedTarget) {
-			if (this.handles(event.relatedTarget as Element)) {
+		} else if (event.relatedTarget instanceof HTMLElement) {
+			if (this.handles(event.relatedTarget)) {
 				this.unhighlight("hovered");
 			}
 		}
 	};
 
 	onInput = (event: Event) => {
-		if (!event.target || !this.handles(event.target as Element)) {
+		if (!(event.target instanceof HTMLElement) || !this.handles(event.target)) {
 			return;
 		}
-		//const element = event.target as Element;
 		this.highlight("focused", this.terms, this.hues);
 	};
 

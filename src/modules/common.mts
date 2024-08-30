@@ -91,9 +91,7 @@ class HighlightingCompatibility {
 		this.paintEngineMethods = {
 			paint: !!globalThis.CSS?.paintWorklet,
 			// `element()` might be defined anyway, could have false negatives.
-			element: (!!globalThis.document
-				&& !!(globalThis.document as Document & { mozSetImageElement: unknown }).mozSetImageElement
-			),
+			element: (!!globalThis.document && !!globalThis.document["mozSetImageElement"]),
 			url: true,
 		};
 	}
@@ -198,8 +196,8 @@ const getNodeFinal = (node: Node): Node =>
  * @param element An element.
  * @returns `true` if visible, `false` otherwise.
  */
-const isVisible = (element: HTMLElement) => // TODO improve correctness
-	(element.offsetWidth || element.offsetHeight || element.getClientRects().length)
+const isVisible = (element: HTMLElement): boolean => // TODO improve correctness
+	(element.offsetWidth > 0 || element.offsetHeight > 0 || element.getClientRects().length > 0)
 	&& getComputedStyle(element).visibility !== "hidden"
 ;
 
@@ -231,13 +229,13 @@ const elementsPurgeClass = (
 	)
 ;
 
-const focusClosest = <E extends HTMLElement>(element: E, filter: (element: E) => boolean) => {
+const focusClosest = (element: HTMLElement, filter: (element: HTMLElement) => boolean) => {
 	element.focus({ preventScroll: true }); // TODO use focusElement function instead (rename the function too)
 	if (document.activeElement !== element) {
-		if (filter(element)) {
-			focusClosest(element.parentElement as E, filter);
-		} else if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
+		if (filter(element) && element.parentElement instanceof HTMLElement) {
+			focusClosest(element.parentElement, filter);
+		} else if (document.activeElement instanceof HTMLElement) {
+			document.activeElement.blur();
 		}
 	}
 };

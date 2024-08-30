@@ -63,7 +63,7 @@ class TermMarker implements AbstractTermMarker {
 				`${term ? `.${getTermClass(term, this.#termTokens)}` : ""}[top^="${
 					Math.trunc(getElementYRelative(container) * precision) / precision
 				}"]`
-			) as HTMLElement | null;
+			);
 			if (scrollMarker) {
 				scrollMarker.classList.add(EleClass.FOCUS);
 				return true;

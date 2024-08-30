@@ -279,7 +279,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		for (const listener of this.#highlightingAppliedListeners) {
 			listener(this.#elementStyleRuleMap.keys());
 		}
-		const style = document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement;
+		const style = document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement; // NEXT 2
 		style.textContent = Array.from(this.#elementStyleRuleMap.values()).join("\n");
 	}
 
