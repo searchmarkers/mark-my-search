@@ -15,7 +15,7 @@ interface HighlighterWalkerInterface {
 	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
 	 * @returns The element landed on by the function, if any.
 	 */
-	stepToNextOccurrence: (
+	readonly stepToNextOccurrence: (
 		reverse: boolean,
 		stepNotJump: boolean,
 		term: MatchTerm | null,

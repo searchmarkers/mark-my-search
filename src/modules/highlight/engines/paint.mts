@@ -9,13 +9,13 @@ import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, createContainer, type PaintEngineMethod, type AllReadonly } from "/dist/modules/common.mjs";
 
-interface Box {
+type Box = Readonly<{
 	token: string
 	x: number
 	y: number
 	width: number
 	height: number
-}
+}>
 
 type PaintEngineMethodContainer = Awaited<ReturnType<typeof PaintEngine.getMethodModule>>
 
@@ -26,11 +26,11 @@ type HighlightingStyleRuleDeletedListener = (element: HTMLElement) => void
 type HighlightingAppliedListener = (styledElements: IterableIterator<HTMLElement>) => void
 
 interface HighlightingStyleObserver {
-	addHighlightingStyleRuleChangedListener: (listener: HighlightingStyleRuleChangedListener) => void
+	readonly addHighlightingStyleRuleChangedListener: (listener: HighlightingStyleRuleChangedListener) => void
 
-	addHighlightingStyleRuleDeletedListener: (listener: HighlightingStyleRuleChangedListener) => void
+	readonly addHighlightingStyleRuleDeletedListener: (listener: HighlightingStyleRuleChangedListener) => void
 
-	addHighlightingAppliedListener: (listener: HighlightingAppliedListener) => void
+	readonly addHighlightingAppliedListener: (listener: HighlightingAppliedListener) => void
 }
 
 class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver {

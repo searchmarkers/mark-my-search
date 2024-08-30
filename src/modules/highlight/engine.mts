@@ -23,15 +23,15 @@ interface HighlighterCSSInterface {
 	readonly getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
 }
 
-interface EngineCSS {
-	readonly misc: () => string
-	readonly termHighlights: () => string
-	readonly termHighlight: (
+type EngineCSS = Readonly<{
+	misc: () => string
+	termHighlights: () => string
+	termHighlight: (
 		terms: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 		termIndex: number,
 	) => string
-}
+}>
 
 interface HighlightingInterface {
 	/**

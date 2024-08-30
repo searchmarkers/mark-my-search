@@ -1,7 +1,7 @@
 interface Highlightables {
-	isElementHighlightable: (element: HTMLElement) => boolean
+	readonly isElementHighlightable: (element: HTMLElement) => boolean
 
-	findHighlightableAncestor: (element: HTMLElement) => HTMLElement
+	readonly findHighlightableAncestor: (element: HTMLElement) => HTMLElement
 }
 
 export type { Highlightables };

@@ -3,7 +3,7 @@ import { getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
 import { EleClass } from "/dist/modules/common.mjs";
 import type { DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
-interface ControlButtonInfo {
+type ControlButtonInfo = Readonly<{
 	controlClasses?: Array<typeof EleClass[keyof typeof EleClass]>
 	buttonClasses?: Array<typeof EleClass[keyof typeof EleClass]>
 	path?: string
@@ -11,7 +11,7 @@ interface ControlButtonInfo {
 	label?: string
 	onClick?: () => void
 	setUp?: (container: HTMLElement) => void
-}
+}>
 
 class Control {
 	readonly #controlsInfo: ControlsInfo;

@@ -1,10 +1,10 @@
-interface CommandInfo {
+type CommandInfo = Readonly<{
 	type: CommandType
 	termIdx?: number
 	reversed?: boolean
-}
+}>
 
-type CommandType =
+type CommandType = (
 	| "none"
 	| "openPopup"
 	| "openOptions"
@@ -18,7 +18,7 @@ type CommandType =
 	| "selectTerm"
 	| "stepGlobal"
 	| "focusTermInput"
-;
+)
 
 /**
  * Transforms a command string into a command object understood by the extension.
