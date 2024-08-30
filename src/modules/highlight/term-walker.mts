@@ -8,13 +8,13 @@ interface AbstractTermWalker {
 	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
 	 * @returns The element landed on by the function, if any.
 	 */
-	step: (
+	readonly step: (
 		reverse: boolean,
 		stepNotJump: boolean,
 		term: MatchTerm | null,
 	) => HTMLElement | null
 	
-	cleanup: () => void
+	readonly cleanup: () => void
 }
 
 export type { AbstractTermWalker };

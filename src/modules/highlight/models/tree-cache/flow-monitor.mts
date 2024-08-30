@@ -16,7 +16,7 @@ type Span = BaseSpan<true>
  * - maintaining a cache of [TODO]
  */
 interface AbstractFlowMonitor extends MutationObserverWrapper {
-	getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>
+	readonly getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>
 
 	/** Sets the listener for gain of highlight spans in an unhighlighted element. */
 	readonly setNewSpanOwnerListener: (

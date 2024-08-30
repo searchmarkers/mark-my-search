@@ -26,18 +26,66 @@ class TermWalker implements AbstractTermWalker {
 	}
 
 	cleanup () {
-		elementsReMakeUnfocusable();
+		this.elementsReMakeUnfocusable();
 	}
 
 	/**
-	 * Focuses an element, preventing immediate scroll-into-view and forcing visible focus where supported.
-	 * @param element An element.
+	 * Scrolls to and focuses the next block containing an occurrence of a term in the document, from the current selection position.
+	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
+	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
 	 */
-	focusElement (element: HTMLElement) {
-		element.focus({
-			preventScroll: true,
-			focusVisible: true, // Very sparse browser compatibility
-		} as FocusOptions);
+	focusNextTermJump (reverse: boolean, term: MatchTerm | null): HTMLElement | null {
+		const termSelector = term ? getTermClass(term, this.#termTokens) : undefined;
+		const focusBase = document.body
+			.getElementsByClassName(EleClass.FOCUS)[0] as HTMLElement;
+		const focusContainer = document.body
+			.getElementsByClassName(EleClass.FOCUS_CONTAINER)[0] as HTMLElement;
+		const selection = document.getSelection();
+		const activeElement = document.activeElement;
+		if (activeElement instanceof HTMLInputElement && activeElement.closest(`#${EleID.BAR}`)) {
+			activeElement.blur();
+		}
+		const selectionFocus = selection && (!activeElement
+			|| activeElement === document.body || !document.body.contains(activeElement)
+			|| activeElement === focusBase || activeElement.contains(focusContainer)
+		)
+			? selection.focusNode
+			: activeElement ?? document.body;
+		if (focusBase) {
+			focusBase.classList.remove(EleClass.FOCUS);
+			elementsPurgeClass(EleClass.FOCUS_CONTAINER);
+			this.elementsReMakeUnfocusable();
+		}
+		const selectionFocusContainer = (selectionFocus instanceof HTMLElement
+			? getContainerBlock(selectionFocus)
+			: selectionFocus?.parentElement && getContainerBlock(selectionFocus.parentElement));
+		const walkSelectionFocusContainer = { accept: false };
+		const walker = document.createTreeWalker(
+			document.body,
+			NodeFilter.SHOW_ELEMENT,
+			(element =>
+				element instanceof HTMLElement
+				&& element.tagName === HIGHLIGHT_TAG_UPPER
+				&& (termSelector ? element.classList.contains(termSelector) : true)
+				&& isVisible(element)
+				&& (getContainerBlock(element) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
+					? NodeFilter.FILTER_ACCEPT
+					: NodeFilter.FILTER_SKIP
+			),
+		);
+		walker.currentNode = selectionFocus ? selectionFocus : document.body;
+		const { elementSelected, container } = this.selectNextElement(reverse, walker, walkSelectionFocusContainer);
+		if (!elementSelected || !container) {
+			return null;
+		}
+		elementSelected.scrollIntoView({ behavior: "smooth", block: "center" });
+		if (selection) {
+			selection.setBaseAndExtent(elementSelected, 0, elementSelected, 0);
+		}
+		for (const element of document.body.querySelectorAll(`.${EleClass.REMOVE}`)) {
+			element.remove();
+		}
+		return elementSelected;
 	}
 
 	// TODO document
@@ -97,99 +145,27 @@ class TermWalker implements AbstractTermWalker {
 	}
 
 	/**
-	 * Scrolls to and focuses the next block containing an occurrence of a term in the document, from the current selection position.
-	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
-	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
+	 * Reverts the focusability of elements made temporarily focusable and marked as such using a class name.
+	 * Sets their `tabIndex` to -1.
+	 * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
 	 */
-	focusNextTermJump (reverse: boolean, term: MatchTerm | null): HTMLElement | null {
-		const termSelector = term ? getTermClass(term, this.#termTokens) : undefined;
-		const focusBase = document.body
-			.getElementsByClassName(EleClass.FOCUS)[0] as HTMLElement;
-		const focusContainer = document.body
-			.getElementsByClassName(EleClass.FOCUS_CONTAINER)[0] as HTMLElement;
-		const selection = document.getSelection();
-		const activeElement = document.activeElement;
-		if (activeElement instanceof HTMLInputElement && activeElement.closest(`#${EleID.BAR}`)) {
-			activeElement.blur();
+	elementsReMakeUnfocusable (root: HTMLElement = document.body) {
+		for (const element of root.querySelectorAll<HTMLElement>(`.${EleClass.FOCUS_REVERT}`)) {
+			element.tabIndex = -1;
+			element.classList.remove(EleClass.FOCUS_REVERT);
 		}
-		const selectionFocus = selection && (!activeElement
-			|| activeElement === document.body || !document.body.contains(activeElement)
-			|| activeElement === focusBase || activeElement.contains(focusContainer)
-		)
-			? selection.focusNode
-			: activeElement ?? document.body;
-		if (focusBase) {
-			focusBase.classList.remove(EleClass.FOCUS);
-			elementsPurgeClass(EleClass.FOCUS_CONTAINER);
-			elementsReMakeUnfocusable();
-		}
-		const selectionFocusContainer = (selectionFocus instanceof HTMLElement
-			? getContainerBlock(selectionFocus)
-			: selectionFocus?.parentElement && getContainerBlock(selectionFocus.parentElement));
-		const walkSelectionFocusContainer = { accept: false };
-		const walker = document.createTreeWalker(
-			document.body,
-			NodeFilter.SHOW_ELEMENT,
-			(element =>
-				element instanceof HTMLElement
-				&& element.tagName === HIGHLIGHT_TAG_UPPER
-				&& (termSelector ? element.classList.contains(termSelector) : true)
-				&& isVisible(element)
-				&& (getContainerBlock(element) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
-					? NodeFilter.FILTER_ACCEPT
-					: NodeFilter.FILTER_SKIP
-			),
-		);
-		walker.currentNode = selectionFocus ? selectionFocus : document.body;
-		const { elementSelected, container } = this.selectNextElement(reverse, walker, walkSelectionFocusContainer);
-		if (!elementSelected || !container) {
-			return null;
-		}
-		elementSelected.scrollIntoView({ behavior: "smooth", block: "center" });
-		if (selection) {
-			selection.setBaseAndExtent(elementSelected, 0, elementSelected, 0);
-		}
-		for (const element of document.body.querySelectorAll(`.${EleClass.REMOVE}`)) {
-			element.remove();
-		}
-		return elementSelected;
 	}
 
-	getSiblingHighlightFinal (
-		highlight: HTMLElement,
-		node: Node,
-		nextSiblingMethod: "nextSibling" | "previousSibling"
-	): HTMLElement {
-		const nextSibling = node[nextSiblingMethod];
-		if (!nextSibling) {
-			return highlight;
-		}
-		if (nextSibling instanceof HTMLElement) {
-			if (nextSibling.tagName === HIGHLIGHT_TAG_UPPER) {
-				return this.getSiblingHighlightFinal(nextSibling, nextSibling, nextSiblingMethod);
-			}
-			return highlight;
-		} else if (nextSibling instanceof Text) {
-			if (nextSibling.textContent === "") {
-				return this.getSiblingHighlightFinal(highlight, nextSibling, nextSiblingMethod);
-			}
-			return highlight;
-		}
-		return highlight;
-	}
-
-	getTopLevelHighlight (element: HTMLElement): HTMLElement {
-		const closestHighlight = (element.parentElement instanceof HTMLElement
-			&& (element.parentElement).closest(HIGHLIGHT_TAG));
-		return closestHighlight instanceof HTMLElement ? this.getTopLevelHighlight(closestHighlight) : element;
-	}
-
-	stepToElement (highlight: HTMLElement) {
-		highlight = this.getTopLevelHighlight(highlight);
-		const siblingFirst = this.getSiblingHighlightFinal(highlight, highlight, "previousSibling");
-		const siblingLast = this.getSiblingHighlightFinal(highlight, highlight, "nextSibling");
-		getSelection()?.setBaseAndExtent(siblingFirst, 0, siblingLast, siblingLast.childNodes.length);
-		highlight.scrollIntoView({ block: "center" });
+	/**
+	 * Focuses an element, preventing automatic scroll-into-view and forcing visible focus *(where supported)*.
+	 * @param element The element to focus.
+	 */
+	focusElement (element: HTMLElement) {
+		const focusOptions: FocusOptions & { focusVisible?: boolean } = {
+			preventScroll: true,
+			focusVisible: true, // Sparse browser compatibility
+		};
+		element.focus(focusOptions);
 	}
 
 	/**
@@ -243,18 +219,43 @@ class TermWalker implements AbstractTermWalker {
 		this.stepToElement(highlight);
 		return highlight;
 	}
-}
 
-/**
- * Reverts the focusability of elements made temporarily focusable and marked as such using a class name.
- * Sets their `tabIndex` to -1.
- * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
- */
-const elementsReMakeUnfocusable = (root: HTMLElement = document.body) => {
-	for (const element of root.querySelectorAll<HTMLElement>(`.${EleClass.FOCUS_REVERT}`)) {
-		element.tabIndex = -1;
-		element.classList.remove(EleClass.FOCUS_REVERT);
+	stepToElement (highlight: HTMLElement) {
+		highlight = this.getTopLevelHighlight(highlight);
+		const siblingFirst = this.getSiblingHighlightFinal(highlight, highlight, "previousSibling");
+		const siblingLast = this.getSiblingHighlightFinal(highlight, highlight, "nextSibling");
+		getSelection()?.setBaseAndExtent(siblingFirst, 0, siblingLast, siblingLast.childNodes.length);
+		highlight.scrollIntoView({ block: "center" });
 	}
-};
+
+	getTopLevelHighlight (element: HTMLElement): HTMLElement {
+		const closestHighlight = (element.parentElement instanceof HTMLElement
+			&& (element.parentElement).closest(HIGHLIGHT_TAG));
+		return closestHighlight instanceof HTMLElement ? this.getTopLevelHighlight(closestHighlight) : element;
+	}
+
+	getSiblingHighlightFinal (
+		highlight: HTMLElement,
+		node: Node,
+		nextSiblingMethod: "nextSibling" | "previousSibling"
+	): HTMLElement {
+		const nextSibling = node[nextSiblingMethod];
+		if (!nextSibling) {
+			return highlight;
+		}
+		if (nextSibling instanceof HTMLElement) {
+			if (nextSibling.tagName === HIGHLIGHT_TAG_UPPER) {
+				return this.getSiblingHighlightFinal(nextSibling, nextSibling, nextSiblingMethod);
+			}
+			return highlight;
+		} else if (nextSibling instanceof Text) {
+			if (nextSibling.textContent === "") {
+				return this.getSiblingHighlightFinal(highlight, nextSibling, nextSiblingMethod);
+			}
+			return highlight;
+		}
+		return highlight;
+	}
+}
 
 export { TermWalker };
