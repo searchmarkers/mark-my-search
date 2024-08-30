@@ -20,7 +20,7 @@ type ControlFocusArea = (
  * @param commands Commands as returned by the browser.
  * @returns An object containing the extracted command shortcut strings.
  */
-const getTermCommands = (commands: BrowserCommands): ReadonlyArray<{ down: string, up: string }> => {
+const getTermCommands = (commands: BrowserCommands): Array<Readonly<{ down: string, up: string }>> => {
 	const commandsDetail = commands.map((command): { info: CommandInfo, shortcut: string } => ({
 		info: command.name ? parseCommand(command.name) : { type: "none" },
 		shortcut: command.shortcut ?? "",

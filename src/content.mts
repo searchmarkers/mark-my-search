@@ -52,7 +52,7 @@ const focusReturnToDocument = (): boolean => {
  * @returns The extracted terms, split at some separator and some punctuation characters,
  * with some other punctuation characters removed.
  */
-const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm> => {
+const getTermsFromSelection = (termTokens: TermTokens): Array<MatchTerm> => {
 	const selection = getSelection();
 	const termsMut: Array<MatchTerm> = [];
 	if (selection && selection.anchorNode) {

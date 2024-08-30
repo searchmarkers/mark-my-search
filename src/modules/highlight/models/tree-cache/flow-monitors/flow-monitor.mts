@@ -130,7 +130,7 @@ class FlowMonitor implements AbstractFlowMonitor {
 			return;
 		}
 		const elementBreaksFlow = !highlightTags.flow.has(flowOwner.tagName);
-		const textFlows = this.getTextFlows(flowOwner.firstChild);
+		const textFlows: ReadonlyArray<ReadonlyArray<Text>> = this.getTextFlows(flowOwner.firstChild);
 		this.removeHighlighting(flowOwner);
 		for ( // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
 			let i = (elementBreaksFlow && textFlows[0].length) ? 0 : 1;
@@ -218,7 +218,7 @@ class FlowMonitor implements AbstractFlowMonitor {
 		}
 	}
 
-	getTextFlows (node: Node): ReadonlyArray<ReadonlyArray<Text>> {
+	getTextFlows (node: Node): Array<Array<Text>> {
 		const textFlows: Array<Array<Text>> = [ [] ];
 		this.populateTextFlows(node, textFlows, textFlows[0]);
 		return textFlows;
