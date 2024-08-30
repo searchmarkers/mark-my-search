@@ -52,6 +52,7 @@ const getBoxes = <R extends boolean>(
 		elementPopulateBoxes(
 			elementFlows,
 			ownerRects,
+			// Recalculate is true, so this type is correct.
 			spanBoxesMap as Map<Readonly<Span>, Array<Readonly<Box>>>,
 			termTokens,
 		);

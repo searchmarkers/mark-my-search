@@ -15,7 +15,7 @@ class SearchSite {
 			this.pathname = [ parts[0], parts[1].slice(0, parts[1].endsWith("/") ? parts[1].length : undefined) ];
 		} else {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			const [ param, arg ] = (Array.from(urlDynamic.searchParams as unknown as ArrayLike<string>))
+			const [ param, arg ] = (Array.from(urlDynamic.searchParams))
 				.find(param => param[1].includes("%s")) ?? [ "", "" ];
 			this.param = param;
 		}

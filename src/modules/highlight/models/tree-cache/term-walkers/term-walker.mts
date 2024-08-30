@@ -25,7 +25,7 @@ class TermWalker implements AbstractTermWalker {
 		const nodeFocused = document.activeElement
 			? (document.activeElement === document.body || document.activeElement.closest(`${EleID.BAR}`))
 				? null
-				: document.activeElement as HTMLElement
+				: document.activeElement
 			: null;
 		const nodeCurrent = nodeStart
 			?? (nodeFocused
@@ -54,11 +54,11 @@ class TermWalker implements AbstractTermWalker {
 		);
 		walker.currentNode = nodeCurrent;
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		if (nodeFocused) {
+		if (nodeFocused instanceof HTMLElement) {
 			nodeFocused.blur();
 		}
-		const element = walker[nextNodeMethod]() as HTMLElement | null;
-		if (!element) {
+		const element = walker[nextNodeMethod]();
+		if (!(element instanceof HTMLElement)) {
 			if (!nodeStart) {
 				this.step(reverse, stepNotJump, term, nodeBegin);
 			}

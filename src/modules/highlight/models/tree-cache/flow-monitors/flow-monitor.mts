@@ -225,16 +225,7 @@ class FlowMonitor implements AbstractFlowMonitor {
 	 */
 	cacheFlowWithSpans (terms: ReadonlyArray<MatchTerm>, textFlow: ReadonlyArray<Text>) {
 		const text = textFlow.map(node => node.textContent).join("");
-		const getAncestorCommon = (nodeA_ancestor: HTMLElement, nodeB: Node): HTMLElement | null => {
-			if (nodeA_ancestor.contains(nodeB)) {
-				return nodeA_ancestor;
-			}
-			if (nodeA_ancestor.parentElement) {
-				return getAncestorCommon(nodeA_ancestor.parentElement as HTMLElement, nodeB);
-			}
-			return null;
-		};
-		const ancestor = getAncestorCommon(
+		const ancestor = this.getAncestorCommon(
 			textFlow[0].parentElement!,
 			textFlow[textFlow.length - 1],
 		)!;
@@ -257,6 +248,16 @@ class FlowMonitor implements AbstractFlowMonitor {
 		}
 		if (this.#spansCreatedListener)
 			this.#spansCreatedListener(ancestor, spansCreated);
+	}
+
+	getAncestorCommon (nodeA_ancestor: HTMLElement, nodeB: Node): HTMLElement | null {
+		if (nodeA_ancestor.contains(nodeB)) {
+			return nodeA_ancestor;
+		}
+		if (nodeA_ancestor.parentElement) {
+			return this.getAncestorCommon(nodeA_ancestor.parentElement, nodeB);
+		}
+		return null;
 	}
 
 	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {

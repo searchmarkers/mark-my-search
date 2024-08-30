@@ -73,10 +73,10 @@ class FlowNodeList {
 	getText () {
 		let text = "";
 		let current = this.first;
-		do {
-			text += current!.value.textContent;
-		// eslint-disable-next-line no-cond-assign
-		} while (current = current!.next);
+		while (current) {
+			text += current.value.textContent;
+			current = current.next;
+		}
 		return text;
 	}
 
@@ -86,11 +86,11 @@ class FlowNodeList {
 	}
 
 	*[Symbol.iterator] () {
-		let current = this.first!;
-		do {
+		let current = this.first;
+		while (current) {
 			yield current;
-		// eslint-disable-next-line no-cond-assign
-		} while (current = current.next!);
+			current = current.next;
+		}
 	}
 }
 
@@ -178,7 +178,7 @@ ${HIGHLIGHT_TAG} {
 	 * @param terms The terms associated with the highlights to remove. If `undefined`, all highlights are removed.
 	 * @param root A root node under which to remove highlights.
 	 */
-	undoHighlights (terms?: ReadonlyArray<MatchTerm>, root: HTMLElement | DocumentFragment = document.body) {
+	undoHighlights (terms?: ReadonlyArray<MatchTerm>, root: HTMLElement = document.body) {
 		if (terms && !terms.length) {
 			return; // Optimization for removing 0 terms
 		}
@@ -189,12 +189,6 @@ ${HIGHLIGHT_TAG} {
 		// TODO attempt to join text nodes back together
 		for (const highlight of highlights) {
 			highlight.outerHTML = highlight.innerHTML;
-		}
-		if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-			root = (root as DocumentFragment).getRootNode() as HTMLElement;
-			if (root.nodeType === Node.TEXT_NODE) {
-				return;
-			}
 		}
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER, root);
 		elementsPurgeClass(EleClass.FOCUS, root);
@@ -248,7 +242,8 @@ ${HIGHLIGHT_TAG} {
 				node.remove();
 				return (nodeItemPrevious ? nodeItemPrevious.next : nodeItems.first)!;
 			}
-			(node.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true;
+			(node.parentElement as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED] = true; // NEXT 1
+			// NEXT 0: moving some functions into classes
 			// update: Text after Highlight Element
 			if (end < text.length) {
 				node.textContent = text.substring(end);
@@ -311,7 +306,7 @@ ${HIGHLIGHT_TAG} {
 			const textFlow = nodeItems.getText();
 			for (const term of terms) {
 				let nodeItemPrevious: FlowNodeListItem | null = null;
-				let nodeItem = nodeItems.first!;
+				let nodeItem = nodeItems.first!; // This should always be defined.
 				let textStart = 0;
 				let textEnd = nodeItem.value.length;
 				for (const match of textFlow.matchAll(this.#termPatterns.get(term))) {
@@ -319,7 +314,7 @@ ${HIGHLIGHT_TAG} {
 					const highlightEnd = highlightStart + match[0].length;
 					while (textEnd <= highlightStart) {
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next!;
+						nodeItem = nodeItem.next!; // This should always be defined in this context.
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -341,7 +336,7 @@ ${HIGHLIGHT_TAG} {
 							break;
 						}
 						nodeItemPrevious = nodeItem;
-						nodeItem = nodeItem.next!;
+						nodeItem = nodeItem.next!; // This should always be defined in this context.
 						textStart = textEnd;
 						textEnd += nodeItem.value.length;
 					}
@@ -385,14 +380,14 @@ ${HIGHLIGHT_TAG} {
 					nodeItems.push(node);
 					break;
 				}
-				node = node.nextSibling!; // May be null (checked by loop condition)
+				node = node.nextSibling!; // May be null (checked by loop condition).
 			} while (node && visitSiblings);
 		};
 
 		return (terms: ReadonlyArray<MatchTerm>, rootNode: Node) => {
-			if (rootNode.nodeType === Node.TEXT_NODE) {
+			if (rootNode instanceof Text) {
 				const nodeItems = new FlowNodeList();
-				nodeItems.push(rootNode as Text);
+				nodeItems.push(rootNode);
 				highlightInBlock(terms, nodeItems);
 			} else {
 				const nodeItems = new FlowNodeList();
@@ -445,10 +440,10 @@ ${HIGHLIGHT_TAG} {
 			//mutationUpdates.disconnect();
 			const elementsJustHighlighted = new Set<HTMLElement>();
 			for (const mutation of mutations) {
-				const element = mutation.target.nodeType === Node.TEXT_NODE
-					? mutation.target.parentElement!
-					: mutation.target as HTMLElement;
-				if (element) {
+				const element = mutation.target instanceof Node
+					? mutation.target.parentElement
+					: mutation.target;
+				if (element instanceof HTMLElement) {
 					if ((element as PropertiesHTMLElement<true>)[ELEMENT_JUST_HIGHLIGHTED]) {
 						elementsJustHighlighted.add(element);
 					} else if (canHighlightElement(rejectSelector, element)) {

@@ -48,8 +48,8 @@ class TermWalker implements AbstractTermWalker {
 		elementToSelect?: HTMLElement,
 	): { elementSelected: HTMLElement | null, container: HTMLElement | null } {
 		const nextNodeMethod = reverse ? "previousNode" : "nextNode";
-		let elementTerm = walker[nextNodeMethod]() as HTMLElement;
-		if (!elementTerm) {
+		let elementTerm = walker[nextNodeMethod]();
+		if (!(elementTerm instanceof HTMLElement)) {
 			let nodeToRemove: Node | null = null;
 			if (!document.body.lastChild || document.body.lastChild.nodeType !== Node.TEXT_NODE) {
 				nodeToRemove = document.createTextNode("");
@@ -58,14 +58,14 @@ class TermWalker implements AbstractTermWalker {
 			walker.currentNode = (reverse && document.body.lastChild)
 				? document.body.lastChild
 				: document.body;
-			elementTerm = walker[nextNodeMethod]() as HTMLElement;
+			elementTerm = walker[nextNodeMethod]();
 			if (nodeToRemove) {
 				nodeToRemove.parentElement?.removeChild(nodeToRemove);
 			}
-			if (!elementTerm) {
+			if (!(elementTerm instanceof HTMLElement)) {
 				walkSelectionFocusContainer.accept = true;
-				elementTerm = walker[nextNodeMethod]() as HTMLElement;
-				if (!elementTerm) {
+				elementTerm = walker[nextNodeMethod]();
+				if (!(elementTerm instanceof HTMLElement)) {
 					return { elementSelected: null, container: null };
 				}
 			}
@@ -123,24 +123,22 @@ class TermWalker implements AbstractTermWalker {
 			elementsPurgeClass(EleClass.FOCUS_CONTAINER);
 			elementsReMakeUnfocusable();
 		}
-		const selectionFocusContainer = selectionFocus
-			? getContainerBlock(
-				selectionFocus.nodeType === Node.ELEMENT_NODE || !selectionFocus.parentElement
-					? selectionFocus as HTMLElement
-					: selectionFocus.parentElement,
-			) : undefined;
+		const selectionFocusContainer = (selectionFocus instanceof HTMLElement
+			? getContainerBlock(selectionFocus)
+			: selectionFocus?.parentElement && getContainerBlock(selectionFocus.parentElement));
 		const walkSelectionFocusContainer = { accept: false };
 		const walker = document.createTreeWalker(
 			document.body,
 			NodeFilter.SHOW_ELEMENT,
 			(element =>
-				element.tagName === HIGHLIGHT_TAG_UPPER
+				element instanceof HTMLElement
+				&& element.tagName === HIGHLIGHT_TAG_UPPER
 				&& (termSelector ? element.classList.contains(termSelector) : true)
 				&& isVisible(element)
 				&& (getContainerBlock(element) !== selectionFocusContainer || walkSelectionFocusContainer.accept)
 					? NodeFilter.FILTER_ACCEPT
 					: NodeFilter.FILTER_SKIP
-			) as ((element: HTMLElement) => number) as (node: Node) => number,
+			),
 		);
 		walker.currentNode = selectionFocus ? selectionFocus : document.body;
 		const { elementSelected, container } = this.selectNextElement(reverse, walker, walkSelectionFocusContainer);
@@ -186,12 +184,12 @@ class TermWalker implements AbstractTermWalker {
 		return closestHighlight instanceof HTMLElement ? this.getTopLevelHighlight(closestHighlight) : element;
 	}
 
-	stepToElement (element: HTMLElement) {
-		element = this.getTopLevelHighlight(element) as HTMLElement;
-		const elementFirst = this.getSiblingHighlightFinal(element, element, "previousSibling");
-		const elementLast = this.getSiblingHighlightFinal(element, element, "nextSibling");
-		getSelection()?.setBaseAndExtent(elementFirst, 0, elementLast, elementLast.childNodes.length);
-		element.scrollIntoView({ block: "center" });
+	stepToElement (highlight: HTMLElement) {
+		highlight = this.getTopLevelHighlight(highlight);
+		const siblingFirst = this.getSiblingHighlightFinal(highlight, highlight, "previousSibling");
+		const siblingLast = this.getSiblingHighlightFinal(highlight, highlight, "nextSibling");
+		getSelection()?.setBaseAndExtent(siblingFirst, 0, siblingLast, siblingLast.childNodes.length);
+		highlight.scrollIntoView({ block: "center" });
 	}
 
 	/**
@@ -207,21 +205,21 @@ class TermWalker implements AbstractTermWalker {
 		if (!selection || !bar) {
 			return null;
 		}
-		if (document.activeElement && bar.contains(document.activeElement)) {
-			(document.activeElement as HTMLElement).blur();
+		if (document.activeElement instanceof HTMLElement && bar.contains(document.activeElement)) {
+			document.activeElement.blur();
 		}
 		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
 		const nodeSelected = reverse ? selection.anchorNode : selection.focusNode;
-		const nodeFocused = document.activeElement
+		const nodeFocused = document.activeElement instanceof HTMLElement
 			? (document.activeElement === document.body || bar.contains(document.activeElement))
 				? null
-				: document.activeElement as HTMLElement
+				: document.activeElement
 			: null;
 		const nodeCurrent = nodeStart ?? (nodeSelected
 			? nodeSelected
 			: nodeFocused ?? nodeBegin);
-		if (document.activeElement) {
-			(document.activeElement as HTMLElement).blur();
+		if (document.activeElement instanceof HTMLElement) {
+			document.activeElement.blur();
 		}
 		const walker = document.createTreeWalker(
 			document.body,
@@ -229,21 +227,21 @@ class TermWalker implements AbstractTermWalker {
 			(element =>
 				element.parentElement!.closest(HIGHLIGHT_TAG)
 					? NodeFilter.FILTER_REJECT
-					: (element.tagName === HIGHLIGHT_TAG_UPPER && isVisible(element))
+					: (element instanceof HTMLElement && element.tagName === HIGHLIGHT_TAG_UPPER && isVisible(element))
 						? NodeFilter.FILTER_ACCEPT
 						: NodeFilter.FILTER_SKIP
-			) as ((element: HTMLElement) => number) as (node: Node) => number,
+			),
 		);
 		walker.currentNode = nodeCurrent;
-		const element = walker[reverse ? "previousNode" : "nextNode"]() as HTMLElement | null;
-		if (!element) {
+		const highlight = reverse ? walker.previousNode() : walker.nextNode();
+		if (!(highlight instanceof HTMLElement)) {
 			if (!nodeStart) {
 				this.focusNextTermStep(reverse, nodeBegin);
 			}
 			return null;
 		}
-		this.stepToElement(element);
-		return element;
+		this.stepToElement(highlight);
+		return highlight;
 	}
 }
 
@@ -252,13 +250,8 @@ class TermWalker implements AbstractTermWalker {
  * Sets their `tabIndex` to -1.
  * @param root If supplied, an element to revert focusability under in the DOM tree (inclusive).
  */
-const elementsReMakeUnfocusable = (root: HTMLElement | DocumentFragment = document.body) => {
-	if (!root.parentNode) {
-		return;
-	}
-	for (const element of root.parentNode.querySelectorAll(
-		`.${EleClass.FOCUS_REVERT}`,
-	) as NodeListOf<HTMLElement>) {
+const elementsReMakeUnfocusable = (root: HTMLElement = document.body) => {
+	for (const element of root.querySelectorAll<HTMLElement>(`.${EleClass.FOCUS_REVERT}`)) {
 		element.tabIndex = -1;
 		element.classList.remove(EleClass.FOCUS_REVERT);
 	}

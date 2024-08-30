@@ -51,7 +51,7 @@ class ExtendedHighlight {
 }
 
 class ExtendedHighlightRegistry {
-	readonly registry = CSS.highlights!;
+	readonly registry = CSS.highlights;
 	readonly map = new Map<string, ExtendedHighlight>();
 
 	get size () {

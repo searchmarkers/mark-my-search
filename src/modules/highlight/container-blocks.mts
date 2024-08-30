@@ -7,7 +7,7 @@ const containerBlockSelector = `:not(${Array.from(highlightTags.flow).join(", ")
 
 /**
  * Gets the containing block of an element.
- * This is its **closest ancestor (inclusive)** which has no tag name counted as `flow` in a highlight tags object.
+ * This is its **closest ancestor (inclusive)** which has no tag name counted as 'flow' type.
  * @param element The element of which to find the first container block.
  * @returns The closest container block ancestor.
  */
