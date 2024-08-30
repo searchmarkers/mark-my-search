@@ -2,7 +2,7 @@ import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type { ConfigValues } from "/dist/modules/privileged/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
-interface Tab {
+type Tab = Readonly<{
 	getDetails?: TabDetailsRequest
 	commands?: ReadonlyArray<CommandInfo>
 	extensionCommands?: ReadonlyArray<chrome.commands.Command>
@@ -17,19 +17,19 @@ interface Tab {
 	highlightLook?: ConfigValues["highlightLook"]
 	highlighter?: ConfigValues["highlighter"]
 	matchMode?: ConfigValues["matchModeDefaults"]
-}
+}>
 
-interface TabDetailsRequest {
+type TabDetailsRequest = Readonly<{
 	termsFromSelection?: true
 	highlightsShown?: true
-}
+}>
 
-interface TabResponse {
+type TabResponse = Readonly<{
 	terms?: ReadonlyArray<MatchTerm>
 	highlightsShown?: boolean
-}
+}>
 
-type Background<WithId = false> = {
+type Background<WithId = false> = Readonly<{
 	highlightCommands?: ReadonlyArray<CommandInfo>
 	initializationGet?: boolean
 	terms?: ReadonlyArray<MatchTerm>
@@ -44,7 +44,7 @@ type Background<WithId = false> = {
 	(WithId extends true ? never : Record<never, never>) | {
 		tabId: number
 	}
-)
+)>
 
 type BackgroundResponse = Tab | null
 

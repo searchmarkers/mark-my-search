@@ -6,7 +6,7 @@ type Model = "tree-edit"
 interface AbstractTreeEditEngine extends AbstractEngine {
 	readonly model: Model
 
-	getHighlightedElementsForTerms: (terms: ReadonlyArray<MatchTerm>) => Iterable<HTMLElement>
+	readonly getHighlightedElementsForTerms: (terms: ReadonlyArray<MatchTerm>) => Iterable<HTMLElement>
 }
 
 export type {

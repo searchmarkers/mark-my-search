@@ -1,4 +1,5 @@
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { HighlightTagName } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 
 /**
  * Logs a debug message as part of normal operation.
@@ -175,12 +176,12 @@ const AtRuleID = (() => {
 
 /**
  * Transforms an array of lowercase element tags into a set of lowercase and uppercase tags.
- * @param tagsLower An array of tag names in their lowercase form.
+ * @param htmlTags An array of tag names in their lowercase form.
  * @returns The transformed set of tag names.
  */
-const getElementTagsSet = (tagsLower: Array<keyof HTMLElementTagNameMap>) =>
-	new Set(tagsLower.flatMap(tagLower => [ tagLower, tagLower.toUpperCase() ]))
-;
+const getElementTagsSet = (
+	htmlTags: Array<keyof HTMLElementTagNameMap | HighlightTagName>,
+) => new Set(htmlTags.map(tagLower => tagLower.toUpperCase()));
 
 /**
  * Gets the node at the end of an element, in layout terms; aka. the last item of a pre-order depth-first search traversal.

@@ -14,19 +14,19 @@ import type { UpdateTermStatus } from "/dist/content.mjs";
 import { compatibility } from "/dist/modules/common.mjs";
 
 interface AbstractEngineManager extends Highlighter, HighlighterCounterInterface, HighlighterWalkerInterface {
-	setEngine: (preference: Engine) => Promise<void>
+	readonly setEngine: (preference: Engine) => Promise<void>
 
-	applyEngine: () => void
+	readonly applyEngine: () => void
 
-	removeEngine: () => void
+	readonly removeEngine: () => void
 
-	signalPaintEngineMethod: (preference: PaintEngineMethod) => void
+	readonly signalPaintEngineMethod: (preference: PaintEngineMethod) => void
 
-	applyPaintEngineMethod: (preference: PaintEngineMethod) => Promise<void>
+	readonly applyPaintEngineMethod: (preference: PaintEngineMethod) => Promise<void>
 
-	setSpecialEngine: () => Promise<void>
+	readonly setSpecialEngine: () => Promise<void>
 
-	removeSpecialEngine: () => void
+	readonly removeSpecialEngine: () => void
 }
 
 type EngineData = Readonly<{

@@ -17,7 +17,7 @@ enum ConfigContext {
 type ResearchInstances = Record<number, ResearchInstance>
 type SearchSites = Record<string, SearchSite>
 
-interface BankValues {
+type BankValues = {
 	researchInstances: ResearchInstances
 	engines: SearchSites
 }
@@ -90,7 +90,7 @@ export class StoreListInterface<T> {
 	}
 }
 
-interface ConfigBarControlsShown<Context = ConfigContext.INTERFACE> {
+type ConfigBarControlsShown<Context = ConfigContext.INTERFACE> = {
 	toggleBarCollapsed: StoreImmediate<boolean, Context>
 	disableTabResearch: StoreImmediate<boolean, Context>
 	performSearch: StoreImmediate<boolean, Context>
@@ -98,7 +98,7 @@ interface ConfigBarControlsShown<Context = ConfigContext.INTERFACE> {
 	appendTerm: StoreImmediate<boolean, Context>
 	replaceTerms: StoreImmediate<boolean, Context>
 }
-interface ConfigBarLook<Context = ConfigContext.INTERFACE> {
+type ConfigBarLook<Context = ConfigContext.INTERFACE> = {
 	showEditIcon: StoreImmediate<boolean, Context>
 	showRevealIcon: StoreImmediate<boolean, Context>
 	fontSize: StoreImmediate<string, Context>
@@ -106,20 +106,20 @@ interface ConfigBarLook<Context = ConfigContext.INTERFACE> {
 	opacityTerm: StoreImmediate<number, Context>
 	borderRadius: StoreImmediate<string, Context>
 }
-interface ConfigHighlightLook<Context = ConfigContext.INTERFACE> {
+type ConfigHighlightLook<Context = ConfigContext.INTERFACE> = {
 	hues: StoreImmediate<Array<number>, Context>
 }
-interface ConfigHighlighter<Context = ConfigContext.INTERFACE> {
+type ConfigHighlighter<Context = ConfigContext.INTERFACE> = {
 	engine: StoreImmediate<Engine, Context>
 	paintEngine: StoreImmediate<PaintEngineConfig, Context>
 }
-interface ConfigURLFilters<Context = ConfigContext.INTERFACE> {
+type ConfigURLFilters<Context = ConfigContext.INTERFACE> = {
 	noPageModify: StoreImmediate<URLFilter, Context>
 	noHighlight: StoreImmediate<URLFilter, Context>
 	nonSearch: StoreImmediate<URLFilter, Context>
 }
 
-interface ConfigValues<Context = ConfigContext.INTERFACE> {
+type ConfigValues<Context = ConfigContext.INTERFACE> = {
 	theme: {
 		edition: StoreImmediate<ThemeEdition, Context>
 		variant: StoreImmediate<ThemeVariant, Context>
@@ -159,7 +159,7 @@ interface ConfigValues<Context = ConfigContext.INTERFACE> {
 
 type ConfigKey = keyof ConfigValues
 
-interface PaintEngineConfig {
+type PaintEngineConfig = {
 	method: PaintEngineMethod
 }
 
@@ -168,7 +168,7 @@ type URLFilter = Array<{
 	pathname: string,
 }>
 
-interface TermList {
+type TermList = {
 	name: string
 	terms: ReadonlyArray<MatchTerm>
 	urlFilter: URLFilter
@@ -186,7 +186,7 @@ enum ThemeVariant {
 	AUTO = "auto",
 }
 
-interface ResearchInstance {
+type ResearchInstance = {
 	terms: ReadonlyArray<MatchTerm>
 	highlightsShown: boolean
 	barCollapsed: boolean

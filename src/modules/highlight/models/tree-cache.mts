@@ -7,7 +7,7 @@ type Model = "tree-cache"
 interface AbstractTreeCacheEngine extends AbstractEngine {
 	readonly model: Model
 
-	getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>;
+	readonly getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>;
 }
 
 export type { AbstractTreeCacheEngine };

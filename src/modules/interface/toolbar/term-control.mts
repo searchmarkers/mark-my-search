@@ -2,39 +2,39 @@ import type { SelectionReturnTarget } from "/dist/modules/interface/toolbar.mjs"
 import type { ControlFocusArea } from "/dist/modules/interface/toolbar/common.mjs";
 
 interface TermAbstractControl extends TermControlInputInterface, TermControlOptionListInterface {
-	getInputValue: () => string
+	readonly getInputValue: () => string
 
-	inputIsLastFocused: () => boolean
+	readonly inputIsLastFocused: () => boolean
 
-	markInputAsLastFocused: (value: boolean) => void
+	readonly markInputAsLastFocused: (value: boolean) => void
 
-	inputIsEventTarget: (target: EventTarget) => boolean
+	readonly inputIsEventTarget: (target: EventTarget) => boolean
 
 	/**
 	 * Focuses and selects the text of the control's input. Note that focus causes a term input to be visible.
 	 * @param shiftCaret If supplied, whether to shift the caret to the "right" or the "left". If unsupplied, all text is selected.
 	 */
-	selectInput: (shiftCaret?: "right" | "left") => void
+	readonly selectInput: (shiftCaret?: "right" | "left") => void
 
-	focusInput: () => SelectionReturnTarget
+	readonly focusInput: () => SelectionReturnTarget
 
-	unfocusInput: () => void
+	readonly unfocusInput: () => void
 
-	getFocusArea: () => ControlFocusArea
+	readonly getFocusArea: () => ControlFocusArea
 
-	appendTo: (parent: HTMLElement) => void
+	readonly appendTo: (parent: HTMLElement) => void
 }
 
 interface TermControlComponentInterface {
-	commit: (inputValue?: string) => void
+	readonly commit: (inputValue?: string) => void
 
-	classListToggle: (token: string, force?: boolean) => boolean
+	readonly classListToggle: (token: string, force?: boolean) => boolean
 
-	classListContains: (token: string) => boolean
+	readonly classListContains: (token: string) => boolean
 }
 
 interface TermControlInputInterface extends TermControlComponentInterface {
-	openOptionList: () => void
+	readonly openOptionList: () => void
 }
 
 interface TermControlOptionListInterface extends TermControlComponentInterface {}

@@ -23,7 +23,7 @@ type DoPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => boolean
 type BrowserCommands = Array<chrome.commands.Command>
 type BrowserCommandsReadonly = ReadonlyArray<chrome.commands.Command>
 
-interface ControlsInfo {
+type ControlsInfo = {
 	pageModifyEnabled: boolean
 	highlightsShown: boolean
 	barCollapsed: boolean
@@ -52,7 +52,7 @@ const focusReturnToDocument = (): boolean => {
  * @returns The extracted terms, split at some separator and some punctuation characters,
  * with some other punctuation characters removed.
  */
-const getTermsFromSelection = (termTokens: TermTokens): ReadonlyArray<MatchTerm> => {
+const getTermsFromSelection = (termTokens: TermTokens): Array<MatchTerm> => {
 	const selection = getSelection();
 	const termsMut: Array<MatchTerm> = [];
 	if (selection && selection.anchorNode) {
@@ -356,14 +356,16 @@ interface TermAppender<Async = true> {
 		message: Message.Tab,
 		sender: chrome.runtime.MessageSender,
 		sendResponse: (response: Message.TabResponse) => void,
+		detailsHandled?: boolean,
 	) => void
 	let queuingPromise: Promise<unknown> | undefined = undefined;
 	const messageHandleHighlight: MessageHandler = (
 		message,
 		sender,
 		sendResponse,
+		detailsHandled?,
 	) => {
-		if (message.getDetails) {
+		if (message.getDetails && !detailsHandled) {
 			sendResponse(getDetails(message.getDetails));
 		}
 		(async () => {
@@ -438,36 +440,40 @@ interface TermAppender<Async = true> {
 		})();
 	};
 	(() => {
-		const messageQueue: Array<{
+		type MessageInfo = {
 			message: Message.Tab,
 			sender: chrome.runtime.MessageSender,
 			sendResponse: (response: Message.TabResponse) => void,
-		}> = [];
+		}
+		const messageQueue: Array<MessageInfo> = [];
 		const messageHandleHighlightUninitialized: MessageHandler = (
 			message,
 			sender,
 			sendResponse,
+			detailsHandled?,
 		) => {
-			if (message.getDetails) {
+			if (message.getDetails && !detailsHandled) {
 				sendResponse(getDetails(message.getDetails));
-				delete message.getDetails;
 			}
-			if (!Object.keys(message).length) {
+			if (Object.keys(message).length === 1) {
+				// If the message only requested details, we can now discard it.
 				return;
 			}
-			messageQueue.unshift({ message, sender, sendResponse });
+			messageQueue.push({ message, sender, sendResponse });
 			if (messageQueue.length === 1) {
-				sendBackgroundMessage({ initializationGet: true }).then(message => {
-					if (!message) {
+				sendBackgroundMessage({ initializationGet: true }).then(initMessage => {
+					if (!initMessage) {
 						assert(false, "not initialized, so highlighting remains inactive", "no init response was received");
 						return;
 					}
 					const initialize = () => {
 						chrome.runtime.onMessage.removeListener(messageHandleHighlightUninitialized);
 						chrome.runtime.onMessage.addListener(messageHandleHighlight);
-						messageHandleHighlight(message, sender, sendResponse);
-						for (const messageInfo of messageQueue) {
-							messageHandleHighlight(messageInfo.message, messageInfo.sender, messageInfo.sendResponse);
+						messageHandleHighlight(initMessage, sender, sendResponse);
+						let info: MessageInfo | undefined;
+						// eslint-disable-next-line no-cond-assign
+						while (info = messageQueue.shift()) {
+							messageHandleHighlight(info.message, info.sender, info.sendResponse, true);
 						}
 					};
 					if (document.body) {

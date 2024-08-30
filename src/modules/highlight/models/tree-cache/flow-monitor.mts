@@ -1,4 +1,4 @@
-import type { MutationObserverWrapper } from "/dist/modules/highlight/flow-mutation-observer.mjs";
+import type { FlowMutationObserver } from "/dist/modules/highlight/flow-mutation-observer.mjs";
 import type { BaseFlow, BaseSpan } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
@@ -15,8 +15,8 @@ type Span = BaseSpan<true>
  * - determining "flows" of text and matching within them, producing highlighting "boxes" information;
  * - maintaining a cache of [TODO]
  */
-interface AbstractFlowMonitor extends MutationObserverWrapper {
-	getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>
+interface AbstractFlowMonitor extends FlowMutationObserver {
+	readonly getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>
 
 	/** Sets the listener for gain of highlight spans in an unhighlighted element. */
 	readonly setNewSpanOwnerListener: (

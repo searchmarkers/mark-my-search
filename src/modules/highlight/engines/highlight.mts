@@ -5,91 +5,12 @@ import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, createContainer, type AllReadonly } from "/dist/modules/common.mjs";
 
-const getName = (termToken: string) => "markmysearch-" + termToken;
-
-class ExtendedHighlight {
-	readonly highlight: Highlight;
-	readonly spanRangeMap = new Map<Span, AbstractRange>();
-
-	constructor (...initialRanges: Array<AbstractRange>) {
-		this.highlight = new Highlight(...initialRanges);
-	}
-
-	add (value: AbstractRange, span: Span) {
-		this.spanRangeMap.set(span, value);
-		return this.highlight.add(value);
-	}
-
-	has (value: AbstractRange) {
-		return this.highlight.has(value);
-	}
-
-	delete (value: AbstractRange) {
-		const result = Array.from(this.spanRangeMap.entries()).find(({ 1: range }) => range === value);
-		if (!result) {
-			return this.highlight.delete(value);
-		}
-		return this.spanRangeMap.delete(result[0]);
-	}
-
-	getBySpan (span: Span) {
-		return this.spanRangeMap.get(span);
-	}
-
-	deleteBySpan (span: Span) {
-		const range = this.spanRangeMap.get(span);
-		if (!range) {
-			return false;
-		}
-		this.spanRangeMap.delete(span);
-		return this.highlight.delete(range);
-	}
-
-	hasBySpan (span: Span) {
-		return this.spanRangeMap.has(span);
-	}
-}
-
-class ExtendedHighlightRegistry {
-	readonly registry = CSS.highlights;
-	readonly map = new Map<string, ExtendedHighlight>();
-
-	get size () {
-		return this.map.size;
-	}
-
-	set (termToken: string, value: ExtendedHighlight) {
-		this.map.set(termToken, value);
-		return this.registry.set(getName(termToken), value.highlight);
-	}
-
-	get (termToken: string) {
-		return this.map.get(termToken);
-	}
-
-	has (termToken: string) {
-		return this.map.has(termToken);
-	}
-
-	delete (termToken: string) {
-		this.registry.delete(getName(termToken));
-		return this.map.delete(termToken);
-	}
-
-	clear () {
-		for (const termToken of this.map.keys()) {
-			this.registry.delete(getName(termToken));
-		}
-		return this.map.clear();
-	}
-}
-
-interface HighlightStyle {
+type HighlightStyle = Readonly<{
 	opacity: number
 	lineThickness: number
 	lineStyle: "dotted" | "dashed" | "solid" | "double" | "wavy"
 	textColor?: string
-}
+}>
 
 class HighlightEngine implements AbstractTreeCacheEngine {
 	readonly class = "HIGHLIGHT";
@@ -216,6 +137,85 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		this.#highlightingUpdatedListeners.add(listener);
 	}
 }
+
+class ExtendedHighlightRegistry {
+	readonly registry = CSS.highlights;
+	readonly map = new Map<string, ExtendedHighlight>();
+
+	get size () {
+		return this.map.size;
+	}
+
+	set (termToken: string, value: ExtendedHighlight) {
+		this.map.set(termToken, value);
+		return this.registry.set(getName(termToken), value.highlight);
+	}
+
+	get (termToken: string) {
+		return this.map.get(termToken);
+	}
+
+	has (termToken: string) {
+		return this.map.has(termToken);
+	}
+
+	delete (termToken: string) {
+		this.registry.delete(getName(termToken));
+		return this.map.delete(termToken);
+	}
+
+	clear () {
+		for (const termToken of this.map.keys()) {
+			this.registry.delete(getName(termToken));
+		}
+		return this.map.clear();
+	}
+}
+
+class ExtendedHighlight {
+	readonly highlight: Highlight;
+	readonly spanRangeMap = new Map<Span, AbstractRange>();
+
+	constructor (...initialRanges: Array<AbstractRange>) {
+		this.highlight = new Highlight(...initialRanges);
+	}
+
+	add (value: AbstractRange, span: Span) {
+		this.spanRangeMap.set(span, value);
+		return this.highlight.add(value);
+	}
+
+	has (value: AbstractRange) {
+		return this.highlight.has(value);
+	}
+
+	delete (value: AbstractRange) {
+		const result = Array.from(this.spanRangeMap.entries()).find(({ 1: range }) => range === value);
+		if (!result) {
+			return this.highlight.delete(value);
+		}
+		return this.spanRangeMap.delete(result[0]);
+	}
+
+	getBySpan (span: Span) {
+		return this.spanRangeMap.get(span);
+	}
+
+	deleteBySpan (span: Span) {
+		const range = this.spanRangeMap.get(span);
+		if (!range) {
+			return false;
+		}
+		this.spanRangeMap.delete(span);
+		return this.highlight.delete(range);
+	}
+
+	hasBySpan (span: Span) {
+		return this.spanRangeMap.has(span);
+	}
+}
+
+const getName = (termToken: string) => "markmysearch-" + termToken;
 
 export {
 	type Flow, type Span,

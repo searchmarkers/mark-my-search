@@ -45,11 +45,10 @@ class ElementMethod implements AbstractMethod {
 				this.#elementDrawContainerMap.get(element)?.remove();
 				this.#elementDrawContainerMap.delete(element);
 				const container = this.getDrawElementContainer(element);
-				if (container === null) {
-					continue;
+				if (container) {
+					this.#elementDrawContainerMap.set(element, container);
+					parent.appendChild(container);
 				}
-				this.#elementDrawContainerMap.set(element, container);
-				parent.appendChild(container);
 			}
 		});
 	}

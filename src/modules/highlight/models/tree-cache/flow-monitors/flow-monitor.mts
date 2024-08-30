@@ -41,19 +41,19 @@ class FlowMonitor implements AbstractFlowMonitor {
 			for (const mutation of mutations) {
 				if (mutation.type === "characterData"
 					&& mutation.target.parentElement
-					&& canHighlightElement(rejectSelector, mutation.target.parentElement)
+					&& this.canHighlightElement(rejectSelector, mutation.target.parentElement)
 				) {
 					elementsAffected.add(mutation.target.parentElement);
 				}
 				for (const node of mutation.addedNodes) {
 					if (node instanceof HTMLElement) {
-						if (canHighlightElement(rejectSelector, node)) {
+						if (this.canHighlightElement(rejectSelector, node)) {
 							//elementsAdded.add(node);
 							elementsAffected.add(node);
 						}
 						break;
 					} else if (node instanceof Text && node.parentElement) {
-						if (canHighlightElement(rejectSelector, node.parentElement)) {
+						if (this.canHighlightElement(rejectSelector, node.parentElement)) {
 							elementsAffected.add(node.parentElement);
 						}
 						break;
@@ -130,7 +130,7 @@ class FlowMonitor implements AbstractFlowMonitor {
 			return;
 		}
 		const elementBreaksFlow = !highlightTags.flow.has(flowOwner.tagName);
-		const textFlows = getTextFlows(flowOwner.firstChild);
+		const textFlows: ReadonlyArray<ReadonlyArray<Text>> = this.getTextFlows(flowOwner.firstChild);
 		this.removeHighlighting(flowOwner);
 		for ( // The first flow is always before the first break, and the last flow after the last break. Either may be empty.
 			let i = (elementBreaksFlow && textFlows[0].length) ? 0 : 1;
@@ -218,6 +218,42 @@ class FlowMonitor implements AbstractFlowMonitor {
 		}
 	}
 
+	getTextFlows (node: Node): Array<Array<Text>> {
+		const textFlows: Array<Array<Text>> = [ [] ];
+		this.populateTextFlows(node, textFlows, textFlows[0]);
+		return textFlows;
+	}
+	
+	/**
+	 * Gets an array of all flows from the node provided to its final sibling,
+	 * where a 'flow' is an array of text nodes considered to flow into each other in the document.
+	 * @param node The node from which flows are collected, up to the last descendant of its final sibling.
+	 * @param textFlows Holds the flows gathered so far.
+	 * @param textFlow Points to the last flow in `textFlows`.
+	 */
+	populateTextFlows (node: Node, textFlows: Array<Array<Text>>, textFlow: Array<Text>) {
+		do {
+			if (node instanceof Text) {
+				textFlow.push(node);
+			} else if (node instanceof HTMLElement && !highlightTags.reject.has(node.tagName)) {
+				const breaksFlow = !highlightTags.flow.has(node.tagName);
+				if (breaksFlow && (textFlow.length || textFlows.length === 1)) { // Ensure the first flow is always the one before a break.
+					textFlow = [];
+					textFlows.push(textFlow);
+				}
+				if (node.firstChild) {
+					this.populateTextFlows(node.firstChild, textFlows, textFlow);
+					textFlow = textFlows[textFlows.length - 1];
+					if (breaksFlow && textFlow.length) {
+						textFlow = [];
+						textFlows.push(textFlow);
+					}
+				}
+			}
+			node = node.nextSibling!; // May be null (checked by loop condition).
+		} while (node);
+	}
+
 	/**
 	 * TODO document
 	 * @param terms Terms to find and highlight.
@@ -260,6 +296,16 @@ class FlowMonitor implements AbstractFlowMonitor {
 		return null;
 	}
 
+	/**
+	 * Determines whether or not the highlighting algorithm should be run on an element.
+	 * @param rejectSelector A selector string for ancestor tags to cause rejection.
+	 * @param element The element to test for highlighting viability.
+	 * @returns `true` if determined highlightable, `false` otherwise.
+	 */
+	canHighlightElement (rejectSelector: string, element: HTMLElement): boolean {
+		return !element.closest(rejectSelector);
+	}
+
 	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
 		return this.#elementFlowsMap;
 	}
@@ -284,52 +330,5 @@ class FlowMonitor implements AbstractFlowMonitor {
 		this.#highlightingUpdatedListeners.add(listener);
 	}
 }
-
-/**
- * Determines whether or not the highlighting algorithm should be run on an element.
- * @param rejectSelector A selector string for ancestor tags to cause rejection.
- * @param element An element to test for highlighting viability.
- * @returns `true` if determined highlightable, `false` otherwise.
- */
-const canHighlightElement = (rejectSelector: string, element: HTMLElement): boolean =>
-	!element.closest(rejectSelector)
-;
-
-const getTextFlows = (node: Node): ReadonlyArray<ReadonlyArray<Text>> => {
-	const textFlows: Array<Array<Text>> = [ [] ];
-	populateTextFlows(node, textFlows, textFlows[0]);
-	return textFlows;
-};
-
-/**
- * Gets an array of all flows from the node provided to its final sibling,
- * where a 'flow' is an array of text nodes considered to flow into each other in the document.
- * For example, a paragraph will _ideally_ be considered a flow, but in fact may not be heuristically detected as such.
- * @param node The node from which flows are collected, up to the last descendant of its final sibling.
- * @param textFlows __Only supplied in recursion.__ Holds the flows gathered so far.
- * @param textFlow __Only supplied in recursion.__ Points to the last flow in `textFlows`.
- */
-const populateTextFlows = (node: Node, textFlows: Array<Array<Text>>, textFlow: Array<Text>) => {
-	do {
-		if (node instanceof Text) {
-			textFlow.push(node);
-		} else if (node instanceof HTMLElement && !highlightTags.reject.has(node.tagName)) {
-			const breaksFlow = !highlightTags.flow.has(node.tagName);
-			if (breaksFlow && (textFlow.length || textFlows.length === 1)) { // Ensure the first flow is always the one before a break.
-				textFlow = [];
-				textFlows.push(textFlow);
-			}
-			if (node.firstChild) {
-				populateTextFlows(node.firstChild, textFlows, textFlow);
-				textFlow = textFlows[textFlows.length - 1];
-				if (breaksFlow && textFlow.length) {
-					textFlow = [];
-					textFlows.push(textFlow);
-				}
-			}
-		}
-		node = node.nextSibling!; // May be null (checked by loop condition).
-	} while (node);
-};
 
 export { FlowMonitor };
