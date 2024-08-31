@@ -1,4 +1,4 @@
-import { Bank } from "/dist/modules/privileged/storage.mjs";
+import { Bank } from "../storage.mjs";
 
 /**
  * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.

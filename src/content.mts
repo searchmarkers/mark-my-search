@@ -1,5 +1,5 @@
 /* eslint-disable indent */ // TODO remove
-import type { ConfigValues } from "/dist/modules/privileged/storage.mjs";
+import type { ConfigValues } from "./modules/storage.mjs";
 import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";

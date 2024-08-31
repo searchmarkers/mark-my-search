@@ -1,5 +1,5 @@
 import type { CommandInfo } from "/dist/modules/commands.mjs";
-import type { ConfigValues } from "/dist/modules/privileged/storage.mjs";
+import type { ConfigValues } from "./storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 type Tab = Readonly<{
