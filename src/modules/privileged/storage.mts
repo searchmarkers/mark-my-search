@@ -22,7 +22,7 @@ type BankValues = {
 	engines: SearchSites
 }
 
-export enum StoreType {
+enum StoreType {
 	IMMEDIATE,
 	LIST,
 }
@@ -56,7 +56,7 @@ type Store<Context = ConfigContext.INTERFACE> =
 
 type StoreGroup<Context = ConfigContext.INTERFACE> = Record<string, Store<Context>>
 
-export class StoreListInterface<T> {
+class StoreListInterface<T> {
 	readonly baseList: Array<T>;
 	userList: Array<T>;
 	baseExcludeList: Array<T>;
@@ -447,7 +447,7 @@ const bankDefault: BankValues = {
  */
 //
 
-export abstract class Bank {
+abstract class Bank {
 	static async set (bank: Partial<BankValues>) {
 		(Object.entries as Entries)(bank).forEach(<K extends BankKey>([ key, value ]: [ K, BankValues[K] ]) => {
 			bankCache[key] = value;
@@ -492,10 +492,10 @@ type Partial2<T> = {
 	};
 };
 
-type ConfigKeyObject<ConfigK extends ConfigKey> = {[C in ConfigK]?: Array<keyof ConfigValues[C]> | true}
+type ConfigKeyObject<ConfigK extends ConfigKey> = {[C in ConfigK]?: {[G in keyof ConfigValues[C]]?: true} | true}
 
 type ConfigPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>> = {
-	[C in ConfigK]: KeyObject[C] extends Array<infer GroupK extends keyof ConfigValues[C]>
+	[C in ConfigK]: KeyObject[C] extends Record<infer GroupK extends keyof ConfigValues[C], true>
 		? {[G in GroupK]: ConfigValues[C][G]}
 		: (KeyObject[C] extends true ? ConfigValues[C] : never)
 }
@@ -506,7 +506,7 @@ type ConfigTypesPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyOb
 		: (KeyObject[C] extends true ? Record<keyof ConfigValues[C], StoreType> : never)
 }
 
-export abstract class Config {
+abstract class Config {
 	static async set (config: Partial<Partial2<ConfigValues>>) {
 		const storageAreaValues: Record<StorageAreaName, Record<string, unknown>> = { local: {}, sync: {} };
 		for (const [ configKey, group ] of Object.entries(config)) {
@@ -562,10 +562,10 @@ export abstract class Config {
 			let pendingCount = 0;
 			const config = {} as ConfigPartial<K, Keys>;
 			const storageAreaKeys: Record<StorageAreaName, Array<string>> = { local: [], sync: [] };
-			const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Array<string> | true ]>;
+			const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Record<string, true> | true ]>;
 			for (const [ configKey, groupInfo ] of keyObjectEntries) {
 				const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
-				for (const groupKey of groupKeys) {
+				for (const groupKey of Object.keys(groupKeys)) {
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 					storageAreaKeys[valueSchema.sync ? "sync" : "local"].push(configKey + "." + groupKey);
@@ -583,7 +583,7 @@ export abstract class Config {
 			};
 			for (const [ configKey, groupInfo ] of keyObjectEntries) {
 				const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
-				groupKeys.forEach(async groupKey => {
+				Object.keys(groupKeys).forEach(async groupKey => {
 					pendingCount++;
 					(config[configKey] as unknown) ??= {} as StoreGroup;
 					const key = configKey + "." + groupKey;
@@ -625,11 +625,11 @@ export abstract class Config {
 
 	static getDefault <K extends ConfigKey, Keys extends ConfigKeyObject<K>> (keyObject: Keys): ConfigPartial<K, Keys> {
 		const config = {} as ConfigPartial<K, Keys>;
-		const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Array<string> | true ]>;
+		const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Record<string, true> | true ]>;
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
 			(config[configKey] as unknown) = {} as StoreGroup;
 			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
-			for (const groupKey of groupKeys) {
+			for (const groupKey of Object.keys(groupKeys)) {
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				switch (valueSchema.type) {
@@ -723,11 +723,11 @@ const migrations: Record<number, Record<number, (storage: StorageObject, areaNam
 				config.urlFilters = old.urlFilters as Partial<ConfigURLFilters>;
 				if (old.autoFindOptions && typeof old.autoFindOptions === "object") {
 					config.autoFindOptions ??= {};
-					const searchParams = Config.getDefault({ autoFindOptions: [ "searchParams" ] }).autoFindOptions.searchParams;
+					const searchParams = Config.getDefault({ autoFindOptions: { searchParams: true } }).autoFindOptions.searchParams;
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 					searchParams.setList(old.autoFindOptions["searchParams"] ?? []);
 					config.autoFindOptions.searchParams = searchParams;
-					const stoplist = Config.getDefault({ autoFindOptions: [ "stoplist" ] }).autoFindOptions.stoplist;
+					const stoplist = Config.getDefault({ autoFindOptions: { stoplist: true } }).autoFindOptions.stoplist;
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-argument
 					stoplist.setList(old.autoFindOptions["stoplist"] ?? []);
 					config.autoFindOptions.stoplist = stoplist;
@@ -820,7 +820,7 @@ const storageInitializeArea = async (areaName: StorageAreaName) => {
 	log("storage-initialize (single-area) complete", "", { areaName });
 };
 
-export const configInitialize = async () => {
+const configInitialize = async () => {
 	log("storage-initialize begin", "", { areaNames: [ "local", "sync" ] });
 	const localPromise = storageInitializeArea("local");
 	const syncPromise = storageInitializeArea("sync");
@@ -829,11 +829,18 @@ export const configInitialize = async () => {
 };
 
 export type {
-	Store, StoreImmediate, StoreList,
 	BankValues,
+	Store, StoreImmediate, StoreList, StoreListInterface,
 	ConfigValues, ConfigKey,
 	ConfigBarControlsShown, ConfigURLFilters,
 	URLFilter,
 	SearchSites,
 	ResearchInstances, ResearchInstance,
+};
+
+export {
+	StoreType,
+	Bank,
+	Config,
+	configInitialize,
 };

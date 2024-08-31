@@ -486,11 +486,11 @@ export const loadPage = (() => {
 		};
 		style.textContent =
 `:root {
-	--hue: ${Config.getDefault({ theme: [ "hue" ] }).theme.hue};
-	--contrast: ${Config.getDefault({ theme: [ "contrast" ] }).theme.contrast};
-	--lightness: ${Config.getDefault({ theme: [ "lightness" ] }).theme.lightness};
-	--saturation: ${Config.getDefault({ theme: [ "saturation" ] }).theme.saturation};
-	--font-scale: ${Config.getDefault({ theme: [ "fontScale" ] }).theme.fontScale};
+	--hue: ${Config.getDefault({ theme: { hue: true } }).theme.hue};
+	--contrast: ${Config.getDefault({ theme: { contrast: true } }).theme.contrast};
+	--lightness: ${Config.getDefault({ theme: { lightness: true } }).theme.lightness};
+	--saturation: ${Config.getDefault({ theme: { saturation: true } }).theme.saturation};
+	--font-scale: ${Config.getDefault({ theme: { fontScale: true } }).theme.fontScale};
 }
 body
 	{ height: 100vh; margin: 0; box-sizing: border-box; border: 2px solid ${color.border.frame}; overflow: hidden;
