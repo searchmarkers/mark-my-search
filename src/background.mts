@@ -1,6 +1,6 @@
 import "/dist/modules/namespace/normalize.mjs";
-import type { ConfigURLFilters, ResearchInstance, SearchSites, URLFilter } from "/dist/modules/privileged/storage.mjs";
-import { Bank, Config, configInitialize } from "/dist/modules/privileged/storage.mjs";
+import type { ConfigURLFilters, ResearchInstance, SearchSites, URLFilter } from "./modules/storage.mjs";
+import { Bank, Config, configInitialize } from "./modules/storage.mjs";
 import { parseCommand } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendTabMessage } from "/dist/modules/messaging/tab.mjs";

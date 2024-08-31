@@ -1,5 +1,5 @@
 import { type Page, loadPage, pageInsertWarning, sendProblemReport } from "/dist/modules/page/build.mjs";
-import { Bank, Config } from "/dist/modules/privileged/storage.mjs";
+import { Bank, Config } from "../modules/storage.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { isTabResearchPage } from "/dist/modules/privileged/tabs.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
