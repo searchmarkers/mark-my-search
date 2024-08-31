@@ -19,7 +19,7 @@ const createResearchInstance = async (args: {
 	url?: { stoplist: Array<string>, url: string, engine?: SearchSite }
 	terms?: ReadonlyArray<MatchTerm>
 }): Promise<ResearchInstance> => {
-	const config = await Config.get({ showHighlights: [ "default" ], barCollapse: [ "fromSearch" ] });
+	const config = await Config.get({ showHighlights: { default: true }, barCollapse: { fromSearch: true } });
 	if (args.url) {
 		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
 		const termsRaw = args.url.engine
@@ -51,7 +51,7 @@ const createResearchInstance = async (args: {
  * @returns The URL segment determined to be the search query, or the empty string if none is found.
  */
 const getSearchQuery = async (url: string): Promise<string> =>
-	Config.get({ autoFindOptions: [ "searchParams" ] }).then(config =>
+	Config.get({ autoFindOptions: { searchParams: true } }).then(config =>
 		new URL(url).searchParams.get(
 			config.autoFindOptions.searchParams.getList().find(param => new URL(url).searchParams.has(param)) ?? ""
 		) ?? ""
@@ -89,10 +89,13 @@ const isUrlFilteredIn = (() => {
 	;
 
 	return (url: URL, urlFilter: URLFilter): boolean =>
-		!!urlFilter.find(({ hostname, pathname }) =>
+		!!urlFilter.find(({ hostname, pathname }) => (
 			(new RegExp(sanitize(hostname) + "\\b")).test(url.hostname)
-			&& (pathname === "" || pathname === "/" || (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1)))
-		)
+			&& (pathname === ""
+				|| pathname === "/"
+				|| (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1))
+			)
+		))
 	;
 })();
 
@@ -260,7 +263,8 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 			log("research-activation request", "context menu item activated", { tabId: tab.id });
 			activateResearchInTab(tab.id, await getTermsSelectedInTab(tab.id));
 		} else {
-			assert(false, "research-activation (from context menu) void request", "no valid tab", { tab });
+			assert(false, "research-activation (from context menu) void request",
+				"no valid tab", { tab });
 		}
 	};
 
@@ -313,7 +317,8 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 
 	chrome.runtime.onStartup.addListener(initialize);
 
-	createContextMenuItems(); // Ensures context menu items will be recreated on enabling the extension (after disablement).
+	// Ensures context menu items will be recreated on enabling the extension (after disablement).
+	createContextMenuItems();
 })();
 
 // AUDITED ABOVE
@@ -323,11 +328,11 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		const logMetadata = { timeStart: Date.now(), tabId, url: urlString };
 		log("tab-communicate fulfillment start", "", logMetadata);
 		const config = await Config.get({
-			autoFindOptions: [ "enabled", "stoplist" ],
-			showHighlights: [ "overrideSearchPages", "overrideResearchPages" ],
-			barCollapse: [ "fromTermListAuto" ],
+			autoFindOptions: { enabled: true, stoplist: true },
+			showHighlights: { overrideSearchPages: true, overrideResearchPages: true },
+			barCollapse: { fromTermListAuto: true },
 			urlFilters: true,
-			termListOptions: [ "termLists" ],
+			termListOptions: { termLists: true },
 		});
 		const bank = await Bank.get([ "researchInstances", "engines" ]);
 		const searchDetails = config.autoFindOptions.enabled
@@ -337,8 +342,10 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		const termsFromLists = config.termListOptions.termLists
 			.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 			.flatMap(termList => termList.terms);
-		const getTermsAdditionalDistinct = (terms: ReadonlyArray<MatchTerm>, termsExtra: ReadonlyArray<MatchTerm>) => termsExtra
-			.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
+		const getTermsAdditionalDistinct = (
+			terms: ReadonlyArray<MatchTerm>,
+			termsExtra: ReadonlyArray<MatchTerm>,
+		) => termsExtra.filter(termExtra => !terms.find(term => term.phrase === termExtra.phrase));
 		const isResearchPage = await Tabs.isTabResearchPage(tabId);
 		const overrideHighlightsShown =
 			(searchDetails.isSearch && config.showHighlights.overrideSearchPages) ||
@@ -444,10 +451,12 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 const getTermsSelectedInTab = async (tabId: number): Promise<ReadonlyArray<MatchTerm> | undefined> => {
 	log("selection-terms-retrieval start", "");
 	return sendTabMessage(tabId, { getDetails: { termsFromSelection: true } }).then(response => {
-		log("selection-terms-retrieval finish", "", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
+		log("selection-terms-retrieval finish",
+			"", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
 		return response.terms ?? [];
 	}).catch(() => {
-		log("selection-terms-retrieval fail", "selection terms not received in response, perhaps no script is injected", { tabId });
+		log("selection-terms-retrieval fail",
+			"selection terms not received in response, perhaps no script is injected", { tabId });
 		return undefined;
 	});
 };
@@ -458,9 +467,12 @@ const getTermsSelectedInTab = async (tabId: number): Promise<ReadonlyArray<Match
  */
 const activateResearchInTab = async (tabId: number, terms: ReadonlyArray<MatchTerm> = []) => {
 	log("research-activation start", "", { tabId });
-	const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+	const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
 	const bank = await Bank.get([ "researchInstances" ]);
-	const researchInstance = bank.researchInstances[tabId] && config.researchInstanceOptions.restoreLastInTab && !terms.length
+	const researchInstance = (bank.researchInstances[tabId]
+		&& config.researchInstanceOptions.restoreLastInTab
+		&& !terms.length
+	)
 		? bank.researchInstances[tabId]
 		: await createResearchInstance({ terms });
 	researchInstance.enabled = true;
@@ -537,7 +549,7 @@ chrome.commands.onCommand.addListener(async commandString => {
 		chrome.runtime.openOptionsPage();
 		return;
 	} case "toggleEnabled": {
-		Config.get({ autoFindOptions: [ "enabled" ] }).then(config => {
+		Config.get({ autoFindOptions: { enabled: true } }).then(config => {
 			config.autoFindOptions.enabled = !config.autoFindOptions.enabled;
 			Config.set(config);
 			//updateActionIcon(config.autoFindOptions.enabled);

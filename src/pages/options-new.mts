@@ -3,8 +3,10 @@ import {
 	type Page, loadPage, pageReload, pageThemeUpdate,
 	isWindowInFrame, sendProblemReport, getOrderedShortcut, forInput,
 } from "/dist/modules/page/build.mjs";
-import type { StoreImmediate, StoreList, ConfigValues, ConfigKey } from "/dist/modules/privileged/storage.mjs";
-import { StoreType, StoreListInterface, Config } from "/dist/modules/privileged/storage.mjs";
+import type {
+	StoreImmediate, StoreList, StoreListInterface, ConfigValues, ConfigKey,
+} from "/dist/modules/privileged/storage.mjs";
+import { StoreType, Config } from "/dist/modules/privileged/storage.mjs";
 import { compatibility } from "/dist/modules/common.mjs";
 
 const getControlOptionTemp = <ConfigK extends ConfigKey>(
@@ -188,12 +190,12 @@ const loadOptionsNew = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										Config.get({ urlFilters: [ "noPageModify" ] }).then(config => //
+										Config.get({ urlFilters: { noPageModify: true } }).then(config => //
 											config.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										Config.get({ urlFilters: [ "noPageModify" ] }).then(config => {
+										Config.get({ urlFilters: { noPageModify: true } }).then(config => {
 											config.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -458,12 +460,12 @@ const loadOptionsNew = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										Config.get({ urlFilters: [ "nonSearch" ] }).then(config => //
+										Config.get({ urlFilters: { nonSearch: true } }).then(config => //
 											config.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										Config.get({ urlFilters: [ "nonSearch" ] }).then(config => {
+										Config.get({ urlFilters: { nonSearch: true } }).then(config => {
 											config.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {

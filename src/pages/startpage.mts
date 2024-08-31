@@ -74,11 +74,11 @@ You can always activate ${Manifest.getName()} by opening its popup (from the 'ex
 							input: {
 								getType: () => "checkbox",
 								onLoad: async setChecked => {
-									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									const config = await Config.get({ autoFindOptions: { enabled: true } });
 									setChecked(config.autoFindOptions.enabled);
 								},
 								onChange: async checked => {
-									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									const config = await Config.get({ autoFindOptions: { enabled: true } });
 									config.autoFindOptions.enabled = checked;
 									await Config.set(config);
 								},

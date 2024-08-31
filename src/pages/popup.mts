@@ -23,11 +23,11 @@ const loadPopup = (() => {
 		},
 		input: {
 			onLoad: async (setChecked, objectIndex, containerIndex) => {
-				const config = await Config.get({ termListOptions: [ "termLists" ] });
+				const config = await Config.get({ termListOptions: { termLists: true } });
 				setChecked(config.termListOptions.termLists[containerIndex].terms[objectIndex].matchMode[mode]);
 			},
 			onChange: (checked, objectIndex, containerIndex) => {
-				Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+				Config.get({ termListOptions: { termLists: true } }).then(config => {
 					const termList = config.termListOptions.termLists[containerIndex];
 					const matchMode = Object.assign({}, termList.terms[objectIndex].matchMode) as MatchMode;
 					matchMode[mode] = checked;
@@ -87,11 +87,11 @@ const loadPopup = (() => {
 							input: {
 								getType: () => "checkbox",
 								onLoad: async setChecked => {
-									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									const config = await Config.get({ autoFindOptions: { enabled: true } });
 									setChecked(config.autoFindOptions.enabled);
 								},
 								onChange: async checked => {
-									const config = await Config.get({ autoFindOptions: [ "enabled" ] });
+									const config = await Config.get({ autoFindOptions: { enabled: true } });
 									config.autoFindOptions.enabled = checked;
 									await Config.set(config);
 								},
@@ -105,11 +105,11 @@ const loadPopup = (() => {
 							input: {
 								getType: () => "checkbox",
 								onLoad: async setChecked => {
-									const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+									const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
 									setChecked(config.researchInstanceOptions.restoreLastInTab);
 								},
 								onChange: async checked => {
-									const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+									const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
 									config.researchInstanceOptions.restoreLastInTab = checked;
 									await Config.set(config);
 								},
@@ -140,7 +140,7 @@ const loadPopup = (() => {
 											if (tab.id === undefined) {
 												return;
 											}
-											const config = await Config.get({ researchInstanceOptions: [ "restoreLastInTab" ] });
+											const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
 											const researchInstance = bank.researchInstances[tab.id];
 											if (researchInstance && config.researchInstanceOptions.restoreLastInTab) {
 												researchInstance.enabled = true;
@@ -258,12 +258,12 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										Config.get({ urlFilters: [ "noPageModify" ] }).then(config => //
+										Config.get({ urlFilters: { noPageModify: true } }).then(config => //
 											config.urlFilters.noPageModify.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										Config.get({ urlFilters: [ "noPageModify" ] }).then(config => {
+										Config.get({ urlFilters: { noPageModify: true } }).then(config => {
 											config.urlFilters.noPageModify = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -292,12 +292,12 @@ const loadPopup = (() => {
 								className: "url-input",
 								list: {
 									getArray: () =>
-										Config.get({ urlFilters: [ "nonSearch" ] }).then(config => //
+										Config.get({ urlFilters: { nonSearch: true } }).then(config => //
 											config.urlFilters.nonSearch.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: array =>
-										Config.get({ urlFilters: [ "nonSearch" ] }).then(config => {
+										Config.get({ urlFilters: { nonSearch: true } }).then(config => {
 											config.urlFilters.nonSearch = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -332,12 +332,12 @@ const loadPopup = (() => {
 							className: "temp-class",
 							list: {
 								getLength: () =>
-									Config.get({ termListOptions: [ "termLists" ] }).then(config =>
+									Config.get({ termListOptions: { termLists: true } }).then(config =>
 										config.termListOptions.termLists.length
 									)
 								,
 								pushWithName: name =>
-									Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+									Config.get({ termListOptions: { termLists: true } }).then(config => {
 										config.termListOptions.termLists.push({
 											name,
 											terms: [],
@@ -347,7 +347,7 @@ const loadPopup = (() => {
 									})
 								,
 								removeAt: index =>
-									Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+									Config.get({ termListOptions: { termLists: true } }).then(config => {
 										config.termListOptions.termLists.splice(index, 1);
 										Config.set(config);
 									})
@@ -356,12 +356,12 @@ const loadPopup = (() => {
 							label: {
 								text: "",
 								getText: index =>
-									Config.get({ termListOptions: [ "termLists" ] }).then(config =>
+									Config.get({ termListOptions: { termLists: true } }).then(config =>
 										config.termListOptions.termLists[index] ? config.termListOptions.termLists[index].name : ""
 									)
 								,
 								setText: (text, index) =>
-									Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+									Config.get({ termListOptions: { termLists: true } }).then(config => {
 										config.termListOptions.termLists[index].name = text;
 										Config.set(config);
 									})
@@ -374,12 +374,12 @@ const loadPopup = (() => {
 								className: "term",
 								list: {
 									getArray: index =>
-										Config.get({ termListOptions: [ "termLists" ] }).then(config =>
+										Config.get({ termListOptions: { termLists: true } }).then(config =>
 											config.termListOptions.termLists[index].terms as unknown as Array<Record<string, unknown>>
 										)
 									,
 									setArray: (array, index) =>
-										Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+										Config.get({ termListOptions: { termLists: true } }).then(config => {
 											config.termListOptions.termLists[index].terms =
 												array as unknown as typeof config["termListOptions"]["termLists"][number]["terms"];
 											Config.set(config);
@@ -407,12 +407,12 @@ const loadPopup = (() => {
 													placeholder: "keyword",
 													spellcheck: false,
 													onLoad: async (setText, objectIndex, containerIndex) => {
-														const config = await Config.get({ termListOptions: [ "termLists" ] });
+														const config = await Config.get({ termListOptions: { termLists: true } });
 														setText(config.termListOptions.termLists[containerIndex].terms[objectIndex]
 															? config.termListOptions.termLists[containerIndex].terms[objectIndex].phrase : "");
 													},
 													onChange: (text, objectIndex, containerIndex) => {
-														Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+														Config.get({ termListOptions: { termLists: true } }).then(config => {
 															const termList = config.termListOptions.termLists[containerIndex];
 															const term = new MatchTerm(text, termList.terms[objectIndex].matchMode);
 															const terms = [ ...termList.terms ];
@@ -441,12 +441,12 @@ const loadPopup = (() => {
 								className: "temp-class",
 								list: {
 									getArray: index =>
-										Config.get({ termListOptions: [ "termLists" ] }).then(config => //
+										Config.get({ termListOptions: { termLists: true } }).then(config => //
 											config.termListOptions.termLists[index].urlFilter.map(({ hostname, pathname }) => hostname + pathname) //
 										)
 									,
 									setArray: (array, index) =>
-										Config.get({ termListOptions: [ "termLists" ] }).then(config => {
+										Config.get({ termListOptions: { termLists: true } }).then(config => {
 											config.termListOptions.termLists[index].urlFilter = array.map(value => {
 												const pathnameStart = value.includes("/") ? value.indexOf("/") : value.length;
 												return {
@@ -469,7 +469,7 @@ const loadPopup = (() => {
 										if (tab.id === undefined) {
 											return;
 										}
-										const config = await Config.get({ termListOptions: [ "termLists" ] });
+										const config = await Config.get({ termListOptions: { termLists: true } });
 										const bank = await Bank.get([ "researchInstances" ]);
 										const researchInstance = bank.researchInstances[tab.id];
 										if (researchInstance) {
