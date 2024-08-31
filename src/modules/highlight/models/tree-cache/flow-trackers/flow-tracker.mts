@@ -1,10 +1,10 @@
-import type { Flow, Span, AbstractFlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { Flow, Span, AbstractFlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
 import { MatchTerm, type TermPatterns } from "/dist/modules/match-term.mjs";
 import type { RContainer, AllReadonly } from "/dist/modules/common.mjs";
 
-class FlowMonitor implements AbstractFlowMonitor {
+class FlowTracker implements AbstractFlowTracker {
 	readonly #termPatterns: TermPatterns;
 
 	/**
@@ -331,4 +331,4 @@ class FlowMonitor implements AbstractFlowMonitor {
 	}
 }
 
-export { FlowMonitor };
+export { FlowTracker };

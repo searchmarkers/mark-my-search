@@ -1,4 +1,4 @@
-import type { Flow } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
+import type { Flow } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import type { AbstractEngine } from "/dist/modules/highlight/engine.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
 

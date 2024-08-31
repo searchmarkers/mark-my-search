@@ -1,6 +1,6 @@
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
-import type { AbstractFlowMonitor, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
+import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
+import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-trackers/flow-tracker.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, createContainer, type AllReadonly } from "/dist/modules/common.mjs";
@@ -18,7 +18,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 
 	readonly #termTokens: TermTokens;
 
-	readonly #flowMonitor: AbstractFlowMonitor;
+	readonly #flowTracker: AbstractFlowTracker;
 
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
@@ -45,8 +45,8 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		termPatterns: TermPatterns,
 	) {
 		this.#termTokens = termTokens;
-		this.#flowMonitor = new FlowMonitor(this.terms, termPatterns);
-		this.#flowMonitor.setSpansCreatedListener((flowOwner, spansCreated) => {
+		this.#flowTracker = new FlowTracker(this.terms, termPatterns);
+		this.#flowTracker.setSpansCreatedListener((flowOwner, spansCreated) => {
 			for (const span of spansCreated) {
 				this.#highlights.get(this.#termTokens.get(span.term))?.add(new StaticRange({
 					startContainer: span.node,
@@ -56,12 +56,12 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 				}), span);
 			}
 		});
-		this.#flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
+		this.#flowTracker.setSpansRemovedListener((flowOwner, spansRemoved) => {
 			for (const span of spansRemoved) {
 				this.#highlights.get(this.#termTokens.get(span.term))?.deleteBySpan(span);
 			}
 		});
-		this.#elementFlowsMap = this.#flowMonitor.getElementFlowsMap();
+		this.#elementFlowsMap = this.#flowTracker.getElementFlowsMap();
 	}
 
 	readonly getCSS = {
@@ -97,7 +97,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
-		this.#flowMonitor.unobserveMutations();
+		this.#flowTracker.unobserveMutations();
 		this.undoHighlights(termsToPurge);
 		// MAIN
 		this.terms.assign(terms);
@@ -105,17 +105,17 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		for (const term of terms) {
 			this.#highlights.set(this.#termTokens.get(term), new ExtendedHighlight());
 		}
-		this.#flowMonitor.generateHighlightSpansFor(terms, document.body);
-		this.#flowMonitor.observeMutations();
+		this.#flowTracker.generateHighlightSpansFor(terms, document.body);
+		this.#flowTracker.observeMutations();
 	}
 
 	endHighlighting () {
-		this.#flowMonitor.unobserveMutations();
+		this.#flowTracker.unobserveMutations();
 		this.undoHighlights();
 	}
 
 	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
-		this.#flowMonitor.removeHighlightSpansFor(terms);
+		this.#flowTracker.removeHighlightSpansFor(terms);
 		if (terms) {
 			for (const term of terms) {
 				this.#highlights.delete(this.#termTokens.get(term));

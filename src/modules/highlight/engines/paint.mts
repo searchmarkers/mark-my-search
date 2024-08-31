@@ -1,8 +1,8 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
-import type { AbstractFlowMonitor, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-monitor.mjs";
-import { FlowMonitor } from "/dist/modules/highlight/models/tree-cache/flow-monitors/flow-monitor.mjs";
+import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
+import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-trackers/flow-tracker.mjs";
 import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
@@ -41,7 +41,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 
 	readonly #method: AbstractMethod;
 
-	readonly #flowMonitor: AbstractFlowMonitor;
+	readonly #flowTracker: AbstractFlowTracker;
 
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 	readonly #spanBoxesMap = new Map<Span, Array<Box>>;
@@ -63,8 +63,8 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		termPatterns: TermPatterns,
 	) {
 		this.#termTokens = termTokens;
-		this.#flowMonitor = new FlowMonitor(this.terms, termPatterns);
-		this.#flowMonitor.setNewSpanOwnerListener(flowOwner => {
+		this.#flowTracker = new FlowTracker(this.terms, termPatterns);
+		this.#flowTracker.setNewSpanOwnerListener(flowOwner => {
 			this.observeVisibilityChangesFor(flowOwner);
 			if (!this.#elementHighlightingIdMap.has(flowOwner)) {
 				const id = highlightingId.next().value;
@@ -74,12 +74,12 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 				flowOwner.setAttribute("markmysearch-h_id", id.toString());
 			}
 		});
-		this.#flowMonitor.setSpansRemovedListener((flowOwner, spansRemoved) => {
+		this.#flowTracker.setSpansRemovedListener((flowOwner, spansRemoved) => {
 			for (const span of spansRemoved) {
 				this.#spanBoxesMap.delete(span);
 			}
 		});
-		this.#flowMonitor.setNonSpanOwnerListener(flowOwner => {
+		this.#flowTracker.setNonSpanOwnerListener(flowOwner => {
 			// TODO this is done for consistency with the past behaviour; but is it right/necessary?
 			this.#elementHighlightingIdMap.delete(flowOwner);
 			this.#elementStyleRuleMap.delete(flowOwner);
@@ -87,7 +87,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 				listener(flowOwner);
 			}
 		});
-		this.#elementFlowsMap = this.#flowMonitor.getElementFlowsMap();
+		this.#elementFlowsMap = this.#flowTracker.getElementFlowsMap();
 		const method = (() => {
 			switch (methodModule.methodClass) {
 			case "paint": {
@@ -186,13 +186,13 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		hues: ReadonlyArray<number>,
 	) {
 		// Clean up.
-		this.#flowMonitor.unobserveMutations();
-		this.#flowMonitor.removeHighlightSpansFor(termsToPurge);
+		this.#flowTracker.unobserveMutations();
+		this.#flowTracker.removeHighlightSpansFor(termsToPurge);
 		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
-		this.#flowMonitor.generateHighlightSpansFor(terms, document.body);
-		this.#flowMonitor.observeMutations();
+		this.#flowTracker.generateHighlightSpansFor(terms, document.body);
+		this.#flowTracker.observeMutations();
 		// TODO how are the currently-visible elements known and hence highlighted (when the engine has not been watching them)?
 		// TODO (should visibility changes be unobserved and re-observed?)
 		const highlightables = this.#method.highlightables;
@@ -207,8 +207,8 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 
 	endHighlighting () {
 		this.unobserveVisibilityChanges();
-		this.#flowMonitor.unobserveMutations();
-		this.#flowMonitor.removeHighlightSpansFor();
+		this.#flowTracker.unobserveMutations();
+		this.#flowTracker.removeHighlightSpansFor();
 		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
 		for (const element of document.body.querySelectorAll("[markmysearch-h_id]")) {
 			element.removeAttribute("markmysearch-h_id");
@@ -292,7 +292,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 	}
 
 	addHighlightingUpdatedListener (listener: Generator) {
-		this.#flowMonitor.addHighlightingUpdatedListener(listener);
+		this.#flowTracker.addHighlightingUpdatedListener(listener);
 	}
 
 	addHighlightingStyleRuleChangedListener (listener: HighlightingStyleRuleChangedListener) {

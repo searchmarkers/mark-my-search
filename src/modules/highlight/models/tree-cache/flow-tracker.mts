@@ -15,7 +15,7 @@ type Span = BaseSpan<true>
  * - determining "flows" of text and matching within them, producing highlighting "boxes" information;
  * - maintaining a cache of [TODO]
  */
-interface AbstractFlowMonitor extends FlowMutationObserver {
+interface AbstractFlowTracker extends FlowMutationObserver {
 	readonly getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>
 
 	/** Sets the listener for gain of highlight spans in an unhighlighted element. */
@@ -82,5 +82,5 @@ interface AbstractFlowMonitor extends FlowMutationObserver {
 
 export type {
 	Flow, Span,
-	AbstractFlowMonitor,
+	AbstractFlowTracker,
 };
