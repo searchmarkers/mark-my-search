@@ -260,7 +260,7 @@ label[for]:hover
 					const valueEnteredBool = input.checked;
 					const valueEntered = preferenceInfo.type === PreferenceType.BOOLEAN ? valueEnteredBool : valueEnteredString;
 					const type: PreferenceType = preferenceInfo.type;
-					switch (Config.getType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+					switch (Config.getType({ [optionKey]: { [preferenceKey]: true } })[optionKey][preferenceKey]) {
 					case StoreType.IMMEDIATE: {
 						const configValue = (() => {
 							switch (type) {
@@ -281,7 +281,7 @@ label[for]:hover
 							}
 						})();
 						config[optionKey][preferenceKey] = configValue;
-						if (configValue === Config.getDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey]) {
+						if (configValue === Config.getDefault({ [optionKey]: { [preferenceKey]: true } })[optionKey][preferenceKey]) {
 							configToUnset[optionKey] ??= [];
 							configToUnset[optionKey].push(preferenceKey);
 						}
@@ -290,7 +290,7 @@ label[for]:hover
 						const list: Array<unknown> = (type === PreferenceType.ARRAY_NUMBER)
 							? valueEnteredString.split(",").map(item => Number(item))
 							: valueEnteredString.split(",");
-						const storeList = Config.getDefault({ [optionKey]: [ preferenceKey ] }
+						const storeList = Config.getDefault({ [optionKey]: { [preferenceKey]: true } }
 						)[optionKey][preferenceKey] as StoreListInterface<unknown>;
 						storeList.setList(list);
 						config[optionKey][preferenceKey] = storeList;
@@ -499,8 +499,8 @@ label[for]:hover
 					preferenceInfo.getPreviewElement,
 					(value) => { valuesCurrent[optionKey][preferenceKey] = value; },
 					() => valuesCurrent[optionKey][preferenceKey],
-					Config.getDefault({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey],
-					Config.getType({ [optionKey]: [ preferenceKey ] })[optionKey][preferenceKey] as StoreType,
+					Config.getDefault({ [optionKey]: { [preferenceKey]: true } })[optionKey][preferenceKey],
+					Config.getType({ [optionKey]: { [preferenceKey]: true } })[optionKey][preferenceKey] as StoreType,
 					() => config[optionKey][preferenceKey],
 				);
 			}

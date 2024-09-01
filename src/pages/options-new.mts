@@ -40,7 +40,7 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 			onLoad: async setValue => {
 				const config = await Config.get({ [configKey]: [ key ] });
 				const value = config[configKey][key];
-				switch (Config.getType({ [configKey]: [ key ] })[configKey][key]) {
+				switch (Config.getType({ [configKey]: { [key]: true } })[configKey][key]) {
 				case StoreType.IMMEDIATE: {
 					setValue(value as StoreImmediate<unknown> as unknown as boolean);
 					break;
@@ -57,12 +57,12 @@ const getControlOptionTemp = <ConfigK extends ConfigKey>(
 						: inputType === "textNumber"
 							? parseFloat(value as unknown as string)
 							: value;
-					switch (Config.getType({ [configKey]: [ key ] })[configKey][key]) {
+					switch (Config.getType({ [configKey]: { [key]: true } })[configKey][key]) {
 					case StoreType.IMMEDIATE: {
 						(config[configKey][key] as unknown) = valueTransformed as StoreImmediate<unknown>;
 						break;
 					} case StoreType.LIST: {
-						const storeList = Config.getDefault({ [configKey]: [ key ] })[configKey][key] as StoreListInterface<unknown>;
+						const storeList = Config.getDefault({ [configKey]: { [key]: true } })[configKey][key] as StoreListInterface<unknown>;
 						storeList.setList(valueTransformed as Array<unknown>);
 						(config[configKey][key] as unknown) = storeList;
 						break;
