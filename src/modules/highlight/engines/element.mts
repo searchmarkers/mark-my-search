@@ -63,10 +63,10 @@ class ElementEngine implements AbstractTreeEditEngine {
 			const mutationObserver = new MutationObserver(mutations => {
 				//mutationUpdates.disconnect();
 				for (const mutation of mutations) {
-					const element = mutation.target instanceof Node
-						? mutation.target.parentElement
-						: mutation.target;
-					if (element instanceof HTMLElement
+					const element = mutation.target instanceof HTMLElement
+						? mutation.target
+						: mutation.target?.parentElement;
+					if (element
 						&& !this.#elementsJustHighlighted.has(element)
 						&& this.canHighlightElement(rejectSelector, element)
 					) {
@@ -74,7 +74,7 @@ class ElementEngine implements AbstractTreeEditEngine {
 					}
 				}
 				this.#elementsJustHighlighted.clear();
-				if (elements.size) {
+				if (elements.size > 0) {
 					// TODO improve this algorithm
 					for (const element of elements) {
 						for (const elementOther of elements) {
@@ -337,10 +337,7 @@ ${HIGHLIGHT_TAG} {
 		) => {
 			// TODO support for <iframe>?
 			do {
-				if (node instanceof HTMLElement) {
-					if (highlightTags.reject.has(node.tagName)) {
-						break;
-					}
+				if (node instanceof HTMLElement) { if (!highlightTags.reject.has(node.tagName)) {
 					const breaksFlow = !highlightTags.flow.has(node.tagName);
 					if (breaksFlow && nodeItems.first) {
 						highlightInBlock(terms, nodeItems);
@@ -353,10 +350,8 @@ ${HIGHLIGHT_TAG} {
 							nodeItems.clear();
 						}
 					}
-					break;
-				} else if (node instanceof Text) {
+				} } else if (node instanceof Text) {
 					nodeItems.push(node);
-					break;
 				}
 				node = node.nextSibling!; // May be null (checked by loop condition).
 			} while (node && visitSiblings);
