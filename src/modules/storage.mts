@@ -492,6 +492,7 @@ type Partial2<T> = {
 	};
 };
 
+// TODO ensure that correct call syntax is enforced even for generic use (e.g. { [configKey]: { [groupKey]: true } })
 type ConfigKeyObject<ConfigK extends ConfigKey> = {[C in ConfigK]?: {[G in keyof ConfigValues[C]]?: true} | true}
 
 type ConfigPartial<ConfigK extends ConfigKey, KeyObject extends ConfigKeyObject<ConfigK>> = {
@@ -564,8 +565,8 @@ abstract class Config {
 			const storageAreaKeys: Record<StorageAreaName, Array<string>> = { local: [], sync: [] };
 			const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Record<string, true> | true ]>;
 			for (const [ configKey, groupInfo ] of keyObjectEntries) {
-				const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
-				for (const groupKey of Object.keys(groupKeys)) {
+				const groupKeys = typeof groupInfo === "object" ? Object.keys(groupInfo) : Object.keys(configSchema[configKey]);
+				for (const groupKey of groupKeys) {
 					// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 					const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 					storageAreaKeys[valueSchema.sync ? "sync" : "local"].push(configKey + "." + groupKey);
@@ -582,8 +583,8 @@ abstract class Config {
 				}),
 			};
 			for (const [ configKey, groupInfo ] of keyObjectEntries) {
-				const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
-				Object.keys(groupKeys).forEach(async groupKey => {
+				const groupKeys = typeof groupInfo === "object" ? Object.keys(groupInfo) : Object.keys(configSchema[configKey]);
+				groupKeys.forEach(async groupKey => {
 					pendingCount++;
 					(config[configKey] as unknown) ??= {} as StoreGroup;
 					const key = configKey + "." + groupKey;
@@ -628,8 +629,8 @@ abstract class Config {
 		const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Record<string, true> | true ]>;
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
 			(config[configKey] as unknown) = {} as StoreGroup;
-			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
-			for (const groupKey of Object.keys(groupKeys)) {
+			const groupKeys = typeof groupInfo === "object" ? Object.keys(groupInfo) : Object.keys(configSchema[configKey]);
+			for (const groupKey of groupKeys) {
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
 				switch (valueSchema.type) {
@@ -647,10 +648,10 @@ abstract class Config {
 
 	static getType <K extends ConfigKey, Keys extends ConfigKeyObject<K>> (keyObject: Keys): ConfigTypesPartial<K, Keys> {
 		const configTypes = {} as ConfigTypesPartial<K, Keys>;
-		const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Array<string> | true ]>;
+		const keyObjectEntries = Object.entries(keyObject) as Array<[ K, Record<string, true> | true ]>;
 		for (const [ configKey, groupInfo ] of keyObjectEntries) {
 			(configTypes[configKey] as unknown) = {} as StoreGroup;
-			const groupKeys = typeof groupInfo === "object" ? groupInfo : Object.keys(configSchema[configKey]);
+			const groupKeys = typeof groupInfo === "object" ? Object.keys(groupInfo) : Object.keys(configSchema[configKey]);
 			for (const groupKey of groupKeys) {
 				// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 				const valueSchema: Store<ConfigContext.SCHEMA> = configSchema[configKey][groupKey];
