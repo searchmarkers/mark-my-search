@@ -11,7 +11,7 @@ The Work is provided under the terms of this Licence when the Licensor (as
 defined below) has placed the following notice immediately following the
 copyright notice for the Work:
 
-<i>Licensed under the EUPL</i>
+> Licensed under the EUPL
 
 or has expressed by any other means his willingness to license under the EUPL.
 
