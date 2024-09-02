@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 import type { MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
 import { SearchSite } from "/dist/modules/search-site.mjs";
 import type { Engine, PaintEngineMethod, Entries } from "/dist/modules/common.mjs";

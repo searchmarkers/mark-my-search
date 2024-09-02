@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 /**
  * Creates a regex corresponding to an array of regex OR character groups, using a single capture group for each one.
  * @param characterGroups An array of regex OR groups.

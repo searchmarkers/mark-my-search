@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 /**
  * Returns a generator function, the generator of which consumes empty requests for calling the specified function.
  * Request fulfillment is variably delayed based on activity.

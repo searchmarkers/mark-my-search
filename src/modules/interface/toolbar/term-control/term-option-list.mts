@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.mjs";
 import { getMatchModeOptionClass, getInputIdSequential, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
