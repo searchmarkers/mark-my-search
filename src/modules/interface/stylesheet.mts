@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 import { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 import { getControlClass, getControlPadClass } from "/dist/modules/interface/toolbar/common.mjs";

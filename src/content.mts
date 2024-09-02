@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 /* eslint-disable indent */ // TODO remove
 import type { ConfigValues } from "./modules/storage.mjs";
 import type { CommandInfo } from "/dist/modules/commands.mjs";

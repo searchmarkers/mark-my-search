@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 import type { ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
 import { getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
 import { EleClass } from "/dist/modules/common.mjs";

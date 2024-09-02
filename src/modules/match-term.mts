@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 import { getWordPatternStrings } from "/dist/modules/matching/word-stems.mjs";
 import { getDiacriticsMatchingPatternString } from "/dist/modules/matching/diacritics.mjs";
 import { sanitizeForRegex } from "/dist/modules/common.mjs";

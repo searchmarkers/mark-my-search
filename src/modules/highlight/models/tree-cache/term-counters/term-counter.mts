@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 import type { AbstractTermCounter } from "/dist/modules/highlight/term-counter.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
