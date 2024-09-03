@@ -6,8 +6,8 @@
 
 import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import type { SelectionReturnTarget, ToolbarTermInputInterface } from "/dist/modules/interface/toolbar.mjs";
+import { EleID, EleClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass } from "/dist/modules/common.mjs";
 
 class TermInput {
 	readonly #controlInterface: TermControlInputInterface;

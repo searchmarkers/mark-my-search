@@ -10,9 +10,10 @@ import { TermInput } from "/dist/modules/interface/toolbar/term-control/term-inp
 import { TermOptionList } from "/dist/modules/interface/toolbar/term-control/term-option-list.mjs";
 import { Control } from "/dist/modules/interface/toolbar/control.mjs";
 import type { ControlFocusArea } from "/dist/modules/interface/toolbar/common.mjs";
-import { applyMatchModeToClassList, getMatchModeFromClassList } from "/dist/modules/interface/toolbar/common.mjs";
+import {
+	EleClass, applyMatchModeToClassList, getMatchModeFromClassList,
+} from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
-import { EleClass } from "/dist/modules/common.mjs";
 import type { TermAppender, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 class TermAppendControl implements TermAbstractControl {

@@ -116,69 +116,31 @@ const compatibility = new Compatibility();
 
 const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
 
-const EleID = (() => {
-	const wrap = (name: string) => "markmysearch--" + name;
-	return {
-		STYLE: "style",
-		STYLE_PAINT: wrap("style-paint"),
-		STYLE_PAINT_SPECIAL: wrap("style-paint-special"),
-		BAR: wrap("bar"),
-		BAR_LEFT: "bar-left",
-		BAR_TERMS: "bar-terms",
-		BAR_RIGHT: "bar-right",
-		MARKER_GUTTER: wrap("markers"),
-		DRAW_CONTAINER: wrap("draw-container"),
-		DRAW_ELEMENT: wrap("draw"),
-		ELEMENT_CONTAINER_SPECIAL: wrap("element-container-special"),
-		INPUT: wrap("input"),
-	} as const;
-})();
+enum EleID {
+	STYLE_PAINT = "markmysearch--style-paint",
+	STYLE_PAINT_SPECIAL = "markmysearch--style-paint-special",
+	BAR = "markmysearch--bar",
+	MARKER_GUTTER = "markmysearch--markers",
+	DRAW_CONTAINER = "markmysearch--draw-container",
+	DRAW_ELEMENT = "markmysearch--draw",
+	ELEMENT_CONTAINER_SPECIAL = "markmysearch--element-container-special",
+	INPUT = "markmysearch--input",
+}
 
-const EleClass = (() => {
-	const wrap = (name: string) => "mms--" + name;
-	return {
-		HIGHLIGHTS_SHOWN: wrap("highlights-shown"),
-		BAR_HIDDEN: "bar-hidden",
-		BAR_NO_AUTOFOCUS: "bar-no-autofocus",
-		CONTROL: "control",
-		CONTROL_PAD: "control-pad",
-		CONTROL_INPUT: "control-input",
-		CONTROL_CONTENT: "control-content",
-		CONTROL_BUTTON: "control-button",
-		CONTROL_REVEAL: "control-reveal",
-		CONTROL_EDIT: "control-edit",
-		OPTION_LIST: "options",
-		OPTION: "option",
-		OPTION_LIST_PULLDOWN: "options-pulldown",
-		TERM: wrap("term"),
-		FOCUS: wrap("focus"),
-		FOCUS_CONTAINER: wrap("focus-contain"),
-		FOCUS_REVERT: wrap("focus-revert"),
-		REMOVE: "remove",
-		DISABLED: "disabled",
-		LAST_FOCUSED: "last-focused",
-		MENU_OPEN: "menu-open",
-		COLLAPSED: "collapsed",
-		UNCOLLAPSIBLE: "collapsed-impossible",
-		MATCH_REGEX: "match-regex",
-		MATCH_CASE: "match-case",
-		MATCH_STEM: "match-stem",
-		MATCH_WHOLE: "match-whole",
-		MATCH_DIACRITICS: "match-diacritics",
-		PRIMARY: "primary",
-		SECONDARY: "secondary",
-		BAR_CONTROLS: "bar-controls",
-	} as const;
-})();
+enum EleClass {
+	HIGHLIGHTS_SHOWN = "mms--highlights-shown",
+	TERM = "mms--term",
+	FOCUS = "mms--focus",
+	FOCUS_CONTAINER = "mms--focus-contain",
+	FOCUS_REVERT = "mms--focus-revert",
+	REMOVE = "mms--remove",
+}
 
-const AtRuleID = (() => {
-	const wrap = (name: string) => "markmysearch--" + name;
-	return {
-		FLASH: wrap("flash"),
-		MARKER_ON: wrap("marker-on"),
-		MARKER_OFF: wrap("marker-off"),
-	} as const;
-})();
+enum AtRuleID {
+	FLASH = "markmysearch--flash",
+	MARKER_ON = "markmysearch--marker-on",
+	MARKER_OFF = "markmysearch--marker-off",
+}
 
 /**
  * Transforms an array of lowercase element tags into a set of lowercase and uppercase tags.

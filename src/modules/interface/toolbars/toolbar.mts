@@ -15,10 +15,10 @@ import type { TermAbstractControl, TermControlOptionListInterface } from "/dist/
 import { TermReplaceControl } from "/dist/modules/interface/toolbar/term-controls/replace.mjs";
 import { TermAppendControl } from "/dist/modules/interface/toolbar/term-controls/append.mjs";
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
-import { getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
+import { EleID, EleClass, getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass } from "/dist/modules/common.mjs";
+import { EleID as CommonEleID, EleClass as CommonEleClass } from "/dist/modules/common.mjs";
 import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.mjs";
 import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.mjs";
 import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
@@ -70,7 +70,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
 		this.#barContainer = document.createElement("div");
-		this.#barContainer.id = EleID.BAR;
+		this.#barContainer.id = CommonEleID.BAR;
 		const shadowRoot = this.#barContainer.attachShadow({
 			mode: "closed",
 			delegatesFocus: true,
@@ -211,7 +211,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		};
 		this.replaceTerms(terms, commands);
 		this.#scrollGutter = document.createElement("div");
-		this.#scrollGutter.id = EleID.MARKER_GUTTER;
+		this.#scrollGutter.id = CommonEleID.MARKER_GUTTER;
 	}
 
 	getTermAbstractControls (): Array<TermAbstractControl> {
@@ -423,7 +423,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	}
 
 	updateHighlightsShownFlag () {
-		this.#barContainer.classList.toggle(EleClass.HIGHLIGHTS_SHOWN, this.#controlsInfo.highlightsShown);
+		this.#barContainer.classList.toggle(CommonEleClass.HIGHLIGHTS_SHOWN, this.#controlsInfo.highlightsShown);
 	}
 
 	updateVisibility () {

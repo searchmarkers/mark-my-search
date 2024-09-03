@@ -45,9 +45,10 @@ type ControlsInfo = {
  * @returns `true` if focus was changed (i.e. it was in the toolbar), `false` otherwise.
  */
 const focusReturnToDocument = (): boolean => {
-	const activeElement = document.activeElement;
-	if (activeElement instanceof HTMLInputElement && activeElement.closest(`#${EleID.BAR}`)) {
-		activeElement.blur();
+	const focus = document.activeElement;
+	// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+	if (focus instanceof HTMLElement && focus.id === EleID.BAR) {
+		focus.blur();
 		return true;
 	}
 	return false;
@@ -213,8 +214,6 @@ interface TermAppender<Async = true> {
 }
 
 (() => {
-	// Can't remove controls because a script may be left behind from the last install, and start producing unhandled errors. FIXME
-	//controlsRemove();
 	const commands: BrowserCommands = [];
 	let terms: ReadonlyArray<MatchTerm> = [];
 	let hues: ReadonlyArray<number> = [];

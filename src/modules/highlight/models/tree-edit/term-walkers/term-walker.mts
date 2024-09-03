@@ -47,16 +47,17 @@ class TermWalker implements AbstractTermWalker {
 		const focusContainer = document.body
 			.getElementsByClassName(EleClass.FOCUS_CONTAINER)[0] as HTMLElement;
 		const selection = document.getSelection();
-		const activeElement = document.activeElement;
-		if (activeElement instanceof HTMLInputElement && activeElement.closest(`#${EleID.BAR}`)) {
-			activeElement.blur();
+		const focus = document.activeElement;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+		if (focus instanceof HTMLElement && focus.id === EleID.BAR) {
+			focus.blur();
 		}
-		const selectionFocus = selection && (!activeElement
-			|| activeElement === document.body || !document.body.contains(activeElement)
-			|| activeElement === focusBase || activeElement.contains(focusContainer)
+		const selectionFocus = selection && (!focus
+			|| focus === document.body || !document.body.contains(focus)
+			|| focus === focusBase || focus.contains(focusContainer)
 		)
 			? selection.focusNode
-			: activeElement ?? document.body;
+			: focus ?? document.body;
 		if (focusBase) {
 			focusBase.classList.remove(EleClass.FOCUS);
 			elementsPurgeClass(EleClass.FOCUS_CONTAINER);
@@ -183,17 +184,18 @@ class TermWalker implements AbstractTermWalker {
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER);
 		elementsPurgeClass(EleClass.FOCUS);
 		const selection = getSelection();
-		const bar = document.getElementById(EleID.BAR);
-		if (!selection || !bar) {
+		if (!selection) {
 			return null;
 		}
-		if (document.activeElement instanceof HTMLElement && bar.contains(document.activeElement)) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+		if (document.activeElement instanceof HTMLElement && document.activeElement.id === EleID.BAR) {
 			document.activeElement.blur();
 		}
 		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
 		const nodeSelected = reverse ? selection.anchorNode : selection.focusNode;
 		const nodeFocused = document.activeElement instanceof HTMLElement
-			? (document.activeElement === document.body || bar.contains(document.activeElement))
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+			? (document.activeElement === document.body || document.activeElement.id === EleID.BAR)
 				? null
 				: document.activeElement
 			: null;

@@ -5,13 +5,12 @@
  */
 
 import type { ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
-import { getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
-import { EleClass } from "/dist/modules/common.mjs";
+import { EleClass, getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 type ControlButtonInfo = Readonly<{
-	controlClasses?: Array<typeof EleClass[keyof typeof EleClass]>
-	buttonClasses?: Array<typeof EleClass[keyof typeof EleClass]>
+	controlClasses?: Array<EleClass>
+	buttonClasses?: Array<EleClass>
 	path?: string
 	pathSecondary?: string
 	label?: string

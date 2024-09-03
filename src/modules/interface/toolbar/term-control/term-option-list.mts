@@ -6,9 +6,10 @@
 
 import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.mjs";
-import { getMatchModeOptionClass, getInputIdSequential, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
+import {
+	EleClass, getMatchModeOptionClass, getInputIdSequential, passKeyEvent,
+} from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchMode } from "/dist/modules/match-term.mjs";
-import { EleClass } from "/dist/modules/common.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
 
 class TermOptionList {
