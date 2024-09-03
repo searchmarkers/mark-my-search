@@ -12,7 +12,7 @@ import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID } from "/dist/modules/common.mjs";
 import { type AbstractEngineManager, EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
-import * as Stylesheet from "/dist/modules/interface/stylesheet.mjs";
+import { Style } from "/dist/modules/style.mjs";
 import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
 import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
 import { assert, itemsMatch } from "/dist/modules/common.mjs";
@@ -34,8 +34,8 @@ type ControlsInfo = {
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: ReadonlyArray<MatchTerm>
-	barControlsShown: ConfigValues["barControlsShown"]
-	barLook: ConfigValues["barLook"]
+	barControlsShown: Readonly<ConfigValues["barControlsShown"]>
+	barLook: Readonly<ConfigValues["barLook"]>
 	matchMode: Readonly<MatchMode>
 }
 
@@ -108,7 +108,7 @@ const updateToolbar = (
 		toolbar.replaceTerms(terms, commands);
 	}
 	toolbar.updateControlVisibility("replaceTerms");
-	toolbar.insertIntoDocument();
+	toolbar.insertAdjacentTo(document.body, "beforebegin");
 };
 
 const startHighlighting = (
@@ -135,33 +135,10 @@ const startHighlighting = (
  * Inserts a uniquely identified CSS stylesheet to perform all extension styling.
  */
 const styleElementsInsert = () => {
-	if (!document.getElementById(EleID.STYLE)) {
-		const style = document.createElement("style");
-		style.id = EleID.STYLE;
-		document.head.appendChild(style);
-	}
-	if (!document.getElementById(EleID.STYLE_PAINT)) {
-		const style = document.createElement("style");
-		style.id = EleID.STYLE_PAINT;
-		document.head.appendChild(style);
-	}
 	if (!document.getElementById(EleID.DRAW_CONTAINER)) {
 		const container = document.createElement("div");
 		container.id = EleID.DRAW_CONTAINER;
 		document.body.insertAdjacentElement("afterend", container);
-	}
-};
-
-const styleElementsCleanup = () => {
-	const style = document.getElementById(EleID.STYLE);
-	if (style && style.textContent !== "") {
-		style.textContent = "";
-	}
-	const stylePaint = document.getElementById(EleID.STYLE_PAINT);
-	if (stylePaint instanceof HTMLStyleElement && stylePaint.sheet) {
-		while (stylePaint.sheet.cssRules.length) {
-			stylePaint.sheet.deleteRule(0);
-		}
 	}
 };
 
@@ -274,6 +251,7 @@ interface TermAppender<Async = true> {
 	};
 	const updateTermStatus = (term: MatchTerm) => getToolbarOrNull()?.updateTermStatus(term);
 	const highlighter: AbstractEngineManager = new EngineManager(updateTermStatus, termTokens, termPatterns);
+	const styleManager = new Style();
 	const termSetterInternal: TermSetter<false> = {
 		setTerms: termsNew => {
 			if (itemsMatch(terms, termsNew, termEquals)) {
@@ -281,7 +259,7 @@ interface TermAppender<Async = true> {
 			}
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = termsNew;
-			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			styleManager.updateStyle(terms, termTokens, hues, highlighter);
 			updateToolbar(termsOld, terms, null, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -297,7 +275,7 @@ interface TermAppender<Async = true> {
 			} else {
 				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
-			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			styleManager.updateStyle(terms, termTokens, hues, highlighter);
 			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -307,7 +285,7 @@ interface TermAppender<Async = true> {
 		appendTerm: term => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = terms.concat(term);
-			Stylesheet.fillContent(terms, termTokens, hues, controlsInfo.barLook, highlighter);
+			styleManager.updateStyle(terms, termTokens, hues, highlighter);
 			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -343,7 +321,7 @@ interface TermAppender<Async = true> {
 			getToolbar: () => {
 				if (!toolbar) {
 					toolbar = new Toolbar([],
-						commands, hues,
+						hues, commands,
 						controlsInfo,
 						termSetter, doPhrasesMatchTerms,
 						termTokens, highlighter,
@@ -426,7 +404,6 @@ interface TermAppender<Async = true> {
 			highlighter.endHighlighting();
 			terms = [];
 			getToolbarOrNull()?.remove();
-			styleElementsCleanup();
 		}
 		if (message.terms) {
 			// TODO make sure same MatchTerm objects are used for terms which are equivalent

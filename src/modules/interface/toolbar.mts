@@ -47,9 +47,13 @@ interface AbstractToolbar {
 	readonly updateControlVisibility: (controlName: ControlButtonName) => void
 
 	/**
-	 * Inserts the toolbar and appropriate controls.
+	 * Inserts the toolbar as a child or sibling of an element.
+	 * @param element The element into which to insert the toolbar.
+	 * @param position The target position, adjacent to the element provided.  
+	 * "beforebegin" / "afterend" = previous/next sibling;  
+	 * "afterbegin" / "beforeend" = first/last child.
 	 */
-	readonly insertIntoDocument: () => void
+	readonly insertAdjacentTo: (element: HTMLElement, position: InsertPosition) => void
 
 	/**
 	 * Removes the toolbar and appropriate controls.
