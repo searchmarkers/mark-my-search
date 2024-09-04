@@ -118,12 +118,8 @@ const startHighlighting = (
 	highlighter: AbstractEngineManager,
 	hues: ReadonlyArray<number>,
 ) => {
-	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term =>
-		!termsOld.find(termOld => termEquals(term, termOld))
-	);
-	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(term =>
-		!terms.find(termOld => termEquals(term, termOld))
-	);
+	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term => !termsOld.includes(term));
+	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(termOld => !terms.includes(termOld));
 	highlighter.startHighlighting(
 		terms,
 		termsToHighlight,
