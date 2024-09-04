@@ -6,9 +6,10 @@
 
 import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
 import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.mjs";
-import { getMatchModeOptionClass, getInputIdSequential, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
+import {
+	EleClass, getMatchModeOptionClass, getInputIdSequential, passKeyEvent,
+} from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchMode } from "/dist/modules/match-term.mjs";
-import { EleClass } from "/dist/modules/common.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
 
 class TermOptionList {
@@ -84,7 +85,7 @@ class TermOptionList {
 				if (event.key === "ArrowUp" || event.key === "ArrowDown") {
 					const down = event.key === "ArrowDown";
 					const checkboxes = this.#checkboxes;
-					let index = checkboxes.findIndex(checkbox => checkbox === document.activeElement);
+					let index = checkboxes.findIndex(checkbox => checkbox.closest(":focus") === checkbox);
 					if (index === -1) {
 						index = down ? 0 : (checkboxes.length - 1);
 					} else {

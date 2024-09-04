@@ -29,7 +29,8 @@ class TermWalker implements AbstractTermWalker {
 		const nodeBegin = reverse ? getNodeFinal(document.body) : document.body;
 		const nodeSelected = getSelection()?.anchorNode;
 		const nodeFocused = document.activeElement
-			? (document.activeElement === document.body || document.activeElement.closest(`${EleID.BAR}`))
+			// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+			? (document.activeElement === document.body || document.activeElement.id === EleID.BAR)
 				? null
 				: document.activeElement
 			: null;

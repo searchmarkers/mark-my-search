@@ -116,69 +116,31 @@ const compatibility = new Compatibility();
 
 const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
 
-const EleID = (() => {
-	const wrap = (name: string) => "markmysearch--" + name;
-	return {
-		STYLE: wrap("style"),
-		STYLE_PAINT: wrap("style-paint"),
-		STYLE_PAINT_SPECIAL: wrap("style-paint-special"),
-		BAR: wrap("bar"),
-		BAR_LEFT: wrap("bar-left"),
-		BAR_TERMS: wrap("bar-terms"),
-		BAR_RIGHT: wrap("bar-right"),
-		MARKER_GUTTER: wrap("markers"),
-		DRAW_CONTAINER: wrap("draw-container"),
-		DRAW_ELEMENT: wrap("draw"),
-		ELEMENT_CONTAINER_SPECIAL: wrap("element-container-special"),
-		INPUT: wrap("input"),
-	} as const;
-})();
+enum EleID {
+	STYLE_PAINT = "markmysearch--style-paint",
+	STYLE_PAINT_SPECIAL = "markmysearch--style-paint-special",
+	BAR = "markmysearch--bar",
+	MARKER_GUTTER = "markmysearch--markers",
+	DRAW_CONTAINER = "markmysearch--draw-container",
+	DRAW_ELEMENT = "markmysearch--draw",
+	ELEMENT_CONTAINER_SPECIAL = "markmysearch--element-container-special",
+	INPUT = "markmysearch--input",
+}
 
-const EleClass = (() => {
-	const wrap = (name: string) => "mms--" + name;
-	return {
-		HIGHLIGHTS_SHOWN: wrap("highlights-shown"),
-		BAR_HIDDEN: wrap("bar-hidden"),
-		BAR_NO_AUTOFOCUS: wrap("bar-no-autofocus"),
-		CONTROL: wrap("control"),
-		CONTROL_PAD: wrap("control-pad"),
-		CONTROL_INPUT: wrap("control-input"),
-		CONTROL_CONTENT: wrap("control-content"),
-		CONTROL_BUTTON: wrap("control-button"),
-		CONTROL_REVEAL: wrap("control-reveal"),
-		CONTROL_EDIT: wrap("control-edit"),
-		OPTION_LIST: wrap("options"),
-		OPTION: wrap("option"),
-		OPTION_LIST_PULLDOWN: wrap("options-pulldown"),
-		TERM: wrap("term"),
-		FOCUS: wrap("focus"),
-		FOCUS_CONTAINER: wrap("focus-contain"),
-		FOCUS_REVERT: wrap("focus-revert"),
-		REMOVE: wrap("remove"),
-		DISABLED: wrap("disabled"),
-		LAST_FOCUSED: wrap("last-focused"),
-		MENU_OPEN: wrap("menu-open"),
-		COLLAPSED: wrap("collapsed"),
-		UNCOLLAPSIBLE: wrap("collapsed-impossible"),
-		MATCH_REGEX: wrap("match-regex"),
-		MATCH_CASE: wrap("match-case"),
-		MATCH_STEM: wrap("match-stem"),
-		MATCH_WHOLE: wrap("match-whole"),
-		MATCH_DIACRITICS: wrap("match-diacritics"),
-		PRIMARY: wrap("primary"),
-		SECONDARY: wrap("secondary"),
-		BAR_CONTROLS: wrap("bar-controls"),
-	} as const;
-})();
+enum EleClass {
+	HIGHLIGHTS_SHOWN = "mms--highlights-shown",
+	TERM = "mms--term",
+	FOCUS = "mms--focus",
+	FOCUS_CONTAINER = "mms--focus-contain",
+	FOCUS_REVERT = "mms--focus-revert",
+	REMOVE = "mms--remove",
+}
 
-const AtRuleID = (() => {
-	const wrap = (name: string) => "markmysearch--" + name;
-	return {
-		FLASH: wrap("flash"),
-		MARKER_ON: wrap("marker-on"),
-		MARKER_OFF: wrap("marker-off"),
-	} as const;
-})();
+enum AtRuleID {
+	FLASH = "markmysearch--flash",
+	MARKER_ON = "markmysearch--marker-on",
+	MARKER_OFF = "markmysearch--marker-off",
+}
 
 /**
  * Transforms an array of lowercase element tags into a set of lowercase and uppercase tags.
