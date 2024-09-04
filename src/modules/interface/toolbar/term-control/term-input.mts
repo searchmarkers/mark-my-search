@@ -8,6 +8,7 @@ import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/
 import type { SelectionReturnTarget, ToolbarTermInputInterface } from "/dist/modules/interface/toolbar.mjs";
 import { EleID, EleClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import { EleID as CommonEleID } from "/dist/modules/common.mjs";
 
 class TermInput {
 	readonly #controlInterface: TermControlInputInterface;
@@ -39,7 +40,8 @@ class TermInput {
 		input.type = "text";
 		input.classList.add(EleClass.CONTROL_INPUT);
 		// Inputs should not be focusable unless user has already focused bar. (0)
-		if (!document.activeElement || !document.activeElement.closest(`#${EleID.BAR}`)) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+		if (!document.activeElement || document.activeElement.id !== CommonEleID.BAR) {
 			input.tabIndex = -1;
 		}
 		const focusOnEvent = (event: MouseEvent) => {
@@ -183,7 +185,7 @@ class TermInput {
 	 * @param shiftCaret If supplied, whether to shift the caret to the "right" or the "left". If unsupplied, all text is selected.
 	 */
 	select (shiftCaret?: "right" | "left"): SelectionReturnTarget | null {
-		const returnTarget = document.activeElement !== this.#input ? this.focus() : null;
+		const returnTarget = !this.hasFocus() ? this.focus() : null;
 		if (shiftCaret) {
 			const caretPosition = shiftCaret === "left" ? 0 : -1;
 			this.#input.setSelectionRange(caretPosition, caretPosition);
@@ -210,7 +212,7 @@ class TermInput {
 	}
 
 	hasFocus (): boolean {
-		return document.activeElement === this.#input;
+		return this.#input.closest(":focus") === this.#input;
 	}
 
 	isEventTarget (target: EventTarget): boolean {

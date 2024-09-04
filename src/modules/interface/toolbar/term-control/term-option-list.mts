@@ -85,7 +85,7 @@ class TermOptionList {
 				if (event.key === "ArrowUp" || event.key === "ArrowDown") {
 					const down = event.key === "ArrowDown";
 					const checkboxes = this.#checkboxes;
-					let index = checkboxes.findIndex(checkbox => checkbox === document.activeElement);
+					let index = checkboxes.findIndex(checkbox => checkbox.closest(":focus") === checkbox);
 					if (index === -1) {
 						index = down ? 0 : (checkboxes.length - 1);
 					} else {

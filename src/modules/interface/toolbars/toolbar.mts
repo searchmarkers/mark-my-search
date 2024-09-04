@@ -73,7 +73,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		this.#barContainer.id = CommonEleID.BAR;
 		const shadowRoot = this.#barContainer.attachShadow({
 			mode: "closed",
-			delegatesFocus: true,
+			delegatesFocus: false,
 		});
 		this.#style = new ToolbarStyle(shadowRoot, this.#termTokens, this.#highlighter);
 		this.#style.applyStyle();
@@ -99,7 +99,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			inputsSetFocusable(true);
 		});
 		this.#bar.addEventListener("focusout", event => {
-			if (event.relatedTarget instanceof Node && !this.#bar.contains(event.relatedTarget)) {
+			if (!(event.relatedTarget instanceof Node) || !this.#bar.contains(event.relatedTarget)) {
 				if (this.hasLastFocusedInput()) {
 					if (!this.#bar.classList.contains(EleClass.BAR_NO_AUTOFOCUS)) {
 						this.focusLastFocusedInput();
@@ -397,13 +397,15 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	returnSelectionToDocument (eventHasRelatedTarget: boolean) {
 		if (eventHasRelatedTarget) {
 			setTimeout(() => {
-				if (!document.activeElement || !document.activeElement.closest(`#${EleID.BAR}`)) {
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+				if (!document.activeElement || document.activeElement.id !== CommonEleID.BAR) {
 					this.#selectionReturn.forgetTarget();
 				}
 			});
 			return; // Focus is being moved, not lost.
 		}
-		if (document.activeElement && document.activeElement.closest(`#${EleID.BAR}`)) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+		if (document.activeElement && document.activeElement.id === CommonEleID.BAR) {
 			return;
 		}
 		const target = this.#selectionReturn.getTarget();
@@ -517,7 +519,8 @@ class ToolbarSelectionReturnManager {
 	#target: SelectionReturnTarget | null = null;
 
 	setTargetIfValid (target: SelectionReturnTarget | null) {
-		if (!target?.element || (target.element && target.element.closest(`#${EleID.BAR}`))) {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
+		if (!target?.element || target.element.id === CommonEleID.BAR) {
 			return;
 		}
 		this.#target = target;
