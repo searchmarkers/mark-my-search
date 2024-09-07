@@ -6,13 +6,21 @@
 
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
-import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractMethod {
-	readonly highlightables?: Highlightables
+	readonly deactivate: () => void
 
-	readonly getCSS: EngineCSS
+	readonly startHighlighting: (
+		terms: ReadonlyArray<MatchTerm>,
+		termsToHighlight: ReadonlyArray<MatchTerm>,
+		termsToPurge: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
+	) => void
+
+	readonly endHighlighting: () => void
+
+	readonly highlightables?: Highlightables
 
 	/**
 	 * Gets a CSS rule to style all elements as per the enabled PAINT variant.

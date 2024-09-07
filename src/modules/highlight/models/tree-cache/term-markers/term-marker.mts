@@ -16,12 +16,21 @@ class TermMarker implements AbstractTermMarker {
 
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
+	readonly #scrollGutter: HTMLElement;
+
 	constructor (
 		termTokens: TermTokens,
 		elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>,
 	) {
 		this.#termTokens = termTokens;
 		this.#elementFlowsMap = elementFlowsMap;
+		this.#scrollGutter = document.createElement("div");
+		this.#scrollGutter.id = EleID.MARKER_GUTTER;
+		document.body.insertAdjacentElement("afterend", this.#scrollGutter);
+	}
+
+	deactivate () {
+		this.#scrollGutter.remove();
 	}
 
 	insert (
@@ -30,7 +39,6 @@ class TermMarker implements AbstractTermMarker {
 		highlightedElements: Iterable<HTMLElement>,
 	) {
 		const termsSet = new Set(terms);
-		const gutter = document.getElementById(EleID.MARKER_GUTTER)!;
 		let markersHtml = "";
 		for (const element of highlightedElements) if (this.#elementFlowsMap.has(element)) {
 			const highlightedTerms = new Set((this.#elementFlowsMap.get(element) ?? []).flatMap(flow =>
@@ -44,8 +52,8 @@ class TermMarker implements AbstractTermMarker {
 				}" top="${yRelative}" style="top: ${yRelative * 100}%; padding-left: ${i * 5}px; z-index: ${i * -1}"></div>`)
 				.join("");
 		}
-		gutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
-		gutter.innerHTML = markersHtml;
+		this.#scrollGutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
+		this.#scrollGutter.innerHTML = markersHtml;
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars

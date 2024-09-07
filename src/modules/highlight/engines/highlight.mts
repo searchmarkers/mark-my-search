@@ -8,7 +8,9 @@ import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tre
 import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-trackers/flow-tracker.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
+import { MatchTerm, type TermTokens, type TermPatterns } from "/dist/modules/match-term.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import { EleID, EleClass, createContainer, type AllReadonly } from "/dist/modules/common.mjs";
 
 type HighlightStyle = Readonly<{
@@ -31,6 +33,8 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	readonly #highlights = new ExtendedHighlightRegistry();
 
 	readonly #highlightingUpdatedListeners = new Set<Generator>();
+
+	readonly #termStyleManagerMap = new Map<MatchTerm, StyleManager<Record<never, never>>>();
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -70,29 +74,9 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		this.#elementFlowsMap = this.#flowTracker.getElementFlowsMap();
 	}
 
-	readonly getCSS = {
-		misc: () => "",
-		termHighlights: () => "",
-		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
-			const term = terms[termIndex];
-			const hue = hues[termIndex % hues.length];
-			const cycle = Math.floor(termIndex / hues.length);
-			const {
-				opacity,
-				lineThickness,
-				lineStyle,
-				textColor,
-			} = HighlightEngine.hueCycleStyles[Math.min(cycle, HighlightEngine.hueCycleStyles.length - 1)];
-			return (`
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.#termTokens.get(term))}) {
-	background-color: hsl(${hue} 70% 70% / ${opacity});
-	${textColor ? `color: ${textColor};` : ""}
-	${lineThickness ? `text-decoration: ${lineThickness}px hsl(${hue} 100% 35%) ${lineStyle} underline;` : ""}
-	${lineThickness ? `text-decoration-skip-ink: none;` : ""}
-}`
-			);
-		},
-	};
+	deactivate () {
+		this.endHighlighting();
+	}
 
 	readonly getTermBackgroundStyle = TermCSS.getFlatStyle;
 
@@ -105,9 +89,11 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		// Clean up.
 		this.#flowTracker.unobserveMutations();
 		this.undoHighlights(termsToPurge);
+		this.removeTermStyles();
 		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
+		this.addTermStyles(terms, hues);
 		for (const term of terms) {
 			this.#highlights.set(this.#termTokens.get(term), new ExtendedHighlight());
 		}
@@ -118,6 +104,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	endHighlighting () {
 		this.#flowTracker.unobserveMutations();
 		this.undoHighlights();
+		this.removeTermStyles();
 	}
 
 	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
@@ -129,6 +116,42 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		} else {
 			this.#highlights.clear();
 		}
+	}
+
+	addTermStyles (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
+		for (let i = 0; i < terms.length; i++) {
+			const styleManager = new StyleManager(new HTMLStylesheet(document.head));
+			styleManager.setStyle(this.getTermCSS(terms, hues, i));
+			this.#termStyleManagerMap.set(terms[i], styleManager);
+		}
+	}
+
+	removeTermStyles () {
+		for (const styleManager of this.#termStyleManagerMap.values()) {
+			styleManager.deactivate();
+		}
+		this.#termStyleManagerMap.clear();
+	}
+
+	getTermCSS (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) {
+		const term = terms[termIndex];
+		const hue = hues[termIndex % hues.length];
+		const cycle = Math.floor(termIndex / hues.length);
+		const {
+			opacity,
+			lineThickness,
+			lineStyle,
+			textColor,
+		} = HighlightEngine.hueCycleStyles[Math.min(cycle, HighlightEngine.hueCycleStyles.length - 1)];
+		return (`
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.#termTokens.get(term))}) {
+	background-color: hsl(${hue} 70% 70% / ${opacity}) !important;
+	${textColor ? `color: ${textColor} !important;` : ""}
+	${lineThickness ? `text-decoration: ${lineThickness}px hsl(${hue} 100% 35%) ${lineStyle} underline !important;` : ""}
+	${lineThickness ? `text-decoration-skip-ink: none !important;` : ""}
+}
+`
+		);
 	}
 
 	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {

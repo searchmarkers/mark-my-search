@@ -10,7 +10,9 @@ import type { FlowMutationObserver } from "/dist/modules/highlight/flow-mutation
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass, AtRuleID, elementsPurgeClass, getTermClass, createContainer } from "/dist/modules/common.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
+import { EleID, EleClass, elementsPurgeClass, getTermClass, createContainer } from "/dist/modules/common.mjs";
 
 class ElementEngine implements AbstractTreeEditEngine {
 	readonly class = "ELEMENT";
@@ -23,6 +25,9 @@ class ElementEngine implements AbstractTreeEditEngine {
 
 	readonly #elementsJustHighlighted = new Set<HTMLElement>();
 
+	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
+	readonly #termStyleManagerMap = new Map<MatchTerm, StyleManager<Record<never, never>>>();
+
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
 
@@ -32,6 +37,14 @@ class ElementEngine implements AbstractTreeEditEngine {
 	) {
 		this.#termTokens = termTokens;
 		this.#termPatterns = termPatterns;
+		this.#styleManager.setStyle(`
+${HIGHLIGHT_TAG} {
+	font: inherit !important;
+	border-radius: 2px !important;
+	visibility: visible !important;
+}
+`
+		);
 		{
 			const rejectSelector = Array.from(highlightTags.reject).join(", ");
 			const elements = new Set<HTMLElement>();
@@ -108,33 +121,9 @@ class ElementEngine implements AbstractTreeEditEngine {
 		}
 	}
 
-	readonly getCSS = {
-		misc: () => "",
-		termHighlights: () => {
-			return (`
-${HIGHLIGHT_TAG} {
-	font: inherit;
-	border-radius: 2px;
-	visibility: visible;
-}
-.${EleClass.FOCUS_CONTAINER} {
-	animation: ${AtRuleID.FLASH} 1s;
-}`
-			);
-		},
-		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
-			const term = terms[termIndex];
-			const hue = hues[termIndex % hues.length];
-			const cycle = Math.floor(termIndex / hues.length);
-			return (`
-#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)},
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)} {
-	background: ${this.getTermBackgroundStyle(`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle)};
-	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35);
-}`
-			);
-		},
-	};
+	deactivate () {
+		this.endHighlighting();
+	}
 
 	readonly getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
@@ -144,10 +133,14 @@ ${HIGHLIGHT_TAG} {
 		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) {
+		// Clean up.
 		this.#flowMutations.unobserveMutations();
 		this.undoHighlights(termsToPurge);
+		this.removeTermStyles();
+		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
+		this.addTermStyles(terms, hues);
 		this.generateTermHighlightsUnderNode(termsToHighlight, document.body);
 		this.#flowMutations.observeMutations();
 	}
@@ -155,6 +148,7 @@ ${HIGHLIGHT_TAG} {
 	endHighlighting () {
 		this.#flowMutations.unobserveMutations();
 		this.undoHighlights();
+		this.removeTermStyles();
 	}
 
 	/**
@@ -177,6 +171,37 @@ ${HIGHLIGHT_TAG} {
 		}
 		elementsPurgeClass(EleClass.FOCUS_CONTAINER, root);
 		elementsPurgeClass(EleClass.FOCUS, root);
+	}
+
+	addTermStyles (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
+		for (let i = 0; i < terms.length; i++) {
+			const styleManager = new StyleManager(new HTMLStylesheet(document.head));
+			styleManager.setStyle(this.getTermCSS(terms, hues, i));
+			this.#termStyleManagerMap.set(terms[i], styleManager);
+		}
+	}
+
+	removeTermStyles () {
+		for (const styleManager of this.#termStyleManagerMap.values()) {
+			styleManager.deactivate();
+		}
+		this.#termStyleManagerMap.clear();
+	}
+
+	getTermCSS (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) {
+		const term = terms[termIndex];
+		const hue = hues[termIndex % hues.length];
+		const cycle = Math.floor(termIndex / hues.length);
+		return `
+#${EleID.BAR} ~ body .${EleClass.FOCUS_CONTAINER} ${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)},
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ${HIGHLIGHT_TAG}.${getTermClass(term, this.#termTokens)} {
+	background: ${this.getTermBackgroundStyle(
+		`hsl(${hue} 100% 60% / 0.4)`, `hsl(${hue} 100% 88% / 0.4)`, cycle,
+	)} !important;
+	box-shadow: 0 0 0 1px hsl(${hue} 100% 20% / 0.35) !important;
+}
+`
+		;
 	}
 
 	getHighlightedElements (): Iterable<HTMLElement> {

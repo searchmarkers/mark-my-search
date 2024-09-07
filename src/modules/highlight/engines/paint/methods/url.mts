@@ -6,7 +6,6 @@
 
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
@@ -17,11 +16,11 @@ class UrlMethod implements AbstractMethod {
 		this.#termTokens = termTokens;
 	}
 
-	readonly getCSS: EngineCSS = {
-		misc: () => "",
-		termHighlights: () => "",
-		termHighlight: () => "",
-	};
+	deactivate () {}
+
+	startHighlighting () {}
+
+	endHighlighting () {}
 
 	constructHighlightStyleRule (
 		highlightingId: number,

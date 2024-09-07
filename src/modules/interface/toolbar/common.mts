@@ -99,7 +99,7 @@ const applyMatchModeToClassList = (
 	classListToggle(EleClass.MATCH_DIACRITICS, matchMode.diacritics);
 };
 
-const getInputIdSequential = () => CommonEleID.INPUT + "-" + getIdSequential.next().value.toString();
+const getInputIdSequential = () => CommonEleID.INPUT + getIdSequential.next().value.toString();
 
 const getControlClass = (controlName: ControlButtonName) => EleClass.CONTROL + "-" + controlName;
 

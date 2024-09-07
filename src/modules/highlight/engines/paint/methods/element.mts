@@ -7,9 +7,10 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { HighlightingStyleObserver, Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import { MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
 import { Z_INDEX_MIN, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 
@@ -20,6 +21,9 @@ class ElementMethod implements AbstractMethod {
 	readonly #spanBoxesMap: AllReadonly<Map<Span, Array<Box>>>;
 	readonly #elementHighlightingIdMap: AllReadonly<Map<HTMLElement, number>>;
 
+	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
+	readonly #termStyleManagerMap = new Map<MatchTerm, StyleManager<Record<never, never>>>();
+	readonly #drawContainersParent: HTMLElement;
 	readonly #elementDrawContainerMap = new Map<HTMLElement, HTMLElement>();
 
 	constructor (
@@ -33,6 +37,32 @@ class ElementMethod implements AbstractMethod {
 		this.#elementFlowsMap = elementFlowsMap;
 		this.#spanBoxesMap = spanBoxesMap;
 		this.#elementHighlightingIdMap = elementHighlightingIdMap;
+		this.#styleManager.setStyle(`
+#${EleID.DRAW_CONTAINER} {
+	& {
+		position: fixed !important;
+		width: 100% !important;
+		height: 100% !important;
+		top: 100% !important;
+		z-index: ${Z_INDEX_MIN} !important;
+	}
+	& > * {
+		position: fixed !important;
+		width: 100% !important;
+		height: 100% !important;
+	}
+}
+
+#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${EleClass.TERM} {
+	outline: 2px solid hsl(0 0% 0% / 0.1) !important;
+	outline-offset: -2px !important;
+	border-radius: 2px !important;
+}
+`
+		);
+		this.#drawContainersParent = document.createElement("div");
+		this.#drawContainersParent.id = EleID.DRAW_CONTAINER;
+		document.body.insertAdjacentElement("afterend", this.#drawContainersParent);
 		const newlyStyledElements = new Set<HTMLElement>();
 		const newlyUnstyledElements = new Set<HTMLElement>();
 		styleObserver.addHighlightingStyleRuleChangedListener(element => {
@@ -42,7 +72,6 @@ class ElementMethod implements AbstractMethod {
 			newlyUnstyledElements.add(element);
 		});
 		styleObserver.addHighlightingAppliedListener(() => {
-			const parent = document.getElementById(EleID.DRAW_CONTAINER)!;
 			for (const element of newlyUnstyledElements) {
 				this.#elementDrawContainerMap.get(element)?.remove();
 				this.#elementDrawContainerMap.delete(element);
@@ -53,57 +82,61 @@ class ElementMethod implements AbstractMethod {
 				const container = this.getDrawElementContainer(element);
 				if (container) {
 					this.#elementDrawContainerMap.set(element, container);
-					parent.appendChild(container);
+					this.#drawContainersParent.appendChild(container);
 				}
 			}
 		});
 	}
 
-	readonly getCSS: EngineCSS = {
-		misc: () => {
-			return (`
-#${EleID.DRAW_CONTAINER} {
-& {
-	position: fixed;
-	width: 100%;
-	height: 100%;
-	top: 100%;
-	z-index: ${Z_INDEX_MIN};
-}
-& > * {
-	position: fixed;
-	width: 100%;
-	height: 100%;
-}
-}
+	deactivate () {
+		this.endHighlighting();
+		this.#drawContainersParent.remove();
+		this.#styleManager.deactivate();
+	}
 
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${EleClass.TERM} {
-outline: 2px solid hsl(0 0% 0% / 0.1);
-outline-offset: -2px;
-border-radius: 2px;
-}`
-			);
-		},
-		termHighlights: () => "",
-		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) => {
-			const term = terms[termIndex];
-			const hue = hues[termIndex % hues.length];
-			const cycle = Math.floor(termIndex / hues.length);
-			const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
-				getTermClass(term, this.#termTokens)
-			}`;
-			const backgroundStyle = TermCSS.getHorizontalStyle(
-				`hsl(${hue} 100% 60% / 0.4)`,
-				`hsl(${hue} 100% 88% / 0.4)`,
-				cycle,
-			);
-			return`${selector} { background: ${backgroundStyle}; }`;
-		},
-	};
+	startHighlighting (
+		terms: ReadonlyArray<MatchTerm>,
+		termsToHighlight: ReadonlyArray<MatchTerm>,
+		termsToPurge: ReadonlyArray<MatchTerm>,
+		hues: ReadonlyArray<number>,
+	) {
+		this.removeTermStyles();
+		for (let i = 0; i < terms.length; i++) {
+			const styleManager = new StyleManager(new HTMLStylesheet(document.head));
+			styleManager.setStyle(this.getTermCSS(terms, hues, i));
+			this.#termStyleManagerMap.set(terms[i], styleManager);
+		}
+	}
+
+	endHighlighting () {
+		this.removeTermStyles();
+	}
+
+	removeTermStyles () {
+		for (const styleManager of this.#termStyleManagerMap.values()) {
+			styleManager.deactivate();
+		}
+		this.#termStyleManagerMap.clear();
+	}
+
+	getTermCSS (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number): string {
+		const term = terms[termIndex];
+		const hue = hues[termIndex % hues.length];
+		const cycle = Math.floor(termIndex / hues.length);
+		const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
+			getTermClass(term, this.#termTokens)
+		}`;
+		const backgroundStyle = TermCSS.getHorizontalStyle(
+			`hsl(${hue} 100% 60% / 0.4)`,
+			`hsl(${hue} 100% 88% / 0.4)`,
+			cycle,
+		);
+		return`${selector} { background: ${backgroundStyle} !important; }`;
+	}
 
 	constructHighlightStyleRule (highlightingId: number) {
 		return `body [markmysearch-h_id="${highlightingId}"] { background-image: -moz-element(#${
-			EleID.DRAW_ELEMENT + "-" + highlightingId.toString()
+			EleID.DRAW_ELEMENT + highlightingId.toString()
 		}) !important; background-repeat: no-repeat !important; }`;
 	}
 
@@ -124,7 +157,7 @@ border-radius: 2px;
 			return null;
 		}
 		const container = document.createElement("div");
-		container.id = EleID.DRAW_ELEMENT + "-" + highlightingId.toString();
+		container.id = EleID.DRAW_ELEMENT + highlightingId.toString();
 		let boxRightmost = boxes[0];
 		let boxDownmost = boxes[0];
 		for (const box of boxes) {
