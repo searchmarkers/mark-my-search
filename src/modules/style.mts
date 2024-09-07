@@ -7,7 +7,6 @@
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.mjs";
 import { Z_INDEX_MAX, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 
 class Style {
@@ -17,7 +16,6 @@ class Style {
 		terms: ReadonlyArray<MatchTerm>,
 		termTokens: TermTokens,
 		hues: ReadonlyArray<number>,
-		highlighter: HighlighterCSSInterface,
 	) {
 		/** Prevents websites from taking precedence by applying !important to every rule. */
 		const makeImportant = (styleText: string) => (
@@ -53,11 +51,7 @@ class Style {
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }
-${highlighter.getCSS.termHighlights()}
 `) + (`
-
-${highlighter.getCSS.misc()}
-
 /* || Transitions */
 
 @keyframes ${AtRuleID.MARKER_ON} {
@@ -75,10 +69,6 @@ ${highlighter.getCSS.misc()}
 			const term = terms[i];
 			const hue = hues[i % hues.length];
 			style += makeImportant(`
-/* || Term Highlight */
-
-${highlighter.getCSS.termHighlight(terms, hues, i)}
-
 /* || Term Scroll Markers */
 
 #${EleID.MARKER_GUTTER} .${getTermClass(term, termTokens)} {

@@ -128,17 +128,6 @@ const startHighlighting = (
 	);
 };
 
-/**
- * Inserts a uniquely identified CSS stylesheet to perform all extension styling.
- */
-const styleElementsInsert = () => {
-	if (!document.getElementById(EleID.DRAW_CONTAINER)) {
-		const container = document.createElement("div");
-		container.id = EleID.DRAW_CONTAINER;
-		document.body.insertAdjacentElement("afterend", container);
-	}
-};
-
 // TODO decompose this horrible generator function
 /**
  * Returns a generator function to consume individual command objects and produce their desired effect.
@@ -254,7 +243,7 @@ interface TermAppender<Async = true> {
 			}
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = termsNew;
-			styleManager.updateStyle(terms, termTokens, hues, highlighter);
+			styleManager.updateStyle(terms, termTokens, hues);
 			updateToolbar(termsOld, terms, null, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -270,7 +259,7 @@ interface TermAppender<Async = true> {
 			} else {
 				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
-			styleManager.updateStyle(terms, termTokens, hues, highlighter);
+			styleManager.updateStyle(terms, termTokens, hues);
 			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -280,7 +269,7 @@ interface TermAppender<Async = true> {
 		appendTerm: term => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = terms.concat(term);
-			styleManager.updateStyle(terms, termTokens, hues, highlighter);
+			styleManager.updateStyle(terms, termTokens, hues);
 			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -351,7 +340,6 @@ interface TermAppender<Async = true> {
 		if (queuingPromise) {
 			await queuingPromise;
 		}
-		styleElementsInsert();
 		if (message.highlighter !== undefined) {
 			highlighter.removeEngine();
 			highlighter.signalPaintEngineMethod(message.highlighter.paintEngine.method);
@@ -441,7 +429,8 @@ interface TermAppender<Async = true> {
 			if (messageQueue.length === 1) {
 				sendBackgroundMessage({ initializationGet: true }).then(initMessage => {
 					if (!initMessage) {
-						assert(false, "not initialized, so highlighting remains inactive", "no init response was received");
+						assert(false, "not initialized, so highlighting remains inactive",
+							"no init response was received");
 						return;
 					}
 					const initialize = () => {

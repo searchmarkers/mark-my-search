@@ -9,11 +9,12 @@ import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
 import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-trackers/flow-tracker.mjs";
-import type { EngineCSS } from "/dist/modules/highlight/engine.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { EleID, createContainer, type PaintEngineMethod, type AllReadonly } from "/dist/modules/common.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
+import { createContainer, type PaintEngineMethod, type AllReadonly } from "/dist/modules/common.mjs";
 
 type Box = Readonly<{
 	token: string
@@ -59,6 +60,8 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 	readonly #highlightingStyleRuleChangedListeners = new Set<HighlightingStyleRuleChangedListener>();
 	readonly #highlightingStyleRuleDeletedListeners = new Set<HighlightingStyleRuleChangedListener>();
 	readonly #highlightingAppliedListeners = new Set<HighlightingAppliedListener>();
+
+	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -111,7 +114,6 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 			}}
 		})();
 		this.#method = method;
-		this.getCSS = method.getCSS;
 		{
 			const visibilityObserver = new IntersectionObserver(entries => {
 				for (const entry of entries) {
@@ -181,7 +183,11 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		}}
 	}
 
-	readonly getCSS: EngineCSS;
+	deactivate () {
+		this.endHighlighting();
+		this.#method.deactivate();
+		this.#styleManager.deactivate();
+	}
 
 	readonly getTermBackgroundStyle = TermCSS.getHorizontalStyle;
 
@@ -197,6 +203,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
+		this.#method.startHighlighting(terms, termsToHighlight, termsToPurge, hues);
 		this.#flowTracker.generateHighlightSpansFor(terms, document.body);
 		this.#flowTracker.observeMutations();
 		// TODO how are the currently-visible elements known and hence highlighted (when the engine has not been watching them)?
@@ -215,6 +222,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		this.unobserveVisibilityChanges();
 		this.#flowTracker.unobserveMutations();
 		this.#flowTracker.removeHighlightSpansFor();
+		this.#method.endHighlighting();
 		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
 		for (const element of document.body.querySelectorAll("[markmysearch-h_id]")) {
 			element.removeAttribute("markmysearch-h_id");
@@ -285,8 +293,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		for (const listener of this.#highlightingAppliedListeners) {
 			listener(this.#elementStyleRuleMap.keys());
 		}
-		const style = document.getElementById(EleID.STYLE_PAINT) as HTMLStyleElement; // NEXT 2
-		style.textContent = Array.from(this.#elementStyleRuleMap.values()).join("\n");
+		this.#styleManager.setStyle(Array.from(this.#elementStyleRuleMap.values()).join("\n"));
 	}
 
 	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {

@@ -67,18 +67,6 @@ class EngineManager implements AbstractEngineManager {
 		this.#updateTermStatus = updateTermStatus;
 	}
 
-	readonly getCSS = {
-		misc: (): string => (
-			this.#engineData?.engine.getCSS.misc() ?? ""
-		),
-		termHighlights: (): string => (
-			this.#engineData?.engine.getCSS.termHighlights() ?? ""
-		),
-		termHighlight: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number): string => (
-			this.#engineData?.engine.getCSS.termHighlight(terms, hues, termIndex) ?? ""
-		),
-	};
-
 	getTermBackgroundStyle (colorA: string, colorB: string, cycle: number): string {
 		return this.#engineData?.engine.getTermBackgroundStyle(colorA, colorB, cycle) ?? "";
 	}
@@ -127,7 +115,7 @@ class EngineManager implements AbstractEngineManager {
 	async setEngine (preference: Engine) {
 		const highlighting = this.#highlighting;
 		if (highlighting && this.#engineData) {
-			this.#engineData.engine.endHighlighting();
+			this.#engineData.engine.deactivate();
 		}
 		this.#engineData = await this.constructAndLinkEngineData(compatibility.highlighting.engineToUse(preference));
 	}
@@ -232,7 +220,7 @@ class EngineManager implements AbstractEngineManager {
 
 	removeEngine () {
 		if (this.#highlighting && this.#engineData) {
-			this.#engineData.engine.endHighlighting();
+			this.#engineData.engine.deactivate();
 		}
 		this.#engineData = null;
 	}

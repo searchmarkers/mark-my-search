@@ -117,14 +117,11 @@ const compatibility = new Compatibility();
 const [ Z_INDEX_MIN, Z_INDEX_MAX ] = [ -(2**31), 2**31 - 1 ];
 
 enum EleID {
-	STYLE_PAINT = "markmysearch--style-paint",
-	STYLE_PAINT_SPECIAL = "markmysearch--style-paint-special",
 	BAR = "markmysearch--bar",
 	MARKER_GUTTER = "markmysearch--markers",
 	DRAW_CONTAINER = "markmysearch--draw-container",
-	DRAW_ELEMENT = "markmysearch--draw",
-	ELEMENT_CONTAINER_SPECIAL = "markmysearch--element-container-special",
-	INPUT = "markmysearch--input",
+	DRAW_ELEMENT = "markmysearch--draw-",
+	INPUT = "markmysearch--input-",
 }
 
 enum EleClass {

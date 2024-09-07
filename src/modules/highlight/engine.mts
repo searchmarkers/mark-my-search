@@ -16,6 +16,8 @@ interface AbstractEngine extends Highlighter {
 	readonly terms: RContainer<ReadonlyArray<MatchTerm>>;
 	readonly hues: RContainer<ReadonlyArray<number>>;
 
+	readonly deactivate: () => void
+
 	readonly addHighlightingUpdatedListener: (listener: Generator) => void
 
 	readonly getHighlightedElements: () => Iterable<HTMLElement>
@@ -24,20 +26,8 @@ interface AbstractEngine extends Highlighter {
 interface Highlighter extends HighlighterCSSInterface, HighlightingInterface {}
 
 interface HighlighterCSSInterface {
-	readonly getCSS: EngineCSS
-
 	readonly getTermBackgroundStyle: (colorA: string, colorB: string, cycle: number) => string
 }
-
-type EngineCSS = Readonly<{
-	misc: () => string
-	termHighlights: () => string
-	termHighlight: (
-		terms: ReadonlyArray<MatchTerm>,
-		hues: ReadonlyArray<number>,
-		termIndex: number,
-	) => string
-}>
 
 interface HighlightingInterface {
 	/**
@@ -59,6 +49,6 @@ interface HighlightingInterface {
 export type {
 	AbstractEngine,
 	Highlighter,
-	HighlighterCSSInterface, EngineCSS,
+	HighlighterCSSInterface,
 	HighlightingInterface,
 };

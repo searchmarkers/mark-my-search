@@ -45,8 +45,6 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	readonly #controls: Readonly<Record<ControlButtonName, Control>>;
 	readonly #termControls: Array<TermReplaceControl> = [];
 	readonly #termAppendControl: TermAppendControl;
-	// TODO why is the toolbar in charge of the scroll gutter??
-	readonly #scrollGutter: HTMLElement;
 
 	readonly #selectionReturn = new ToolbarSelectionReturnManager();
 	#indicatedClassToken: string | null = null;
@@ -210,8 +208,6 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			),
 		};
 		this.replaceTerms(terms, commands);
-		this.#scrollGutter = document.createElement("div");
-		this.#scrollGutter.id = CommonEleID.MARKER_GUTTER;
 	}
 
 	getTermAbstractControls (): Array<TermAbstractControl> {
@@ -502,7 +498,6 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 
 	insertAdjacentTo (element: HTMLElement, position: InsertPosition) {
 		element.insertAdjacentElement(position, this.#barContainer);
-		element.insertAdjacentElement(position, this.#scrollGutter);
 	}
 
 	remove () {
@@ -511,7 +506,6 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			document.activeElement.blur();
 		}
 		this.#barContainer.remove();
-		this.#scrollGutter.remove();
 	}
 }
 
