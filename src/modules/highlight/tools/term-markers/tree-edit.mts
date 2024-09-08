@@ -4,9 +4,12 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractTermMarker } from "/dist/modules/highlight/term-marker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.mjs";
+import { Styles } from "/dist/modules/highlight/tools/term-marker/common.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import {
 	EleID, EleClass, getElementYRelative, elementsPurgeClass,
 	getTermClass, getTermClassToken,
@@ -15,10 +18,13 @@ import {
 class TermMarker implements AbstractTermMarker {
 	readonly #termTokens: TermTokens;
 
+	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
+	readonly #termsStyleManager = new StyleManager(new HTMLStylesheet(document.head));
 	readonly #scrollGutter: HTMLElement;
-	
+
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;
+		this.#styleManager.setStyle(Styles.mainCSS);
 		this.#scrollGutter = document.createElement("div");
 		this.#scrollGutter.id = EleID.MARKER_GUTTER;
 		document.body.insertAdjacentElement("afterend", this.#scrollGutter);
@@ -26,6 +32,8 @@ class TermMarker implements AbstractTermMarker {
 
 	deactivate () {
 		this.#scrollGutter.remove();
+		this.#termsStyleManager.deactivate();
+		this.#styleManager.deactivate();
 	}
 
 	insert (
@@ -33,6 +41,7 @@ class TermMarker implements AbstractTermMarker {
 		hues: ReadonlyArray<number>,
 		highlightedElements: Iterable<HTMLElement>,
 	) {
+		this.setTermsStyle(terms, hues);
 		const regexMatchTermSelector = new RegExp(`\\b${EleClass.TERM}(?:-\\w+)+\\b`);
 		const containersInfo: Array<{
 			container: HTMLElement
@@ -65,6 +74,11 @@ class TermMarker implements AbstractTermMarker {
 		}
 		this.#scrollGutter.replaceChildren(); // Removes children, since inner HTML replacement does not for some reason
 		this.#scrollGutter.innerHTML = markersHtml;
+	}
+
+	setTermsStyle (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
+		const styles = terms.map((term, i) => Styles.getTermCSS(term, i, hues, this.#termTokens));
+		this.#termsStyleManager.setStyle(styles.join(""));
 	}
 
 	raise (term: MatchTerm | null, container: HTMLElement) {

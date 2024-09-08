@@ -6,7 +6,7 @@
 
 import type { BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
-import type { ConfigBarControlsShown } from "../storage.mjs";
+import type { ConfigBarControlsShown } from "/dist/modules/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 type SelectionReturnTarget = Readonly<{

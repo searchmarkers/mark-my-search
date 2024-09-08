@@ -7,9 +7,9 @@
 import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.mjs";
 import type { Highlighter } from "/dist/modules/highlight/engine.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
-import type { AbstractTermCounter } from "/dist/modules/highlight/term-counter.mjs";
-import type { AbstractTermWalker } from "/dist/modules/highlight/term-walker.mjs";
-import type { AbstractTermMarker } from "/dist/modules/highlight/term-marker.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/tools/term-counter.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.mjs";
 import type { AbstractTreeEditEngine } from "/dist/modules/highlight/models/tree-edit.mjs";
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
@@ -113,10 +113,7 @@ class EngineManager implements AbstractEngineManager {
 	}
 
 	async setEngine (preference: Engine) {
-		const highlighting = this.#highlighting;
-		if (highlighting && this.#engineData) {
-			this.#engineData.engine.deactivate();
-		}
+		this.deactivateEngine();
 		this.#engineData = await this.constructAndLinkEngineData(compatibility.highlighting.engineToUse(preference));
 	}
 
@@ -173,9 +170,9 @@ class EngineManager implements AbstractEngineManager {
 		case "ELEMENT": {
 			const [ { ElementEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
 				import("/dist/modules/highlight/engines/element.mjs"),
-				import("/dist/modules/highlight/models/tree-edit/term-counters/term-counter.mjs"),
-				import("/dist/modules/highlight/models/tree-edit/term-walkers/term-walker.mjs"),
-				import("/dist/modules/highlight/models/tree-edit/term-markers/term-marker.mjs"),
+				import("/dist/modules/highlight/tools/term-counters/tree-edit.mjs"),
+				import("/dist/modules/highlight/tools/term-walkers/tree-edit.mjs"),
+				import("/dist/modules/highlight/tools/term-markers/tree-edit.mjs"),
 			]);
 			const engine = new ElementEngine(this.#termTokens, this.#termPatterns);
 			return {
@@ -187,9 +184,9 @@ class EngineManager implements AbstractEngineManager {
 		} case "PAINT": {
 			const [ { PaintEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
 				import("/dist/modules/highlight/engines/paint.mjs"),
-				import("/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs"),
-				import("/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs"),
-				import("/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs"),
+				import("/dist/modules/highlight/tools/term-counters/tree-cache.mjs"),
+				import("/dist/modules/highlight/tools/term-walkers/tree-cache.mjs"),
+				import("/dist/modules/highlight/tools/term-markers/tree-cache.mjs"),
 			]);
 			const engine = new PaintEngine(
 				await PaintEngine.getMethodModule(this.#paintEngineMethodClass),
@@ -204,9 +201,9 @@ class EngineManager implements AbstractEngineManager {
 		} case "HIGHLIGHT": {
 			const [ { HighlightEngine }, { TermCounter }, { TermWalker }, { TermMarker } ] = await Promise.all([
 				import("/dist/modules/highlight/engines/highlight.mjs"),
-				import("/dist/modules/highlight/models/tree-cache/term-counters/term-counter.mjs"),
-				import("/dist/modules/highlight/models/tree-cache/term-walkers/term-walker.mjs"),
-				import("/dist/modules/highlight/models/tree-cache/term-markers/term-marker.mjs"),
+				import("/dist/modules/highlight/tools/term-counters/tree-cache.mjs"),
+				import("/dist/modules/highlight/tools/term-walkers/tree-cache.mjs"),
+				import("/dist/modules/highlight/tools/term-markers/tree-cache.mjs"),
 			]);
 			const engine = new HighlightEngine(this.#termTokens, this.#termPatterns);
 			return {
@@ -219,10 +216,18 @@ class EngineManager implements AbstractEngineManager {
 	}
 
 	removeEngine () {
-		if (this.#highlighting && this.#engineData) {
-			this.#engineData.engine.deactivate();
-		}
+		this.deactivateEngine();
 		this.#engineData = null;
+	}
+
+	deactivateEngine () {
+		const engineData = this.#engineData;
+		if (!engineData) {
+			return;
+		}
+		engineData.termWalker?.deactivate();
+		engineData.termMarker?.deactivate();
+		engineData.engine.deactivate();
 	}
 
 	signalPaintEngineMethod (preference: PaintEngineMethod) {

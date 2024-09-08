@@ -4,18 +4,28 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractTermWalker } from "/dist/modules/highlight/term-walker.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.mjs";
+import { Styles } from "/dist/modules/highlight/tools/term-walker/common.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import { getTermClass } from "/dist/modules/common.mjs";
-import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass } from "/dist/modules/common.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
+import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, getTermClass } from "/dist/modules/common.mjs";
 
 class TermWalker implements AbstractTermWalker {
 	readonly #termTokens: TermTokens;
+
+	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
 	
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;
+		this.#styleManager.setStyle(Styles.mainCSS);
+	}
+
+	deactivate () {
+		this.cleanup();
+		this.#styleManager.deactivate();
 	}
 
 	step (
@@ -36,9 +46,11 @@ class TermWalker implements AbstractTermWalker {
 	}
 
 	/**
-	 * Scrolls to and focuses the next block containing an occurrence of a term in the document, from the current selection position.
-	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.
-	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumpted to.
+	 * Scrolls to and focuses the next block containing an occurrence of a term in the document,
+	 * from the current selection position.
+	 * @param reverse Indicates whether elements should be tried in reverse,
+	 * selecting the previous term as opposed to the next.
+	 * @param term A term to jump to. If unspecified, the next closest occurrence of any term is jumped to.
 	 */
 	focusNextTermJump (reverse: boolean, term: MatchTerm | null): HTMLElement | null {
 		const termSelector = term ? getTermClass(term, this.#termTokens) : undefined;

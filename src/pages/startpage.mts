@@ -6,7 +6,7 @@
 
 import * as Manifest from "/dist/modules/manifest.mjs";
 import { type Page, loadPage } from "/dist/modules/page/build.mjs";
-import { Config } from "../modules/storage.mjs";
+import { Config } from "/dist/modules/storage.mjs";
 
 /**
  * Loads the startpage content into the page.

@@ -4,19 +4,29 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractTermWalker } from "/dist/modules/highlight/term-walker.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.mjs";
+import { Styles } from "/dist/modules/highlight/tools/term-walker/common.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
-import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
+import { StyleManager } from "/dist/modules/style-manager.mjs";
+import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
+import { EleID, EleClass, getNodeFinal, isVisible, elementsPurgeClass, focusClosest } from "/dist/modules/common.mjs";
 
 type Flow = BaseFlow<false>
 
 class TermWalker implements AbstractTermWalker {
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
+	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
+
 	constructor (elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>) {
 		this.#elementFlowsMap = elementFlowsMap;
+		this.#styleManager.setStyle(Styles.mainCSS);
+	}
+
+	deactivate () {
+		this.#styleManager.deactivate();
 	}
 
 	step (

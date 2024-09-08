@@ -7,6 +7,8 @@
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractTermWalker {
+	readonly deactivate: () => void
+
 	/**
 	 * Scrolls to the next (downwards) occurrence of a term in the document. Testing begins from the current selection position.
 	 * @param reverse Indicates whether elements should be tried in reverse, selecting the previous term as opposed to the next.

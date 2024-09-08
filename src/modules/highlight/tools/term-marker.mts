@@ -7,6 +7,8 @@
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractTermMarker {
+	readonly deactivate: () => void
+
 	/**
 	 * Inserts markers in the scrollbar to indicate the scroll positions of term highlights.
 	 * @param terms Terms highlighted in the page to mark the scroll position of.
