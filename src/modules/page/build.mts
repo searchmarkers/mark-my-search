@@ -5,7 +5,7 @@
  */
 
 import * as Manifest from "/dist/modules/manifest.mjs";
-import { Bank, Config } from "../storage.mjs";
+import { Bank, Config } from "/dist/modules/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { getIdSequential } from "/dist/modules/common.mjs";
 import * as EmailJS from "/lib/email.min.js";

@@ -125,6 +125,7 @@ enum EleID {
 }
 
 enum EleClass {
+	STYLESHEET = "markmysearch--stylesheet",
 	HIGHLIGHTS_SHOWN = "mms--highlights-shown",
 	TERM = "mms--term",
 	FOCUS = "mms--focus",

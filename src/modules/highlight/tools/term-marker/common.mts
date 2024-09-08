@@ -4,26 +4,11 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import { StyleManager } from "/dist/modules/style-manager.mjs";
-import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { Z_INDEX_MAX, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 
-class Style {
-	#styleManager = new StyleManager(new HTMLStylesheet(document.head));
-
-	updateStyle (
-		terms: ReadonlyArray<MatchTerm>,
-		termTokens: TermTokens,
-		hues: ReadonlyArray<number>,
-	) {
-		/** Prevents websites from taking precedence by applying !important to every rule. */
-		const makeImportant = (styleText: string) => (
-			styleText.replace(/;/g, " !important;")
-		);
-		let style = makeImportant(`
-/* || Scroll Markers */
-
+abstract class Styles {
+	static readonly mainCSS = (`
 #${EleID.MARKER_GUTTER} {
 	& {
 		display: block;
@@ -46,39 +31,29 @@ class Style {
 	}
 }
 
-/* || Term Highlights */
-
-.${EleClass.FOCUS_CONTAINER} {
-	animation: ${AtRuleID.FLASH} 1s;
-}
-`) + (`
-/* || Transitions */
-
 @keyframes ${AtRuleID.MARKER_ON} {
 	from {} to { padding-right: 16px; };
 }
 @keyframes ${AtRuleID.MARKER_OFF} {
 	from { padding-right: 16px; } to { padding-right: 0; };
 }
-@keyframes ${AtRuleID.FLASH} {
-	from { background-color: hsl(0 0% 65% / 0.8); } to {};
-}
 `
-		);
-		for (let i = 0; i < terms.length; i++) {
-			const term = terms[i];
-			const hue = hues[i % hues.length];
-			style += makeImportant(`
-/* || Term Scroll Markers */
+	);
 
+	static getTermCSS (
+		term: MatchTerm,
+		termIndex: number,
+		hues: ReadonlyArray<number>,
+		termTokens: TermTokens,
+	): string {
+		const hue = hues[termIndex % hues.length];
+		return `
 #${EleID.MARKER_GUTTER} .${getTermClass(term, termTokens)} {
 	background: hsl(${hue} 100% 44%);
 }
 `
-			);
-		}
-		this.#styleManager.setStyle(style);
+		;
 	}
 }
 
-export { Style };
+export { Styles };

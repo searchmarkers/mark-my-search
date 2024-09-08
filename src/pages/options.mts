@@ -8,8 +8,8 @@
 //import { isWindowInFrame } from "/dist/modules/page/build.mjs";
 import type {
 	StoreImmediate, StoreList, StoreListInterface, ConfigValues, ConfigKey,
-} from "../modules/storage.mjs";
-import { StoreType, Config } from "../modules/storage.mjs";
+} from "/dist/modules/storage.mjs";
+import { StoreType, Config } from "/dist/modules/storage.mjs";
 import { compatibility, getIdSequential } from "/dist/modules/common.mjs";
 
 const isWindowInFrame = () => (

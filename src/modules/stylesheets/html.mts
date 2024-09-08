@@ -5,11 +5,14 @@
  */
 
 import type { AbstractStylesheet } from "/dist/modules/stylesheet.mjs";
+import { EleClass } from "/dist/modules/common.mjs";
 
 class HTMLStylesheet implements AbstractStylesheet {
-	readonly #stylesheet = document.createElement("style");
+	readonly #stylesheet: HTMLStyleElement;
 	
 	constructor (parent: Node) {
+		this.#stylesheet = document.createElement("style");
+		this.#stylesheet.classList.add(EleClass.STYLESHEET);
 		parent.appendChild(this.#stylesheet);
 	}
 

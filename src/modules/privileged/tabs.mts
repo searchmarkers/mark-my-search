@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import { Bank } from "../storage.mjs";
+import { Bank } from "/dist/modules/storage.mjs";
 
 /**
  * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.

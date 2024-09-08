@@ -5,14 +5,13 @@
  */
 
 /* eslint-disable indent */ // TODO remove
-import type { ConfigValues } from "./modules/storage.mjs";
+import type { ConfigValues } from "/dist/modules/storage.mjs";
 import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID } from "/dist/modules/common.mjs";
 import { type AbstractEngineManager, EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
-import { Style } from "/dist/modules/style.mjs";
 import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
 import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
 import { assert, itemsMatch } from "/dist/modules/common.mjs";
@@ -235,7 +234,6 @@ interface TermAppender<Async = true> {
 	};
 	const updateTermStatus = (term: MatchTerm) => getToolbarOrNull()?.updateTermStatus(term);
 	const highlighter: AbstractEngineManager = new EngineManager(updateTermStatus, termTokens, termPatterns);
-	const styleManager = new Style();
 	const termSetterInternal: TermSetter<false> = {
 		setTerms: termsNew => {
 			if (itemsMatch(terms, termsNew, termEquals)) {
@@ -243,7 +241,6 @@ interface TermAppender<Async = true> {
 			}
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = termsNew;
-			styleManager.updateStyle(terms, termTokens, hues);
 			updateToolbar(termsOld, terms, null, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -259,7 +256,6 @@ interface TermAppender<Async = true> {
 			} else {
 				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
 			}
-			styleManager.updateStyle(terms, termTokens, hues);
 			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
@@ -269,7 +265,6 @@ interface TermAppender<Async = true> {
 		appendTerm: term => {
 			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
 			terms = terms.concat(term);
-			styleManager.updateStyle(terms, termTokens, hues);
 			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(), commands);
 			// Give the interface a chance to redraw before performing highlighting.
 			setTimeout(() => {
