@@ -18,8 +18,6 @@ interface AbstractEngine extends Highlighter {
 
 	readonly deactivate: () => void
 
-	readonly addHighlightingUpdatedListener: (listener: Generator) => void
-
 	readonly getHighlightedElements: () => Iterable<HTMLElement>
 }
 
@@ -44,6 +42,8 @@ interface HighlightingInterface {
 	) => void
 
 	readonly endHighlighting: () => void
+
+	readonly addHighlightingUpdatedListener: (listener: () => void) => void
 }
 
 export type {

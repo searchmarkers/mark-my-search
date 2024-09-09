@@ -312,6 +312,12 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		this.refreshTermControls();
 	}
 
+	updateStatuses () {
+		for (const termControl of this.#termControls) {
+			termControl.updateStatus();
+		}
+	}
+
 	updateTermStatus (term: MatchTerm) {
 		const termToken = this.#termTokens.get(term);
 		this.#termControls.find(control => control.getTermToken() === termToken)?.updateStatus();

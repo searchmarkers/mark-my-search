@@ -61,7 +61,7 @@ interface AbstractFlowTracker extends FlowMutationObserver {
 	) => void
 
 	/** Adds a listener for changes in highlighting. */
-	readonly addHighlightingUpdatedListener: (listener: Generator) => void
+	readonly addHighlightingUpdatedListener: (listener: () => void) => void
 
 	/**
 	 * Generates highlighting information for all text flows below the given element.

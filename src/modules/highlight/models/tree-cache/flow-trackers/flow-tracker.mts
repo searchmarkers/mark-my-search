@@ -7,7 +7,7 @@
 import type { Flow, Span, AbstractFlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import { matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
-import { MatchTerm, type TermPatterns } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 import type { RContainer, AllReadonly } from "/dist/modules/common.mjs";
 
 class FlowTracker implements AbstractFlowTracker {
@@ -26,7 +26,7 @@ class FlowTracker implements AbstractFlowTracker {
 	#spansCreatedListener?: (flowOwner: HTMLElement, spansCreated: AllReadonly<Array<Span>>) => void;
 	#spansRemovedListener?: (flowOwner: HTMLElement, spansRemoved: AllReadonly<Array<Span>>) => void;
 	#nonSpanOwnerListener?: (flowOwner: HTMLElement) => void;
-	readonly #highlightingUpdatedListeners = new Set<Generator>();
+	readonly #highlightingUpdatedListeners = new Set<() => void>();
 
 	/**
 	 * 
@@ -146,7 +146,7 @@ class FlowTracker implements AbstractFlowTracker {
 			this.cacheFlowWithSpans(terms, textFlows[i]);
 		}
 		for (const listener of this.#highlightingUpdatedListeners) {
-			listener.next();
+			listener();
 		}
 	}
 
@@ -220,7 +220,7 @@ class FlowTracker implements AbstractFlowTracker {
 			this.#elementFlowsMap.clear();
 		}
 		for (const listener of this.#highlightingUpdatedListeners) {
-			listener.next();
+			listener();
 		}
 	}
 
@@ -332,7 +332,7 @@ class FlowTracker implements AbstractFlowTracker {
 		this.#nonSpanOwnerListener = listener;
 	}
 
-	addHighlightingUpdatedListener (listener: Generator) {
+	addHighlightingUpdatedListener (listener: () => void) {
 		this.#highlightingUpdatedListeners.add(listener);
 	}
 }
