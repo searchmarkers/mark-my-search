@@ -11,8 +11,9 @@ import type * as Message from "/dist/modules/messaging.d.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { EleID } from "/dist/modules/common.mjs";
-import { type AbstractEngineManager, EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
-import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
+import type { AbstractEngineManager } from "/dist/modules/highlight/engine-manager.d.mjs";
+import { EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
+import type { AbstractToolbar, ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
 import { Toolbar } from "/dist/modules/interface/toolbar.mjs";
 import { assert, itemsMatch } from "/dist/modules/common.mjs";
 

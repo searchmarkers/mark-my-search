@@ -4,8 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.d.mjs";
-import type { Highlighter } from "/dist/modules/highlight/engine.d.mjs";
+import type { AbstractEngineManager } from "/dist/modules/highlight/engine-manager.d.mjs";
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.d.mjs";
 import type { AbstractTermCounter } from "/dist/modules/highlight/tools/term-counter.d.mjs";
 import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.d.mjs";
@@ -17,22 +16,6 @@ import type { Engine, PaintEngineMethod } from "/dist/modules/common.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
 import { compatibility } from "/dist/modules/common.mjs";
-
-interface AbstractEngineManager extends Highlighter, HighlighterCounterInterface, HighlighterWalkerInterface {
-	readonly setEngine: (preference: Engine) => Promise<void>
-
-	readonly applyEngine: () => void
-
-	readonly removeEngine: () => void
-
-	readonly signalPaintEngineMethod: (preference: PaintEngineMethod) => void
-
-	readonly applyPaintEngineMethod: (preference: PaintEngineMethod) => Promise<void>
-
-	readonly setSpecialEngine: () => Promise<void>
-
-	readonly removeSpecialEngine: () => void
-}
 
 type EngineData = Readonly<{
 	engine: AbstractTreeEditEngine | AbstractTreeCacheEngine
