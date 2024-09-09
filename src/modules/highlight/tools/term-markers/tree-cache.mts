@@ -46,6 +46,7 @@ class TermMarker implements AbstractTermMarker {
 		hues: ReadonlyArray<number>,
 		highlightedElements: Iterable<HTMLElement>,
 	) {
+		this.setTermsStyle(terms, hues);
 		const termsSet = new Set(terms);
 		let markersHtml = "";
 		for (const element of highlightedElements) if (this.#elementFlowsMap.has(element)) {

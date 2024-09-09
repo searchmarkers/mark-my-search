@@ -16,7 +16,6 @@ import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs"
 import type { Engine, PaintEngineMethod } from "/dist/modules/common.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";
-import type { UpdateTermStatus } from "/dist/content.mjs";
 import { compatibility } from "/dist/modules/common.mjs";
 
 interface AbstractEngineManager extends Highlighter, HighlighterCounterInterface, HighlighterWalkerInterface {
@@ -46,7 +45,7 @@ class EngineManager implements AbstractEngineManager {
 	readonly #termTokens: TermTokens;
 	readonly #termPatterns: TermPatterns;
 
-	readonly #updateTermStatus: UpdateTermStatus;
+	readonly #highlightingUpdatedListeners = new Set<() => void>();
 
 	#highlighting: {
 		terms: ReadonlyArray<MatchTerm>
@@ -58,13 +57,11 @@ class EngineManager implements AbstractEngineManager {
 	#specialEngine: AbstractSpecialEngine | null = null;
 
 	constructor (
-		updateTermStatus: UpdateTermStatus,
 		termTokens: TermTokens,
 		termPatterns: TermPatterns,
 	) {
 		this.#termTokens = termTokens;
 		this.#termPatterns = termPatterns;
-		this.#updateTermStatus = updateTermStatus;
 	}
 
 	getTermBackgroundStyle (colorA: string, colorB: string, cycle: number): string {
@@ -154,14 +151,11 @@ class EngineManager implements AbstractEngineManager {
 				break;
 			}}
 		}
-		engine.addHighlightingUpdatedListener(requestCallFn(
-			() => {
-				for (const term of terms.current) {
-					this.#updateTermStatus(term);
-				}
-			},
-			50, 500,
-		));
+		engine.addHighlightingUpdatedListener(() => {
+			for (const listener of this.#highlightingUpdatedListeners) {
+				listener();
+			}
+		});
 		return engineData;
 	}
 
@@ -263,6 +257,10 @@ class EngineManager implements AbstractEngineManager {
 			this.#specialEngine.endHighlighting();
 		}
 		this.#specialEngine = null;
+	}
+
+	addHighlightingUpdatedListener (listener: () => void) {
+		this.#highlightingUpdatedListeners.add(listener);
 	}
 }
 

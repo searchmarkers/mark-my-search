@@ -25,6 +25,8 @@ class ElementEngine implements AbstractTreeEditEngine {
 
 	readonly #elementsJustHighlighted = new Set<HTMLElement>();
 
+	readonly #highlightingUpdatedListeners = new Set<() => void>();
+
 	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
 	readonly #termStyleManagerMap = new Map<MatchTerm, StyleManager<Record<never, never>>>();
 
@@ -106,8 +108,8 @@ ${HIGHLIGHT_TAG} {
 					highlightElementsThrottled();
 				}
 				//mutationUpdates.observe();
-				for (const listener of this.highlightingUpdatedListeners) {
-					listener.next();
+				for (const listener of this.#highlightingUpdatedListeners) {
+					listener();
 				}
 			});
 			this.#flowMutations = {
@@ -215,10 +217,8 @@ ${HIGHLIGHT_TAG} {
 		);
 	}
 
-	readonly highlightingUpdatedListeners = new Set<Generator>();
-
-	addHighlightingUpdatedListener (listener: Generator) {
-		this.highlightingUpdatedListeners.add(listener);
+	addHighlightingUpdatedListener (listener: () => void) {
+		this.#highlightingUpdatedListeners.add(listener);
 	}
 
 	/**
@@ -400,8 +400,8 @@ ${HIGHLIGHT_TAG} {
 					highlightInBlock(terms, nodeItems);
 				}
 			}
-			for (const listener of this.highlightingUpdatedListeners) {
-				listener.next();
+			for (const listener of this.#highlightingUpdatedListeners) {
+				listener();
 			}
 		};
 	})();

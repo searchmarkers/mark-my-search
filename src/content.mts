@@ -232,8 +232,10 @@ interface TermAppender<Async = true> {
 			diacritics: false,
 		},
 	};
-	const updateTermStatus = (term: MatchTerm) => getToolbarOrNull()?.updateTermStatus(term);
-	const highlighter: AbstractEngineManager = new EngineManager(updateTermStatus, termTokens, termPatterns);
+	const highlighter: AbstractEngineManager = new EngineManager(termTokens, termPatterns);
+	highlighter.addHighlightingUpdatedListener(() => {
+		getToolbarOrNull()?.updateStatuses();
+	});
 	const termSetterInternal: TermSetter<false> = {
 		setTerms: termsNew => {
 			if (itemsMatch(terms, termsNew, termEquals)) {

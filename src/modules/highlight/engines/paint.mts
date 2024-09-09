@@ -304,7 +304,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		return this.#elementHighlightingIdMap.keys();
 	}
 
-	addHighlightingUpdatedListener (listener: Generator) {
+	addHighlightingUpdatedListener (listener: () => void) {
 		this.#flowTracker.addHighlightingUpdatedListener(listener);
 	}
 

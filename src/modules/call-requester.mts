@@ -11,11 +11,11 @@
  * @param waitDuration Time to wait after the last request, before fulfilling it.
  * @param reschedulingDelayMax Maximum total delay time between requests and fulfillment.
  */
-const requestCallFn = function* (
+const requestCallFn = (
 	call: () => void,
 	waitDuration: number,
 	reschedulingDelayMax: number,
-) {
+): (() => void) => {
 	const reschedulingRequestCountMargin = 1;
 	let timeRequestAcceptedLast = 0;
 	let requestCount = 0;
@@ -31,15 +31,14 @@ const requestCallFn = function* (
 			requestCount = 0;
 			call();
 		}, waitDuration + 20); // Arbitrary small amount added to account for lag (preventing lost updates).
-	while (true) {
+	return () => {
 		requestCount++;
 		const dateMs = Date.now();
 		if (dateMs > timeRequestAcceptedLast + waitDuration) {
 			timeRequestAcceptedLast = dateMs;
 			scheduleRefresh();
 		}
-		yield;
-	}
+	};
 };
 
 export { requestCallFn };

@@ -28,7 +28,13 @@ interface AbstractToolbar {
 	readonly removeTerm: (term: MatchTerm | number) => void
 
 	/**
-	 * Updates the look of the control to reflect whether or not its term currently occurs within the document.
+	 * Updates the look of every term control, to reflect whether their terms currently occur within the document.
+	 */
+	readonly updateStatuses: () => void
+
+	/**
+	 * Updates the look of a term control, to reflect whether its term currently occurs within the document.
+	 * @param term The control's term.
 	 */
 	readonly updateTermStatus: (term: MatchTerm) => void
 

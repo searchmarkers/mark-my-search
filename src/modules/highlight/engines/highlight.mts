@@ -8,7 +8,7 @@ import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tre
 import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-trackers/flow-tracker.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
-import { MatchTerm, type TermTokens, type TermPatterns } from "/dist/modules/match-term.mjs";
+import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import { EleID, EleClass, createContainer, type AllReadonly } from "/dist/modules/common.mjs";
@@ -31,8 +31,6 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
 
 	readonly #highlights = new ExtendedHighlightRegistry();
-
-	readonly #highlightingUpdatedListeners = new Set<Generator>();
 
 	readonly #termStyleManagerMap = new Map<MatchTerm, StyleManager<Record<never, never>>>();
 
@@ -162,8 +160,8 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		return this.#elementFlowsMap.keys();
 	}
 
-	addHighlightingUpdatedListener (listener: Generator) {
-		this.#highlightingUpdatedListeners.add(listener);
+	addHighlightingUpdatedListener (listener: () => void) {
+		this.#flowTracker.addHighlightingUpdatedListener(listener);
 	}
 }
 
