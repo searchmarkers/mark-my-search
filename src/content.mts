@@ -13,7 +13,7 @@ import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from 
 import { EleID } from "/dist/modules/common.mjs";
 import { type AbstractEngineManager, EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
 import { type AbstractToolbar, type ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
-import { Toolbar } from "/dist/modules/interface/toolbars/toolbar.mjs";
+import { Toolbar } from "/dist/modules/interface/toolbar.mjs";
 import { assert, itemsMatch } from "/dist/modules/common.mjs";
 
 type GetToolbar<CreateIfNull extends boolean> = (CreateIfNull extends true
