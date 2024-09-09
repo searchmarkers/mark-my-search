@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
+import type { ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
 import { EleClass, getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 

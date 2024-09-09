@@ -5,7 +5,7 @@
  */
 
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.d.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 interface AbstractMethod {

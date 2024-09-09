@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type * as Message from "/dist/modules/messaging.mjs";
+import type * as Message from "/dist/modules/messaging.d.mjs";
 import { log } from "/dist/modules/common.mjs";
 
 // TODO document

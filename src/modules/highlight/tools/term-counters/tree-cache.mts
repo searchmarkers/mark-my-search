@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractTermCounter } from "/dist/modules/highlight/tools/term-counter.mjs";
+import type { AbstractTermCounter } from "/dist/modules/highlight/tools/term-counter.d.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";

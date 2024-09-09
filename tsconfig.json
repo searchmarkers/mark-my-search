@@ -3,7 +3,6 @@
 		"outDir": "dist",
 		"target": "ES2022",
 		"module": "ES2022",
-		"declaration": true,
 		"alwaysStrict": true,
 		"strictNullChecks": true,
 		"strictBindCallApply": true,
@@ -12,6 +11,7 @@
 		//"noImplicitAny": true,
 		"noImplicitThis": true,
 		"useUnknownInCatchVariables": true,
+		// Prevent `import` (except `import type`) statements from being dropped, in case the import has side-effects.
 		"verbatimModuleSyntax": true,
 		"paths": {
 			"/dist/*": [ "./src/*" ],

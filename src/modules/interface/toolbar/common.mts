@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { ControlButtonName } from "/dist/modules/interface/toolbar.mjs";
+import type { ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
 import { type CommandInfo, parseCommand } from "/dist/modules/commands.mjs";
 import type { MatchMode } from "/dist/modules/match-term.mjs";
 import { EleID as CommonEleID } from "/dist/modules/common.mjs";

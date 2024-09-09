@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.mjs";
+import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.d.mjs";
 import { Styles } from "/dist/modules/highlight/tools/term-marker/common.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";

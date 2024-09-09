@@ -5,7 +5,7 @@
  */
 
 import type { Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.d.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import type { TermTokens } from "/dist/modules/match-term.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
