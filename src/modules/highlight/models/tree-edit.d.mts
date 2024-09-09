@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractEngine } from "/dist/modules/highlight/engine.mjs";
+import type { AbstractEngine } from "/dist/modules/highlight/engine.d.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 type Model = "tree-edit"

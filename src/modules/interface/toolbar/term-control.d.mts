@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { SelectionReturnTarget } from "/dist/modules/interface/toolbar.mjs";
+import type { SelectionReturnTarget } from "/dist/modules/interface/toolbar.d.mjs";
 import type { ControlFocusArea } from "/dist/modules/interface/toolbar/common.mjs";
 
 interface TermAbstractControl extends TermControlInputInterface, TermControlOptionListInterface {

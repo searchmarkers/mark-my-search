@@ -4,10 +4,10 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.d.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
-import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.mjs";
-import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
+import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.d.mjs";
+import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.d.mjs";
 import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-trackers/flow-tracker.mjs";
 import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
 import * as TermCSS from "/dist/modules/highlight/term-css.mjs";

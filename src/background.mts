@@ -8,7 +8,7 @@ import "/dist/modules/namespace/normalize.mjs";
 import type { ConfigURLFilters, ResearchInstance, SearchSites, URLFilter } from "/dist/modules/storage.mjs";
 import { Bank, Config, configInitialize } from "/dist/modules/storage.mjs";
 import { parseCommand } from "/dist/modules/commands.mjs";
-import type * as Message from "/dist/modules/messaging.mjs";
+import type * as Message from "/dist/modules/messaging.d.mjs";
 import { sendTabMessage } from "/dist/modules/messaging/tab.mjs";
 import { MatchTerm } from "/dist/modules/match-term.mjs";
 import { SearchSite } from "/dist/modules/search-site.mjs";

@@ -4,15 +4,15 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.mjs";
-import type { SelectionReturnTarget, ToolbarTermControlInterface } from "/dist/modules/interface/toolbar.mjs";
+import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.d.mjs";
+import type { SelectionReturnTarget, ToolbarTermControlInterface } from "/dist/modules/interface/toolbar.d.mjs";
 import { TermInput } from "/dist/modules/interface/toolbar/term-control/term-input.mjs";
 import { TermOptionList } from "/dist/modules/interface/toolbar/term-control/term-option-list.mjs";
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { EleClass, applyMatchModeToClassList, getTermCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
 import { getTermClass } from "/dist/modules/common.mjs";
-import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.mjs";
+import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.d.mjs";
 import type { TermReplacer, ControlsInfo } from "/dist/content.mjs";
 
 class TermReplaceControl implements TermAbstractControl {

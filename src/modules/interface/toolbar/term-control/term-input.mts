@@ -4,8 +4,8 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
-import type { SelectionReturnTarget, ToolbarTermInputInterface } from "/dist/modules/interface/toolbar.mjs";
+import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.d.mjs";
+import type { SelectionReturnTarget, ToolbarTermInputInterface } from "/dist/modules/interface/toolbar.d.mjs";
 import { EleID, EleClass } from "/dist/modules/interface/toolbar/common.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { EleID as CommonEleID } from "/dist/modules/common.mjs";

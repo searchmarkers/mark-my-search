@@ -4,8 +4,8 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.mjs";
-import type { ToolbarTermControlInterface } from "/dist/modules/interface/toolbar.mjs";
+import type { TermAbstractControl } from "/dist/modules/interface/toolbar/term-control.d.mjs";
+import type { ToolbarTermControlInterface } from "/dist/modules/interface/toolbar.d.mjs";
 import { TermInput } from "/dist/modules/interface/toolbar/term-control/term-input.mjs";
 import { TermOptionList } from "/dist/modules/interface/toolbar/term-control/term-option-list.mjs";
 import { Control } from "/dist/modules/interface/toolbar/control.mjs";

@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractStylesheet } from "/dist/modules/stylesheet.mjs";
+import type { AbstractStylesheet } from "/dist/modules/stylesheet.d.mjs";
 
 // TODO backend implementation
 

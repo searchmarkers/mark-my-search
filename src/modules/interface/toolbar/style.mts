@@ -8,7 +8,7 @@ import { EleID, EleClass, getControlClass, getControlPadClass } from "/dist/modu
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.mjs";
+import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.d.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
 import { Z_INDEX_MAX, getTermClass } from "/dist/modules/common.mjs";
 

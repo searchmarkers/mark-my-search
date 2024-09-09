@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.mjs";
+import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.d.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
 import { type BaseFlow, type BaseSpan, matchInText } from "/dist/modules/highlight/matcher.mjs";

@@ -4,8 +4,8 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.mjs";
-import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.mjs";
+import type { TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.d.mjs";
+import type { ToolbarTermOptionListInterface } from "/dist/modules/interface/toolbar.d.mjs";
 import {
 	EleClass, getMatchModeOptionClass, getInputIdSequential, passKeyEvent,
 } from "/dist/modules/interface/toolbar/common.mjs";

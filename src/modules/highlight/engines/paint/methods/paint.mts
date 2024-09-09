@@ -4,9 +4,9 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.mjs";
+import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.d.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.mjs";
+import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.d.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";

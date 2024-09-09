@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.mjs";
+import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.d.mjs";
 import { Styles } from "/dist/modules/highlight/tools/term-walker/common.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
