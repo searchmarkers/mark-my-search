@@ -6,9 +6,9 @@
 
 import type { AbstractTreeEditEngine } from "/dist/modules/highlight/models/tree-edit.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
-import type { FlowMutationObserver } from "/dist/modules/highlight/flow-mutation-observer.d.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
+import type { FlowMutationObserver } from "/dist/modules/highlight/common/flow-mutation-observer.d.mjs";
+import { highlightTags } from "/dist/modules/highlight/common/highlight-tags.mjs";
+import * as TermCSS from "/dist/modules/highlight/common/term-css.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";

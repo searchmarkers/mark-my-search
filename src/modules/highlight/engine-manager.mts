@@ -11,7 +11,7 @@ import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walk
 import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.d.mjs";
 import type { AbstractTreeEditEngine } from "/dist/modules/highlight/models/tree-edit.mjs";
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.d.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
+import { getContainerBlock } from "/dist/modules/highlight/common/container-blocks.mjs";
 import type { Engine, PaintEngineMethod } from "/dist/modules/common.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { requestCallFn } from "/dist/modules/call-requester.mjs";

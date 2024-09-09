@@ -5,8 +5,8 @@
  */
 
 import type { Flow, Span, AbstractFlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-tracker.d.mjs";
-import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
-import { matchInTextFlow } from "/dist/modules/highlight/matcher.mjs";
+import { highlightTags } from "/dist/modules/highlight/common/highlight-tags.mjs";
+import { matchInTextFlow } from "/dist/modules/highlight/common/matcher.mjs";
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
 import type { RContainer, AllReadonly } from "/dist/modules/common.mjs";
 

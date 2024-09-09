@@ -6,7 +6,7 @@
 
 import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.d.mjs";
 import { Styles } from "/dist/modules/highlight/tools/term-walker/common.mjs";
-import type { BaseFlow } from "/dist/modules/highlight/matcher.mjs";
+import type { BaseFlow } from "/dist/modules/highlight/common/matcher.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
