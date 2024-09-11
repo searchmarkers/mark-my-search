@@ -4,21 +4,8 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
+import type { BaseSpan } from "/dist/modules/highlight/common/matching.d.mjs";
 import type { MatchTerm, TermPatterns } from "/dist/modules/match-term.mjs";
-
-type BaseFlow<WithNode extends boolean> = {
-	text: string
-	spans: Array<BaseSpan<WithNode>>
-}
-
-type BaseSpan<WithNode extends boolean> = {
-	term: MatchTerm
-	start: number
-	end: number
-} & (WithNode extends true
-	? { node: Text }
-	: Record<never, never>
-)
 
 const matchInText = (
 	terms: ReadonlyArray<MatchTerm>,
@@ -79,7 +66,4 @@ const matchInTextFlow = (
 	return spans;
 };
 
-export {
-	type BaseFlow, type BaseSpan,
-	matchInText, matchInTextFlow,
-};
+export { matchInText, matchInTextFlow };
