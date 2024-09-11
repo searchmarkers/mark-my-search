@@ -167,10 +167,12 @@ class FlowTracker implements AbstractFlowTracker {
 			const flows = this.#elementFlowsMap.get(element);
 			if (flows) {
 				this.#elementFlowsMap.delete(element);
-				if (this.#spansRemovedListener)
+				if (this.#spansRemovedListener) {
 					this.#spansRemovedListener(element, flows.flatMap(flow => flow.spans));
-				if (this.#nonSpanOwnerListener)
+				}
+				if (this.#nonSpanOwnerListener) {
 					this.#nonSpanOwnerListener(element);
+				}
 			}
 		// eslint-disable-next-line no-cond-assign
 		} while (element = walker.nextNode());
@@ -196,25 +198,28 @@ class FlowTracker implements AbstractFlowTracker {
 				});
 				if (flowsNew.length > 0) {
 					this.#elementFlowsMap.set(element, flowsNew);
-					if (spansRemoved.length > 0) {
-						if (this.#spansRemovedListener)
-							this.#spansRemovedListener(element, spansRemoved);
+					if (this.#spansRemovedListener && spansRemoved.length > 0) {
+						this.#spansRemovedListener(element, spansRemoved);
 					}
 				} else {
 					this.#elementFlowsMap.delete(element);
-					if (this.#spansRemovedListener)
+					if (this.#spansRemovedListener) {
 						this.#spansRemovedListener(element, spansRemoved);
-					if (this.#nonSpanOwnerListener)
+					}
+					if (this.#nonSpanOwnerListener) {
 						this.#nonSpanOwnerListener(element);
+					}
 				}
 			}
 		} else {
 			if (this.#spansRemovedListener || this.#nonSpanOwnerListener) {
 				for (const [ element, flows ] of this.#elementFlowsMap) {
-					if (this.#spansRemovedListener)
+					if (this.#spansRemovedListener) {
 						this.#spansRemovedListener(element, flows.flatMap(flow => flow.spans));
-					if (this.#nonSpanOwnerListener)
+					}
+					if (this.#nonSpanOwnerListener) {
 						this.#nonSpanOwnerListener(element);
+					}
 				}
 			}
 			this.#elementFlowsMap.clear();
@@ -284,12 +289,21 @@ class FlowTracker implements AbstractFlowTracker {
 			this.#elementFlowsMap.set(ancestor, flows);
 		}
 		flows.push({ text, spans: spansCreated });
-		if (flows.length === 1) {
-			if (this.#newSpanOwnerListener)
+		if (this.#newSpanOwnerListener) {
+			if (
+				// If: the new flow contains spans
+				spansCreated.length > 0
+				// AND the total number of spans equals the number of spans in the new flow
+				&& (flows.reduce((previous, current) => previous + current.spans.length, 0)
+					=== spansCreated.length)
+				// So: the element just became a span owner
+			) {
 				this.#newSpanOwnerListener(ancestor);
+			}
 		}
-		if (this.#spansCreatedListener)
+		if (this.#spansCreatedListener && spansCreated.length > 0) {
 			this.#spansCreatedListener(ancestor, spansCreated);
+		}
 	}
 
 	getAncestorCommon (nodeA_ancestor: HTMLElement, nodeB: Node): HTMLElement | null {
