@@ -12,7 +12,7 @@ import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
-type TermSelectorStyles = Record<string, {
+type TermTokenStyles = Record<string, {
 	hue: number
 	cycle: number
 }>
@@ -49,7 +49,7 @@ class PaintMethod implements AbstractMethod {
 	endHighlighting () {}
 
 	getTermsCSS (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
-		const styles: TermSelectorStyles = {};
+		const styles: TermTokenStyles = {};
 		for (let i = 0; i < terms.length; i++) {
 			styles[this.#termTokens.get(terms[i])] = {
 				hue: hues[i % hues.length],
@@ -69,7 +69,8 @@ class PaintMethod implements AbstractMethod {
 		--markmysearch-styles: unset;
 		--markmysearch-boxes: unset;
 	}
-}`
+}
+`
 		);
 	}
 
@@ -100,4 +101,7 @@ class PaintMethod implements AbstractMethod {
 	}
 }
 
-export { type TermSelectorStyles, PaintMethod };
+export {
+	type TermTokenStyles,
+	PaintMethod,
+};

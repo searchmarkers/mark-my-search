@@ -74,9 +74,12 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		this.#termTokens = termTokens;
 		this.#flowTracker = new FlowTracker(this.terms, termPatterns);
 		this.#flowTracker.setNewSpanOwnerListener(flowOwner => {
+			if (this.#method.highlightables) {
+				flowOwner = this.#method.highlightables.findHighlightableAncestor(flowOwner);
+			}
 			this.observeVisibilityChangesFor(flowOwner);
 			if (!this.#elementHighlightingIdMap.has(flowOwner)) {
-				const id = highlightingId.next().value;
+				const id = highlightingIds.next().value;
 				this.#elementHighlightingIdMap.set(flowOwner, id);
 				// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
 				// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
@@ -89,6 +92,9 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 			}
 		});
 		this.#flowTracker.setNonSpanOwnerListener(flowOwner => {
+			if (this.#method.highlightables) {
+				flowOwner = this.#method.highlightables.findHighlightableAncestor(flowOwner);
+			}
 			// TODO this is done for consistency with the past behaviour; but is it right/necessary?
 			this.#elementHighlightingIdMap.delete(flowOwner);
 			this.#elementStyleRuleMap.delete(flowOwner);
@@ -161,7 +167,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 				visibilityObserver.disconnect();
 			};
 		}
-		const highlightingId = (function* () {
+		const highlightingIds = (function* () {
 			let i = 0;
 			while (true) {
 				yield i++;
