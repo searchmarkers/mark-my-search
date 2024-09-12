@@ -54,7 +54,6 @@
 		{
 			"resources": [
 				"/icons/*.svg",
-				"/dist/paint.js",
 				"/dist/content.mjs",
 				"/dist/modules/*.mjs"
 			],
