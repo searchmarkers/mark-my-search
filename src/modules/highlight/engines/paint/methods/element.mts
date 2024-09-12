@@ -7,7 +7,7 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.d.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import type { HighlightingStyleObserver, Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import * as TermCSS from "/dist/modules/highlight/term-css.mjs";
+import TermCSS from "/dist/modules/highlight/common/term-css.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";

@@ -4,8 +4,8 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { FlowMutationObserver } from "/dist/modules/highlight/flow-mutation-observer.d.mjs";
-import type { BaseFlow, BaseSpan } from "/dist/modules/highlight/matcher.mjs";
+import type { FlowMutationObserver } from "/dist/modules/highlight/common/flow-mutations.d.mjs";
+import type { BaseFlow, BaseSpan } from "/dist/modules/highlight/common/matching.d.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
 

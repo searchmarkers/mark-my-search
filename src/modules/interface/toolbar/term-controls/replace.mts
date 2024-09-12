@@ -12,7 +12,9 @@ import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/
 import { EleClass, applyMatchModeToClassList, getTermCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
 import { getTermClass } from "/dist/modules/common.mjs";
-import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.d.mjs";
+import type {
+	HighlighterCounterInterface, HighlighterWalkerInterface,
+} from "/dist/modules/highlight/engine-manager.d.mjs";
 import type { TermReplacer, ControlsInfo } from "/dist/content.mjs";
 
 class TermReplaceControl implements TermAbstractControl {

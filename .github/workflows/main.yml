@@ -34,7 +34,7 @@ jobs:
         run: |
           git clone https://user:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY
           cd ${{ env.REPO_NAME }}
-          version=$( cat manifest/firefox.json | jq --raw-output '.version' )
+          version=$( cat platform/firefox/manifest.json | jq --raw-output '.version' )
           tag_name=v$version
           git config user.name "searchmarkers"
           git config user.email "bot@searchmarkers.github.io"

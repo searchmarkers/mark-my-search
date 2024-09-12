@@ -27,7 +27,9 @@ class PaintMethod implements AbstractMethod {
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;
 		if (!PaintMethod.#paintModuleAdded) {
-			CSS.paintWorklet?.addModule(chrome.runtime.getURL("/dist/paint.js"));
+			CSS.paintWorklet?.addModule(chrome.runtime.getURL(
+				"/dist/modules/highlight/engines/paint/methods/paint/paint-worklet.mjs",
+			));
 			PaintMethod.#paintModuleAdded = true;
 		}
 	}

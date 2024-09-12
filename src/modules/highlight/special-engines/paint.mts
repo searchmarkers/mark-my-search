@@ -7,7 +7,8 @@
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.d.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
-import { type BaseFlow, type BaseSpan, matchInText } from "/dist/modules/highlight/matcher.mjs";
+import { type BaseFlow, type BaseSpan } from "/dist/modules/highlight/common/matching.d.mjs";
+import { matchInText } from "/dist/modules/highlight/common/matching.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";

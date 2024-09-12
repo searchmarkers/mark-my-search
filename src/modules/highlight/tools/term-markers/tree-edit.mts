@@ -6,7 +6,7 @@
 
 import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.d.mjs";
 import { Styles } from "/dist/modules/highlight/tools/term-marker/common.mjs";
-import { getContainerBlock } from "/dist/modules/highlight/container-blocks.mjs";
+import { getContainerBlock } from "/dist/modules/highlight/common/container-blocks.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";

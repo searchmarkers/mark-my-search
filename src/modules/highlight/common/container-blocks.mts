@@ -4,7 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import { highlightTags } from "/dist/modules/highlight/highlight-tags.mjs";
+import { highlightTags } from "/dist/modules/highlight/common/highlight-tags.mjs";
 
 /**
  * A selector string for the container block of an element.

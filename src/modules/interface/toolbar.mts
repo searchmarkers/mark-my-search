@@ -11,7 +11,9 @@ import type {
 } from "/dist/modules/interface/toolbar.d.mjs";
 import { ToolbarStyle } from "/dist/modules/interface/toolbar/style.mjs";
 import { Control, type ControlButtonInfo } from "/dist/modules/interface/toolbar/control.mjs";
-import type { TermAbstractControl, TermControlOptionListInterface } from "/dist/modules/interface/toolbar/term-control.d.mjs";
+import type {
+	TermAbstractControl, TermControlOptionListInterface,
+} from "/dist/modules/interface/toolbar/term-control.d.mjs";
 import { TermReplaceControl } from "/dist/modules/interface/toolbar/term-controls/replace.mjs";
 import { TermAppendControl } from "/dist/modules/interface/toolbar/term-controls/append.mjs";
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
@@ -20,7 +22,9 @@ import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID as CommonEleID, EleClass as CommonEleClass } from "/dist/modules/common.mjs";
 import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.d.mjs";
-import type { HighlighterCounterInterface, HighlighterWalkerInterface } from "/dist/modules/highlight/model.d.mjs";
+import type {
+	HighlighterCounterInterface, HighlighterWalkerInterface,
+} from "/dist/modules/highlight/engine-manager.d.mjs";
 import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
 
 enum ToolbarSection {
