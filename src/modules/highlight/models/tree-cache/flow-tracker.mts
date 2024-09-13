@@ -169,6 +169,105 @@ class FlowTracker implements AbstractFlowTracker {
 	}
 
 	/**
+	 * We assume that the highlighting information is fully correct for the old array of terms
+	 * (i.e. it hasn't become malformed by the document changing shape).
+	 * The only work to be done here is changing *which* terms are highlighted in the element-flows-spans cache.
+	 * @param terms Terms to find and highlight.
+	 * @param textFlow Consecutive text nodes to highlight inside.
+	 */
+	cacheFlowWithSpans (terms: ReadonlyArray<MatchTerm>, textFlow: ReadonlyArray<Text>) {
+		const text = textFlow.map(node => node.textContent).join("");
+		const flowOwner = this.getTextAncestorCommon(
+			textFlow[0].parentElement!,
+			textFlow[textFlow.length - 1],
+		)!;
+		// Match the terms inside the flow to produce highlighting box info.
+		const spansMatched = matchInTextFlow(terms, this.#termPatterns, text, textFlow);
+		let flows = this.#elementFlowsMap.get(flowOwner);
+		if (!flows) {
+			flows = [];
+			this.#elementFlowsMap.set(flowOwner, flows);
+		}
+		const previousOwnedSpanCount = flows.reduce(
+			(previous, current) => previous + current.spans.length, 0,
+		);
+		const flowIndex = flows.findIndex(flow => flow.firstNode === textFlow[0]);
+		const flowPreviousSpans = flowIndex !== -1 ? flows[flowIndex].spans : undefined;
+		if (flowIndex !== -1) {
+			if (spansMatched.length > 0) {
+				// Assumption: the text property is the same,
+				// as the document hasn't changed shape here since last being highlighted.
+				flows[flowIndex].spans = spansMatched;
+			} else {
+				flows.splice(flowIndex, 1);
+			}
+		} else if (spansMatched.length > 0) {
+			flows.push({
+				text,
+				spans: spansMatched,
+				firstNode: textFlow[0],
+			});
+		}
+		if (this.#newSpanOwnerListener && previousOwnedSpanCount === 0 && spansMatched.length > 0) {
+			this.#newSpanOwnerListener(flowOwner);
+		} else if (this.#nonSpanOwnerListener
+			&& previousOwnedSpanCount > 0
+			&& previousOwnedSpanCount === flowPreviousSpans?.length
+			&& spansMatched.length === 0
+		) {
+			this.#nonSpanOwnerListener(flowOwner);
+		}
+		if (this.#spansRemovedListener && flowPreviousSpans && flowPreviousSpans.length > 0) {
+			this.#spansRemovedListener(flowOwner, flowPreviousSpans);
+		}
+		if (this.#spansCreatedListener && spansMatched.length > 0) {
+			this.#spansCreatedListener(flowOwner, spansMatched);
+		}
+	}
+
+	/**
+	 * @param terms The terms for which to remove highlighting.
+	 * @param fireUpdatedListeners Whether to fire listeners of {@link addHighlightingUpdatedListener}.
+	 */
+	removeHighlightSpansFor (
+		terms: ReadonlyArray<MatchTerm>,
+		fireUpdatedListeners = true,
+	) {
+		for (const [ element, flows ] of this.#elementFlowsMap) {
+			const spansRemoved: Array<Span> = [];
+			const flowsNew = flows.filter(flow => {
+				flow.spans = flow.spans.filter(span => {
+					if (terms.includes(span.term)) {
+						spansRemoved.push(span);
+						return false;
+					}
+					return true;
+				});
+				return flow.spans.length > 0;
+			});
+			if (flowsNew.length > 0) {
+				this.#elementFlowsMap.set(element, flowsNew);
+				if (this.#spansRemovedListener && spansRemoved.length > 0) {
+					this.#spansRemovedListener(element, spansRemoved);
+				}
+			} else {
+				this.#elementFlowsMap.delete(element);
+				if (this.#spansRemovedListener) {
+					this.#spansRemovedListener(element, spansRemoved);
+				}
+				if (this.#nonSpanOwnerListener) {
+					this.#nonSpanOwnerListener(element);
+				}
+			}
+		}
+		if (fireUpdatedListeners) {
+			for (const listener of this.#highlightingUpdatedListeners) {
+				listener();
+			}
+		}
+	}
+
+	/**
 	 * Removes highlighting from all descendant elements (inclusive).
 	 * @param root The element below which to remove highlighting.
 	 */
@@ -227,48 +326,6 @@ class FlowTracker implements AbstractFlowTracker {
 	}
 
 	/**
-	 * @param terms The terms for which to remove highlighting.
-	 * @param fireUpdatedListeners Whether to fire listeners of {@link addHighlightingUpdatedListener}.
-	 */
-	removeHighlightSpansFor (
-		terms: ReadonlyArray<MatchTerm>,
-		fireUpdatedListeners = true,
-	) {
-		for (const [ element, flows ] of this.#elementFlowsMap) {
-			const spansRemoved: Array<Span> = [];
-			const flowsNew = flows.filter(flow => {
-				flow.spans = flow.spans.filter(span => {
-					if (terms.includes(span.term)) {
-						spansRemoved.push(span);
-						return false;
-					}
-					return true;
-				});
-				return flow.spans.length > 0;
-			});
-			if (flowsNew.length > 0) {
-				this.#elementFlowsMap.set(element, flowsNew);
-				if (this.#spansRemovedListener && spansRemoved.length > 0) {
-					this.#spansRemovedListener(element, spansRemoved);
-				}
-			} else {
-				this.#elementFlowsMap.delete(element);
-				if (this.#spansRemovedListener) {
-					this.#spansRemovedListener(element, spansRemoved);
-				}
-				if (this.#nonSpanOwnerListener) {
-					this.#nonSpanOwnerListener(element);
-				}
-			}
-		}
-		if (fireUpdatedListeners) {
-			for (const listener of this.#highlightingUpdatedListeners) {
-				listener();
-			}
-		}
-	}
-
-	/**
 	 * Gets an array of all flows from the node provided to its final sibling.
 	 * where a *flow* is an array of {@link Text} considered to flow into each other in the document.
 	 * @param node The node from which flows are collected, up to its last descendant.
@@ -309,63 +366,6 @@ class FlowTracker implements AbstractFlowTracker {
 			}
 			node = node.nextSibling!; // May be null (checked by loop condition).
 		} while (node);
-	}
-
-	/**
-	 * We assume that the highlighting information is fully correct for the old array of terms
-	 * (i.e. it hasn't become malformed by the document changing shape).
-	 * The only work to be done here is changing *which* terms are highlighted in the element-flows-spans cache.
-	 * @param terms Terms to find and highlight.
-	 * @param textFlow Consecutive text nodes to highlight inside.
-	 */
-	cacheFlowWithSpans (terms: ReadonlyArray<MatchTerm>, textFlow: ReadonlyArray<Text>) {
-		const text = textFlow.map(node => node.textContent).join("");
-		const flowOwner = this.getTextAncestorCommon(
-			textFlow[0].parentElement!,
-			textFlow[textFlow.length - 1],
-		)!;
-		// Match the terms inside the flow to produce highlighting box info.
-		const spansMatched = matchInTextFlow(terms, this.#termPatterns, text, textFlow);
-		let flows = this.#elementFlowsMap.get(flowOwner);
-		if (!flows) {
-			flows = [];
-			this.#elementFlowsMap.set(flowOwner, flows);
-		}
-		const previousOwnedSpanCount = flows.reduce(
-			(previous, current) => previous + current.spans.length, 0,
-		);
-		const flowIndex = flows.findIndex(flow => flow.firstNode === textFlow[0]);
-		const flowPreviousSpans = flowIndex !== -1 ? flows[flowIndex].spans : undefined;
-		if (flowIndex !== -1) {
-			if (spansMatched.length > 0) {
-				// Assumption: the text property is the same,
-				// as the document hasn't changed shape here since last being highlighted.
-				flows[flowIndex].spans = spansMatched;
-			} else {
-				flows.splice(flowIndex, 1);
-			}
-		} else if (spansMatched.length > 0) {
-			flows.push({
-				text,
-				spans: spansMatched,
-				firstNode: textFlow[0],
-			});
-		}
-		if (this.#newSpanOwnerListener && previousOwnedSpanCount === 0 && spansMatched.length > 0) {
-			this.#newSpanOwnerListener(flowOwner);
-		} else if (this.#nonSpanOwnerListener
-			&& previousOwnedSpanCount > 0
-			&& previousOwnedSpanCount === flowPreviousSpans?.length
-			&& spansMatched.length === 0
-		) {
-			this.#nonSpanOwnerListener(flowOwner);
-		}
-		if (this.#spansRemovedListener && flowPreviousSpans && flowPreviousSpans.length > 0) {
-			this.#spansRemovedListener(flowOwner, flowPreviousSpans);
-		}
-		if (this.#spansCreatedListener && spansMatched.length > 0) {
-			this.#spansCreatedListener(flowOwner, spansMatched);
-		}
 	}
 
 	getTextAncestorCommon (textA_ancestor: HTMLElement, textB: Text): HTMLElement | null {
