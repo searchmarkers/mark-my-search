@@ -237,7 +237,7 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		pendingCount++;
 		await chrome.scripting.executeScript({
 			target: { tabId: tab.id as number },
-			files: [ "/dist/content-entry.js" ],
+			files: [ "/dist/entrypoints/content.js" ],
 		}).catch(() => chrome.runtime.lastError); // Read `lastError` to suppress injection errors.
 		pendingCount--;
 		if (pendingCount === 0) resolve();
