@@ -7,6 +7,7 @@
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.d.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { Highlightables } from "/dist/modules/highlight/engines/paint/highlightables.d.mjs";
+import { getAttributeName, highlightingIdAttr } from "/dist/modules/highlight/engines/paint/common.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
@@ -16,6 +17,8 @@ type TermTokenStyles = Record<string, {
 	hue: number
 	cycle: number
 }>
+
+const highlightingTargetAttr = getAttributeName("highlighting-target");
 
 class PaintMethod implements AbstractMethod {
 	readonly #termTokens: TermTokens;
@@ -59,15 +62,15 @@ class PaintMethod implements AbstractMethod {
 			};
 		}
 		return (`
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body [markmysearch-h_id] {
-	& [markmysearch-h_beneath] {
+#${ EleID.BAR }.${ EleClass.HIGHLIGHTS_SHOWN } ~ body [${ highlightingIdAttr }] {
+	&:is(:has([${ highlightingTargetAttr }]), [${ highlightingTargetAttr }]) {
 		background-color: transparent !important;
 	}
 	& {
 		background-image: paint(markmysearch-highlights) !important;
-		--markmysearch-styles: ${JSON.stringify(styles)};
+		--markmysearch-styles: ${ JSON.stringify(styles) };
 	}
-	& > :not([markmysearch-h_id]) {
+	& > :not([${ highlightingIdAttr }]) {
 		--markmysearch-styles: unset;
 		--markmysearch-boxes: unset;
 	}
@@ -97,7 +100,7 @@ class PaintMethod implements AbstractMethod {
 	};
 
 	constructHighlightStyleRule (highlightingId: number, boxes: ReadonlyArray<Box>) {
-		return `body [markmysearch-h_id="${highlightingId}"] { --markmysearch-boxes: ${
+		return `body [${ highlightingIdAttr }="${ highlightingId }"] { --markmysearch-boxes: ${
 			JSON.stringify(boxes)
 		}; }`;
 	}

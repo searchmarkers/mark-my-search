@@ -6,6 +6,7 @@
 
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.d.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
+import { highlightingIdAttr, HighlightingIdGenerator } from "/dist/modules/highlight/engines/paint/common.mjs";
 import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tree-cache.d.mjs";
 import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.d.mjs";
 import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
@@ -32,15 +33,38 @@ type HighlightingStyleRuleDeletedListener = (element: HTMLElement) => void
 
 type HighlightingAppliedListener = (styledElements: IterableIterator<HTMLElement>) => void
 
-interface HighlightingStyleObserver {
-	readonly addHighlightingStyleRuleChangedListener: (listener: HighlightingStyleRuleChangedListener) => void
+/**
+ * Observable for a highlighting style manager;
+ * something which applies a set of style rules to a document to produce a highlighting effect.
+ * 
+ * This may be a component of style-based highlighting engines.
+ */
+interface HighlightingStyleObservable {
+	/**
+	 * Adds a listener for the addion or modification of style rules in-cache.
+	 * At the time of firing, they **will not** be applied to the document.
+	 */
+	readonly addHighlightingStyleRuleChangedListener: (
+		listener: HighlightingStyleRuleChangedListener,
+	) => void
 
-	readonly addHighlightingStyleRuleDeletedListener: (listener: HighlightingStyleRuleChangedListener) => void
+	/**
+	 * Adds a listener for the deletion of style rules in-cache.
+	 * At the time of firing, they **will not** be applied to the document.
+	 */
+	readonly addHighlightingStyleRuleDeletedListener: (
+		listener: HighlightingStyleRuleChangedListener,
+	) => void
 
-	readonly addHighlightingAppliedListener: (listener: HighlightingAppliedListener) => void
+	/**
+	 * Adds a listener for the application of highlighting style rules from cache.
+	 */
+	readonly addHighlightingAppliedListener: (
+		listener: HighlightingAppliedListener,
+	) => void
 }
 
-class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver {
+class PaintEngine implements AbstractTreeCacheEngine {
 	readonly class = "PAINT";
 	readonly model = "tree-cache";
 
@@ -57,11 +81,10 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 
 	readonly #elementsVisible = new Set<HTMLElement>();
 
-	readonly #highlightingStyleRuleChangedListeners = new Set<HighlightingStyleRuleChangedListener>();
-	readonly #highlightingStyleRuleDeletedListeners = new Set<HighlightingStyleRuleChangedListener>();
-	readonly #highlightingAppliedListeners = new Set<HighlightingAppliedListener>();
-
 	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
+
+	/** Whether a 1-frame delayed call to {@link applyStyleRules} is pending. */
+	#styleRulesApplicationPending = false;
 
 	readonly terms = createContainer<ReadonlyArray<MatchTerm>>([]);
 	readonly hues = createContainer<ReadonlyArray<number>>([]);
@@ -79,24 +102,35 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 			}
 			this.observeVisibilityChangesFor(flowOwner);
 			if (!this.#elementHighlightingIdMap.has(flowOwner)) {
-				const id = highlightingIds.next().value;
+				const id = highlightingIds.getNextId();
 				this.#elementHighlightingIdMap.set(flowOwner, id);
 				// NOTE: Some webpages may remove unknown attributes. It is possible to check and re-apply it from cache.
-				// TODO make sure there is cleanup once the highlighting ID becomes invalid (e.g. when the cache is removed).
-				flowOwner.setAttribute("markmysearch-h_id", id.toString());
+				flowOwner.setAttribute(highlightingIdAttr, id.toString());
 			}
+		});
+		this.#flowTracker.setSpansCreatedListener(flowOwner => {
+			if (this.#method.highlightables) {
+				flowOwner = this.#method.highlightables.findHighlightableAncestor(flowOwner);
+			}
+			if (!this.#elementsVisible.has(flowOwner)) {
+				return;
+			}
+			this.cacheStyleRulesFor(flowOwner, false, this.terms.current, this.hues.current);
+			this.scheduleStyleRulesApplication();
 		});
 		this.#flowTracker.setSpansRemovedListener((flowOwner, spansRemoved) => {
 			for (const span of spansRemoved) {
 				this.#spanBoxesMap.delete(span);
 			}
+			this.cacheStyleRulesFor(flowOwner, false, this.terms.current, this.hues.current);
+			this.scheduleStyleRulesApplication();
 		});
 		this.#flowTracker.setNonSpanOwnerListener(flowOwner => {
 			if (this.#method.highlightables) {
 				flowOwner = this.#method.highlightables.findHighlightableAncestor(flowOwner);
 			}
-			// TODO this is done for consistency with the past behaviour; but is it right/necessary?
 			this.#elementHighlightingIdMap.delete(flowOwner);
+			flowOwner.removeAttribute(highlightingIdAttr);
 			this.#elementStyleRuleMap.delete(flowOwner);
 			for (const listener of this.#highlightingStyleRuleDeletedListeners) {
 				listener(flowOwner);
@@ -115,7 +149,7 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 					this.#elementFlowsMap,
 					this.#spanBoxesMap,
 					this.#elementHighlightingIdMap,
-					this,
+					this.#styleObservable,
 				);
 			}}
 		})();
@@ -167,25 +201,20 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 				visibilityObserver.disconnect();
 			};
 		}
-		const highlightingIds = (function* () {
-			let i = 0;
-			while (true) {
-				yield i++;
-			}
-		})();
+		const highlightingIds = new HighlightingIdGenerator();
 	}
 
 	static async getMethodModule (methodClass: PaintEngineMethod) {
 		switch (methodClass) {
 		case "paint": {
-			const module = await import("/dist/modules/highlight/engines/paint/methods/paint.mjs");
-			return { methodClass, PaintMethod: module.PaintMethod };
+			const { PaintMethod } = await import("/dist/modules/highlight/engines/paint/methods/paint.mjs");
+			return { methodClass, PaintMethod };
 		} case "url": {
-			const module = await import("/dist/modules/highlight/engines/paint/methods/url.mjs");
-			return { methodClass, UrlMethod: module.UrlMethod };
+			const { UrlMethod } = await import("/dist/modules/highlight/engines/paint/methods/url.mjs");
+			return { methodClass, UrlMethod };
 		} case "element": {
-			const module = await import("/dist/modules/highlight/engines/paint/methods/element.mjs");
-			return { methodClass, ElementMethod: module.ElementMethod };
+			const { ElementMethod } = await import("/dist/modules/highlight/engines/paint/methods/element.mjs");
+			return { methodClass, ElementMethod };
 		}}
 	}
 
@@ -203,36 +232,18 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) {
-		// Clean up.
-		this.#flowTracker.unobserveMutations();
-		this.#flowTracker.removeHighlightSpansFor(termsToPurge);
-		// MAIN
 		this.terms.assign(terms);
 		this.hues.assign(hues);
 		this.#method.startHighlighting(terms, termsToHighlight, termsToPurge, hues);
-		this.#flowTracker.generateHighlightSpansFor(terms, document.body);
+		this.#flowTracker.generateHighlightSpansFor(terms);
 		this.#flowTracker.observeMutations();
-		// TODO how are the currently-visible elements known and hence highlighted (when the engine has not been watching them)?
-		// TODO (should visibility changes be unobserved and re-observed?)
-		const highlightables = this.#method.highlightables;
-		const highlightableAncestorsVisible = highlightables
-			? new Set(Array.from(this.#elementsVisible).map(element => highlightables.findHighlightableAncestor(element)))
-			: this.#elementsVisible;
-		for (const element of highlightableAncestorsVisible) {
-			this.cacheStyleRulesFor(element, false, terms, hues);
-		}
-		this.applyStyleRules();
 	}
 
 	endHighlighting () {
 		this.unobserveVisibilityChanges();
 		this.#flowTracker.unobserveMutations();
-		this.#flowTracker.removeHighlightSpansFor();
+		this.#flowTracker.removeHighlightSpans();
 		this.#method.endHighlighting();
-		// FIXME this should really be applied automatically and judiciously, and the stylesheet should be cleaned up with it
-		for (const element of document.body.querySelectorAll("[markmysearch-h_id]")) {
-			element.removeAttribute("markmysearch-h_id");
-		}
 	}
 
 	readonly observeVisibilityChangesFor: (element: HTMLElement) => void;
@@ -295,7 +306,19 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		}
 	}
 
+	scheduleStyleRulesApplication () {
+		if (!this.#styleRulesApplicationPending) {
+			this.#styleRulesApplicationPending = true;
+			setTimeout(() => {
+				if (this.#styleRulesApplicationPending) {
+					this.applyStyleRules();
+				}
+			});
+		}
+	}
+
 	applyStyleRules () {
+		this.#styleRulesApplicationPending = false;
 		for (const listener of this.#highlightingAppliedListeners) {
 			listener(this.#elementStyleRuleMap.keys());
 		}
@@ -314,21 +337,37 @@ class PaintEngine implements AbstractTreeCacheEngine, HighlightingStyleObserver 
 		this.#flowTracker.addHighlightingUpdatedListener(listener);
 	}
 
-	addHighlightingStyleRuleChangedListener (listener: HighlightingStyleRuleChangedListener) {
-		this.#highlightingStyleRuleChangedListeners.add(listener);
-	}
+	/** See {@link HighlightingStyleObservable.addHighlightingStyleRuleChangedListener}. */
+	readonly #highlightingStyleRuleChangedListeners = new Set<HighlightingStyleRuleChangedListener>();
 
-	addHighlightingStyleRuleDeletedListener (listener: HighlightingStyleRuleDeletedListener) {
-		this.#highlightingStyleRuleDeletedListeners.add(listener);
-	}
+	/** See {@link HighlightingStyleObservable.addHighlightingStyleRuleDeletedListener}. */
+	readonly #highlightingStyleRuleDeletedListeners = new Set<HighlightingStyleRuleChangedListener>();
 
-	addHighlightingAppliedListener (listener: HighlightingAppliedListener) {
-		this.#highlightingAppliedListeners.add(listener);
-	}
+	/** See {@link HighlightingStyleObservable.addHighlightingAppliedListener}. */
+	readonly #highlightingAppliedListeners = new Set<HighlightingAppliedListener>();
+
+	readonly #styleObservable: HighlightingStyleObservable = (() => {
+		const styleRuleChangedListeners = this.#highlightingStyleRuleChangedListeners;
+		const styleRuleDeletedListeners = this.#highlightingStyleRuleDeletedListeners;
+		const appliedListeners = this.#highlightingAppliedListeners;
+		return {
+			addHighlightingStyleRuleChangedListener (listener: HighlightingStyleRuleChangedListener) {
+				styleRuleChangedListeners.add(listener);
+			},
+
+			addHighlightingStyleRuleDeletedListener (listener: HighlightingStyleRuleDeletedListener) {
+				styleRuleDeletedListeners.add(listener);
+			},
+
+			addHighlightingAppliedListener (listener: HighlightingAppliedListener) {
+				appliedListeners.add(listener);
+			},
+		};
+	})();
 }
 
 export {
 	type Flow, type Span, type Box,
-	type HighlightingStyleObserver,
+	type HighlightingStyleObservable,
 	PaintEngine,
 };

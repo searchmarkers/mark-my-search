@@ -18,13 +18,34 @@ type Span = BaseSpan<true>
  * 
  * Implementers are responsible for:
  * 
- * - determining "flows" of text and matching within them, producing highlighting "boxes" information;
- * - maintaining a cache of [TODO]
+ * - determining "flows"* of text and matching within them, producing highlighting "spans"*;
+ * - maintaining an element-flows map* containing this information;
+ * - firing the appropriate registered listeners when highlighting changes;
+ * - responding to document mutations to ensure that highlighting is always up-to-date.
+ * 
+ * Footnotes:
+ * - *{@link getElementFlowsMap}
  */
 interface AbstractFlowTracker extends FlowMutationObserver {
+	/**
+	 * @returns
+	 * The element-flows map used by the FlowTracker to hold highlighting information,
+	 * updated as the document changes or when one of the highlighting methods is called.
+	 * 
+	 * Notes:
+	 * - A *flow* represents a segment of text which may cross multiple element boundaries.
+	 * - Each element is a *flow owner*, although the map will never contain *all* flow owners.
+	 * - Each flow contains highlighting *spans* (ranges within the text, where every range matches one term).
+	 * - Every element with at least one flow containing spans is a *span owner*.
+	 */
 	readonly getElementFlowsMap: () => AllReadonly<Map<HTMLElement, Array<Flow>>>
 
-	/** Sets the listener for gain of highlight spans in an unhighlighted element. */
+	/**
+	 * Sets the listener for gain of highlight spans in an unhighlighted element.
+	 * 
+	 * Implementation notes:
+	 * - There is **no guarantee** of the order in which listeners are called.
+	 */
 	readonly setNewSpanOwnerListener: (
 		listener: (
 			/** The new owner of text flows which together contain 1+ highlight spans. */
@@ -32,7 +53,15 @@ interface AbstractFlowTracker extends FlowMutationObserver {
 		) => void,
 	) => void
 
-	/** Sets the listener for gain of 1+ highlight spans in an element. */
+	/**
+	 * Sets the listener for gain of 1+ highlight spans in an element.
+	 * 
+	 * Implementation notes:
+	 * - There is **no guarantee** that the spans-created argument contains only new spans.
+	 * - There is **no guarantee** of the order in which listeners are called,
+	 * *except that* for a given flow-owner, spans-created is always called after spans-removed
+	 * (although either one may be called alone).
+	 */
 	readonly setSpansCreatedListener: (
 		listener: (
 			/** The owner of text flows which together contain 1+ new highlight spans (and any already present). */
@@ -42,7 +71,15 @@ interface AbstractFlowTracker extends FlowMutationObserver {
 		) => void,
 	) => void
 
-	/** Sets the listener for loss of 1+ highlight spans in an element. */
+	/**
+	 * Sets the listener for loss of 1+ highlight spans in an element.
+	 * 
+	 * Implementation notes:
+	 * - Spans in the spans-removed argument may be passed as spans-created immediately afterwards.
+	 * - There is **no guarantee** of the order in which listeners are called,
+	 * *except that* for a given flow-owner, spans-created is always called after spans-removed
+	 * (although either one may be called alone).
+	 */
 	readonly setSpansRemovedListener: (
 		listener: (
 			/** The owner of text flows which together contain some number of highlight spans. */
@@ -52,7 +89,12 @@ interface AbstractFlowTracker extends FlowMutationObserver {
 		) => void,
 	) => void
 
-	/** Sets the listener for loss of all highlight spans in an element. */
+	/**
+	 * Sets the listener for loss of all highlight spans in an element.
+	 * 
+	 * Implementation notes:
+	 * - There is **no guarantee** of the order in which listeners are called.
+	 */
 	readonly setNonSpanOwnerListener: (
 		listener: (
 			/** The owner of text flows which together used to contain highlight spans. */
@@ -60,30 +102,27 @@ interface AbstractFlowTracker extends FlowMutationObserver {
 		) => void,
 	) => void
 
-	/** Adds a listener for changes in highlighting. */
+	/**
+	 * Adds a listener for changes in highlighting.
+	 */
 	readonly addHighlightingUpdatedListener: (listener: () => void) => void
 
 	/**
 	 * Generates highlighting information for all text flows below the given element.
 	 * @param terms The terms to highlight. Highlighting is removed for all terms not included.
-	 * @param root The highest element below which to generate highlight spans for flows.
-	 * This is assumed to be a flow-breaking element; an element at whose boundaries text flows start and end.
-	 * Otherwise the function would need to look above the element, since the boundary flows would extend outside.
 	 */
-	readonly generateHighlightSpansFor: (
-		terms: ReadonlyArray<MatchTerm>,
-		root: HTMLElement,
-	) => void
+	readonly generateHighlightSpansFor: (terms: ReadonlyArray<MatchTerm>) => void
 
 	/**
-	 * Removes highlighting information for all text flows below the given element.
-	 * @param terms The terms for which to remove highlighting. If undefined, all highlighting information is removed.
-	 * @param root The element below which to remove flow highlighting.
+	 * Removes highlighting information in all text flows.
 	 */
-	readonly removeHighlightSpansFor: (
-		terms?: ReadonlyArray<MatchTerm>,
-		root?: HTMLElement,
-	) => void
+	readonly removeHighlightSpans: () => void
+
+	/**
+	 * Removes highlighting information for specific terms in all text flows.
+	 * @param terms The terms for which to remove highlighting.
+	 */
+	readonly removeHighlightSpansFor: (terms: ReadonlyArray<MatchTerm>) => void
 }
 
 export type {
