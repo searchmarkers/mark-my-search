@@ -31,7 +31,7 @@
 	"content_scripts": [
 		{
 			"matches": [ "*://*/*" ],
-			"js": [ "/dist/content-entry.js" ],
+			"js": [ "/dist/entrypoints/content.js" ],
 			"run_at": "document_start"
 		}
 	],
@@ -55,6 +55,7 @@
 			"resources": [
 				"/icons/*.svg",
 				"/dist/content.mjs",
+				"/dist/entrypoints/content.js",
 				"/dist/modules/*.mjs"
 			],
 			"matches": [ "*://*/*" ]
