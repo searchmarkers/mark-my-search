@@ -20,7 +20,7 @@ type TermTokenStyles = Record<string, {
 
 const highlightingTargetAttr = getAttributeName("highlighting-target");
 
-class PaintMethod implements AbstractMethod {
+class HoudiniPaintMethod implements AbstractMethod {
 	readonly #termTokens: TermTokens;
 
 	readonly #styleManager = new StyleManager(new HTMLStylesheet(document.head));
@@ -29,11 +29,11 @@ class PaintMethod implements AbstractMethod {
 
 	constructor (termTokens: TermTokens) {
 		this.#termTokens = termTokens;
-		if (!PaintMethod.#paintModuleAdded) {
+		if (!HoudiniPaintMethod.#paintModuleAdded) {
 			CSS.paintWorklet?.addModule(chrome.runtime.getURL(
 				"/dist/modules/highlight/engines/paint/methods/paint/paint-worklet.mjs",
 			));
-			PaintMethod.#paintModuleAdded = true;
+			HoudiniPaintMethod.#paintModuleAdded = true;
 		}
 	}
 
@@ -108,5 +108,5 @@ class PaintMethod implements AbstractMethod {
 
 export {
 	type TermTokenStyles,
-	PaintMethod,
+	HoudiniPaintMethod,
 };

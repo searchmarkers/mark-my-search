@@ -15,7 +15,7 @@ import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
 import { Z_INDEX_MIN, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 
-class ElementMethod implements AbstractMethod {
+class ElementImageMethod implements AbstractMethod {
 	readonly #termTokens: TermTokens;
 
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
@@ -184,4 +184,4 @@ class ElementMethod implements AbstractMethod {
 	}
 }
 
-export { ElementMethod };
+export { ElementImageMethod };

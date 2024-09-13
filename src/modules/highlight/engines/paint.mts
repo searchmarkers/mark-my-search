@@ -140,11 +140,11 @@ class PaintEngine implements AbstractTreeCacheEngine {
 		const method = (() => {
 			switch (methodModule.methodClass) {
 			case "paint": {
-				return new methodModule.PaintMethod(termTokens);
+				return new methodModule.HoudiniPaintMethod(termTokens);
 			} case "url": {
-				return new methodModule.UrlMethod(termTokens);
+				return new methodModule.SvgUrlMethod(termTokens);
 			} case "element": {
-				return new methodModule.ElementMethod(
+				return new methodModule.ElementImageMethod(
 					termTokens,
 					this.#elementFlowsMap,
 					this.#spanBoxesMap,
@@ -207,14 +207,20 @@ class PaintEngine implements AbstractTreeCacheEngine {
 	static async getMethodModule (methodClass: PaintEngineMethod) {
 		switch (methodClass) {
 		case "paint": {
-			const { PaintMethod } = await import("/dist/modules/highlight/engines/paint/methods/paint.mjs");
-			return { methodClass, PaintMethod };
+			const { HoudiniPaintMethod } = await import(
+				"/dist/modules/highlight/engines/paint/methods/houdini-paint.mjs"
+			);
+			return { methodClass, HoudiniPaintMethod };
 		} case "url": {
-			const { UrlMethod } = await import("/dist/modules/highlight/engines/paint/methods/url.mjs");
-			return { methodClass, UrlMethod };
+			const { SvgUrlMethod } = await import(
+				"/dist/modules/highlight/engines/paint/methods/svg-url.mjs"
+			);
+			return { methodClass, SvgUrlMethod };
 		} case "element": {
-			const { ElementMethod } = await import("/dist/modules/highlight/engines/paint/methods/element.mjs");
-			return { methodClass, ElementMethod };
+			const { ElementImageMethod } = await import(
+				"/dist/modules/highlight/engines/paint/methods/element-image.mjs"
+			);
+			return { methodClass, ElementImageMethod };
 		}}
 	}
 

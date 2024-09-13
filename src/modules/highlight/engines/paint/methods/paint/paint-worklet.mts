@@ -5,7 +5,7 @@
  */
 
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import type { TermTokenStyles } from "/dist/modules/highlight/engines/paint/methods/paint.mjs";
+import type { TermTokenStyles } from "/dist/modules/highlight/engines/paint/methods/houdini-paint.mjs";
 
 registerPaint("markmysearch-highlights", class {
 	static get inputProperties () {

@@ -10,7 +10,7 @@ import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { EleID, EleClass } from "/dist/modules/common.mjs";
 
-class UrlMethod implements AbstractMethod {
+class SvgUrlMethod implements AbstractMethod {
 	readonly #termTokens: TermTokens;
 
 	constructor (termTokens: TermTokens) {
@@ -51,4 +51,4 @@ class UrlMethod implements AbstractMethod {
 	}
 }
 
-export { UrlMethod };
+export { SvgUrlMethod };
