@@ -15,6 +15,8 @@ import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
 import { Z_INDEX_MIN, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 
+// TODO investigate whether `mozSetImageElement()` is a viable alternative to the draw container
+
 class ElementImageMethod implements AbstractMethod {
 	readonly #termTokens: TermTokens;
 
