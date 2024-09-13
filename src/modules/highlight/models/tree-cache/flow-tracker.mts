@@ -67,7 +67,15 @@ class FlowTracker implements AbstractFlowTracker {
 				}
 				for (const node of mutation.removedNodes) {
 					if (node instanceof HTMLElement) {
-						this.removeHighlighting(node, false);
+						/** Guaranteed to be a flow owner (as it is a flow-breaking element). */
+						const flowOwnerAncestor = node.closest(rejectSelector);
+						if (flowOwnerAncestor instanceof HTMLElement && flowOwnerAncestor !== node) {
+							elementsAffected.add(flowOwnerAncestor);
+						}
+						this.removeHighlighting(
+							flowOwnerAncestor instanceof HTMLElement ? flowOwnerAncestor : node,
+							false,
+						);
 					}
 				}
 			}
@@ -97,6 +105,12 @@ class FlowTracker implements AbstractFlowTracker {
 		this.#mutationObserver.disconnect();
 	}
 
+	/**
+	 * 
+	 * @param terms 
+	 * @param node 
+	 * @param fireUpdatedListeners Whether to fire listeners of {@link addHighlightingUpdatedListener}.
+	 */
 	generateSpansForFlowOwners (
 		terms: ReadonlyArray<MatchTerm>,
 		node: Node,
@@ -141,8 +155,9 @@ class FlowTracker implements AbstractFlowTracker {
 	/**
 	 * @param terms The terms to highlight. Highlighting is removed for all terms not included.
 	 * @param root The highest element below which to generate highlight spans for flows.
-	 * This is assumed to be a flow-breaking element; an element at whose boundaries text flows start and end.
+	 * This **must be a flow-breaking element** (an element at whose boundaries text flows start and end).
 	 * Otherwise the function would need to look above the element, since the boundary flows would extend outside.
+	 * @param fireUpdatedListeners Whether to fire listeners of {@link addHighlightingUpdatedListener}.
 	 */
 	generateHighlightSpansFor (
 		terms: ReadonlyArray<MatchTerm>,
@@ -159,7 +174,7 @@ class FlowTracker implements AbstractFlowTracker {
 			i < textFlows.length + ((elementBreaksFlow && textFlows[textFlows.length - 1].length) ? 0 : -1);
 			i++
 		) {
-			this.cacheFlowWithSpans(terms, textFlows[i]);
+			this.cacheFlowWithSpans(terms, textFlows[i], false);
 		}
 		if (fireUpdatedListeners) {
 			for (const listener of this.#highlightingUpdatedListeners) {
@@ -174,8 +189,13 @@ class FlowTracker implements AbstractFlowTracker {
 	 * The only work to be done here is changing *which* terms are highlighted in the element-flows-spans cache.
 	 * @param terms Terms to find and highlight.
 	 * @param textFlow Consecutive text nodes to highlight inside.
+	 * @param fireUpdatedListeners Whether to fire listeners of {@link addHighlightingUpdatedListener}.
 	 */
-	cacheFlowWithSpans (terms: ReadonlyArray<MatchTerm>, textFlow: ReadonlyArray<Text>) {
+	cacheFlowWithSpans (
+		terms: ReadonlyArray<MatchTerm>,
+		textFlow: ReadonlyArray<Text>,
+		fireUpdatedListeners = true,
+	) {
 		const text = textFlow.map(node => node.textContent).join("");
 		const flowOwner = this.getTextAncestorCommon(
 			textFlow[0].parentElement!,
@@ -222,6 +242,11 @@ class FlowTracker implements AbstractFlowTracker {
 		}
 		if (this.#spansCreatedListener && spansMatched.length > 0) {
 			this.#spansCreatedListener(flowOwner, spansMatched);
+		}
+		if (fireUpdatedListeners) {
+			for (const listener of this.#highlightingUpdatedListeners) {
+				listener();
+			}
 		}
 	}
 
@@ -270,6 +295,9 @@ class FlowTracker implements AbstractFlowTracker {
 	/**
 	 * Removes highlighting from all descendant elements (inclusive).
 	 * @param root The element below which to remove highlighting.
+	 * This **must be a flow-breaking element** (an element at whose boundaries text flows start and end).
+	 * Otherwise the function would need to look above the element, since the boundary flows would extend outside.
+	 * @param fireUpdatedListeners Whether to fire listeners of {@link addHighlightingUpdatedListener}.
 	 */
 	removeHighlighting (
 		root: HTMLElement,
