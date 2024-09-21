@@ -6,7 +6,8 @@
 
 import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/method.d.mjs";
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
-import type { HighlightingStyleObserver, Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
+import { highlightingIdAttr } from "/dist/modules/highlight/engines/paint/common.mjs";
+import type { HighlightingStyleObservable, Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
 import TermCSS from "/dist/modules/highlight/common/term-css.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
@@ -14,7 +15,9 @@ import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
 import type { AllReadonly } from "/dist/modules/common.mjs";
 import { Z_INDEX_MIN, EleID, EleClass, getTermClass, getTermTokenClass } from "/dist/modules/common.mjs";
 
-class ElementMethod implements AbstractMethod {
+// TODO investigate whether `mozSetImageElement()` is a viable alternative to the draw container
+
+class ElementImageMethod implements AbstractMethod {
 	readonly #termTokens: TermTokens;
 
 	readonly #elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>;
@@ -31,20 +34,20 @@ class ElementMethod implements AbstractMethod {
 		elementFlowsMap: AllReadonly<Map<HTMLElement, Array<Flow>>>,
 		spanBoxesMap: Map<Readonly<Span>, Array<Readonly<Box>>>,
 		elementHighlightingIdMap: AllReadonly<Map<HTMLElement, number>>,
-		styleObserver: HighlightingStyleObserver,
+		styleObserver: HighlightingStyleObservable,
 	) {
 		this.#termTokens = termTokens;
 		this.#elementFlowsMap = elementFlowsMap;
 		this.#spanBoxesMap = spanBoxesMap;
 		this.#elementHighlightingIdMap = elementHighlightingIdMap;
 		this.#styleManager.setStyle(`
-#${EleID.DRAW_CONTAINER} {
+#${ EleID.DRAW_CONTAINER } {
 	& {
 		position: fixed !important;
 		width: 100% !important;
 		height: 100% !important;
 		top: 100% !important;
-		z-index: ${Z_INDEX_MIN} !important;
+		z-index: ${ Z_INDEX_MIN } !important;
 	}
 	& > * {
 		position: fixed !important;
@@ -53,7 +56,7 @@ class ElementMethod implements AbstractMethod {
 	}
 }
 
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${EleClass.TERM} {
+#${ EleID.BAR }.${ EleClass.HIGHLIGHTS_SHOWN } ~ #${ EleID.DRAW_CONTAINER } .${ EleClass.TERM } {
 	outline: 2px solid hsl(0 0% 0% / 0.1) !important;
 	outline-offset: -2px !important;
 	border-radius: 2px !important;
@@ -124,19 +127,19 @@ class ElementMethod implements AbstractMethod {
 		const term = terms[termIndex];
 		const hue = hues[termIndex % hues.length];
 		const cycle = Math.floor(termIndex / hues.length);
-		const selector = `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ #${EleID.DRAW_CONTAINER} .${
+		const selector = `#${ EleID.BAR }.${ EleClass.HIGHLIGHTS_SHOWN } ~ #${ EleID.DRAW_CONTAINER } .${
 			getTermClass(term, this.#termTokens)
 		}`;
 		const backgroundStyle = TermCSS.getHorizontalStyle(
-			`hsl(${hue} 100% 60% / 0.4)`,
-			`hsl(${hue} 100% 88% / 0.4)`,
+			`hsl(${ hue } 100% 60% / 0.4)`,
+			`hsl(${ hue } 100% 88% / 0.4)`,
 			cycle,
 		);
-		return`${selector} { background: ${backgroundStyle} !important; }`;
+		return`${ selector } { background: ${ backgroundStyle } !important; }`;
 	}
 
 	constructHighlightStyleRule (highlightingId: number) {
-		return `body [markmysearch-h_id="${highlightingId}"] { background-image: -moz-element(#${
+		return `body [${ highlightingIdAttr }="${ highlightingId }"] { background-image: -moz-element(#${
 			EleID.DRAW_ELEMENT + highlightingId.toString()
 		}) !important; background-repeat: no-repeat !important; }`;
 	}
@@ -183,4 +186,4 @@ class ElementMethod implements AbstractMethod {
 	}
 }
 
-export { ElementMethod };
+export { ElementImageMethod };

@@ -6,7 +6,7 @@
 
 import type { AbstractSpecialEngine } from "/dist/modules/highlight/special-engine.d.mjs";
 import type { Box } from "/dist/modules/highlight/engines/paint.mjs";
-import { UrlMethod } from "/dist/modules/highlight/engines/paint/methods/url.mjs";
+import { SvgUrlMethod } from "/dist/modules/highlight/engines/paint/methods/svg-url.mjs";
 import { type BaseFlow, type BaseSpan } from "/dist/modules/highlight/common/matching.d.mjs";
 import { matchInText } from "/dist/modules/highlight/common/matching.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
@@ -28,7 +28,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	readonly #termTokens: TermTokens;
 	readonly #termPatterns: TermPatterns;
 
-	readonly #method: UrlMethod;
+	readonly #method: SvgUrlMethod;
 	readonly #styleRules: StyleRulesInfo = { hovered: "", focused: "" };
 
 	//readonly #elementsInfo = new Map<HTMLElement, {
@@ -44,7 +44,7 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 	constructor (termTokens: TermTokens, termPatterns: TermPatterns) {
 		this.#termTokens = termTokens;
 		this.#termPatterns = termPatterns;
-		this.#method = new UrlMethod(termTokens);
+		this.#method = new SvgUrlMethod(termTokens);
 		this.#elementContainer = document.createElement("div");
 		document.body.insertAdjacentElement("afterend", this.#elementContainer);
 	}
@@ -146,7 +146,9 @@ class PaintSpecialEngine implements AbstractSpecialEngine {
 		hues: ReadonlyArray<number>,
 		text: string,
 	): string {
-		return `#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body input${contextCSS[highlightCtx]} { background-image: ${
+		return `#${ EleID.BAR }.${ EleClass.HIGHLIGHTS_SHOWN } ~ body input${
+			contextCSS[highlightCtx]
+		} { background-image: ${
 			this.constructHighlightStyleRuleUrl(terms, hues, text)
 		} !important; background-repeat: no-repeat !important; }`;
 	}

@@ -86,7 +86,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 	) {
 		// Clean up.
 		this.#flowTracker.unobserveMutations();
-		this.undoHighlights(termsToPurge);
+		this.undoHighlightsFor(termsToPurge);
 		this.removeTermStyles();
 		// MAIN
 		this.terms.assign(terms);
@@ -95,7 +95,7 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		for (const term of terms) {
 			this.#highlights.set(this.#termTokens.get(term), new ExtendedHighlight());
 		}
-		this.#flowTracker.generateHighlightSpansFor(terms, document.body);
+		this.#flowTracker.generateHighlightSpansFor(terms);
 		this.#flowTracker.observeMutations();
 	}
 
@@ -105,14 +105,15 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		this.removeTermStyles();
 	}
 
-	undoHighlights (terms?: ReadonlyArray<MatchTerm>) {
+	undoHighlights () {
+		this.#flowTracker.removeHighlightSpans();
+		this.#highlights.clear();
+	}
+
+	undoHighlightsFor (terms: ReadonlyArray<MatchTerm>) {
 		this.#flowTracker.removeHighlightSpansFor(terms);
-		if (terms) {
-			for (const term of terms) {
-				this.#highlights.delete(this.#termTokens.get(term));
-			}
-		} else {
-			this.#highlights.clear();
+		for (const term of terms) {
+			this.#highlights.delete(this.#termTokens.get(term));
 		}
 	}
 
@@ -131,25 +132,24 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		this.#termStyleManagerMap.clear();
 	}
 
-	getTermCSS (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number) {
+	getTermCSS (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>, termIndex: number): string {
 		const term = terms[termIndex];
 		const hue = hues[termIndex % hues.length];
 		const cycle = Math.floor(termIndex / hues.length);
 		const {
-			opacity,
-			lineThickness,
-			lineStyle,
-			textColor,
+			opacity, lineThickness, lineStyle, textColor,
 		} = HighlightEngine.hueCycleStyles[Math.min(cycle, HighlightEngine.hueCycleStyles.length - 1)];
-		return (`
-#${EleID.BAR}.${EleClass.HIGHLIGHTS_SHOWN} ~ body ::highlight(${getName(this.#termTokens.get(term))}) {
-	background-color: hsl(${hue} 70% 70% / ${opacity}) !important;
-	${textColor ? `color: ${textColor} !important;` : ""}
-	${lineThickness ? `text-decoration: ${lineThickness}px hsl(${hue} 100% 35%) ${lineStyle} underline !important;` : ""}
-	${lineThickness ? `text-decoration-skip-ink: none !important;` : ""}
-}
-`
-		);
+		return [
+			`#${ EleID.BAR }.${ EleClass.HIGHLIGHTS_SHOWN } ~ body ::highlight(${ getName(this.#termTokens.get(term)) }) {`,
+			`\tbackground-color: hsl(${ hue } 70% 70% / ${ opacity }) !important;`,
+			(textColor
+				&& `\tcolor: ${ textColor } !important;`),
+			(lineThickness
+				&& `\ttext-decoration: ${ lineThickness }px hsl(${ hue } 100% 35%) ${ lineStyle } underline !important;`),
+			(lineThickness
+				&& `\ttext-decoration-skip-ink: none !important;`),
+			`}`,
+		].filter(line => !!line).join("\n");
 	}
 
 	getElementFlowsMap (): AllReadonly<Map<HTMLElement, Array<Flow>>> {
