@@ -73,6 +73,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		this.#highlighter = highlighter;
 		this.#barContainer = document.createElement("div");
 		this.#barContainer.id = CommonEleID.BAR;
+		this.#barContainer.style.cssText = "all: revert !important;";
 		const shadowRoot = this.#barContainer.attachShadow({
 			mode: "closed",
 			delegatesFocus: false,
