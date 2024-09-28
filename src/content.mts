@@ -387,6 +387,8 @@ interface TermAppender<Async = true> {
 			getToolbarOrNull()?.remove();
 		}
 		if (message.terms) {
+			// Ensure the toolbar is set up.
+			getToolbar().insertAdjacentTo(document.body, "beforebegin");
 			// TODO make sure same MatchTerm objects are used for terms which are equivalent
 			termSetterInternal.setTerms(message.terms);
 		}
