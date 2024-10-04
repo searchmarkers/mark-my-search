@@ -415,9 +415,9 @@ const loadPopup = (() => {
 									{
 										className: "matching",
 										rows: [
-											getMatchModeInteractionInfo("whole", "Stemming"),
-											getMatchModeInteractionInfo("stem", "Whole Words"),
 											getMatchModeInteractionInfo("case", "Case Sensitive"),
+											getMatchModeInteractionInfo("whole", "Whole Words"),
+											getMatchModeInteractionInfo("stem", "Stemming"),
 											getMatchModeInteractionInfo("diacritics", "Diacritics Insensitive"),
 											getMatchModeInteractionInfo("regex", "Regular Expression"),
 										],
