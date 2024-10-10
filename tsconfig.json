@@ -1,9 +1,21 @@
 {
 	"compilerOptions": {
-		"lib": [ "ES2020", "DOM" ],
 		"outDir": "dist",
-		"target": "ES2020",
+		"target": "ES2022",
+		"module": "ES2022",
 		"alwaysStrict": true,
-		"strictNullChecks": true
-	}
+		"strictNullChecks": true,
+		"strictBindCallApply": true,
+		"useUnknownInCatchVariables": true,
+		// Prevent `import` (except `import type`) statements from being dropped, in case the import has side-effects.
+		"verbatimModuleSyntax": true,
+		"paths": {
+			"/dist/*": [ "./src/*" ],
+			"/lib/*": [ "./lib/*" ],
+		},
+	},
+	"include": [
+		"src/**/*",
+		"lib/*",
+	],
 }

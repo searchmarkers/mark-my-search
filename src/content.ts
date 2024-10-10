@@ -1578,7 +1578,6 @@ const getAncestorHighlightable: (node: Node) => HTMLElement = !paintUseExperimen
 	? node => node.parentElement as HTMLElement
 	: node => {
 		let ancestor = node.parentElement as HTMLElement;
-		// eslint-disable-next-line no-constant-condition
 		while (true) {
 			const ancestorUnhighlightable = (ancestor as HTMLElement).closest("a");
 			if (ancestorUnhighlightable && ancestorUnhighlightable.parentElement) {
@@ -1797,7 +1796,6 @@ const flowCacheWithBoxesInfo = (terms: MatchTerms, textFlow: Array<Text>,
 				(node.parentElement as Element).setAttribute("markmysearch-h_id",
 					(node.parentElement as Element)["markmysearch-h_id"]);
 			}
-			// eslint-disable-next-line no-constant-condition
 			while (true) {
 				flow.boxesInfo.push({
 					term,
@@ -2221,7 +2219,6 @@ const generateTermHighlightsUnderNode = (() => {
 					textStart = textEnd;
 					textEnd += nodeItem.value.length;
 				}
-				// eslint-disable-next-line no-constant-condition
 				while (true) {
 					nodeItemPrevious = highlightInsideNode(
 						term,
@@ -2389,7 +2386,6 @@ const insertScrollMarkersClassic = (() => {
 const focusOnScrollMarkerClassic = (term: MatchTerm | undefined, container: HTMLElement) => {
 	const scrollMarkerGutter = document.getElementById(getSel(ElementID.MARKER_GUTTER)) as HTMLElement;
 	elementsPurgeClass(getSel(ElementClass.FOCUS), scrollMarkerGutter);
-	// eslint-disable-next-line no-constant-condition
 	[6, 5, 4, 3, 2].some(precisionFactor => {
 		const precision = 10**precisionFactor;
 		const scrollMarker = scrollMarkerGutter.querySelector(

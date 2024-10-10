@@ -193,7 +193,6 @@ const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> |
  * @param keys The keys corresponding to the entries to retrieve.
  * @returns A promise resolving to an object of storage entries.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
 	Promise<StorageAreaValues<Area>> =>
 {
