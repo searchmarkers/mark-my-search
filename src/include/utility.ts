@@ -28,7 +28,6 @@ const getObjectStringLog = (object: Record<string, unknown>): string =>
  * @param reason Description (omittable) of the reason for the process or situation.
  * Single lowercase statement with capitalisation where appropriate and no fullstop.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const log = (operation: string, reason: string, metadata: Record<string, unknown> = {}) => {
 	const operationStatement = `LOG: ${operation[0].toUpperCase() + operation.slice(1)}`;
 	const reasonStatement = reason.length ? reason[0].toUpperCase() + reason.slice(1) : "";
@@ -159,7 +158,6 @@ type HighlightDetailsRequest = {
 	highlightsShown?: true
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type HighlightMessage = {
 	getDetails?: HighlightDetailsRequest
 	commands?: Array<CommandInfo>
@@ -177,13 +175,11 @@ type HighlightMessage = {
 	matchMode?: StorageSyncValues[StorageSync.MATCH_MODE_DEFAULTS]
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type HighlightMessageResponse = {
 	terms?: MatchTerms
 	highlightsShown?: boolean
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type BackgroundMessage<WithId = false> = {
 	highlightCommands?: Array<CommandInfo>
 	initializationGet?: boolean
@@ -203,7 +199,6 @@ type BackgroundMessage<WithId = false> = {
 	}
 )
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type BackgroundMessageResponse = HighlightMessage | null
 
 enum CommandType {

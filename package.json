@@ -1,13 +1,14 @@
 {
 	"name": "mark-my-search",
 	"displayName": "Mark My Search",
+	"type": "module",
 	"scripts": {
 		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
-		"scripts-build": "tsc -p tsconfig.json",
-		"prepare-firefox": "ln --force --symbolic manifest/firefox.json manifest.json",
-		"prepare-chromium": "ln --force --symbolic manifest/chromium.json manifest.json",
-		"pack-firefox": "npm run prepare-firefox; mkdir --parents pack; rm --force pack/mark_my_search-firefox.zip; zip pack/mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json",
-		"pack-chromium": "npm run prepare-chromium; mkdir --parents pack; rm --force pack/mark_my_search-chromium.zip; zip pack/mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json"
+		"scripts-build": "rm --recursive dist; tsc --project tsconfig.json",
+		"prepare-firefox": "ln --force --symbolic platform/firefox/manifest.json manifest.json",
+		"prepare-chromium": "ln --force --symbolic platform/chromium/manifest.json manifest.json",
+		"pack-firefox": "rm --force pack/mark_my_search-firefox.zip; npm run scripts-build; npm run prepare-firefox; mkdir --parents pack; zip pack/mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json",
+		"pack-chromium": "rm --force pack/mark_my_search-chromium.zip; npm run scripts-build; npm run prepare-chromium; mkdir --parents pack; zip pack/mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json"
 	},
 	"repository": {
 		"type": "git",
@@ -24,14 +25,12 @@
 	},
 	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
 	"devDependencies": {
-		"@types/chrome": "^0.0.204",
-		"@types/firefox-webext-browser": "^94.0.1",
-		"@typescript-eslint/eslint-plugin": "^5.46.1",
-		"@typescript-eslint/parser": "^5.46.1",
-		"eslint": "^8.30.0",
-		"inkscape": "^3.1.1",
-		"jq": "^1.7.2",
-		"typescript": "^4.9.4",
-		"winston": "^3.8.2"
+		"@types/chrome": "0.0.253",
+		"@types/firefox-webext-browser": "120.0.0",
+		"eslint": "9.12.0",
+		"globals": "^15.6.0",
+		"inkscape": "3.1.1",
+		"typescript": "5.6.3",
+		"typescript-eslint": "8.8.1"
 	}
 }
