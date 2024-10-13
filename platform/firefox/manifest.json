@@ -52,8 +52,7 @@
 	],
 
 	"options_ui": {
-		"page": "/pages/options.html",
-		"browser_style": true
+		"page": "/pages/options.html"
 	},
 
 	"action": {
