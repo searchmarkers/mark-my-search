@@ -1199,8 +1199,8 @@ const insertTermControl = (terms: MatchTerms, idx: number, command: string, comm
 	controlContent.classList.add(getSel(ElementClass.CONTROL_CONTENT));
 	controlContent.tabIndex = -1;
 	controlContent.textContent = term.phrase;
-	controlContent.onclick = () => { // Hack: event handler property used so that the listener is not duplicated.
-		focusOnTermJump(controlsInfo, highlightTags, false, term);
+	controlContent.onclick = event => { // Hack: event handler property used so that the listener is not duplicated.
+		focusOnTermJump(controlsInfo, highlightTags, event.shiftKey, term);
 	};
 	controlContent.addEventListener("mouseover", () => { // FIXME this is not screenreader friendly.
 		updateTermTooltip(term, controlsInfo);
