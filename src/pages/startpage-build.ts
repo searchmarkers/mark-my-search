@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 /**
  * Loads the startpage content into the page.
  * This presents the user with expandable onboarding information and functions, for use when the user has installed the extension.
