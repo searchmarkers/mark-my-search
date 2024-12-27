@@ -1,3 +1,9 @@
+/*
+ * This file is part of Mark My Search.
+ * Copyright © 2021-present ‘ator-dev’, Mark My Search contributors.
+ * Licensed under the EUPL-1.2-or-later.
+ */
+
 /**
  * Loads the sendoff page content into the page.
  * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.
