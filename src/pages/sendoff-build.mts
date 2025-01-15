@@ -4,6 +4,10 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
+import { getName } from "/dist/modules/utility.mjs";
+import type { PagePanelInfo } from "/dist/modules/page-build.mjs";
+import { loadPage, sendProblemReport, PageAlertType } from "/dist/modules/page-build.mjs";
+
 /**
  * Loads the sendoff page content into the page.
  * This presents the user with an offboarding form with detail, for use when the user has uninstalled the extension.

@@ -4,14 +4,32 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-if (this.importScripts) {
+import type { MatchTerms, HighlightMessage, BackgroundMessage, BackgroundMessageResponse } from "/dist/modules/utility.mjs";
+import {
+	log, assert,
+	MatchTerm,
+	CommandType,
+	messageSendHighlight, parseCommand, sanitizeForRegex,
+} from "/dist/modules/utility.mjs";
+import { Engine, isTabResearchPage } from "/dist/modules/util-privileged.mjs";
+import type {
+	ResearchInstance, Engines, URLFilter,
+	StorageSyncValues, StorageSessionValues, StorageLocalValues,
+} from "/dist/modules/storage.mjs";
+import {
+	StorageSession, StorageLocal, StorageSync,
+	storageGet, storageSet, storageInitialize,
+	optionsRepair,
+} from "/dist/modules/storage.mjs";
+
+if (globalThis["importScripts"]) {
 	// Required for service workers, whereas event pages use declarative imports.
-	this.importScripts(
-		"/dist/include/utility.js",
-		"/dist/include/pattern-stem.js",
-		"/dist/include/pattern-diacritic.js",
-		"/dist/include/util-privileged.js",
-		"/dist/include/storage.js",
+	globalThis["importScripts"](
+		"/dist/modules/utility.js",
+		"/dist/modules/pattern-stem.js",
+		"/dist/modules/pattern-diacritic.js",
+		"/dist/modules/util-privileged.js",
+		"/dist/modules/storage.js",
 	);
 }
 
@@ -187,7 +205,7 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 	};
 
 	return () => {
-		if (useChromeAPI() || !chrome.bookmarks) {
+		if (!globalThis.browser || !chrome.bookmarks) {
 			return;
 		}
 		browser.bookmarks.getTree().then(async nodes => {
@@ -233,9 +251,9 @@ const injectIntoTabs = async () => {
 		chrome.scripting.executeScript({
 			target: { tabId: tab.id as number },
 			files: [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
+				"/dist/modules/utility.js",
+				"/dist/modules/pattern-stem.js",
+				"/dist/modules/pattern-diacritic.js",
 				"/dist/content.js",
 			],
 		}).catch(() => chrome.runtime.lastError); // Read `lastError` to suppress injection errors.
@@ -249,7 +267,7 @@ const injectIntoTabs = async () => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? storageGet("local", [ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: useChromeAPI()
+		: chrome.action.setIcon({ path: !globalThis.browser
 			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -269,7 +287,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Registers items to selectively appear in context menus, if not present, to serve as shortcuts for managing the extension.
 	 */
 	const createContextMenuItems = () => {
-		if (useChromeAPI() && chrome.contextMenus.onClicked["hasListeners"]()) {
+		if (!globalThis.browser && chrome.contextMenus.onClicked["hasListeners"]()) {
 			return;
 		}
 		chrome.contextMenus.removeAll();
@@ -424,7 +442,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			return;
 		}
 		if (openerTabId === undefined) {
-			if (!useChromeAPI()) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+			if (globalThis.browser) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
 				return;
 			}
 			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
@@ -442,7 +460,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	});
 
 	chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
-		if (useChromeAPI()) {
+		if (!globalThis.browser) {
 			// Chromium emits no `tabs` event for tab reload.
 			if (changeInfo.status === "loading" || changeInfo.status === "complete") {
 				pageChangeRespondOld((await chrome.tabs.get(tabId)).url ?? "", tabId);
@@ -543,7 +561,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			return;
 		}
 		if (openerTabId === undefined) {
-			if (!useChromeAPI()) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+			if (globalThis.browser) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
 				return;
 			}
 			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
@@ -568,7 +586,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	};
 
 	// Note: emitted events differ between Firefox and Chromium.
-	if (useChromeAPI()) {
+	if (!globalThis.browser) {
 		chrome.tabs.onUpdated.addListener(pageEventListener);
 	} else {
 		browser.tabs.onUpdated.addListener(pageEventListener, { properties: [ "url", "status" ] });

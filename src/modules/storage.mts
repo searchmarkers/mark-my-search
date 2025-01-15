@@ -4,20 +4,24 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-chrome.storage = useChromeAPI() ? chrome.storage : browser.storage as typeof chrome.storage;
+import type { MatchTerms, MatchMode } from "/dist/modules/utility.mjs";
+import { MatchTerm } from "/dist/modules/utility.mjs";
+import { Engine } from "/dist/modules/util-privileged.mjs";
+
+chrome.storage = !globalThis.browser ? chrome.storage : browser.storage as typeof chrome.storage;
 chrome.storage.session ??= chrome.storage.local;
 
-type ResearchInstances = Record<number, ResearchInstance>
-type Engines = Record<string, Engine>
-type StorageSessionValues = {
+export type ResearchInstances = Record<number, ResearchInstance>
+export type Engines = Record<string, Engine>
+export type StorageSessionValues = {
 	[StorageSession.RESEARCH_INSTANCES]: ResearchInstances
 	[StorageSession.ENGINES]: Engines
 }
-type StorageLocalValues = {
+export type StorageLocalValues = {
 	[StorageLocal.ENABLED]: boolean
 	[StorageLocal.PERSIST_RESEARCH_INSTANCES]: boolean
 }
-type StorageSyncValues = {
+export type StorageSyncValues = {
 	[StorageSync.AUTO_FIND_OPTIONS]: {
 		stoplist: Array<string>
 		searchParams: Array<string>
@@ -59,41 +63,41 @@ type StorageSyncValues = {
 	}
 	[StorageSync.TERM_LISTS]: Array<TermList>
 }
-type URLFilter = Array<{
+export type URLFilter = Array<{
 	hostname: string,
 	pathname: string,
 }>
-type TermList = {
+export type TermList = {
 	name: string
 	terms: Array<MatchTerm>
 	urlFilter: URLFilter
 }
 
-type StorageAreaName = "session" | "local" | "sync"
+export type StorageAreaName = "session" | "local" | "sync"
 
-type StorageArea<Area extends StorageAreaName> =
+export type StorageArea<Area extends StorageAreaName> =
 	Area extends "session" ? StorageSession :
 	Area extends "local" ? StorageLocal :
 	Area extends "sync" ? StorageSync :
 never;
 
-type StorageAreaValues<Area extends StorageAreaName> =
+export type StorageAreaValues<Area extends StorageAreaName> =
 	Area extends "session" ? StorageSessionValues :
 	Area extends "local" ? StorageLocalValues :
 	Area extends "sync" ? StorageSyncValues :
 never;
 
-enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
+export enum StorageSession { // Keys assumed to be unique across all storage areas (excluding 'managed')
 	RESEARCH_INSTANCES = "researchInstances",
 	ENGINES = "engines",
 }
 
-enum StorageLocal {
+export enum StorageLocal {
 	ENABLED = "enabled",
 	PERSIST_RESEARCH_INSTANCES = "persistResearchInstances",
 }
 
-enum StorageSync {
+export enum StorageSync {
 	AUTO_FIND_OPTIONS = "autoFindOptions",
 	MATCH_MODE_DEFAULTS = "matchModeDefaults",
 	SHOW_HIGHLIGHTS = "showHighlights",
@@ -105,7 +109,7 @@ enum StorageSync {
 	TERM_LISTS = "termLists",
 }
 
-interface ResearchInstance {
+export interface ResearchInstance {
 	terms: MatchTerms
 	highlightsShown: boolean
 	barCollapsed: boolean
@@ -116,7 +120,7 @@ interface ResearchInstance {
  * The default options to be used for items missing from storage, or to which items may be reset.
  * Set to sensible options for a generic first-time user of the extension.
  */
-const optionsDefault: StorageSyncValues = {
+export const optionsDefault: StorageSyncValues = {
 	autoFindOptions: {
 		searchParams: [ // Order of specificity, as only the first match will be used.
 			"search_terms", "search_term", "searchTerms", "searchTerm",
@@ -199,7 +203,7 @@ const storageCache: Record<StorageAreaName, StorageAreaValues<StorageAreaName> |
  * @param keys The keys corresponding to the entries to retrieve.
  * @returns A promise resolving to an object of storage entries.
  */
-const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
+export const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array<StorageArea<Area>>):
 	Promise<StorageAreaValues<Area>> =>
 {
 	if (keys && keys.every(key => storageCache[area][key as string] !== undefined)) {
@@ -222,7 +226,7 @@ const storageGet = async <Area extends StorageAreaName>(area: Area, keys?: Array
  * @param area 
  * @param store 
  */
-const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
+export const storageSet = async <Area extends StorageAreaName>(area: Area, store: StorageAreaValues<Area>) => {
 	Object.entries(store).forEach(([ key, value ]) => {
 		storageCache[area][key] = value;
 	});
@@ -232,8 +236,7 @@ const storageSet = async <Area extends StorageAreaName>(area: Area, store: Stora
 /**
  * Sets internal storage to its default working values.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const storageInitialize = async () => {
+export const storageInitialize = async () => {
 	const local = await storageGet("local");
 	const localOld = { ...local };
 	const toRemove: Array<string> = [];
@@ -301,8 +304,7 @@ const objectFixWithDefaults = (
 /**
  * Checks persistent options storage for unwanted or misconfigured values, then restores it to a normal state.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const optionsRepair = async () => {
+export const optionsRepair = async () => {
 	const sync = await storageGet("sync");
 	const syncOld = { ...sync };
 	const toRemove = [];

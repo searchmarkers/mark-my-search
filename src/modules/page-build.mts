@@ -4,19 +4,23 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-type PageInteractionObjectRowInfo = {
+import type { MatchTerm } from "/dist/modules/utility.mjs";
+import { getIdSequential, getName } from "/dist/modules/utility.mjs";
+import { StorageSession, storageGet } from "/dist/modules/storage.mjs";
+
+export type PageInteractionObjectRowInfo = {
 	className: string
 	key: string
 	label?: PageInteractionInfo["label"]
 	textbox?: PageInteractionInfo["textbox"]
 	checkbox?: PageInteractionInfo["checkbox"]
 }
-type PageInteractionObjectColumnInfo = {
+export type PageInteractionObjectColumnInfo = {
 	className: string
 	rows: Array<PageInteractionObjectRowInfo>
 }
-type PageInteractionSubmitterLoad = (setEnabled: (enabled: boolean) => void) => void
-type PageInteractionSubmitterInfo = {
+export type PageInteractionSubmitterLoad = (setEnabled: (enabled: boolean) => void) => void
+export type PageInteractionSubmitterInfo = {
 	text: string
 	id?: string
 	onLoad?: PageInteractionSubmitterLoad
@@ -36,14 +40,14 @@ type PageInteractionSubmitterInfo = {
 	}
 	alerts?: Record<PageAlertType, PageAlertInfo>
 }
-type PageInteractionCheckboxLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
-type PageInteractionCheckboxToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
-type PageInteractionCheckboxInfo = {
+export type PageInteractionCheckboxLoad = (setChecked: (checked: boolean) => void, objectIndex: number, containerIndex: number) => Promise<void>
+export type PageInteractionCheckboxToggle = (checked: boolean, objectIndex: number, containerIndex: number) => void
+export type PageInteractionCheckboxInfo = {
 	autoId?: string
 	onLoad?: PageInteractionCheckboxLoad
 	onToggle?: PageInteractionCheckboxToggle
 }
-type PageInteractionInfo = {
+export type PageInteractionInfo = {
 	className: string
 	list?: {
 		getLength: () => Promise<number>
@@ -94,36 +98,36 @@ type PageInteractionInfo = {
 		text: string
 	}
 }
-type PageSectionInfo = {
+export type PageSectionInfo = {
 	title?: {
 		text: string
 		expands?: boolean
 	}
 	interactions: Array<PageInteractionInfo>
 }
-type PagePanelInfo = {
+export type PagePanelInfo = {
 	className: string
 	name: {
 		text: string
 	}
 	sections: Array<PageSectionInfo>
 }
-type PageAlertInfo = {
+export type PageAlertInfo = {
 	text: string
 	timeout?: number
 }
-type FormField = {
+export type FormField = {
 	question: string
 	response: string
 }
 
-enum PageAlertType {
+export enum PageAlertType {
 	SUCCESS = "success",
 	FAILURE = "failure",
 	PENDING = "pending",
 }
 
-//enum PageButtonClass {
+//export enum PageButtonClass {
 //	TOGGLE = "toggle",
 //	ENABLED = "enabled",
 //}
@@ -135,7 +139,7 @@ enum PageAlertType {
  * @param details Custom template field entries.
  * @param key The API key to use.
  */
-const sendEmail: (
+export const sendEmail: (
 	service: string,
 	template: string,
 	details: {
@@ -172,8 +176,7 @@ const sendEmail: (
  * Sends a problem report message to a dedicated inbox.
  * @param userMessage An optional message string to send as a comment.
 	*/
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
+export const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const session = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 	const phrases = session.researchInstances[tab.id as number]
@@ -199,15 +202,14 @@ const sendProblemReport = async (userMessage = "", formFields: Array<FormField>)
 
 // TODO document functions
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const pageInsertWarning = (container: HTMLElement, text: string) => {
+export const pageInsertWarning = (container: HTMLElement, text: string) => {
 	const warning = document.createElement("div");
 	warning.classList.add("warning");
 	warning.textContent = text;
 	container.appendChild(warning);
 };
 
-const pageFocusScrollContainer = () =>
+export const pageFocusScrollContainer = () =>
 	(document.querySelector(".container-panel") as HTMLElement).focus()
 ;
 
@@ -217,8 +219,7 @@ const pageFocusScrollContainer = () =>
  * @param additionalStyleText 
  * @param shiftModifierIsRequired 
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const loadPage = (() => {
+export const loadPage = (() => {
 	/**
 	 * Fills and inserts a CSS stylesheet element to style the page.
 	 */
@@ -828,7 +829,7 @@ textarea
 			}
 			container.appendChild(button);
 			let getMessageText = () => "";
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
+			// @typescript-eslint/no-empty-function
 			let allowInputs = (allowed = true) => {};
 			button.addEventListener("click", () => {
 				button.disabled = true;
@@ -1131,7 +1132,7 @@ textarea
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
-		chrome.tabs.query = useChromeAPI()
+		chrome.tabs.query = !globalThis.browser
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
 		fillAndInsertStylesheet(additionalStyleText);

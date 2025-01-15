@@ -4,6 +4,20 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
+import type {
+	CommandInfo,
+	HighlightDetailsRequest, HighlightMessage, HighlightMessageResponse,
+	MatchMode, MatchTerms,
+} from "/dist/modules/utility.mjs";
+import {
+	assert,
+	CommandType,
+	itemsMatch,
+	MatchTerm,
+	messageSendBackground, parseCommand, termEquals,
+} from "/dist/modules/utility.mjs";
+import type { StorageSyncValues, StorageSync } from "/dist/modules/storage.mjs";
+
 type BrowserCommands = Array<chrome.commands.Command>
 type HighlightTags = {
 	reject: ReadonlySet<string>,
@@ -558,7 +572,6 @@ const focusOnScrollMarkerPaint = (term: MatchTerm | undefined, container: HTMLEl
 	// Depends on scroll markers refreshed Paint implementation (TODO)
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const focusOnScrollMarker = (term: MatchTerm | undefined, container: HTMLElement, controlsInfo: ControlsInfo) =>
 	focusOnScrollMarkerClassic(term, container)
 ;
@@ -3183,7 +3196,7 @@ const getTermsFromSelection = () => {
 
 	return () => {
 		if (!paintUsePaintingFallback) {
-			(CSS["paintWorklet"] as PaintWorkletType).addModule(chrome.runtime.getURL("/dist/paint.js"));
+			CSS["paintWorklet"].addModule(chrome.runtime.getURL("/dist/paint.js"));
 		}
 		// Can't remove controls because a script may be left behind from the last install, and start producing unhandled errors. FIXME
 		//controlsRemove();
@@ -3388,3 +3401,5 @@ const getTermsFromSelection = () => {
 		messageHandleHighlightGlobal = messageHandleHighlight;
 	};
 })()();
+
+export type { TermSelectorStyles, HighlightBox };
