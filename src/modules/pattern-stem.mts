@@ -10,8 +10,7 @@
  * @param word A word.
  * @returns A 2-element array containing the prefix and suffix determined to best fit the word and its forms.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getWordPatternStrings = (() => { // TODO maybe rename as inflection finder?
+export const getWordPatternStrings = (() => { // TODO maybe rename as inflection finder?
 	/**
 	 * Reverses the characters in a string.
 	 * @param chars A string.

@@ -28,25 +28,14 @@
 	],
 
 	"background": {
-		"scripts": [
-			"/dist/include/utility.js",
-			"/dist/include/pattern-stem.js",
-			"/dist/include/pattern-diacritic.js",
-			"/dist/include/util-privileged.js",
-			"/dist/include/storage.js",
-			"/dist/background.js"
-		]
+		"type": "module",
+		"scripts": [ "/dist/background.mjs" ]
 	},
 
 	"content_scripts": [
 		{
 			"matches": [ "*://*/*" ],
-			"js": [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
-				"/dist/content.js"
-			],
+			"js": [ "/dist/entrypoints/content.js" ],
 			"run_at": "document_start"
 		}
 	],
@@ -64,16 +53,10 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
-				"/dist/paint.js",
-				"/icons/arrow.svg",
-				"/icons/close.svg",
-				"/icons/search.svg",
-				"/icons/show.svg",
-				"/icons/refresh.svg",
-				"/icons/create.svg",
-				"/icons/delete.svg",
-				"/icons/edit.svg",
-				"/icons/reveal.svg"
+				"/icons/*.svg",
+				"/dist/content.mjs",
+				"/dist/entrypoints/content.js",
+				"/dist/modules/*.mjs"
 			],
 			"matches": [ "*://*/*" ]
 		}

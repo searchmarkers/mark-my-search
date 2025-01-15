@@ -10,8 +10,7 @@
  * @param chars A sequence of characters.
  * @returns A regex string which matches accented forms of the letters.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getDiacriticsMatchingPatternString: (chars: string) => string = (() => {
+export const getDiacriticsMatchingPatternString: (chars: string) => string = (() => {
 	/**
 	 * Gets the groups of characters to be considered equal (including diacritic forms) in regex notation.
 	 * @returns An array of regex OR groups, each corresponding to an alphanumeric character's lowercase and uppercase forms.
