@@ -4,7 +4,6 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.d.mjs";
 import type { ConfigBarControlsShown } from "/dist/modules/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
@@ -17,16 +16,6 @@ type SelectionReturnTarget = Readonly<{
 type ControlButtonName = keyof ConfigBarControlsShown
 
 interface AbstractToolbar {
-	readonly appendTerm: (term: MatchTerm, commands: BrowserCommands) => void
-
-	readonly insertTerm: (term: MatchTerm, index: number, commands: BrowserCommands) => void
-
-	readonly replaceTerm: (term: MatchTerm, termOld: MatchTerm | number) => void
-
-	readonly replaceTerms: (terms: ReadonlyArray<MatchTerm>, commands: BrowserCommands) => void
-
-	readonly removeTerm: (term: MatchTerm | number) => void
-
 	/**
 	 * Updates the look of every term control, to reflect whether their terms currently occur within the document.
 	 */

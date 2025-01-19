@@ -10,7 +10,7 @@ import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.d.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { EleID, ArrayBox, type ArrayMutation } from "/dist/modules/common.mjs";
+import { EleID, ArrayBox } from "/dist/modules/common.mjs";
 import type { AbstractEngineManager } from "/dist/modules/highlight/engine-manager.d.mjs";
 import { EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
 import type { AbstractToolbar, ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
@@ -23,7 +23,6 @@ type GetToolbar<CreateIfNull extends boolean> = (CreateIfNull extends true
 )
 
 type BrowserCommands = Array<chrome.commands.Command>
-type BrowserCommandsReadonly = ReadonlyArray<chrome.commands.Command>
 
 type ControlsInfo = {
 	pageModifyEnabled: boolean
@@ -81,49 +80,6 @@ const getTermsFromSelection = (termTokens: TermTokens): Array<MatchTerm> => {
 		}
 	}
 	return termsMut;
-};
-
-const updateToolbar = (
-	terms: ReadonlyArray<MatchTerm>,
-	mutation: ArrayMutation<MatchTerm> | null,
-	toolbar: AbstractToolbar,
-	commands: BrowserCommandsReadonly,
-) => {
-	switch (mutation?.type) {
-		case "remove": {
-			toolbar.removeTerm(mutation.index);
-			break;
-		}
-		case "replace": {
-			toolbar.replaceTerm(mutation.new, mutation.index);
-			break;
-		}
-		case "insert": {
-			toolbar.insertTerm(mutation.new, mutation.index, commands);
-			break;
-		}
-		default: {
-			toolbar.replaceTerms(terms, commands);
-		}
-	}
-	toolbar.updateControlVisibility("replaceTerms");
-	toolbar.insertAdjacentTo(document.body, "beforebegin");
-};
-
-const startHighlighting = (
-	termsOld: ReadonlyArray<MatchTerm>,
-	terms: ReadonlyArray<MatchTerm>,
-	highlighter: AbstractEngineManager,
-	hues: ReadonlyArray<number>,
-) => {
-	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term => !termsOld.includes(term));
-	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(termOld => !terms.includes(termOld));
-	highlighter.startHighlighting(
-		terms,
-		termsToHighlight,
-		termsToPurge,
-		hues,
-	);
 };
 
 // TODO decompose this horrible generator function
@@ -244,16 +200,18 @@ class TermsSyncService {
 		getToolbar()?.updateStatuses();
 	});
 	const termsBox = new ArrayBox<MatchTerm>();
-	termsBox.addListener((terms, oldTerms, mutation) => {
-		if (itemsMatch(terms, oldTerms, termEquals)) {
+	termsBox.addListener((terms, oldTerms) => setTimeout(() => {
+		// The timeout gives the toolbar a chance to redraw before we start highlighting.
+		if (!controlsInfo.pageModifyEnabled) {
 			return;
 		}
-		updateToolbar(terms, mutation, getOrCreateToolbar(), commands);
-		// Give the interface a chance to redraw before performing highlighting.
-		setTimeout(() => {
-			if (controlsInfo.pageModifyEnabled) startHighlighting(oldTerms, terms, highlighter, hues);
-		});
-	});
+		highlighter.startHighlighting(
+			terms,
+			terms.filter(term => !oldTerms.includes(term)),
+			oldTerms.filter(termOld => !terms.includes(termOld)),
+			hues,
+		);
+	}));
 	const termsSyncService = new TermsSyncService(termsBox);
 	// TODO: Remove toolbar completely when not in use. Use WeakRef?
 	const { getToolbar, getOrCreateToolbar } = (() => {

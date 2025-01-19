@@ -20,7 +20,7 @@ import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/
 import { EleID, EleClass, getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
-import type { ArrayAccessor, ArrayMutator } from "/dist/modules/common.mjs";
+import type { ArrayAccessor, ArrayMutator, ArrayMutation, ArrayObservable } from "/dist/modules/common.mjs";
 import { EleID as CommonEleID, EleClass as CommonEleClass } from "/dist/modules/common.mjs";
 import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.d.mjs";
 import type {
@@ -32,6 +32,7 @@ enum ToolbarSection { LEFT, TERMS, RIGHT }
 
 class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarControlButtonInterface {
 	readonly #controlsInfo: ControlsInfo;
+	readonly #commands: BrowserCommands; // TODO: Make commands data passing more consistent.
 	readonly #termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm>;
 	readonly #termTokens: TermTokens;
 	readonly #highlighter: HighlighterCSSInterface & HighlighterCounterInterface & HighlighterWalkerInterface;
@@ -55,13 +56,14 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		hues: ReadonlyArray<number>,
 		commands: BrowserCommands,
 		controlsInfo: ControlsInfo,
-		termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm>,
+		termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm> & ArrayObservable<MatchTerm>,
 		termTokens: TermTokens,
 		highlighter: HighlighterCSSInterface & HighlighterCounterInterface & HighlighterWalkerInterface,
 	) {
 		this.#hues = hues;
 		this.#termsBox = termsBox;
 		this.#controlsInfo = controlsInfo;
+		this.#commands = commands;
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
 		this.#barContainer = document.createElement("div");
@@ -205,7 +207,10 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 				this.createAndInsertControl("replaceTerms", ToolbarSection.RIGHT)
 			),
 		};
-		this.replaceTerms(termsBox.getItems(), commands);
+		termsBox.addListener((terms, oldTerms, mutation) => {
+			this.onTermsMutated(terms, mutation);
+		});
+		this.onTermsMutated(termsBox.getItems(), null);
 	}
 
 	getTermAbstractControls (): Array<TermAbstractControl> {
@@ -248,6 +253,26 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 				return;
 			}
 		}
+	}
+
+	onTermsMutated (terms: ReadonlyArray<MatchTerm>, mutation: ArrayMutation<MatchTerm> | null) {
+		switch (mutation?.type) {
+		case "remove": {
+			this.removeTerm(mutation.index);
+			break;
+		}
+		case "replace": {
+			this.replaceTerm(mutation.new, mutation.index);
+			break;
+		}
+		case "insert": {
+			this.insertTerm(mutation.new, mutation.index, this.#commands);
+			break;
+		}
+		default: {
+			this.replaceTerms(terms, this.#commands);
+		}}
+		this.updateControlVisibility("replaceTerms");
 	}
 
 	appendTerm (term: MatchTerm, commands: BrowserCommands) {

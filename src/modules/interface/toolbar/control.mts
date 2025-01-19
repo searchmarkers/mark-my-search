@@ -101,20 +101,21 @@ class Control {
 	}
 
 	updateVisibility () {
-		const value = this.#controlsInfo.barControlsShown[this.#name];
-		if (this.#name === "replaceTerms") {
+		const shownValue = this.#controlsInfo.barControlsShown[this.#name];
+		// TODO: Do not hardcode this behaviour.
+		if (this.#name === "replaceTerms" && shownValue) {
 			const doTermsMatch = (terms: ReadonlyArray<MatchTerm>) => {
 				const termsOther = this.#termsAccessor.getItems();
 				return terms.length === termsOther.length // TODO: This seems dubious.
 					&& terms.every(({ phrase }) => termsOther.find(term => term.phrase === phrase));
 			};
-			const shown = (value
-				&& this.#controlsInfo.termsOnHold.length > 0
+			const shown = (
+				this.#controlsInfo.termsOnHold.length > 0
 				&& !doTermsMatch(this.#controlsInfo.termsOnHold)
 			);
 			this.#control.classList.toggle(EleClass.DISABLED, !shown);
 		} else {
-			this.#control.classList.toggle(EleClass.DISABLED, !value);
+			this.#control.classList.toggle(EleClass.DISABLED, !shownValue);
 		}
 	}
 
