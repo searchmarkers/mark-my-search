@@ -10,7 +10,7 @@ import type { CommandInfo } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.d.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { EleID, ArrayBox } from "/dist/modules/common.mjs";
+import { ArrayBox } from "/dist/modules/common.mjs";
 import type { AbstractEngineManager } from "/dist/modules/highlight/engine-manager.d.mjs";
 import { EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
 import type { AbstractToolbar, ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
@@ -33,21 +33,6 @@ type ControlsInfo = {
 	barLook: Readonly<ConfigValues["barLook"]>
 	matchMode: Readonly<MatchMode>
 }
-
-// TODO put in toolbar
-/**
- * Safely removes focus from the toolbar, returning it to the current document.
- * @returns `true` if focus was changed (i.e. it was in the toolbar), `false` otherwise.
- */
-const focusReturnToDocument = (): boolean => {
-	const focus = document.activeElement;
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-	if (focus instanceof HTMLElement && focus.id === EleID.BAR) {
-		focus.blur();
-		return true;
-	}
-	return false;
-};
 
 /**
  * Extracts terms from the currently user-selected string.
@@ -90,7 +75,7 @@ const getTermsFromSelection = (termTokens: TermTokens): Array<MatchTerm> => {
 const respondToCommand_factory = (
 	termsBox: ArrayBox<MatchTerm>,
 	controlsInfo: ControlsInfo,
-	getToolbarOrNull: GetToolbar<false>,
+	getToolbar: GetToolbar<false>,
 	highlighter: AbstractEngineManager,
 ) => {
 	let selectModeFocus = false;
@@ -104,7 +89,7 @@ const respondToCommand_factory = (
 		}
 		switch (commandInfo.type) {
 		case "toggleBar": {
-			getToolbarOrNull()?.toggleHidden();
+			getToolbar()?.toggleHidden();
 			break;
 		} case "toggleSelect": {
 			selectModeFocus = !selectModeFocus;
@@ -113,25 +98,30 @@ const respondToCommand_factory = (
 			termsBox.setItems(controlsInfo.termsOnHold);
 			break;
 		} case "stepGlobal": {
-			if (focusReturnToDocument()) {
+			if (getToolbar()?.isFocused()) {
+				// We return the document selection and do not proceed.
+				getToolbar()?.returnSelectionToDocument();
 				break;
 			}
 			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, true, null);
 			break;
 		} case "advanceGlobal": {
-			focusReturnToDocument();
+			if (getToolbar()?.isFocused()) {
+				// We return the document selection and then jump from there.
+				getToolbar()?.returnSelectionToDocument();
+			}
 			const term = (selectModeFocus && focusedIdx !== null) ? termsBox.getItems()[focusedIdx] : null;
 			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
 			break;
 		} case "focusTermInput": {
-			getToolbarOrNull()?.focusTermInput(commandInfo.termIdx ?? null);
+			getToolbar()?.focusTermInput(commandInfo.termIdx ?? null);
 			break;
 		} case "selectTerm": {
 			if (focusedIdx === null) {
 				break;
 			}
 			const term = termsBox.getItems()[focusedIdx];
-			getToolbarOrNull()?.indicateTerm(term);
+			getToolbar()?.indicateTerm(term);
 			if (!selectModeFocus) {
 				highlighter.stepToNextOccurrence(!!commandInfo.reversed, false, term);
 			}
@@ -208,7 +198,7 @@ class TermsSyncService {
 		highlighter.startHighlighting(
 			terms,
 			terms.filter(term => !oldTerms.includes(term)),
-			oldTerms.filter(termOld => !terms.includes(termOld)),
+			oldTerms.filter(oldTerm => !terms.includes(oldTerm)),
 			hues,
 		);
 	}));
@@ -221,12 +211,7 @@ class TermsSyncService {
 			getToolbar: () => toolbar,
 			getOrCreateToolbar: () => {
 				if (!toolbar) {
-					toolbar = new Toolbar(
-						hues, commands,
-						controlsInfo,
-						termsBox,
-						termTokens, highlighter,
-					);
+					toolbar = new Toolbar(hues, commands, controlsInfo, termsBox, termTokens, highlighter);
 				}
 				return toolbar;
 			}

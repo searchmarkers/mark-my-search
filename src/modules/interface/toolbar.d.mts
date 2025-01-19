@@ -31,6 +31,10 @@ interface AbstractToolbar {
 
 	readonly focusTermInput: (termIndex: number | null) => void
 
+	readonly isFocused: () => boolean
+	
+	readonly returnSelectionToDocument: () => void
+
 	readonly updateHighlightsShownFlag: () => void
 
 	readonly updateVisibility: () => void

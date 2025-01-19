@@ -103,7 +103,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 						this.focusLastFocusedInput();
 					}
 				} else {
-					this.returnSelectionToDocument(!!event.relatedTarget);
+					this.onFocusOut(event.relatedTarget);
 					inputsSetFocusable(false);
 				}
 			}
@@ -419,20 +419,11 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		return { control: null, termIndex: null, focusArea: "none" };
 	}
 
-	returnSelectionToDocument (eventHasRelatedTarget: boolean) {
-		if (eventHasRelatedTarget) {
-			setTimeout(() => {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-				if (!document.activeElement || document.activeElement.id !== CommonEleID.BAR) {
-					this.#selectionReturn.forgetTarget();
-				}
-			});
-			return; // Focus is being moved, not lost.
-		}
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-		if (document.activeElement && document.activeElement.id === CommonEleID.BAR) {
-			return;
-		}
+	isFocused () {
+		return !!document.activeElement && document.activeElement.id === CommonEleID.BAR as string;
+	}
+
+	returnSelectionToDocument () {
 		const target = this.#selectionReturn.getTarget();
 		if (target) {
 			this.#selectionReturn.forgetTarget();
@@ -445,6 +436,21 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 					selection.removeAllRanges();
 					target.selectionRanges.forEach(range => selection.addRange(range));
 				}
+			}
+		}
+	}
+
+	onFocusOut (newFocus: EventTarget | null) {
+		if (newFocus) {
+			// Focus is being moved, not lost.
+			setTimeout(() => {
+				if (!this.isFocused()) {
+					this.#selectionReturn.forgetTarget();
+				}
+			});
+		} else {
+			if (!this.isFocused()) {
+				this.returnSelectionToDocument();
 			}
 		}
 	}
