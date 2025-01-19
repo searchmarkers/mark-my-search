@@ -20,23 +20,19 @@ import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/
 import { EleID, EleClass, getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { ArrayAccessor, ArrayMutator } from "/dist/modules/common.mjs";
 import { EleID as CommonEleID, EleClass as CommonEleClass } from "/dist/modules/common.mjs";
 import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.d.mjs";
 import type {
 	HighlighterCounterInterface, HighlighterWalkerInterface,
 } from "/dist/modules/highlight/engine-manager.d.mjs";
-import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
+import type { ControlsInfo } from "/dist/content.mjs";
 
-enum ToolbarSection {
-	LEFT = "left",
-	TERMS = "terms",
-	RIGHT = "right",
-}
+enum ToolbarSection { LEFT, TERMS, RIGHT }
 
 class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarControlButtonInterface {
 	readonly #controlsInfo: ControlsInfo;
-	readonly #termSetter: TermSetter;
-	readonly #doPhrasesMatchTerms: DoPhrasesMatchTerms;
+	readonly #termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm>;
 	readonly #termTokens: TermTokens;
 	readonly #highlighter: HighlighterCSSInterface & HighlighterCounterInterface & HighlighterWalkerInterface;
 
@@ -56,18 +52,15 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	readonly #hues: ReadonlyArray<number> = [];
 
 	constructor (
-		terms: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 		commands: BrowserCommands,
 		controlsInfo: ControlsInfo,
-		termSetter: TermSetter,
-		doPhrasesMatchTerms: DoPhrasesMatchTerms,
+		termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm>,
 		termTokens: TermTokens,
 		highlighter: HighlighterCSSInterface & HighlighterCounterInterface & HighlighterWalkerInterface,
 	) {
 		this.#hues = hues;
-		this.#termSetter = termSetter;
-		this.#doPhrasesMatchTerms = doPhrasesMatchTerms;
+		this.#termsBox = termsBox;
 		this.#controlsInfo = controlsInfo;
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
@@ -177,19 +170,19 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			event.preventDefault();
 		});
 		this.#sections = {
-			left: document.createElement("span"),
-			terms: document.createElement("span"),
-			right: document.createElement("span"),
+			[ToolbarSection.LEFT]: document.createElement("span"),
+			[ToolbarSection.TERMS]: document.createElement("span"),
+			[ToolbarSection.RIGHT]: document.createElement("span"),
 		};
-		this.#sections.left.id = EleID.BAR_LEFT;
-		this.#sections.left.classList.add(EleClass.BAR_CONTROLS);
-		this.#sections.terms.id = EleID.BAR_TERMS;
-		this.#sections.right.id = EleID.BAR_RIGHT;
-		this.#sections.right.classList.add(EleClass.BAR_CONTROLS);
+		this.#sections[ToolbarSection.LEFT].id = EleID.BAR_LEFT;
+		this.#sections[ToolbarSection.LEFT].classList.add(EleClass.BAR_CONTROLS);
+		this.#sections[ToolbarSection.TERMS].id = EleID.BAR_TERMS;
+		this.#sections[ToolbarSection.RIGHT].id = EleID.BAR_RIGHT;
+		this.#sections[ToolbarSection.RIGHT].classList.add(EleClass.BAR_CONTROLS);
 		for (const sectionName of Toolbar.#sectionNames) {
 			this.#bar.appendChild(this.#sections[sectionName]);
 		}
-		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termSetter, doPhrasesMatchTerms);
+		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termsBox);
 		this.#controls = {
 			// The order of properties determines the order of insertion into (sections of) the toolbar.
 			toggleBarCollapsed: (
@@ -205,14 +198,14 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 				this.createAndInsertControl("toggleHighlights", ToolbarSection.LEFT)
 			),
 			appendTerm: (() => {
-				this.#termAppendControl.appendTo(this.#sections.right);
+				this.#termAppendControl.appendTo(this.#sections[ToolbarSection.RIGHT]);
 				return this.#termAppendControl.control;
 			})(),
 			replaceTerms: (
 				this.createAndInsertControl("replaceTerms", ToolbarSection.RIGHT)
 			),
 		};
-		this.replaceTerms(terms, commands);
+		this.replaceTerms(termsBox.getItems(), commands);
 	}
 
 	getTermAbstractControls (): Array<TermAbstractControl> {
@@ -260,7 +253,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	appendTerm (term: MatchTerm, commands: BrowserCommands) {
 		this.#termControls.push(new TermReplaceControl(term,
 			commands, this.#controlsInfo,
-			this, this.#termSetter, this.#termTokens, this.#highlighter,
+			this, this.#termsBox, this.#termTokens, this.#highlighter,
 		));
 		this.#style.applyTermStyle(term, this.#termControls.length - 1, this.#hues);
 		this.refreshTermControls();
@@ -269,7 +262,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	insertTerm (term: MatchTerm, index: number, commands: BrowserCommands) {
 		this.#termControls.splice(index, 0, new TermReplaceControl(term,
 			commands, this.#controlsInfo,
-			this, this.#termSetter, this.#termTokens, this.#highlighter,
+			this, this.#termsBox, this.#termTokens, this.#highlighter,
 		));
 		this.#style.applyTermStyle(term, index, this.#hues);
 		this.refreshTermControls();
@@ -296,7 +289,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		for (const term of terms) {
 			this.#termControls.push(new TermReplaceControl(term,
 				commands, this.#controlsInfo,
-				this, this.#termSetter, this.#termTokens, this.#highlighter,
+				this, this.#termsBox, this.#termTokens, this.#highlighter,
 			));
 		}
 		for (let i = 0; i < terms.length; i++) {
@@ -330,20 +323,20 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 
 	indicateTerm (term: MatchTerm | null) {
 		if (this.#indicatedClassToken) {
-			this.#sections.terms.classList.remove(this.#indicatedClassToken);
+			this.#sections[ToolbarSection.TERMS].classList.remove(this.#indicatedClassToken);
 		}
 		if (term) {
 			const termToken = this.#termTokens.get(term);
 			const termControl = this.#termControls.findIndex(control => control.getTermToken() === termToken);
 			this.#indicatedClassToken = getControlPadClass(termControl);
-			this.#sections.terms.classList.add(this.#indicatedClassToken);
+			this.#sections[ToolbarSection.TERMS].classList.add(this.#indicatedClassToken);
 		}
 	}
 
 	refreshTermControls () {
-		this.#sections.terms.replaceChildren();
+		this.#sections[ToolbarSection.TERMS].replaceChildren();
 		for (const control of this.#termControls) {
-			control.appendTo(this.#sections.terms);
+			control.appendTo(this.#sections[ToolbarSection.TERMS]);
 		}
 		for (let i = 0; i < this.#termControls.length; i++) {
 			this.#style.updateTermStyle(this.#termControls[i].getTermToken(), i, this.#hues);
@@ -456,7 +449,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		barSide: Exclude<ToolbarSection, ToolbarSection.TERMS>,
 	): Control {
 		const info = this.createControlButtonInfo(controlName);
-		const control = new Control(controlName, info, this.#controlsInfo, this.#doPhrasesMatchTerms);
+		const control = new Control(controlName, info, this.#controlsInfo, this.#termsBox);
 		control.appendTo(this.#sections[barSide]);
 		return control;
 	}
@@ -502,7 +495,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		}; case "replaceTerms": return {
 			path: "/icons/refresh.svg",
 			onClick: () => {
-				this.#termSetter.setTerms(controlsInfo.termsOnHold);
+				this.#termsBox.setItems(controlsInfo.termsOnHold);
 			},
 		};}
 	}

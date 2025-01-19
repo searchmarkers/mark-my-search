@@ -213,6 +213,7 @@ const getTermTokenClass = (termToken: string): string => EleClass.TERM + "-" + t
 
 const getTermClassToken = (termClass: string) => termClass.slice(EleClass.TERM.length + 1);
 
+// TODO: Instantiate this in specific places and pass it around, rather than using global index.
 const getIdSequential = (function* () {
 	let id = 0;
 	while (true) {
@@ -271,6 +272,104 @@ type Entries = <T extends Record<PropertyKey, unknown>>(
 	obj: T
 ) => Array<B<A<{ [K in keyof T]: [K, T[K]] }[keyof T]>>>
 
+interface ArrayAccessor<T> {
+	getItems: () => ReadonlyArray<T>
+}
+
+interface ArrayMutator<T> {
+	setItems: (items: ReadonlyArray<T>) => void
+	replaceItem: (item: T | null, index: number) => void
+	insertItem: (item: T, index?: number) => void
+}
+
+type ArrayListener<T> = (items: ReadonlyArray<T>, oldItems: ReadonlyArray<T>, mutation: ArrayMutation<T> | null) => void
+
+type ArrayMutation<T> = Readonly<{
+	type: "remove"
+	index: number
+	old: T
+} | {
+	type: "replace"
+	index: number
+	new: T
+	old: T
+} | {
+	type: "insert"
+	index: number
+	new: T
+}>
+
+interface ArrayObservable<T> {
+	addListener: (listener: ArrayListener<T>) => void
+}
+
+class ArrayBox<T> implements ArrayAccessor<T>, ArrayMutator<T>, ArrayObservable<T> {
+	#items: ReadonlyArray<T> = [];
+	#listeners = new Set<ArrayListener<T>>();
+
+	getItems () {
+		return this.#items;
+	}
+
+	setItems (items: ReadonlyArray<T>) {
+		if (items.length === this.#items.length && items.every((item, i) => item === this.#items[i])) {
+			return;
+		}
+		const oldItems = this.#items;
+		this.#items = [ ...items ]; // The array passed may mutate unexpectedly; create our own copy.
+		for (const listener of this.#listeners) {
+			listener(this.#items, oldItems, null);
+		}
+	}
+
+	replaceItem (item: T | null, index: number) {
+		if (this.#items[index] === item) {
+			return;
+		}
+		const mutation: ArrayMutation<T> = item === null ? {
+			type: "remove",
+			index,
+			old: this.#items[index],
+		} : {
+			type: "replace",
+			index,
+			new: item,
+			old: this.#items[index],
+		};
+		const oldItems = this.#items;
+		if (item) {
+			this.#items = this.#items.slice(0, index).concat(item).concat(this.#items.slice(index + 1));
+		} else {
+			this.#items = this.#items.slice(0, index).concat(this.#items.slice(index + 1));
+		}
+		for (const listener of this.#listeners) {
+			listener(this.#items, oldItems, mutation);
+		}
+	}
+
+	insertItem (item: T, index?: number) {
+		index ??= this.#items.length;
+		const mutation: ArrayMutation<T> = {
+			type: "insert",
+			index,
+			new: item,
+		};
+		const oldItems = this.#items;
+		if (index === this.#items.length) {
+			this.#items = this.#items.concat(item);
+		} else {
+			this.#items = this.#items.slice(0, index).concat(item ?? []).concat(this.#items.slice(index));
+		}
+		for (const listener of this.#listeners) {
+			listener(this.#items, oldItems, mutation);
+		}
+	}
+
+	addListener (listener: ArrayListener<T>) {
+		this.#listeners.add(listener);
+	}
+}
+
 /**
  * Compares two arrays using an item comparison function.
  * @param as An array of items of a single type.
@@ -307,6 +406,9 @@ export {
 	type RWContainer, type RContainer, type WContainer, createContainer,
 	type AllReadonly, type StopReadonly,
 	type FromEntries, type Entries,
+	type ArrayMutation,
+	type ArrayAccessor, type ArrayMutator, type ArrayObservable,
+	ArrayBox,
 	itemsMatch,
 	sanitizeForRegex,
 };
