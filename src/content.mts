@@ -300,9 +300,7 @@ class TermsSyncService {
 			controlsInfo.termsOnHold = message.termsOnHold;
 		}
 		if (message.deactivate) {
-			//removeTermsAndDeactivate();
 			highlighter.endHighlighting();
-			termsBox.setItems([]);
 			getToolbar()?.remove();
 		}
 		if (message.terms) {
