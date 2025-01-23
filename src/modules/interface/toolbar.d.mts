@@ -5,7 +5,6 @@
  */
 
 import type { TermControlInputInterface } from "/dist/modules/interface/toolbar/term-control.d.mjs";
-import type { ConfigBarControlsShown } from "/dist/modules/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
 
 type SelectionReturnTarget = Readonly<{
@@ -13,7 +12,14 @@ type SelectionReturnTarget = Readonly<{
 	selectionRanges: Array<Range> | null
 }>
 
-type ControlButtonName = keyof ConfigBarControlsShown
+type ControlButtonName =
+	| "toggleBarCollapsed"
+	| "disableTabResearch"
+	| "performSearch"
+	| "toggleHighlights"
+	| "appendTerm"
+	| "replaceTerms"
+;
 
 interface AbstractToolbar {
 	/**

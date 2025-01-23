@@ -129,12 +129,9 @@ ${HIGHLIGHT_TAG} {
 
 	readonly getTermBackgroundStyle = TermCSS.getDiagonalStyle;
 
-	startHighlighting (
-		terms: ReadonlyArray<MatchTerm>,
-		termsToHighlight: ReadonlyArray<MatchTerm>,
-		termsToPurge: ReadonlyArray<MatchTerm>,
-		hues: ReadonlyArray<number>,
-	) {
+	startHighlighting (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
+		const termsToHighlight = terms.filter(a => this.terms.current.every(b => JSON.stringify(a) !== JSON.stringify(b)));
+		const termsToPurge = this.terms.current.filter(a => terms.every(b => JSON.stringify(a) !== JSON.stringify(b)));
 		// Clean up.
 		this.#flowMutations.unobserveMutations();
 		this.undoHighlights(termsToPurge);
@@ -151,6 +148,8 @@ ${HIGHLIGHT_TAG} {
 		this.#flowMutations.unobserveMutations();
 		this.undoHighlights();
 		this.removeTermStyles();
+		this.terms.assign([]);
+		this.hues.assign([]);
 	}
 
 	/**

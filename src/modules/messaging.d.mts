@@ -4,57 +4,108 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { CommandInfo } from "/dist/modules/commands.mjs";
-import type { ConfigValues } from "/dist/modules/storage.mjs";
 import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { ResearchRecord } from "/dist/modules/research.mjs";
 
-type Tab = Readonly<{
-	getDetails?: TabDetailsRequest
-	commands?: ReadonlyArray<CommandInfo>
-	extensionCommands?: ReadonlyArray<chrome.commands.Command>
-	terms?: ReadonlyArray<MatchTerm>
-	termsOnHold?: ReadonlyArray<MatchTerm>
-	deactivate?: boolean
-	enablePageModify?: boolean
-	toggleHighlightsOn?: boolean
-	toggleBarCollapsedOn?: boolean
-	barControlsShown?: ConfigValues["barControlsShown"]
-	barLook?: ConfigValues["barLook"]
-	highlightLook?: ConfigValues["highlightLook"]
-	highlighter?: ConfigValues["highlighter"]
-	matchMode?: ConfigValues["matchModeDefaults"]
+type Tab = Readonly<TabRequest | {
+	type: "commands"
+	commands: ReadonlyArray<TabCommand>
 }>
 
-type TabDetailsRequest = Readonly<{
-	termsFromSelection?: true
-	highlightsShown?: true
-}>
-
-type TabResponse = Readonly<{
-	terms?: ReadonlyArray<MatchTerm>
-	highlightsShown?: boolean
-}>
-
-type Background<WithId = false> = Readonly<{
-	highlightCommands?: ReadonlyArray<CommandInfo>
-	initializationGet?: boolean
-	terms?: ReadonlyArray<MatchTerm>
-	termsSend?: boolean
-	deactivateTabResearch?: boolean
-	performSearch?: boolean
-	toggle?: {
-		highlightsShownOn?: boolean
-		barCollapsedOn?: boolean
-	}
+type TabRequest = Readonly<{
+	type: "request"
 } & (
-	(WithId extends true ? never : Record<never, never>) | {
-		tabId: number
+	{
+		requestType: "selectedText"
+	} | {
+		requestType: "highlightsShown"
 	}
 )>
 
-type BackgroundResponse = Tab | null
+type TabResponse = Readonly<{
+	type: "selectedText"
+	selectedText: string
+} | {
+	type: "highlightsShown"
+	highlightsShown: boolean
+}>
+
+type TabCommand = Readonly<{
+	type: "receiveExtensionCommands"
+	extensionCommands: ReadonlyArray<chrome.commands.Command>
+} | {
+	type: "useTerms"
+	terms: ReadonlyArray<MatchTerm>
+	replaceExisting: boolean
+} | {
+	type: "activate"
+} | {
+	type: "deactivate"
+} | {
+	type: "toggleHighlightsShown"
+	enable: boolean
+} | {
+	type: "toggleBarCollapsed"
+	enable: boolean
+} | {
+	type: "toggleSelectMode"
+} | {
+	type: "replaceTerms"
+} | {
+	type: "stepGlobal"
+	forwards: boolean
+} | {
+	type: "jumpGlobal"
+	forwards: boolean
+} | {
+	type: "selectTerm"
+	forwards: boolean
+	termIndex: number
+} | {
+	type: "focusTermInput"
+	termIndex: number | null
+}>
+
+type Background = Readonly<BackgroundRequest | {
+	type: "commands"
+	commands: ReadonlyArray<BackgroundCommand>
+}>
+
+type BackgroundRequest = Readonly<{
+	type: "request"
+} & (
+	{
+		requestType: "tabId"
+	} | {
+		requestType: "tabResearchRecord"
+	}
+)>
+
+type BackgroundCommand = Readonly<{
+	type: "assignTabTerms"
+	terms: ReadonlyArray<MatchTerm>
+} | {
+	type: "sendTabCommands"
+	commands: ReadonlyArray<TabCommand>
+} | {
+	type: "toggleInTab"
+	highlightsShownOn?: boolean
+	barCollapsedOn?: boolean
+} | {
+	type: "deactivateTabResearch"
+} | {
+	type: "performTabSearch"
+}>
+
+type BackgroundResponse = Readonly<{
+	type: "tabId"
+	tabId: number
+} | {
+	type: "tabResearchRecord"
+	researchRecord: ResearchRecord | null
+}>
 
 export type {
-	Tab, TabDetailsRequest, TabResponse,
-	Background, BackgroundResponse,
+	Tab, TabRequest, TabResponse, TabCommand,
+	Background, BackgroundRequest, BackgroundResponse, BackgroundCommand,
 };

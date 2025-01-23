@@ -460,7 +460,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	}
 
 	updateVisibility () {
-		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModifyEnabled);
+		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModificationAllowed);
 	}
 
 	updateCollapsed () {
@@ -500,39 +500,56 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			onClick: () => {
 				controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
 				sendBackgroundMessage({
-					toggle: {
+					type: "commands",
+					commands: [ {
+						type: "toggleInTab",
 						barCollapsedOn: controlsInfo.barCollapsed,
-					},
+					} ],
 				});
 				this.updateCollapsed();
 			},
-		}; case "disableTabResearch": return {
+		};
+		case "disableTabResearch": return {
 			path: "/icons/close.svg",
 			onClick: () => sendBackgroundMessage({
-				deactivateTabResearch: true,
+				type: "commands",
+				commands: [ {
+					type: "deactivateTabResearch",
+				} ],
 			}),
-		}; case "performSearch": return {
+		};
+		case "performSearch": return {
 			path: "/icons/search.svg",
 			onClick: () => sendBackgroundMessage({
-				performSearch: true,
+				type: "commands",
+				commands: [ {
+					type: "performTabSearch",
+				} ],
 			}),
-		}; case "toggleHighlights": return {
+		};
+		case "toggleHighlights": return {
 			path: "/icons/show.svg",
 			onClick: () => sendBackgroundMessage({
-				toggle: {
+				type: "commands",
+				commands: [ {
+					type: "toggleInTab",
 					highlightsShownOn: !controlsInfo.highlightsShown,
-				},
+				} ],
 			}),
-		}; case "replaceTerms": return {
+		};
+		case "replaceTerms": return {
 			path: "/icons/refresh.svg",
 			onClick: () => {
 				this.#termsBox.setItems(controlsInfo.termsOnHold);
 			},
-		};}
+		};
+		}
 	}
 
 	insertAdjacentTo (element: HTMLElement, position: InsertPosition) {
-		element.insertAdjacentElement(position, this.#barContainer);
+		if (this.#barContainer.parentElement !== document.body.parentElement) {
+			element.insertAdjacentElement(position, this.#barContainer);
+		}
 	}
 
 	remove () {

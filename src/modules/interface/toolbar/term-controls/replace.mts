@@ -204,13 +204,13 @@ class TermReplaceControl implements TermAbstractControl {
 			return;
 		}
 		const { [index]: commandObject } = getTermCommands(commands);
-		const { down: command, up: commandReverse } = commandObject ?? { down: "", up: "" };
+		const { forwards, backwards } = commandObject ?? { forwards: "", backwards: "" };
 		const occurrenceCount = this.#highlighter.termCounter.countBetter(this.#term);
 		const matchesString = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page`;
-		if (occurrenceCount > 0 && command && commandReverse) {
+		if (occurrenceCount > 0 && forwards && backwards) {
 			const commandString = (occurrenceCount === 1)
-				? `Jump to: ${command} or ${commandReverse}`
-				: `Jump to next: ${command}\nJump to previous: ${commandReverse}`;
+				? `Jump to: ${forwards} or ${backwards}`
+				: `Jump to next: ${forwards}\nJump to previous: ${backwards}`;
 			this.#controlContent.title = matchesString + "\n" + commandString;
 		} else {
 			this.#controlContent.title = matchesString;

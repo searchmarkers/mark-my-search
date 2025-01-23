@@ -232,12 +232,9 @@ class PaintEngine implements AbstractTreeCacheEngine {
 
 	readonly getTermBackgroundStyle = TermCSS.getHorizontalStyle;
 
-	startHighlighting (
-		terms: ReadonlyArray<MatchTerm>,
-		termsToHighlight: ReadonlyArray<MatchTerm>,
-		termsToPurge: ReadonlyArray<MatchTerm>,
-		hues: ReadonlyArray<number>,
-	) {
+	startHighlighting (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
+		const termsToHighlight = terms.filter(a => this.terms.current.every(b => JSON.stringify(a) !== JSON.stringify(b)));
+		const termsToPurge = this.terms.current.filter(a => terms.every(b => JSON.stringify(a) !== JSON.stringify(b)));
 		this.terms.assign(terms);
 		this.hues.assign(hues);
 		this.#method.startHighlighting(terms, termsToHighlight, termsToPurge, hues);
@@ -250,6 +247,8 @@ class PaintEngine implements AbstractTreeCacheEngine {
 		this.#flowTracker.unobserveMutations();
 		this.#flowTracker.removeHighlightSpans();
 		this.#method.endHighlighting();
+		this.terms.assign([]);
+		this.hues.assign([]);
 	}
 
 	readonly observeVisibilityChangesFor: (element: HTMLElement) => void;

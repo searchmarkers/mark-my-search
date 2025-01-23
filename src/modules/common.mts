@@ -272,14 +272,22 @@ type Entries = <T extends Record<PropertyKey, unknown>>(
 	obj: T
 ) => Array<B<A<{ [K in keyof T]: [K, T[K]] }[keyof T]>>>
 
+type Partial2<T> = {
+	[P in keyof T]: {
+		[P1 in keyof T[P]]?: T[P][P1];
+	};
+};
+
 interface ArrayAccessor<T> {
-	getItems: () => ReadonlyArray<T>
+	readonly getItems: () => ReadonlyArray<T>
+	readonly itemEquals: (a: T, b: T) => boolean
+	readonly itemsEqual: (items: ReadonlyArray<T>) => boolean
 }
 
 interface ArrayMutator<T> {
-	setItems: (items: ReadonlyArray<T>) => void
-	replaceItem: (item: T | null, index: number) => void
-	insertItem: (item: T, index?: number) => void
+	readonly setItems: (items: ReadonlyArray<T>) => void
+	readonly replaceItem: (item: T | null, index: number) => void
+	readonly insertItem: (item: T, index?: number) => void
 }
 
 type ArrayListener<T> = (items: ReadonlyArray<T>, oldItems: ReadonlyArray<T>, mutation: ArrayMutation<T> | null) => void
@@ -300,19 +308,25 @@ type ArrayMutation<T> = Readonly<{
 }>
 
 interface ArrayObservable<T> {
-	addListener: (listener: ArrayListener<T>) => void
+	readonly addListener: (listener: ArrayListener<T>) => void
 }
 
 class ArrayBox<T> implements ArrayAccessor<T>, ArrayMutator<T>, ArrayObservable<T> {
+	itemEquals: (a: T, b: T) => boolean;
+
 	#items: ReadonlyArray<T> = [];
 	#listeners = new Set<ArrayListener<T>>();
+
+	constructor (itemEquals: (a: T, b: T) => boolean = (a, b) => a === b) {
+		this.itemEquals = itemEquals;
+	}
 
 	getItems () {
 		return this.#items;
 	}
 
 	setItems (items: ReadonlyArray<T>) {
-		if (items.length === this.#items.length && items.every((item, i) => item === this.#items[i])) {
+		if (this.itemsEqual(items)) {
 			return;
 		}
 		const oldItems = this.#items;
@@ -322,8 +336,12 @@ class ArrayBox<T> implements ArrayAccessor<T>, ArrayMutator<T>, ArrayObservable<
 		}
 	}
 
+	itemsEqual (items: ReadonlyArray<T>): boolean {
+		return this.#items.length === items.length && this.#items.every((item, i) => this.itemEquals(item, items[i]));
+	}
+
 	replaceItem (item: T | null, index: number) {
-		if (this.#items[index] === item) {
+		if (item && this.itemEquals(item, this.#items[index])) {
 			return;
 		}
 		const mutation: ArrayMutation<T> = item === null ? {
@@ -406,6 +424,7 @@ export {
 	type RWContainer, type RContainer, type WContainer, createContainer,
 	type AllReadonly, type StopReadonly,
 	type FromEntries, type Entries,
+	type Partial2,
 	type ArrayMutation,
 	type ArrayAccessor, type ArrayMutator, type ArrayObservable,
 	ArrayBox,

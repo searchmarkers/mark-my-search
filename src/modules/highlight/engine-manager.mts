@@ -53,12 +53,10 @@ class EngineManager implements AbstractEngineManager {
 
 	startHighlighting (
 		terms: ReadonlyArray<MatchTerm>,
-		termsToHighlight: ReadonlyArray<MatchTerm>,
-		termsToPurge: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 	) {
 		this.#highlighting = { terms, hues };
-		this.#engineData?.engine.startHighlighting(terms, termsToHighlight, termsToPurge, hues);
+		this.#engineData?.engine.startHighlighting(terms, hues);
 		this.#specialEngine?.startHighlighting(terms, hues);
 	}
 
@@ -100,7 +98,7 @@ class EngineManager implements AbstractEngineManager {
 	applyEngine () {
 		const highlighting = this.#highlighting;
 		if (highlighting && this.#engineData) {
-			this.#engineData.engine.startHighlighting(highlighting.terms, highlighting.terms, [], highlighting.hues);
+			this.#engineData.engine.startHighlighting(highlighting.terms, highlighting.hues);
 		}
 	}
 

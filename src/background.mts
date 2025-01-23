@@ -5,15 +5,19 @@
  */
 
 import "/dist/modules/namespace/normalize.mjs";
-import type { ConfigURLFilters, ResearchInstance, SearchSites, URLFilter } from "/dist/modules/storage.mjs";
-import { Bank, Config, configInitialize } from "/dist/modules/storage.mjs";
-import { parseCommand } from "/dist/modules/commands.mjs";
+import { Bank, Config, configInitialize, type BankValues } from "/dist/modules/storage.mjs";
+import { parseUserCommand } from "/dist/modules/commands.mjs";
 import type * as Message from "/dist/modules/messaging.d.mjs";
 import { sendTabMessage } from "/dist/modules/messaging/tab.mjs";
 import { MatchTerm } from "/dist/modules/match-term.mjs";
-import { SearchSite } from "/dist/modules/search-site.mjs";
-import * as Tabs from "/dist/modules/privileged/tabs.mjs";
-import { log, assert, compatibility, sanitizeForRegex } from "/dist/modules/common.mjs";
+import { isUrlFilteredIn } from "/dist/modules/url-handling/url-filters.mjs";
+import { isUrlAutoFindAllowed } from "/dist/modules/url-handling/url-tests.mjs";
+import type { SearchSite } from "/dist/modules/search-sites.mjs";
+import * as SearchSites from "/dist/modules/search-sites.mjs";
+import type { ResearchRecord } from "/dist/modules/research.mjs";
+import * as Tabs from "/dist/modules/tabs.mjs";
+import { log, assert, compatibility } from "/dist/modules/common.mjs";
+import { getTermsFromSelectedText } from "/dist/modules/term-extraction.mjs";
 
 // DEPRECATE
 /**
@@ -21,15 +25,15 @@ import { log, assert, compatibility, sanitizeForRegex } from "/dist/modules/comm
  * @param args Arguments for building the initial research instance. Variables in storage may also be used.
  * @returns The resulting research instance.
  */
-const createResearchInstance = async (args: {
-	url?: { stoplist: Array<string>, url: string, engine?: SearchSite }
+const createResearchRecord = async (args: {
+	url?: { stoplist: Array<string>, url: string, searchSite?: SearchSite }
 	terms?: ReadonlyArray<MatchTerm>
-}): Promise<ResearchInstance> => {
+}): Promise<ResearchRecord> => {
 	const config = await Config.get({ showHighlights: { default: true }, barCollapse: { fromSearch: true } });
 	if (args.url) {
-		const phraseGroups = args.url.engine ? [] : (await getSearchQuery(args.url.url)).split("\"");
-		const termsRaw = args.url.engine
-			? args.url.engine.extract(args.url.url ?? "")
+		const phraseGroups = args.url.searchSite ? [] : (await getSearchQuery(args.url.url)).split("\"");
+		const termsRaw = args.url.searchSite
+			? SearchSites.extractSearchPhrases(args.url.url, args.url.searchSite)
 			: phraseGroups.flatMap(phraseGroups.length % 2
 				? ((phraseGroup, i) => i % 2 ? phraseGroup : phraseGroup.split(" ").filter(phrase => !!phrase))
 				: phraseGroup => phraseGroup.split(" "));
@@ -39,7 +43,7 @@ const createResearchInstance = async (args: {
 				.map(phrase => new MatchTerm(phrase)),
 			highlightsShown: config.showHighlights.default,
 			barCollapsed: config.barCollapse.fromSearch,
-			enabled: true,
+			active: true,
 		};
 	}
 	args.terms ??= [];
@@ -47,7 +51,7 @@ const createResearchInstance = async (args: {
 		terms: args.terms,
 		highlightsShown: config.showHighlights.default,
 		barCollapsed: false,
-		enabled: true,
+		active: true,
 	};
 };
 
@@ -68,68 +72,23 @@ const getSearchQuery = async (url: string): Promise<string> =>
 ;
 
 /**
- * Gets heuristically whether or not a URL specifies a search on an arbitrary search engine.
- * @param engines An array of objects representing search engine URLs and how to extract contained search queries.
+ * Gets heuristically whether or not a URL specifies a search on an arbitrary search site.
+ * @param searchSites An array of objects representing search site URLs and how to extract contained search queries.
  * @param url A URL to be tested.
  * @returns An object containing a flag for whether or not the URL specifies a search,
  * and the first object which matched the URL (if any).
  */
-const isTabSearchPage = async (engines: SearchSites, url: string): Promise<{ isSearch: boolean, engine?: SearchSite }> => {
+const isTabSearchPage = async (
+	searchSites: BankValues["searchSites"],
+	url: string,
+): Promise<{ isSearch: boolean, searchSite?: SearchSite }> => {
 	if (await getSearchQuery(url)) {
 		return { isSearch: true };
 	} else {
-		const engine = Object.values(engines).find(thisEngine => thisEngine.match(url));
-		return { isSearch: !!engine, engine };
+		const searchSite = Object.values(searchSites).find(searchSite => SearchSites.matches(url, searchSite));
+		return { isSearch: !!searchSite, searchSite: searchSite };
 	}
 };
-
-/**
- * Determines whether a URL is filtered in by a given URL filter.
- * @param url A URL object.
- * @param urlFilter A URL filter array, the component strings of which may contain wildcards.
- * @returns `true` if the URL is filtered in, `false` otherwise.
- */
-const isUrlFilteredIn = (() => {
-	const sanitize = (urlComponent: string) =>
-		sanitizeForRegex(urlComponent).replace("\\*", ".*")
-	;
-
-	return (url: URL, urlFilter: URLFilter): boolean =>
-		!!urlFilter.find(({ hostname, pathname }) => (
-			(new RegExp(sanitize(hostname) + "\\b")).test(url.hostname)
-			&& (pathname === ""
-				|| pathname === "/"
-				|| (new RegExp("\\b" + sanitize(pathname.slice(1)))).test(url.pathname.slice(1))
-			)
-		))
-	;
-})();
-
-/**
- * Determines whether the user has permitted pages with the given URL to be deeply modified during highlighting,
- * which is powerful but may be destructive.
- * @param urlString The valid URL string corresponding to a page to be potentially highlighted.
- * @param urlFilters URL filter preferences.
- * @returns `true` if the corresponding page may be modified, `false` otherwise.
- */
-const isUrlPageModifyAllowed = (urlString: string, urlFilters: ConfigURLFilters) => {
-	try {
-		return !isUrlFilteredIn(new URL(urlString), urlFilters.noPageModify);
-	} catch {
-		return true;
-	}
-};
-
-/**
- * Determines whether the user has permitted pages with the given URL to treated as a search page,
- * from which keywords may be collected.
- * @param urlString The valid URL string corresponding to a page to be potentially auto-highlighted.
- * @param urlFilters An object of details about URL filtering.
- * @returns `true` if the corresponding page may be treated as a search page, `false` otherwise.
- */
-const isUrlSearchHighlightAllowed = (urlString: string, urlFilters: ConfigURLFilters) =>
-	!isUrlFilteredIn(new URL(urlString), urlFilters.nonSearch)
-;
 
 /**
  * Determines whether the highlight-showing should be toggled on, off, or left unchanged.
@@ -145,45 +104,48 @@ const determineToggleHighlightsOn = (highlightsShown: boolean, overrideHighlight
 ;
 
 /**
- * Caches objects, representing search engine URLs and how to extract their search queries, to session storage.
+ * Caches objects, representing search site URLs and how to extract their search queries, to session storage.
  * These objects are generated from information such as dynamic bookmarks stored by the user,
  * and caching is triggered on information update.
  */
-const manageEnginesCacheOnBookmarkUpdate = (() => {
+const syncSearchSitesWithBookmarks = (() => {
 	/**
-	 * Updates an array of user search engines with respect to a particular engine ID, based on a potentially dynamic URL.
-	 * @param engines An array of user search engines.
-	 * @param id The unique ID of a potential or existing engine.
-	 * @param urlDynamicString The string of a URL which may be dynamic (contains `%s` as in a dynamic bookmark).
+	 * Updates an array of user search sites with respect to a particular search site ID, based on a potentially dynamic URL.
+	 * @param sites An array of user search sites.
+	 * @param id The unique ID of a potential or existing search site.
+	 * @param dynamicUrl The string of a URL which may be dynamic (contains `%s` as in a dynamic bookmark).
 	 */
-	const updateEngine = (engines: SearchSites, id: string, urlDynamicString: string) => {
-		if (!urlDynamicString) {
+	const updateSearchSite = (sites: Record<string, SearchSite>, id: string, dynamicUrl: string) => {
+		if (!dynamicUrl) {
 			return;
 		}
-		if (!urlDynamicString.includes("%s")) {
-			delete engines[id];
+		if (!dynamicUrl.includes("%s")) {
+			delete sites[id];
 			return;
 		}
-		const engine = new SearchSite({ urlDynamicString });
-		if (Object.values(engines).find(thisEngine => thisEngine.equals(engine))) {
+		const site = SearchSites.createSearchSite({ dynamicUrl });
+		if (Object.values(sites).find(thisSite => SearchSites.searchSiteEquals(thisSite, site))) {
 			return;
 		}
-		engines[id] = engine;
+		sites[id] = site;
 	};
 
 	/**
-	 * Uses a function accepting a single bookmark tree node to modify user search engines in storage.
+	 * Uses a function accepting a single bookmark tree node to modify user search sites in storage.
 	 * Accepts all such nodes under a root node.
-	 * @param engines An array of user search engine objects.
-	 * @param setEngine A function to modify user search engines in storage based on a bookmark tree node.
+	 * @param sites An array of user search site objects.
+	 * @param setSearchSite A function to modify user search sites in storage based on a bookmark tree node.
 	 * @param node A root node under which to accept descendant nodes (inclusive).
 	 */
-	const setEngines = (engines: SearchSites, setEngine: (node: browser.bookmarks.BookmarkTreeNode) => void,
-		node: browser.bookmarks.BookmarkTreeNode) => {
+	const setSearchSites = (
+		sites: Record<string, SearchSite>,
+		setSearchSite: (node: browser.bookmarks.BookmarkTreeNode) => void,
+		node: browser.bookmarks.BookmarkTreeNode,
+	) => {
 		if (node.type === "bookmark") {
-			setEngine(node);
+			setSearchSite(node);
 		}
-		(node.children ?? []).forEach(child => setEngines(engines, setEngine, child));
+		(node.children ?? []).forEach(child => setSearchSites(sites, setSearchSite, child));
 	};
 
 	return () => {
@@ -191,11 +153,11 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 			return;
 		}
 		browser.bookmarks.getTree().then(async nodes => {
-			const bank = await Bank.get([ "engines" ]);
+			const bank = await Bank.get([ "searchSites" ]);
 			nodes.forEach(node =>
-				setEngines(bank.engines, node => {
+				setSearchSites(bank.searchSites, node => {
 					if (node.url) {
-						updateEngine(bank.engines, node.id, node.url);
+						updateSearchSite(bank.searchSites, node.id, node.url);
 					}
 				}, node)
 			);
@@ -203,25 +165,25 @@ const manageEnginesCacheOnBookmarkUpdate = (() => {
 		});
 
 		browser.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
-			const bank = await Bank.get([ "engines" ]);
-			setEngines(bank.engines, node => {
-				delete bank.engines[node.id];
+			const bank = await Bank.get([ "searchSites" ]);
+			setSearchSites(bank.searchSites, node => {
+				delete bank.searchSites[node.id];
 			}, removeInfo.node);
 			Bank.set(bank);
 		});
 
 		browser.bookmarks.onCreated.addListener(async (id, createInfo) => {
 			if (createInfo.url) {
-				const bank = await Bank.get([ "engines" ]);
-				updateEngine(bank.engines, id, createInfo.url);
+				const bank = await Bank.get([ "searchSites" ]);
+				updateSearchSite(bank.searchSites, id, createInfo.url);
 				Bank.set(bank);
 			}
 		});
 
 		browser.bookmarks.onChanged.addListener(async (id, changeInfo) => {
 			if (changeInfo.url) {
-				const bank = await Bank.get([ "engines" ]);
-				updateEngine(bank.engines, id, changeInfo.url);
+				const bank = await Bank.get([ "searchSites" ]);
+				updateSearchSite(bank.searchSites, id, changeInfo.url);
 				Bank.set(bank);
 			}
 		});
@@ -267,7 +229,7 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 	const contextMenuListener = async (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) => {
 		if (tab && tab.id !== undefined) {
 			log("research-activation request", "context menu item activated", { tabId: tab.id });
-			activateResearchInTab(tab.id, await getTermsSelectedInTab(tab.id));
+			activateResearchInTab(tab.id, getTermsFromSelectedText(await getTextSelectedInTab(tab.id) ?? ""));
 		} else {
 			assert(false, "research-activation (from context menu) void request",
 				"no valid tab", { tab });
@@ -299,9 +261,9 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		chrome.runtime.setUninstallURL("https://markmysearch.ator.systems/pages/sendoff/");
 		configInitialize();
 		try {
-			manageEnginesCacheOnBookmarkUpdate();
+			syncSearchSitesWithBookmarks();
 		} catch (error) {
-			console.warn("TODO fix bookmark search engines check", error);
+			console.warn("TODO fix bookmark search sites check", error);
 		}
 		createContextMenuItems();
 		//updateActionIcon();
@@ -340,11 +302,11 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 			urlFilters: true,
 			termListOptions: { termLists: true },
 		});
-		const bank = await Bank.get([ "researchInstances", "engines" ]);
+		const bank = await Bank.get([ "researchRecords", "searchSites" ]);
 		const searchDetails = config.autoFindOptions.enabled
-			? await isTabSearchPage(bank.engines, urlString)
+			? await isTabSearchPage(bank.searchSites, urlString)
 			: { isSearch: false };
-		searchDetails.isSearch = searchDetails.isSearch && isUrlSearchHighlightAllowed(urlString, config.urlFilters);
+		searchDetails.isSearch = searchDetails.isSearch && isUrlAutoFindAllowed(urlString, config.urlFilters.nonSearch);
 		const termsFromLists = config.termListOptions.termLists
 			.filter(termList => isUrlFilteredIn(new URL(urlString), termList.urlFilter))
 			.flatMap(termList => termList.terms);
@@ -359,19 +321,26 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 		// BELOW CONTENTS NOT AUDITED
 		// If tab contains a search AND has no research or none: create research based on search (incl. term lists).
 		if (searchDetails.isSearch) {
-			const researchInstance = await createResearchInstance({ url: {
+			const researchRecord = await createResearchRecord({ url: {
 				stoplist: config.autoFindOptions.stoplist.getList(),
 				url: urlString,
-				engine: searchDetails.engine,
+				searchSite: searchDetails.searchSite,
 			} });
 			// Apply terms from term lists.
-			researchInstance.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchInstance.terms));
+			researchRecord.terms = termsFromLists.concat(getTermsAdditionalDistinct(termsFromLists, researchRecord.terms));
 			if (isResearchPage) {
 				sendTabMessage(tabId, {
-					termsOnHold: researchInstance.terms,
+					type: "commands",
+					commands: [ {
+						type: "useTerms",
+						terms: researchRecord.terms,
+						replaceExisting: false,
+					}, {
+						type: "activate",
+					} ],
 				});
 			} else {
-				bank.researchInstances[tabId] = researchInstance;
+				bank.researchRecords[tabId] = researchRecord;
 				log("tab-communicate research enable (not storing yet)", "search detected in tab", logMetadata);
 			}
 		}
@@ -384,21 +353,35 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 					: "tab is a page which terms lists apply to"
 				: "tab is a research page";
 			log("tab-communicate highlight activation request", highlightActivationReason, logMetadata);
-			const researchInstance = bank.researchInstances[tabId] ?? await createResearchInstance({});
-			researchInstance.terms = researchInstance.enabled
-				? researchInstance.terms.concat(getTermsAdditionalDistinct(researchInstance.terms, termsFromLists))
+			const researchRecord = bank.researchRecords[tabId] ?? await createResearchRecord({});
+			researchRecord.terms = researchRecord.active
+				? researchRecord.terms.concat(getTermsAdditionalDistinct(researchRecord.terms, termsFromLists))
 				: termsFromLists;
 			if (!await Tabs.isTabResearchPage(tabId)) {
-				researchInstance.barCollapsed = config.barCollapse.fromTermListAuto;
+				researchRecord.barCollapsed = config.barCollapse.fromTermListAuto;
 			}
-			researchInstance.enabled = true;
+			researchRecord.active = true;
+			const tabCommands: Array<Message.TabCommand> = [ {
+				type: "useTerms",
+				terms: researchRecord.terms,
+				replaceExisting: true,
+			}, {
+				type: "activate",
+			} ];
+			const toggleHighlightsOn = determineToggleHighlightsOn(researchRecord.highlightsShown, overrideHighlightsShown);
+			if (toggleHighlightsOn !== undefined) {
+				tabCommands.push({
+					type: "toggleHighlightsShown",
+					enable: toggleHighlightsOn,
+				});
+			}
 			highlightActivation = sendTabMessage(tabId, {
-				terms: researchInstance.terms,
-				toggleHighlightsOn: determineToggleHighlightsOn(researchInstance.highlightsShown, overrideHighlightsShown),
+				type: "commands",
+				commands: tabCommands,
 			});
-			bank.researchInstances[tabId] = researchInstance;
+			bank.researchRecords[tabId] = researchRecord;
 		}
-		Bank.set({ researchInstances: bank.researchInstances });
+		Bank.set({ researchRecords: bank.researchRecords });
 		await highlightActivation;
 		log("tab-communicate fulfillment finish", "", logMetadata);
 	};
@@ -418,9 +401,9 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 			}
 		}
 		log("tab-communicate obligation check", "tab created", { tabId: tab.id });
-		const bank = await Bank.get([ "researchInstances" ]);
+		const bank = await Bank.get([ "researchRecords" ]);
 		if (await Tabs.isTabResearchPage(openerTabId)) {
-			bank.researchInstances[tab.id] = { ...bank.researchInstances[openerTabId] };
+			bank.researchRecords[tab.id] = { ...bank.researchRecords[openerTabId] };
 			Bank.set(bank);
 			pageChangeRespond(tab.url ?? "", tab.id); // New tabs may fail to trigger web navigation, due to loading from cache.
 		}
@@ -441,9 +424,9 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 	}
 
 	chrome.tabs.onRemoved.addListener(async tabId => {
-		const bank = await Bank.get([ "researchInstances" ]);
-		if (bank.researchInstances[tabId]) {
-			delete bank.researchInstances[tabId];
+		const bank = await Bank.get([ "researchRecords" ]);
+		if (bank.researchRecords[tabId]) {
+			delete bank.researchRecords[tabId];
 			Bank.set(bank);
 		}
 	});
@@ -454,12 +437,15 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
  * @param tabId The ID of a tab from which to take selected terms.
  * @returns The terms extracted if successful, `undefined` otherwise.
  */
-const getTermsSelectedInTab = async (tabId: number): Promise<ReadonlyArray<MatchTerm> | undefined> => {
+const getTextSelectedInTab = async (tabId: number): Promise<string | undefined> => {
 	log("selection-terms-retrieval start", "");
-	return sendTabMessage(tabId, { getDetails: { termsFromSelection: true } }).then(response => {
+	return sendTabMessage(tabId, {
+		type: "request",
+		requestType: "selectedText",
+	}).then(response => {
 		log("selection-terms-retrieval finish",
-			"", { tabId, phrases: (response.terms ?? []).map(term => term.phrase) });
-		return response.terms ?? [];
+			"", { tabId, response });
+		return response.type === "selectedText" ? response.selectedText : "";
 	}).catch(() => {
 		log("selection-terms-retrieval fail",
 			"selection terms not received in response, perhaps no script is injected", { tabId });
@@ -473,26 +459,36 @@ const getTermsSelectedInTab = async (tabId: number): Promise<ReadonlyArray<Match
  */
 const activateResearchInTab = async (tabId: number, terms: ReadonlyArray<MatchTerm> = []) => {
 	log("research-activation start", "", { tabId });
-	const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
-	const bank = await Bank.get([ "researchInstances" ]);
-	const researchInstance = (bank.researchInstances[tabId]
-		&& config.researchInstanceOptions.restoreLastInTab
-		&& !terms.length
+	const config = await Config.get({ researchRecordOptions: { restoreLastInTab: true } });
+	const bank = await Bank.get([ "researchRecords" ]);
+	const researchRecord = (bank.researchRecords[tabId]
+		&& config.researchRecordOptions.restoreLastInTab
+		&& terms.length === 0
 	)
-		? bank.researchInstances[tabId]
-		: await createResearchInstance({ terms });
-	researchInstance.enabled = true;
-	bank.researchInstances[tabId] = researchInstance;
+		? bank.researchRecords[tabId]
+		: await createResearchRecord({ terms });
+	researchRecord.active = true;
+	bank.researchRecords[tabId] = researchRecord;
 	Bank.set(bank);
-	await handleMessage({
-		tabId,
-		terms: researchInstance.terms,
-		termsSend: true,
-		toggle: {
-			highlightsShownOn: true,
-		},
-		highlightCommands: [ { type: "focusTermInput" } ],
-	});
+	const commands: ReadonlyArray<Message.BackgroundCommand> = [ {
+		type: "sendTabCommands",
+		commands: [ {
+			type: "useTerms",
+			terms: researchRecord.terms,
+			replaceExisting: true,
+		}, {
+			type: "activate",
+		}, {
+			type: "focusTermInput",
+			termIndex: null,
+		} ],
+	}, {
+		type: "toggleInTab",
+		highlightsShownOn: true,
+	} ];
+	for (const command of commands) {
+		await handleCommand(command, tabId);
+	}
 	log("research-activation finish", "", { tabId });
 };
 
@@ -502,17 +498,22 @@ const activateResearchInTab = async (tabId: number, terms: ReadonlyArray<MatchTe
  */
 const deactivateResearchInTab = async (tabId: number) => {
 	log("research-deactivation start", "", { tabId });
-	const bank = await Bank.get([ "researchInstances" ]);
-	const researchInstance = bank.researchInstances[tabId];
-	if (researchInstance) {
-		if (researchInstance.terms.length) {
-			researchInstance.enabled = false;
+	const bank = await Bank.get([ "researchRecords" ]);
+	const researchRecord = bank.researchRecords[tabId];
+	if (researchRecord) {
+		if (researchRecord.terms.length > 0) {
+			researchRecord.active = false;
 		} else {
-			delete bank.researchInstances[tabId];
+			delete bank.researchRecords[tabId];
 		}
 		Bank.set(bank);
 	}
-	await sendTabMessage(tabId, { deactivate: true });
+	await sendTabMessage(tabId, {
+		type: "commands",
+		commands: [ {
+			type: "deactivate",
+		} ],
+	});
 	log("research-deactivation finish", "", { tabId });
 };
 
@@ -525,18 +526,20 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 	if (!await Tabs.isTabResearchPage(tabId)) {
 		return;
 	}
-	const config = await Config.get({ barControlsShown: true });
-	const bank = await Bank.get([ "researchInstances" ]);
-	const researchInstance = bank.researchInstances[tabId];
-	researchInstance.highlightsShown = toggleHighlightsOn
-		?? !await sendTabMessage(tabId, { getDetails: { highlightsShown: true } }).then(response =>
-			response.highlightsShown
+	const bank = await Bank.get([ "researchRecords" ]);
+	const researchRecord = bank.researchRecords[tabId];
+	researchRecord.highlightsShown = toggleHighlightsOn
+		?? !await sendTabMessage(tabId, { type: "request", requestType: "highlightsShown" }).then(response =>
+			response.type === "highlightsShown" ? response.highlightsShown : researchRecord.highlightsShown
 		).catch(() =>
-			researchInstance.highlightsShown
+			researchRecord.highlightsShown
 		);
 	sendTabMessage(tabId, {
-		toggleHighlightsOn: researchInstance.highlightsShown,
-		barControlsShown: config.barControlsShown,
+		type: "commands",
+		commands: [ {
+			type: "toggleHighlightsShown",
+			enable: researchRecord.highlightsShown,
+		} ],
 	});
 	Bank.set(bank);
 };
@@ -547,158 +550,207 @@ chrome.commands.onCommand.addListener(async commandString => {
 	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id!; // `tab.id` is always defined for this case.
-	const commandInfo = parseCommand(commandString);
-	switch (commandInfo.type) {
+	const userCommand = parseUserCommand(commandString);
+	if (!userCommand) {
+		return;
+	}
+	switch (userCommand.type) {
 	case "openPopup": {
 		return;
-	} case "openOptions": {
+	}
+	case "openOptions": {
 		chrome.runtime.openOptionsPage();
 		return;
-	} case "toggleEnabled": {
+	}
+	case "toggleAutoFind": {
 		Config.get({ autoFindOptions: { enabled: true } }).then(config => {
 			config.autoFindOptions.enabled = !config.autoFindOptions.enabled;
 			Config.set(config);
 			//updateActionIcon(config.autoFindOptions.enabled);
 		});
 		return;
-	} case "toggleInTab": {
+	}
+	case "tab_toggleResearch": {
 		if (await Tabs.isTabResearchPage(tabId)) {
 			deactivateResearchInTab(tabId);
 		} else {
-			activateResearchInTab(tabId, await getTermsSelectedInTab(tabId));
+			activateResearchInTab(tabId);
 		}
 		return;
-	} case "toggleHighlights": {
+	}
+	case "tab_toggleHighlightsShown": {
 		toggleHighlightsInTab(tabId);
 		return;
-	} case "toggleBar": {
-		const bank = await Bank.get([ "researchInstances" ]);
-		const researchInstance = bank.researchInstances[tabId];
-		if (!researchInstance) {
+	}
+	case "tab_toggleBarCollapsed": {
+		const bank = await Bank.get([ "researchRecords" ]);
+		const researchRecord = bank.researchRecords[tabId];
+		if (!researchRecord) {
 			return;
 		}
-		researchInstance.barCollapsed = !researchInstance.barCollapsed;
+		researchRecord.barCollapsed = !researchRecord.barCollapsed;
 		sendTabMessage(tabId, {
-			toggleBarCollapsedOn: researchInstance.barCollapsed,
+			type: "commands",
+			commands: [ {
+				type: "toggleBarCollapsed",
+				enable: researchRecord.barCollapsed,
+			} ],
 		});
 		Bank.set(bank);
 		return;
+	}
+	case "tab_toggleSelectMode": {
+		sendTabMessage(tabId, { type: "commands", commands: [ {
+			type: "toggleSelectMode",
+		} ] });
+		return;
+	}
+	case "tab_replaceTerms": {
+		sendTabMessage(tabId, { type: "commands", commands: [ {
+			type: "replaceTerms",
+		} ] });
+		return;
+	}
+	case "tab_stepGlobal": {
+		sendTabMessage(tabId, { type: "commands", commands: [ {
+			type: "stepGlobal",
+			forwards: userCommand.forwards,
+		} ] });
+		return;
+	}
+	case "tab_jumpGlobal": {
+		sendTabMessage(tabId, { type: "commands", commands: [ {
+			type: "jumpGlobal",
+			forwards: userCommand.forwards,
+		} ] });
+		return;
+	}
+	case "tab_selectTerm": {
+		sendTabMessage(tabId, { type: "commands", commands: [ {
+			type: "selectTerm",
+			forwards: userCommand.forwards,
+			termIndex: userCommand.termIndex,
+		} ] });
+		return;
+	}
+	case "tab_focusTermInput": {
+		sendTabMessage(tabId, { type: "commands", commands: [ {
+			type: "focusTermInput",
+			termIndex: userCommand.termIndex,
+		} ] });
+		return;
 	}}
-	sendTabMessage(tabId, { commands: [ commandInfo ] });
 });
 
 // AUDITED BELOW
 
+const handleRequestMessage = (
+	message: Message.BackgroundRequest,
+	sender: chrome.runtime.MessageSender,
+	sendResponse: (response: Message.BackgroundResponse) => void,
+): true | undefined => {
+	switch (message.requestType) {
+	case "tabId": {
+		sendResponse({
+			type: "tabId",
+			tabId: sender.tab?.id ?? NaN,
+		});
+		return;
+	} case "tabResearchRecord": {
+		(async () => {
+			sendResponse({
+				type: "tabResearchRecord",
+				researchRecord: (await Bank.get([ "researchRecords" ])).researchRecords[sender.tab?.id ?? NaN],
+			});
+		})();
+		return true;
+	}}
+};
+
 /**
- * Decodes a message involving backend extension management.
- * @param message A message intended for the background script.
+ * Decodes a command involving backend extension management.
+ * @param command A message intended for the background script.
  */
-const handleMessage = async (message: Message.Background<true>): Promise<Message.BackgroundResponse> => {
-	const tabId = message.tabId;
-	if (message.terms) {
-		const logMetadata = { tabId, terms: message.terms };
+const handleCommand = async (command: Message.BackgroundCommand, tabId: number) => {
+	switch (command.type) {
+	case "assignTabTerms": {
+		const logMetadata = { tabId, terms: command.terms };
 		log("terms-assign start", "", logMetadata);
-		const bank = await Bank.get([ "researchInstances" ]);
-		const researchInstance = bank.researchInstances[tabId];
-		if (researchInstance) {
-			researchInstance.terms = message.terms;
+		const bank = await Bank.get([ "researchRecords" ]);
+		const researchRecord = bank.researchRecords[tabId];
+		if (researchRecord) {
+			researchRecord.terms = command.terms;
 			await Bank.set(bank);
 			log("terms-assign finish", "research instance created with terms", logMetadata);
 		} else {
-			const researchInstance = await createResearchInstance({ terms: message.terms });
-			bank.researchInstances[tabId] = researchInstance;
+			const researchRecord = await createResearchRecord({ terms: command.terms });
+			bank.researchRecords[tabId] = researchRecord;
 			await Bank.set(bank);
 			log("terms-assign finish", "terms assigned to existing research instance", logMetadata);
 		}
+		return;
 	}
-	const tabMessage: Message.Tab = {
-		terms: message.termsSend
-			? (message.terms
-				?? (await Bank.get([ "researchInstances" ])).researchInstances[tabId]?.terms)
-			: undefined,
-		commands: message.highlightCommands,
-	};
-	if (Object.values(tabMessage).some(value => value !== undefined)) {
+	case "sendTabCommands": {
+		const tabMessage: Message.Tab = {
+			type: "commands",
+			commands: command.commands,
+		};
 		const logMetadata = { tabId, message: tabMessage };
 		log("message-send start", "", logMetadata);
 		await sendTabMessage(tabId, tabMessage);
 		log("message-send finish", "", logMetadata);
+		return;
 	}
-	if (message.toggle) {
-		const toggle = message.toggle;
-		const logMetadata = { tabId, toggle };
+	case "toggleInTab": {
+		const logMetadata = { tabId, command };
 		log("flags-toggle start", "", logMetadata);
-		if (toggle.highlightsShownOn !== undefined) {
-			await toggleHighlightsInTab(tabId, toggle.highlightsShownOn);
+		if (command.highlightsShownOn !== undefined) {
+			await toggleHighlightsInTab(tabId, command.highlightsShownOn);
 		}
-		if (toggle.barCollapsedOn !== undefined) {
-			const bank = await Bank.get([ "researchInstances" ]);
+		if (command.barCollapsedOn !== undefined) {
+			const bank = await Bank.get([ "researchRecords" ]);
 			if (await Tabs.isTabResearchPage(tabId)) {
-				bank.researchInstances[tabId].barCollapsed = toggle.barCollapsedOn;
+				bank.researchRecords[tabId].barCollapsed = command.barCollapsedOn;
 				await Bank.set(bank);
 			}
 		}
 		log("flags-toggle finish", "", logMetadata);
+		return;
 	}
-	if (message.deactivateTabResearch) {
+	case "deactivateTabResearch": {
 		deactivateResearchInTab(tabId);
+		return;
 	}
-	if (message.performSearch) {
-		const bank = await Bank.get([ "researchInstances" ]);
+	case "performTabSearch": {
+		const bank = await Bank.get([ "researchRecords" ]);
 		(chrome.search as typeof browser.search).search({
-			query: bank.researchInstances[tabId].terms.map(term => term.phrase).join(" "),
+			query: bank.researchRecords[tabId].terms.map(term => term.phrase).join(" "),
 			tabId,
 		});
-	}
-	if (message.initializationGet) {
-		log("initialization-return start", "", { tabId });
-		const config = (await Config.get({
-			barControlsShown: true,
-			barLook: true,
-			highlightLook: true,
-			highlighter: true,
-			matchModeDefaults: true,
-			urlFilters: true,
-		}));
-		const bank = await Bank.get([ "researchInstances" ]);
-		const researchInstance = bank.researchInstances[tabId];
-		if (researchInstance) {
-			log("initialization-return finish", "", { tabId });
-			return {
-				terms: researchInstance.terms,
-				toggleHighlightsOn: researchInstance.highlightsShown,
-				toggleBarCollapsedOn: researchInstance.barCollapsed,
-				barControlsShown: config.barControlsShown,
-				barLook: config.barLook,
-				highlightLook: config.highlightLook,
-				highlighter: config.highlighter,
-				matchMode: config.matchModeDefaults,
-				enablePageModify: isUrlPageModifyAllowed((await chrome.tabs.get(tabId)).url ?? "", config.urlFilters),
-			};
-		} else {
-			log("initialization-return fail", "no corresponding research instance exists", { tabId });
-		}
-	}
-	return null;
+	}}
 };
 
 chrome.runtime.onMessage.addListener((message: Message.Background, sender, sendResponse) => {
-	(async () => {
-		const messageWithTabId: Message.Background<true> = ("tabId" in message
-			? message
-			: {
-				...message,
-				tabId: sender.tab?.id ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id ?? NaN,
+	switch (message.type) {
+	case "request": {
+		if (handleRequestMessage(message, sender, sendResponse)) {
+			return true;
+		}
+		return;
+	} case "commands": {
+		(async () => {
+			const tabId = sender.tab?.id ?? (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0].id ?? NaN;
+			for (const command of message.commands) {
+				await handleCommand(command, tabId);
 			}
-		);
-		handleMessage(messageWithTabId).then(sendResponse);
-	})();
-	return true;
+		})();
+		return;
+	}}
 });
 
 chrome.permissions.onAdded.addListener(permissions => {
 	if (permissions?.permissions?.includes("bookmarks")) {
-		manageEnginesCacheOnBookmarkUpdate();
+		syncSearchSitesWithBookmarks();
 	} else {
 		console.log(permissions);
 		injectIntoTabs();
