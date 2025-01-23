@@ -4,22 +4,26 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-chrome.tabs.query = useChromeAPI() ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
-chrome.tabs.sendMessage = useChromeAPI()
+import type { CommandInfo } from "/dist/modules/utility.mjs";
+import { CommandType } from "/dist/modules/utility.mjs";
+import type { URLFilter } from "/dist/modules/storage.mjs";
+import { StorageSession, storageGet } from "/dist/modules/storage.mjs";
+
+chrome.tabs.query = !globalThis.browser ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.tabs.sendMessage = !globalThis.browser
 	? chrome.tabs.sendMessage
 	: browser.tabs.sendMessage as typeof chrome.tabs.sendMessage;
-chrome.tabs.get = useChromeAPI() ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
-chrome.search["search"] = useChromeAPI()
+chrome.tabs.get = !globalThis.browser ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
+chrome.search["search"] = !globalThis.browser
 	? (options: { query: string, tabId: number }) =>
 		chrome.search["query"]({ text: options.query, tabId: options.tabId }, () => undefined)
 	: browser.search.search;
-chrome.commands.getAll = useChromeAPI() ? chrome.commands.getAll : browser.commands.getAll;
+chrome.commands.getAll = !globalThis.browser ? chrome.commands.getAll : browser.commands.getAll;
 
 /**
  * Represents the set of URLs used by a particular search engine and how to extract the dynamic search query section.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-class Engine {
+export class Engine {
 	// All appropriate attributes must be compared in `this.equals`
 	hostname: string;
 	pathname: [ string, string ];
@@ -87,8 +91,7 @@ class Engine {
  * @param urlStrings An array of valid URLs as strings.
  * @returns A URL filter array containing no wildcards which would filter in each of the URLs passed.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
+export const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
 	urlStrings.map((urlString): URLFilter[0] => {
 		try {
 			const url = new URL(urlString.replace(/\s/g, "").replace(/.*:\/\//g, "protocol://"));
@@ -106,83 +109,11 @@ const getUrlFilter = (urlStrings: Array<string>): URLFilter =>
 ;
 
 /**
- * Transforms a command string into a command object understood by the extension.
- * @param commandString The string identifying a user command in `manifest.json`.
- * @returns The corresponding command object.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const parseCommand = (commandString: string): CommandInfo => {
-	const parts = commandString.split("-");
-	switch (parts[0]) {
-	case "open": {
-		switch (parts[1]) {
-		case "popup": {
-			return { type: CommandType.OPEN_POPUP };
-		} case "options": {
-			return { type: CommandType.OPEN_OPTIONS };
-		}}
-		break;
-	} case "toggle": {
-		switch (parts[1]) {
-		case "research": {
-			switch (parts[2]) {
-			case "global": {
-				return { type: CommandType.TOGGLE_ENABLED };
-			} case "tab": {
-				return { type: CommandType.TOGGLE_IN_TAB };
-			}}
-			break;
-		} case "bar": {
-			return { type: CommandType.TOGGLE_BAR };
-		} case "highlights": {
-			return { type: CommandType.TOGGLE_HIGHLIGHTS };
-		} case "select": {
-			return { type: CommandType.TOGGLE_SELECT };
-		}}
-		break;
-	} case "terms": {
-		switch (parts[1]) {
-		case "replace": {
-			return { type: CommandType.REPLACE_TERMS };
-		}}
-		break;
-	} case "step": {
-		switch (parts[1]) {
-		case "global": {
-			return { type: CommandType.STEP_GLOBAL, reversed: parts[2] === "reverse" };
-		}}
-		break;
-	} case "advance": {
-		switch (parts[1]) {
-		case "global": {
-			return { type: CommandType.ADVANCE_GLOBAL, reversed: parts[2] === "reverse" };
-		}}
-		break;
-	} case "focus": {
-		switch (parts[1]) {
-		case "term": {
-			switch (parts[2]) {
-			case "append": {
-				return { type: CommandType.FOCUS_TERM_INPUT };
-			}}
-		}}
-		break;
-	} case "select": {
-		switch (parts[1]) {
-		case "term": {
-			return { type: CommandType.SELECT_TERM, termIdx: Number(parts[2]), reversed: parts[3] === "reverse" };
-		}}
-	}}
-	return { type: CommandType.NONE };
-};
-
-/**
  * Gets whether or not a tab has active highlighting information stored, so is considered highlighted.
  * @param tabId The ID of a tab.
  * @returns `true` if the tab is considered highlighted, `false` otherwise.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const isTabResearchPage = async (tabId: number): Promise<boolean> => {
+export const isTabResearchPage = async (tabId: number): Promise<boolean> => {
 	const { researchInstances } = await storageGet("session", [ StorageSession.RESEARCH_INSTANCES ]);
 	return (tabId in researchInstances) && researchInstances[tabId].enabled;
 };

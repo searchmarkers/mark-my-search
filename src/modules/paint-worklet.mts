@@ -4,13 +4,14 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-type PaintWorkletType = {
+import type { TermSelectorStyles, HighlightBox } from "/dist/content.mjs";
+
+type PaintWorkletGlobalScope = {
 	devicePixelRatio: number
 	registerPaint: (name: string, classRef: unknown) => void
-	addModule: (moduleURL: string, options?: { credentials: "omit" | "same-origin" | "include" }) => void
 }
 
-(globalThis as unknown as PaintWorkletType).registerPaint("markmysearch-highlights", class {
+(globalThis as unknown as PaintWorkletGlobalScope).registerPaint("markmysearch-highlights", class {
 	static get inputProperties () {
 		return [
 			"--markmysearch-styles",

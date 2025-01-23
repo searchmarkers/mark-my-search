@@ -2,7 +2,7 @@
 	"manifest_version": 3,
 	"name": "Mark My Search",
 	"description": "Highlight searched keywords. Find matches instantly.",
-	"version": "1.14.3",
+	"version": "1.15.0",
 
 	"icons": {
 		"16": "/icons/dist/mms-16.png",
@@ -24,18 +24,14 @@
 	],
 
 	"background": {
-		"service_worker": "/dist/background.js"
+		"type": "module",
+		"service_worker": "/dist/background.mjs"
 	},
 
 	"content_scripts": [
 		{
 			"matches": [ "*://*/*" ],
-			"js": [
-				"/dist/include/utility.js",
-				"/dist/include/pattern-stem.js",
-				"/dist/include/pattern-diacritic.js",
-				"/dist/content.js"
-			],
+			"js": [ "/dist/entrypoints/content.js" ],
 			"run_at": "document_start"
 		}
 	],
@@ -56,16 +52,10 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
-				"/dist/paint.js",
-				"/icons/arrow.svg",
-				"/icons/close.svg",
-				"/icons/search.svg",
-				"/icons/show.svg",
-				"/icons/refresh.svg",
-				"/icons/create.svg",
-				"/icons/delete.svg",
-				"/icons/edit.svg",
-				"/icons/reveal.svg"
+				"/icons/*.svg",
+				"/dist/content.mjs",
+				"/dist/entrypoints/content.js",
+				"/dist/modules/*.mjs"
 			],
 			"matches": [ "*://*/*" ]
 		}

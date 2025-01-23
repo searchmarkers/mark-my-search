@@ -4,6 +4,14 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
+import type { MatchMode } from "/dist/modules/utility.mjs";
+import { MatchTerm, messageSendBackground } from "/dist/modules/utility.mjs";
+import { isTabResearchPage } from "/dist/modules/util-privileged.mjs";
+import type { PagePanelInfo, PageInteractionObjectRowInfo, PageInteractionCheckboxInfo } from "/dist/modules/page-build.mjs";
+import { loadPage, pageInsertWarning, sendProblemReport, PageAlertType } from "/dist/modules/page-build.mjs";
+import type { StorageLocalValues, StorageAreaName, StorageArea } from "/dist/modules/storage.mjs";
+import { StorageSession, StorageLocal, StorageSync, storageGet, storageSet } from "/dist/modules/storage.mjs";
+
 /**
  * Loads the popup content into the page.
  * This presents the user with common options and actions (usually those needed while navigating), to be placed in a popup.

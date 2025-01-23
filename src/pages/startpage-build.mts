@@ -4,6 +4,12 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
+import { getName } from "/dist/modules/utility.mjs";
+import type { PagePanelInfo } from "/dist/modules/page-build.mjs";
+import { loadPage } from "/dist/modules/page-build.mjs";
+import type { StorageLocalValues } from "/dist/modules/storage.mjs";
+import { StorageLocal, storageGet, storageSet } from "/dist/modules/storage.mjs";
+
 /**
  * Loads the startpage content into the page.
  * This presents the user with expandable onboarding information and functions, for use when the user has installed the extension.
