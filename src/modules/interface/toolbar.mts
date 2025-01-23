@@ -20,23 +20,20 @@ import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/
 import { EleID, EleClass, getControlPadClass, passKeyEvent } from "/dist/modules/interface/toolbar/common.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
+import type { ArrayAccessor, ArrayMutator, ArrayMutation, ArrayObservable } from "/dist/modules/common.mjs";
 import { EleID as CommonEleID, EleClass as CommonEleClass } from "/dist/modules/common.mjs";
 import type { HighlighterCSSInterface } from "/dist/modules/highlight/engine.d.mjs";
 import type {
 	HighlighterCounterInterface, HighlighterWalkerInterface,
 } from "/dist/modules/highlight/engine-manager.d.mjs";
-import type { TermSetter, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
+import type { ControlsInfo } from "/dist/content.mjs";
 
-enum ToolbarSection {
-	LEFT = "left",
-	TERMS = "terms",
-	RIGHT = "right",
-}
+enum ToolbarSection { LEFT, TERMS, RIGHT }
 
 class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarControlButtonInterface {
 	readonly #controlsInfo: ControlsInfo;
-	readonly #termSetter: TermSetter;
-	readonly #doPhrasesMatchTerms: DoPhrasesMatchTerms;
+	readonly #commands: BrowserCommands; // TODO: Make commands data passing more consistent.
+	readonly #termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm>;
 	readonly #termTokens: TermTokens;
 	readonly #highlighter: HighlighterCSSInterface & HighlighterCounterInterface & HighlighterWalkerInterface;
 
@@ -56,19 +53,17 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	readonly #hues: ReadonlyArray<number> = [];
 
 	constructor (
-		terms: ReadonlyArray<MatchTerm>,
 		hues: ReadonlyArray<number>,
 		commands: BrowserCommands,
 		controlsInfo: ControlsInfo,
-		termSetter: TermSetter,
-		doPhrasesMatchTerms: DoPhrasesMatchTerms,
+		termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm> & ArrayObservable<MatchTerm>,
 		termTokens: TermTokens,
 		highlighter: HighlighterCSSInterface & HighlighterCounterInterface & HighlighterWalkerInterface,
 	) {
 		this.#hues = hues;
-		this.#termSetter = termSetter;
-		this.#doPhrasesMatchTerms = doPhrasesMatchTerms;
+		this.#termsBox = termsBox;
 		this.#controlsInfo = controlsInfo;
+		this.#commands = commands;
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
 		this.#barContainer = document.createElement("div");
@@ -108,7 +103,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 						this.focusLastFocusedInput();
 					}
 				} else {
-					this.returnSelectionToDocument(!!event.relatedTarget);
+					this.onFocusOut(event.relatedTarget);
 					inputsSetFocusable(false);
 				}
 			}
@@ -177,19 +172,19 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			event.preventDefault();
 		});
 		this.#sections = {
-			left: document.createElement("span"),
-			terms: document.createElement("span"),
-			right: document.createElement("span"),
+			[ToolbarSection.LEFT]: document.createElement("span"),
+			[ToolbarSection.TERMS]: document.createElement("span"),
+			[ToolbarSection.RIGHT]: document.createElement("span"),
 		};
-		this.#sections.left.id = EleID.BAR_LEFT;
-		this.#sections.left.classList.add(EleClass.BAR_CONTROLS);
-		this.#sections.terms.id = EleID.BAR_TERMS;
-		this.#sections.right.id = EleID.BAR_RIGHT;
-		this.#sections.right.classList.add(EleClass.BAR_CONTROLS);
+		this.#sections[ToolbarSection.LEFT].id = EleID.BAR_LEFT;
+		this.#sections[ToolbarSection.LEFT].classList.add(EleClass.BAR_CONTROLS);
+		this.#sections[ToolbarSection.TERMS].id = EleID.BAR_TERMS;
+		this.#sections[ToolbarSection.RIGHT].id = EleID.BAR_RIGHT;
+		this.#sections[ToolbarSection.RIGHT].classList.add(EleClass.BAR_CONTROLS);
 		for (const sectionName of Toolbar.#sectionNames) {
 			this.#bar.appendChild(this.#sections[sectionName]);
 		}
-		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termSetter, doPhrasesMatchTerms);
+		this.#termAppendControl = new TermAppendControl(controlsInfo, this, termsBox);
 		this.#controls = {
 			// The order of properties determines the order of insertion into (sections of) the toolbar.
 			toggleBarCollapsed: (
@@ -205,14 +200,17 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 				this.createAndInsertControl("toggleHighlights", ToolbarSection.LEFT)
 			),
 			appendTerm: (() => {
-				this.#termAppendControl.appendTo(this.#sections.right);
+				this.#termAppendControl.appendTo(this.#sections[ToolbarSection.RIGHT]);
 				return this.#termAppendControl.control;
 			})(),
 			replaceTerms: (
 				this.createAndInsertControl("replaceTerms", ToolbarSection.RIGHT)
 			),
 		};
-		this.replaceTerms(terms, commands);
+		termsBox.addListener((terms, oldTerms, mutation) => {
+			this.onTermsMutated(terms, mutation);
+		});
+		this.onTermsMutated(termsBox.getItems(), null);
 	}
 
 	getTermAbstractControls (): Array<TermAbstractControl> {
@@ -257,10 +255,30 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		}
 	}
 
+	onTermsMutated (terms: ReadonlyArray<MatchTerm>, mutation: ArrayMutation<MatchTerm> | null) {
+		switch (mutation?.type) {
+		case "remove": {
+			this.removeTerm(mutation.index);
+			break;
+		}
+		case "replace": {
+			this.replaceTerm(mutation.new, mutation.index);
+			break;
+		}
+		case "insert": {
+			this.insertTerm(mutation.new, mutation.index, this.#commands);
+			break;
+		}
+		default: {
+			this.replaceTerms(terms, this.#commands);
+		}}
+		this.updateControlVisibility("replaceTerms");
+	}
+
 	appendTerm (term: MatchTerm, commands: BrowserCommands) {
 		this.#termControls.push(new TermReplaceControl(term,
 			commands, this.#controlsInfo,
-			this, this.#termSetter, this.#termTokens, this.#highlighter,
+			this, this.#termsBox, this.#termTokens, this.#highlighter,
 		));
 		this.#style.applyTermStyle(term, this.#termControls.length - 1, this.#hues);
 		this.refreshTermControls();
@@ -269,7 +287,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 	insertTerm (term: MatchTerm, index: number, commands: BrowserCommands) {
 		this.#termControls.splice(index, 0, new TermReplaceControl(term,
 			commands, this.#controlsInfo,
-			this, this.#termSetter, this.#termTokens, this.#highlighter,
+			this, this.#termsBox, this.#termTokens, this.#highlighter,
 		));
 		this.#style.applyTermStyle(term, index, this.#hues);
 		this.refreshTermControls();
@@ -296,7 +314,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		for (const term of terms) {
 			this.#termControls.push(new TermReplaceControl(term,
 				commands, this.#controlsInfo,
-				this, this.#termSetter, this.#termTokens, this.#highlighter,
+				this, this.#termsBox, this.#termTokens, this.#highlighter,
 			));
 		}
 		for (let i = 0; i < terms.length; i++) {
@@ -330,20 +348,20 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 
 	indicateTerm (term: MatchTerm | null) {
 		if (this.#indicatedClassToken) {
-			this.#sections.terms.classList.remove(this.#indicatedClassToken);
+			this.#sections[ToolbarSection.TERMS].classList.remove(this.#indicatedClassToken);
 		}
 		if (term) {
 			const termToken = this.#termTokens.get(term);
 			const termControl = this.#termControls.findIndex(control => control.getTermToken() === termToken);
 			this.#indicatedClassToken = getControlPadClass(termControl);
-			this.#sections.terms.classList.add(this.#indicatedClassToken);
+			this.#sections[ToolbarSection.TERMS].classList.add(this.#indicatedClassToken);
 		}
 	}
 
 	refreshTermControls () {
-		this.#sections.terms.replaceChildren();
+		this.#sections[ToolbarSection.TERMS].replaceChildren();
 		for (const control of this.#termControls) {
-			control.appendTo(this.#sections.terms);
+			control.appendTo(this.#sections[ToolbarSection.TERMS]);
 		}
 		for (let i = 0; i < this.#termControls.length; i++) {
 			this.#style.updateTermStyle(this.#termControls[i].getTermToken(), i, this.#hues);
@@ -401,20 +419,11 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		return { control: null, termIndex: null, focusArea: "none" };
 	}
 
-	returnSelectionToDocument (eventHasRelatedTarget: boolean) {
-		if (eventHasRelatedTarget) {
-			setTimeout(() => {
-				// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-				if (!document.activeElement || document.activeElement.id !== CommonEleID.BAR) {
-					this.#selectionReturn.forgetTarget();
-				}
-			});
-			return; // Focus is being moved, not lost.
-		}
-		// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-		if (document.activeElement && document.activeElement.id === CommonEleID.BAR) {
-			return;
-		}
+	isFocused () {
+		return !!document.activeElement && document.activeElement.id === CommonEleID.BAR as string;
+	}
+
+	returnSelectionToDocument () {
 		const target = this.#selectionReturn.getTarget();
 		if (target) {
 			this.#selectionReturn.forgetTarget();
@@ -431,12 +440,27 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		}
 	}
 
+	onFocusOut (newFocus: EventTarget | null) {
+		if (newFocus) {
+			// Focus is being moved, not lost.
+			setTimeout(() => {
+				if (!this.isFocused()) {
+					this.#selectionReturn.forgetTarget();
+				}
+			});
+		} else {
+			if (!this.isFocused()) {
+				this.returnSelectionToDocument();
+			}
+		}
+	}
+
 	updateHighlightsShownFlag () {
 		this.#barContainer.classList.toggle(CommonEleClass.HIGHLIGHTS_SHOWN, this.#controlsInfo.highlightsShown);
 	}
 
 	updateVisibility () {
-		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModifyEnabled);
+		this.#bar.classList.toggle(EleClass.DISABLED, !this.#controlsInfo.pageModificationAllowed);
 	}
 
 	updateCollapsed () {
@@ -456,7 +480,7 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 		barSide: Exclude<ToolbarSection, ToolbarSection.TERMS>,
 	): Control {
 		const info = this.createControlButtonInfo(controlName);
-		const control = new Control(controlName, info, this.#controlsInfo, this.#doPhrasesMatchTerms);
+		const control = new Control(controlName, info, this.#controlsInfo, this.#termsBox);
 		control.appendTo(this.#sections[barSide]);
 		return control;
 	}
@@ -476,39 +500,56 @@ class Toolbar implements AbstractToolbar, ToolbarTermControlInterface, ToolbarCo
 			onClick: () => {
 				controlsInfo.barCollapsed = !controlsInfo.barCollapsed;
 				sendBackgroundMessage({
-					toggle: {
+					type: "commands",
+					commands: [ {
+						type: "toggleInTab",
 						barCollapsedOn: controlsInfo.barCollapsed,
-					},
+					} ],
 				});
 				this.updateCollapsed();
 			},
-		}; case "disableTabResearch": return {
+		};
+		case "disableTabResearch": return {
 			path: "/icons/close.svg",
 			onClick: () => sendBackgroundMessage({
-				deactivateTabResearch: true,
+				type: "commands",
+				commands: [ {
+					type: "deactivateTabResearch",
+				} ],
 			}),
-		}; case "performSearch": return {
+		};
+		case "performSearch": return {
 			path: "/icons/search.svg",
 			onClick: () => sendBackgroundMessage({
-				performSearch: true,
+				type: "commands",
+				commands: [ {
+					type: "performTabSearch",
+				} ],
 			}),
-		}; case "toggleHighlights": return {
+		};
+		case "toggleHighlights": return {
 			path: "/icons/show.svg",
 			onClick: () => sendBackgroundMessage({
-				toggle: {
+				type: "commands",
+				commands: [ {
+					type: "toggleInTab",
 					highlightsShownOn: !controlsInfo.highlightsShown,
-				},
+				} ],
 			}),
-		}; case "replaceTerms": return {
+		};
+		case "replaceTerms": return {
 			path: "/icons/refresh.svg",
 			onClick: () => {
-				this.#termSetter.setTerms(controlsInfo.termsOnHold);
+				this.#termsBox.setItems(controlsInfo.termsOnHold);
 			},
-		};}
+		};
+		}
 	}
 
 	insertAdjacentTo (element: HTMLElement, position: InsertPosition) {
-		element.insertAdjacentElement(position, this.#barContainer);
+		if (this.#barContainer.parentElement !== document.body.parentElement) {
+			element.insertAdjacentElement(position, this.#barContainer);
+		}
 	}
 
 	remove () {

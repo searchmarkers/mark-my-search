@@ -7,7 +7,7 @@
 import { type Page, loadPage, pageInsertWarning, sendProblemReport } from "/dist/modules/page/build.mjs";
 import { Bank, Config } from "/dist/modules/storage.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
-import { isTabResearchPage } from "/dist/modules/privileged/tabs.mjs";
+import { isTabResearchPage } from "/dist/modules/tabs.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
 
 /**
@@ -111,12 +111,12 @@ const loadPopup = (() => {
 							input: {
 								getType: () => "checkbox",
 								onLoad: async setChecked => {
-									const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
-									setChecked(config.researchInstanceOptions.restoreLastInTab);
+									const config = await Config.get({ researchRecordOptions: { restoreLastInTab: true } });
+									setChecked(config.researchRecordOptions.restoreLastInTab);
 								},
 								onChange: async checked => {
-									const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
-									config.researchInstanceOptions.restoreLastInTab = checked;
+									const config = await Config.get({ researchRecordOptions: { restoreLastInTab: true } });
+									config.researchRecordOptions.restoreLastInTab = checked;
 									await Config.set(config);
 								},
 							},
@@ -141,27 +141,39 @@ const loadPopup = (() => {
 								},
 								onChange: checked => {
 									if (checked) {
-										Bank.get([ "researchInstances" ]).then(async bank => {
+										Bank.get([ "researchRecords" ]).then(async bank => {
 											const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 											if (tab.id === undefined) {
 												return;
 											}
-											const config = await Config.get({ researchInstanceOptions: { restoreLastInTab: true } });
-											const researchInstance = bank.researchInstances[tab.id];
-											if (researchInstance && config.researchInstanceOptions.restoreLastInTab) {
-												researchInstance.enabled = true;
+											const config = await Config.get({ researchRecordOptions: { restoreLastInTab: true } });
+											const researchRecord = bank.researchRecords[tab.id];
+											if (researchRecord && config.researchRecordOptions.restoreLastInTab) {
+												researchRecord.active = true;
 											}
 											sendBackgroundMessage({
-												terms: (researchInstance && researchInstance.enabled) ? researchInstance.terms : [],
-												termsSend: true,
-												toggle: {
+												type: "commands",
+												commands: [ {
+													type: "sendTabCommands",
+													commands: [ {
+														type: "useTerms",
+														terms: (researchRecord && researchRecord.active) ? researchRecord.terms : [],
+														replaceExisting: true,
+													}, {
+														type: "activate",
+													} ]
+												}, {
+													type: "toggleInTab",
 													highlightsShownOn: true,
-												},
+												} ],
 											});
 										});
 									} else {
 										sendBackgroundMessage({
-											deactivateTabResearch: true,
+											type: "commands",
+											commands: [ {
+												type: "deactivateTabResearch",
+											} ],
 										});
 									}
 								}
@@ -175,18 +187,21 @@ const loadPopup = (() => {
 								onLoad: async setEnabled => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									setEnabled(tab.id === undefined ? false :
-										!!(await Bank.get([ "researchInstances" ])).researchInstances[tab.id]);
+										!!(await Bank.get([ "researchRecords" ])).researchRecords[tab.id]);
 								},
 								onClick: async () => {
 									const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 									if (tab.id === undefined) {
 										return;
 									}
-									const bank = await Bank.get([ "researchInstances" ]);
-									delete bank.researchInstances[tab.id];
+									const bank = await Bank.get([ "researchRecords" ]);
+									delete bank.researchRecords[tab.id];
 									await Bank.set(bank);
 									sendBackgroundMessage({
-										deactivateTabResearch: true,
+										type: "commands",
+										commands: [ {
+											type: "deactivateTabResearch",
+										} ],
 									});
 								},
 							} ],
@@ -476,24 +491,33 @@ const loadPopup = (() => {
 											return;
 										}
 										const config = await Config.get({ termListOptions: { termLists: true } });
-										const bank = await Bank.get([ "researchInstances" ]);
-										const researchInstance = bank.researchInstances[tab.id];
-										if (researchInstance) {
-											researchInstance.enabled = true;
+										const bank = await Bank.get([ "researchRecords" ]);
+										const researchRecord = bank.researchRecords[tab.id];
+										if (researchRecord) {
+											researchRecord.active = true;
 											await Bank.set(bank);
 										}
 										sendBackgroundMessage({
-											terms: researchInstance
-												? researchInstance.terms.concat(
-													config.termListOptions.termLists[index].terms.filter(termFromList =>
-														!researchInstance.terms.find(term => term.phrase === termFromList.phrase)
-													)
-												)
-												: config.termListOptions.termLists[index].terms,
-											termsSend: true,
-											toggle: {
+											type: "commands",
+											commands: [ {
+												type: "sendTabCommands",
+												commands: [ {
+													type: "useTerms",
+													terms: researchRecord
+														? researchRecord.terms.concat(
+															config.termListOptions.termLists[index].terms.filter(termFromList =>
+																!researchRecord.terms.find(term => term.phrase === termFromList.phrase)
+															)
+														)
+														: config.termListOptions.termLists[index].terms,
+													replaceExisting: true,
+												}, {
+													type: "activate",
+												} ],
+											}, {
+												type: "toggleInTab",
 												highlightsShownOn: true,
-											},
+											} ],
 										});
 										onSuccess();
 									},

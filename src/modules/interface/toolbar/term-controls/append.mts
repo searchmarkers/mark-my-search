@@ -13,12 +13,13 @@ import type { ControlFocusArea } from "/dist/modules/interface/toolbar/common.mj
 import {
 	EleClass, applyMatchModeToClassList, getMatchModeFromClassList,
 } from "/dist/modules/interface/toolbar/common.mjs";
+import type { ArrayAccessor, ArrayMutator } from "/dist/modules/common.mjs";
 import { type MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
-import type { TermAppender, DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
+import type { ControlsInfo } from "/dist/content.mjs";
 
 class TermAppendControl implements TermAbstractControl {
 	readonly #toolbarInterface: ToolbarTermControlInterface;
-	readonly #termAppender: TermAppender;
+	readonly #termsMutator: ArrayMutator<MatchTerm>;
 
 	readonly #input: TermInput;
 	readonly #optionList: TermOptionList;
@@ -29,11 +30,10 @@ class TermAppendControl implements TermAbstractControl {
 	constructor (
 		controlsInfo: ControlsInfo,
 		toolbarInterface: ToolbarTermControlInterface,
-		termAppender: TermAppender,
-		doPhrasesMatchTerms: DoPhrasesMatchTerms,
+		termsBox: ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm>,
 	) {
 		this.#toolbarInterface = toolbarInterface;
-		this.#termAppender = termAppender;
+		this.#termsMutator = termsBox;
 		this.matchMode = Object.assign({}, controlsInfo.matchMode);
 		let controlContainerTemp: HTMLElement | undefined = undefined;
 		const setUpControl = (container: HTMLElement) => {
@@ -49,7 +49,7 @@ class TermAppendControl implements TermAbstractControl {
 			setUp: container => {
 				controlContainerTemp = container;
 			},
-		}, controlsInfo, doPhrasesMatchTerms);
+		}, controlsInfo, termsBox);
 		this.#input = new TermInput({ type: "append", button: this.control.button }, this, toolbarInterface);
 		this.#optionList = new TermOptionList(
 			(matchType, checked) => {
@@ -120,7 +120,7 @@ class TermAppendControl implements TermAbstractControl {
 				token => this.control.classListContains(token),
 			);
 			const term = new MatchTerm(inputValue, matchMode, { allowStemOverride: true });
-			this.#termAppender.appendTerm(term);
+			this.#termsMutator.insertItem(term);
 		}
 	}
 

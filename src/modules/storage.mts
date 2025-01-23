@@ -4,9 +4,7 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-import type { MatchMode, MatchTerm } from "/dist/modules/match-term.mjs";
-import { SearchSite } from "/dist/modules/search-site.mjs";
-import type { Engine, PaintEngineMethod, Entries } from "/dist/modules/common.mjs";
+import type { Entries, Partial2 } from "/dist/modules/common.mjs";
 import { log, assert, compatibility } from "/dist/modules/common.mjs";
 
 chrome.storage = compatibility.browser === "chromium"
@@ -20,12 +18,9 @@ enum ConfigContext {
 	INTERFACE,
 }
 
-type ResearchInstances = Record<number, ResearchInstance>
-type SearchSites = Record<string, SearchSite>
-
 type BankValues = {
-	researchInstances: ResearchInstances
-	engines: SearchSites
+	researchRecords: Record<number, StoredResearchRecord>
+	searchSites: Record<string, StoredSearchSite>
 }
 
 enum StoreType {
@@ -116,13 +111,13 @@ type ConfigHighlightLook<Context = ConfigContext.INTERFACE> = {
 	hues: StoreImmediate<Array<number>, Context>
 }
 type ConfigHighlighter<Context = ConfigContext.INTERFACE> = {
-	engine: StoreImmediate<Engine, Context>
-	paintEngine: StoreImmediate<PaintEngineConfig, Context>
+	engine: StoreImmediate<StoredEngine, Context>
+	paintEngine: StoreImmediate<StoredPaintEngineConfig, Context>
 }
 type ConfigURLFilters<Context = ConfigContext.INTERFACE> = {
-	noPageModify: StoreImmediate<URLFilter, Context>
-	noHighlight: StoreImmediate<URLFilter, Context>
-	nonSearch: StoreImmediate<URLFilter, Context>
+	noPageModify: StoreImmediate<StoredURLFilter, Context>
+	noHighlight: StoreImmediate<StoredURLFilter, Context>
+	nonSearch: StoreImmediate<StoredURLFilter, Context>
 }
 
 type ConfigValues<Context = ConfigContext.INTERFACE> = {
@@ -135,7 +130,7 @@ type ConfigValues<Context = ConfigContext.INTERFACE> = {
 		saturation: StoreImmediate<number, Context>
 		fontScale: StoreImmediate<number, Context>
 	}
-	researchInstanceOptions: {
+	researchRecordOptions: {
 		restoreLastInTab: StoreImmediate<boolean, Context>
 	}
 	autoFindOptions: {
@@ -143,7 +138,7 @@ type ConfigValues<Context = ConfigContext.INTERFACE> = {
 		stoplist: StoreList<string, Context>
 		searchParams: StoreList<string, Context>
 	}
-	matchModeDefaults: Record<keyof MatchMode, StoreImmediate<boolean, Context>>
+	matchModeDefaults: Record<keyof StoredMatchMode, StoreImmediate<boolean, Context>>
 	showHighlights: {
 		default: StoreImmediate<boolean, Context>
 		overrideSearchPages: StoreImmediate<boolean, Context>
@@ -159,26 +154,68 @@ type ConfigValues<Context = ConfigContext.INTERFACE> = {
 	highlighter: ConfigHighlighter<Context>
 	urlFilters: ConfigURLFilters<Context>
 	termListOptions: {
-		termLists: StoreImmediate<Array<TermList>, Context>
+		termLists: StoreImmediate<Array<StoredTermList>, Context>
 	}
 }
 
 type ConfigKey = keyof ConfigValues
 
-type PaintEngineConfig = {
-	method: PaintEngineMethod
+type StoredSearchSite = {
+	hostname: string
+} & (
+	{
+		pathname: [ string, string ]
+	} | {
+		param: string
+	}
+)
+
+type StoredResearchRecord = {
+	terms: ReadonlyArray<StoredMatchTerm>
+	highlightsShown: boolean
+	barCollapsed: boolean
+	active: boolean
 }
 
-type URLFilter = Array<{
+type StoredTermList = {
+	name: string
+	terms: ReadonlyArray<StoredMatchTerm>
+	urlFilter: StoredURLFilter
+}
+
+type StoredMatchTerm = {
+	phrase: string
+	matchMode: StoredMatchMode
+}
+
+type StoredMatchMode = {
+	regex: boolean
+	case: boolean
+	stem: boolean
+	whole: boolean
+	diacritics: boolean
+}
+
+type StoredURLFilter = Array<{
 	hostname: string,
 	pathname: string,
 }>
 
-type TermList = {
-	name: string
-	terms: ReadonlyArray<MatchTerm>
-	urlFilter: URLFilter
+type StoredEngine =
+	| "ELEMENT"
+	| "PAINT"
+	| "HIGHLIGHT"
+;
+
+type StoredPaintEngineConfig = {
+	method: StoredPaintEngineMethod
 }
+
+type StoredPaintEngineMethod =
+	| "paint"
+	| "element"
+	| "url"
+;
 
 type BankKey = keyof BankValues
 
@@ -190,13 +227,6 @@ enum ThemeVariant {
 	DARK = "dark",
 	LIGHT = "light",
 	AUTO = "auto",
-}
-
-type ResearchInstance = {
-	terms: ReadonlyArray<MatchTerm>
-	highlightsShown: boolean
-	barCollapsed: boolean
-	enabled: boolean
 }
 
 /**
@@ -234,7 +264,7 @@ const configSchema: ConfigValues<ConfigContext.SCHEMA> = {
 			defaultValue: 1,
 		},
 	},
-	researchInstanceOptions: {
+	researchRecordOptions: {
 		restoreLastInTab: {
 			type: StoreType.IMMEDIATE,
 			defaultValue: true,
@@ -440,8 +470,8 @@ const configSchema: ConfigValues<ConfigContext.SCHEMA> = {
  */
 const bankCache: Partial<BankValues> = {};
 const bankDefault: BankValues = {
-	researchInstances: [],
-	engines: {},
+	researchRecords: [],
+	searchSites: {},
 };
 
 /*
@@ -482,7 +512,7 @@ abstract class Bank {
 	}
 }
 
-chrome.storage.session.onChanged.addListener(changes => {
+if (chrome.storage.session) chrome.storage.session.onChanged.addListener(changes => {
 	// TODO check that the change was not initiated from the same script?
 	for (const [ key, value ] of (Object.entries as Entries)(changes as Record<BankKey, chrome.storage.StorageChange>)) {
 		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -491,12 +521,6 @@ chrome.storage.session.onChanged.addListener(changes => {
 });
 
 type StorageAreaName = "local" | "sync"
-
-type Partial2<T> = {
-    [P in keyof T]: {
-		[P1 in keyof T[P]]?: T[P][P1];
-	};
-};
 
 // TODO ensure that correct call syntax is enforced even for generic use (e.g. { [configKey]: { [groupKey]: true } })
 type ConfigKeyObject<ConfigK extends ConfigKey> = {[C in ConfigK]?: {[G in keyof ConfigValues[C]]?: true} | true}
@@ -711,8 +735,8 @@ const migrations: Record<number, Record<number, (storage: StorageObject, areaNam
 			case "local": {
 				config.autoFindOptions ??= {};
 				config.autoFindOptions.enabled = old.enabled as boolean;
-				config.researchInstanceOptions ??= {};
-				config.researchInstanceOptions.restoreLastInTab = old.persistResearchInstances as boolean;
+				config.researchRecordOptions ??= {};
+				config.researchRecordOptions.restoreLastInTab = old.persistResearchInstances as boolean;
 				return config;
 			} case "sync": {
 				if (old.highlightMethod && typeof old.highlightMethod === "object") {
@@ -740,7 +764,7 @@ const migrations: Record<number, Record<number, (storage: StorageObject, areaNam
 					config.autoFindOptions.stoplist = stoplist;
 				}
 				if (old.matchModeDefaults) {
-					const matchMode = Object.assign({}, old.matchModeDefaults as MatchMode);
+					const matchMode = Object.assign({}, old.matchModeDefaults as StoredMatchMode);
 					matchMode.diacritics = !matchMode.diacritics;
 					config.matchModeDefaults = matchMode;
 				}
@@ -750,7 +774,7 @@ const migrations: Record<number, Record<number, (storage: StorageObject, areaNam
 				config.barLook = old.barLook as ConfigBarLook;
 				if (old.termLists) {
 					config.termListOptions ??= {};
-					config.termListOptions.termLists = old.termLists as Array<TermList>;
+					config.termListOptions.termLists = old.termLists as Array<StoredTermList>;
 				}
 				return config;
 			}}
@@ -839,10 +863,6 @@ export type {
 	BankValues,
 	Store, StoreImmediate, StoreList, StoreListInterface,
 	ConfigValues, ConfigKey,
-	ConfigBarControlsShown, ConfigURLFilters,
-	URLFilter,
-	SearchSites,
-	ResearchInstances, ResearchInstance,
 };
 
 export {

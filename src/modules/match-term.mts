@@ -44,13 +44,6 @@ class MatchTerm {
 	}
 }
 
-const termEquals = (termA: MatchTerm | undefined, termB: MatchTerm | undefined): boolean =>
-	(!termA && !termB) ||
-	!!(termA && termB &&
-	termA.phrase === termB.phrase &&
-	Object.entries(termA.matchMode).every(([ key, value ]) => termB.matchMode[key] === value))
-;
-
 const sanitize = (phrase: string, replacement: string, matchMode: MatchMode) => matchMode.regex
 	? phrase
 	: sanitizeForRegex(phrase, replacement)
@@ -126,6 +119,5 @@ class TermPatterns {
 
 export {
 	type MatchMode, MatchTerm,
-	termEquals,
 	TermTokens, TermPatterns,
 };

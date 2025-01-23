@@ -6,7 +6,9 @@
 
 import type { ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
 import { EleClass, getControlClass } from "/dist/modules/interface/toolbar/common.mjs";
-import type { DoPhrasesMatchTerms, ControlsInfo } from "/dist/content.mjs";
+import type { ArrayAccessor } from "/dist/modules/common.mjs";
+import type { MatchTerm } from "/dist/modules/match-term.mjs";
+import type { ControlsInfo } from "/dist/content.mjs";
 
 type ControlButtonInfo = Readonly<{
 	controlClasses?: Array<EleClass>
@@ -20,7 +22,7 @@ type ControlButtonInfo = Readonly<{
 
 class Control {
 	readonly #controlsInfo: ControlsInfo;
-	readonly #doPhrasesMatchTerms: DoPhrasesMatchTerms;
+	readonly #termsAccessor: ArrayAccessor<MatchTerm>;
 
 	readonly #control: HTMLElement;
 	// TODO do not expose this; remove attribute
@@ -37,10 +39,10 @@ class Control {
 		name: ControlButtonName,
 		info: ControlButtonInfo,
 		controlsInfo: ControlsInfo,
-		doPhrasesMatchTerms: DoPhrasesMatchTerms,
+		termsAccessor: ArrayAccessor<MatchTerm>,
 	) {
 		this.#controlsInfo = controlsInfo;
-		this.#doPhrasesMatchTerms = doPhrasesMatchTerms;
+		this.#termsAccessor = termsAccessor;
 		this.#name = name;
 		this.#control = document.createElement("span");
 		this.#control.classList.add(EleClass.CONTROL, getControlClass(name));
@@ -99,15 +101,21 @@ class Control {
 	}
 
 	updateVisibility () {
-		const value = this.#controlsInfo.barControlsShown[this.#name];
-		if (this.#name === "replaceTerms") {
-			const shown = (value
-				&& this.#controlsInfo.termsOnHold.length > 0
-				&& !this.#doPhrasesMatchTerms(this.#controlsInfo.termsOnHold.map(term => term.phrase))
+		const shownValue = this.#controlsInfo.barControlsShown[this.#name];
+		// TODO: Do not hardcode this behaviour.
+		if (this.#name === "replaceTerms" && shownValue) {
+			const doTermsMatch = (terms: ReadonlyArray<MatchTerm>) => {
+				const termsOther = this.#termsAccessor.getItems();
+				return terms.length === termsOther.length // TODO: This seems dubious.
+					&& terms.every(({ phrase }) => termsOther.find(term => term.phrase === phrase));
+			};
+			const shown = (
+				this.#controlsInfo.termsOnHold.length > 0
+				&& !doTermsMatch(this.#controlsInfo.termsOnHold)
 			);
 			this.#control.classList.toggle(EleClass.DISABLED, !shown);
 		} else {
-			this.#control.classList.toggle(EleClass.DISABLED, !value);
+			this.#control.classList.toggle(EleClass.DISABLED, !shownValue);
 		}
 	}
 

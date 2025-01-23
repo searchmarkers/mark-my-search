@@ -175,9 +175,9 @@ export const isWindowInFrame = () => (
 */
 export const sendProblemReport = async (userMessage = "", formFields: Array<FormField>) => {
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-	const bank = await Bank.get([ "researchInstances" ]);
-	const phrases = bank.researchInstances[tab.id!]
-		? bank.researchInstances[tab.id!].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
+	const bank = await Bank.get([ "researchRecords" ]);
+	const phrases = bank.researchRecords[tab.id!]
+		? bank.researchRecords[tab.id!].terms.map((term: MatchTerm) => term.phrase).join(" ∣ ")
 		: "";
 	const message = {
 		addon_version: Manifest.getVersion(),

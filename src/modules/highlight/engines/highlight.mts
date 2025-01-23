@@ -78,12 +78,8 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 
 	readonly getTermBackgroundStyle = TermCSS.getFlatStyle;
 
-	startHighlighting (
-		terms: ReadonlyArray<MatchTerm>,
-		termsToHighlight: ReadonlyArray<MatchTerm>,
-		termsToPurge: ReadonlyArray<MatchTerm>,
-		hues: ReadonlyArray<number>,
-	) {
+	startHighlighting (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
+		const termsToPurge = this.terms.current.filter(a => terms.every(b => JSON.stringify(a) !== JSON.stringify(b)));
 		// Clean up.
 		this.#flowTracker.unobserveMutations();
 		this.undoHighlightsFor(termsToPurge);
@@ -103,6 +99,8 @@ class HighlightEngine implements AbstractTreeCacheEngine {
 		this.#flowTracker.unobserveMutations();
 		this.undoHighlights();
 		this.removeTermStyles();
+		this.terms.assign([]);
+		this.hues.assign([]);
 	}
 
 	undoHighlights () {

@@ -4,33 +4,20 @@
  * Licensed under the EUPL-1.2-or-later.
  */
 
-/* eslint-disable indent */ // TODO remove
-import type { ConfigValues } from "/dist/modules/storage.mjs";
-import type { CommandInfo } from "/dist/modules/commands.mjs";
+import { Config, type ConfigValues } from "/dist/modules/storage.mjs";
 import type * as Message from "/dist/modules/messaging.d.mjs";
 import { sendBackgroundMessage } from "/dist/modules/messaging/background.mjs";
-import { type MatchMode, MatchTerm, termEquals, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
-import { EleID } from "/dist/modules/common.mjs";
+import { type MatchMode, MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
+import { isUrlPageModificationAllowed } from "/dist/modules/url-handling/url-tests.mjs";
+import type { ArrayAccessor, ArrayMutator, ArrayObservable, Partial2 } from "/dist/modules/common.mjs";
 import type { AbstractEngineManager } from "/dist/modules/highlight/engine-manager.d.mjs";
 import { EngineManager } from "/dist/modules/highlight/engine-manager.mjs";
 import type { AbstractToolbar, ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
 import { Toolbar } from "/dist/modules/interface/toolbar.mjs";
-import { assert, itemsMatch } from "/dist/modules/common.mjs";
-
-type GetToolbar<CreateIfNull extends boolean> = (CreateIfNull extends true
-	? () => AbstractToolbar
-	: () => AbstractToolbar | null
-)
-
-type UpdateTermStatus = (term: MatchTerm) => void
-
-type DoPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => boolean
-
-type BrowserCommands = Array<chrome.commands.Command>
-type BrowserCommandsReadonly = ReadonlyArray<chrome.commands.Command>
+import { ArrayBox } from "/dist/modules/common.mjs";
 
 type ControlsInfo = {
-	pageModifyEnabled: boolean
+	pageModificationAllowed: boolean
 	highlightsShown: boolean
 	barCollapsed: boolean
 	termsOnHold: ReadonlyArray<MatchTerm>
@@ -39,173 +26,49 @@ type ControlsInfo = {
 	matchMode: Readonly<MatchMode>
 }
 
-// TODO put in toolbar
-/**
- * Safely removes focus from the toolbar, returning it to the current document.
- * @returns `true` if focus was changed (i.e. it was in the toolbar), `false` otherwise.
- */
-const focusReturnToDocument = (): boolean => {
-	const focus = document.activeElement;
-	// eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-	if (focus instanceof HTMLElement && focus.id === EleID.BAR) {
-		focus.blur();
-		return true;
-	}
-	return false;
-};
-
-/**
- * Extracts terms from the currently user-selected string.
- * @returns The extracted terms, split at some separator and some punctuation characters,
- * with some other punctuation characters removed.
- */
-const getTermsFromSelection = (termTokens: TermTokens): Array<MatchTerm> => {
-	const selection = getSelection();
-	const termsMut: Array<MatchTerm> = [];
-	if (selection && selection.anchorNode) {
-		const termsAll = (() => {
-			const string = selection.toString();
-			if (/\p{Open_Punctuation}|\p{Close_Punctuation}|\p{Initial_Punctuation}|\p{Final_Punctuation}/u.test(string)) {
-				// If there are brackets or quotes, we just assume it's too complicated to sensibly split up for now.
-				// TODO make this behaviour smarter?
-				return [ string ];
-			} else {
-				return string.split(/\n+|\r+|\p{Other_Punctuation}\p{Space_Separator}+|\p{Space_Separator}+/gu);
-			}
-		})()
-			.map(phrase => phrase.replace(/\p{Other}/gu, ""))
-			.filter(phrase => phrase !== "").map(phrase => new MatchTerm(phrase));
-		const termSelectors = new Set<string>();
-		for (const term of termsAll) {
-			const token = termTokens.get(term);
-			if (!termSelectors.has(token)) {
-				termSelectors.add(token);
-				termsMut.push(term);
-			}
-		}
-	}
-	return termsMut;
-};
-
-const updateToolbar = (
-	termsOld: ReadonlyArray<MatchTerm>,
-	terms: ReadonlyArray<MatchTerm>,
-	update: {
-		term: MatchTerm | null
-		termIndex: number
-	} | null,
-	toolbar: AbstractToolbar,
-	commands: BrowserCommandsReadonly,
-) => {
-	if (update && update.term) {
-		if (update.termIndex === termsOld.length) {
-			toolbar.appendTerm(update.term, commands);
-		} else {
-			toolbar.replaceTerm(update.term, update.termIndex);
-		}
-	} else if (update && !update.term) {
-		toolbar.removeTerm(update.termIndex);
-	} else if (!update) {
-		toolbar.replaceTerms(terms, commands);
-	}
-	toolbar.updateControlVisibility("replaceTerms");
-	toolbar.insertAdjacentTo(document.body, "beforebegin");
-};
-
-const startHighlighting = (
-	termsOld: ReadonlyArray<MatchTerm>,
-	terms: ReadonlyArray<MatchTerm>,
-	highlighter: AbstractEngineManager,
-	hues: ReadonlyArray<number>,
-) => {
-	const termsToHighlight: ReadonlyArray<MatchTerm> = terms.filter(term => !termsOld.includes(term));
-	const termsToPurge: ReadonlyArray<MatchTerm> = termsOld.filter(termOld => !terms.includes(termOld));
-	highlighter.startHighlighting(
-		terms,
-		termsToHighlight,
-		termsToPurge,
-		hues,
-	);
-};
-
-// TODO decompose this horrible generator function
-/**
- * Returns a generator function to consume individual command objects and produce their desired effect.
- * @param terms Terms being controlled, highlighted, and jumped to.
- */
-const respondToCommand_factory = (
-	terms: ReadonlyArray<MatchTerm>,
-	termSetter: TermSetter,
-	controlsInfo: ControlsInfo,
-	getToolbarOrNull: GetToolbar<false>,
-	highlighter: AbstractEngineManager,
-) => {
-	let selectModeFocus = false;
-	let focusedIdx: number | null = null;
-	return (commandInfo: CommandInfo) => {
-		if (commandInfo.termIdx !== undefined) {
-			focusedIdx = commandInfo.termIdx;
-		}
-		if (focusedIdx !== null && focusedIdx >= terms.length) {
-			focusedIdx = null;
-		}
-		switch (commandInfo.type) {
-		case "toggleBar": {
-			getToolbarOrNull()?.toggleHidden();
-			break;
-		} case "toggleSelect": {
-			selectModeFocus = !selectModeFocus;
-			break;
-		} case "replaceTerms": {
-			termSetter.setTerms(controlsInfo.termsOnHold);
-			break;
-		} case "stepGlobal": {
-			if (focusReturnToDocument()) {
-				break;
-			}
-			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, true, null);
-			break;
-		} case "advanceGlobal": {
-			focusReturnToDocument();
-			const term = (selectModeFocus && focusedIdx !== null) ? terms[focusedIdx] : null;
-			highlighter.stepToNextOccurrence(commandInfo.reversed ?? false, false, term);
-			break;
-		} case "focusTermInput": {
-			getToolbarOrNull()?.focusTermInput(commandInfo.termIdx ?? null);
-			break;
-		} case "selectTerm": {
-			if (focusedIdx === null) {
-				break;
-			}
-			getToolbarOrNull()?.indicateTerm(terms[focusedIdx]);
-			if (!selectModeFocus) {
-				highlighter.stepToNextOccurrence(!!commandInfo.reversed, false, terms[focusedIdx]);
-			}
-			break;
-		}}
-	};
-};
-
-interface TermSetter<Async = true> extends TermReplacer<Async>, TermAppender<Async> {
-	setTerms: (termsNew: ReadonlyArray<MatchTerm>) => Async extends true ? Promise<void> : void;
+interface ToolbarGetter {
+	get: () => AbstractToolbar | null
 }
 
-interface TermReplacer<Async = true> {
-	replaceTerm: (term: MatchTerm | null, index: number) => Async extends true ? Promise<void> : void;
+interface ToolbarGetterCreator extends ToolbarGetter {
+	getCreateIfNull: () => AbstractToolbar
 }
 
-interface TermAppender<Async = true> {
-	appendTerm: (term: MatchTerm) => Async extends true ? Promise<void> : void;
+class TermsSyncService {
+	#remoteTerms: ReadonlyArray<MatchTerm> = [];
+
+	constructor (termsBox: ArrayAccessor<MatchTerm> & ArrayObservable<MatchTerm>) {
+		termsBox.addListener(terms => {
+			if (termsBox.itemsEqual(this.#remoteTerms)) {
+				return;
+			}
+			// NOTE: Race condition:
+			// After sending terms (A) to remote, we receive terms (B);
+			// remote silently accepts (A), but we believe remote holds (B).
+			sendBackgroundMessage({
+				type: "commands",
+				commands: [ {
+					type: "assignTabTerms",
+					terms,
+				} ],
+			});
+			this.#remoteTerms = terms;
+		});
+	}
+
+	updateRemoteTerms (terms: ReadonlyArray<MatchTerm>) {
+		this.#remoteTerms = terms;
+	}
 }
 
-(() => {
-	const commands: BrowserCommands = [];
-	let terms: ReadonlyArray<MatchTerm> = [];
+export const handleMessage = await (async () => {
+	const commands: Array<chrome.commands.Command> = [];
 	let hues: ReadonlyArray<number> = [];
 	const termTokens = new TermTokens();
 	const termPatterns = new TermPatterns();
 	const controlsInfo: ControlsInfo = { // Unless otherwise indicated, the values assigned here are arbitrary and to be overridden.
-		pageModifyEnabled: true, // Currently has an effect.
+		// TODO: Make engine manager adhere to this? (instead of handling it our side)
+		pageModificationAllowed: true, // Currently has an effect.
 		highlightsShown: false,
 		barCollapsed: false,
 		termsOnHold: [],
@@ -233,237 +96,220 @@ interface TermAppender<Async = true> {
 			diacritics: false,
 		},
 	};
+	let active = false;
+	let selectModeFocus = false;
+	let focusedIndex: number | null = null;
 	const highlighter: AbstractEngineManager = new EngineManager(termTokens, termPatterns);
 	highlighter.addHighlightingUpdatedListener(() => {
-		getToolbarOrNull()?.updateStatuses();
+		toolbarBox.get()?.updateStatuses();
 	});
-	const termSetterInternal: TermSetter<false> = {
-		setTerms: termsNew => {
-			if (itemsMatch(terms, termsNew, termEquals)) {
+	type TermsBox = ArrayAccessor<MatchTerm> & ArrayMutator<MatchTerm> & ArrayObservable<MatchTerm>
+	const termsBox: TermsBox = new ArrayBox<MatchTerm>((a, b) => JSON.stringify(a) === JSON.stringify(b));
+	termsBox.addListener(terms =>
+		// The timeout gives the toolbar a chance to redraw before we start highlighting.
+		setTimeout(() => {
+			if (!(controlsInfo.pageModificationAllowed && active)) {
 				return;
 			}
-			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
-			terms = termsNew;
-			updateToolbar(termsOld, terms, null, getToolbar(), commands);
-			// Give the interface a chance to redraw before performing highlighting.
-			setTimeout(() => {
-				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
-			});
-		},
-		replaceTerm: (term, termIndex) => {
-			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
-			if (term) {
-				const termsNew = [ ...terms ];
-				termsNew[termIndex] = term;
-				terms = termsNew;
-			} else {
-				terms = terms.slice(0, termIndex).concat(terms.slice(termIndex + 1));
-			}
-			updateToolbar(termsOld, terms, { term, termIndex }, getToolbar(), commands);
-			// Give the interface a chance to redraw before performing highlighting.
-			setTimeout(() => {
-				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
-			});
-		},
-		appendTerm: term => {
-			const termsOld: ReadonlyArray<MatchTerm> = [ ...terms ];
-			terms = terms.concat(term);
-			updateToolbar(termsOld, terms, { term, termIndex: termsOld.length }, getToolbar(), commands);
-			// Give the interface a chance to redraw before performing highlighting.
-			setTimeout(() => {
-				if (controlsInfo.pageModifyEnabled) startHighlighting(termsOld, terms, highlighter, hues);
-			});
-		},
-	};
-	const termSetter: TermSetter = {
-		setTerms: async termsNew => {
-			termSetterInternal.setTerms(termsNew);
-			await sendBackgroundMessage({ terms });
-		},
-		replaceTerm: async (term, termIndex) => {
-			termSetterInternal.replaceTerm(term, termIndex);
-			await sendBackgroundMessage({ terms });
-		},
-		appendTerm: async term => {
-			termSetterInternal.appendTerm(term);
-			await sendBackgroundMessage({ terms });
-		},
-	};
-	const doPhrasesMatchTerms = (phrases: ReadonlyArray<string>) => (
-		phrases.length === terms.length // TODO this seems dubious
-		&& phrases.every(phrase => terms.find(term => term.phrase === phrase))
+			highlighter.startHighlighting(terms, hues);
+		})
 	);
-	// TODO remove toolbar completely when not in use
-	// use WeakRef?
-	const { getToolbarOrNull, getToolbar } = (() => {
-		// TODO use generator function?
-		let toolbar: AbstractToolbar | null = null;
-		return {
-			getToolbarOrNull: () => toolbar,
-			getToolbar: () => {
-				if (!toolbar) {
-					toolbar = new Toolbar([],
-						hues, commands,
-						controlsInfo,
-						termSetter, doPhrasesMatchTerms,
-						termTokens, highlighter,
-					);
-				}
-				return toolbar;
+	const termsSyncService = new TermsSyncService(termsBox);
+	class ToolbarBox implements ToolbarGetterCreator {
+		// TODO: Remove toolbar completely when not in use. Use WeakRef?
+		#toolbar: AbstractToolbar | null = null;
+
+		get () {
+			return this.#toolbar;
+		}
+		getCreateIfNull () {
+			if (!this.#toolbar) {
+				this.#toolbar = new Toolbar(hues, commands, controlsInfo, termsBox, termTokens, highlighter);
 			}
-		};
-	})();
-	const respondToCommand = respondToCommand_factory(terms, termSetter, controlsInfo, getToolbar, highlighter);
-	const getDetails = (request: Message.TabDetailsRequest) => ({
-		terms: request.termsFromSelection ? getTermsFromSelection(termTokens) : undefined,
-		highlightsShown: request.highlightsShown ? controlsInfo.highlightsShown : undefined,
-	});
-	type MessageHandler = (
-		message: Message.Tab,
-		sender: chrome.runtime.MessageSender,
-		sendResponse: (response: Message.TabResponse) => void,
-		detailsHandled?: boolean,
-	) => void
-	let queuingPromise: Promise<unknown> | undefined = undefined;
-	const messageHandleHighlight: MessageHandler = (
-		message,
-		sender,
-		sendResponse,
-		detailsHandled?,
-	) => {
-		if (message.getDetails && !detailsHandled) {
-			sendResponse(getDetails(message.getDetails));
+			return this.#toolbar;
 		}
-		(async () => {
-		if (queuingPromise) {
-			await queuingPromise;
-		}
-		if (message.highlighter !== undefined) {
-			highlighter.removeEngine();
-			highlighter.signalPaintEngineMethod(message.highlighter.paintEngine.method);
-			queuingPromise = highlighter.setEngine(message.highlighter.engine);
-			await queuingPromise;
-			queuingPromise = undefined;
-			highlighter.applyEngine();
-		}
-		if (message.enablePageModify !== undefined && controlsInfo.pageModifyEnabled !== message.enablePageModify) {
-			controlsInfo.pageModifyEnabled = message.enablePageModify;
-			getToolbarOrNull()?.updateVisibility();
-			if (!controlsInfo.pageModifyEnabled) {
+	}
+	const toolbarBox = new ToolbarBox();
+	const applyConfig = async (config: Partial2<ConfigValues>) => {
+		if (config.urlFilters?.noPageModify) {
+			const allowed = isUrlPageModificationAllowed(location.href, config.urlFilters.noPageModify);
+			controlsInfo.pageModificationAllowed = allowed;
+			toolbarBox.get()?.updateVisibility();
+			if (!controlsInfo.pageModificationAllowed) {
 				highlighter.removeEngine();
 			}
 		}
-		if (message.extensionCommands) {
-			commands.splice(0, commands.length, ...message.extensionCommands);
+		if (config.highlighter && controlsInfo.pageModificationAllowed) {
+			highlighter.removeEngine();
+			if (config.highlighter.paintEngine) {
+				highlighter.signalPaintEngineMethod(config.highlighter.paintEngine.method);
+			}
+			if (config.highlighter.engine) {
+				//queuingPromise = highlighter.setEngine(config.highlighter.engine);
+				//await queuingPromise;
+				//queuingPromise = undefined;
+				await highlighter.setEngine(config.highlighter.engine);
+			}
+			// TODO: Make this one apply only when the user visits the tab (as otherwise many tabs may "start highlighting" at once).
+			highlighter.applyEngine();
 		}
-		if (message.barControlsShown) {
-			controlsInfo.barControlsShown = message.barControlsShown;
-			for (const controlName of Object.keys(message.barControlsShown) as Array<ControlButtonName>) {
-				getToolbarOrNull()?.updateControlVisibility(controlName);
+		if (config.barControlsShown) {
+			for (const [ controlName, shown ] of Object.entries(config.barControlsShown)) {
+				controlsInfo.barControlsShown[controlName] = shown;
+			}
+			const toolbar = toolbarBox.get();
+			if (toolbar) {
+				for (const controlName of Object.keys(config.barControlsShown) as Array<ControlButtonName>) {
+					toolbar.updateControlVisibility(controlName);
+				}
 			}
 		}
-		if (message.barLook) {
-			controlsInfo.barLook = message.barLook;
+		if (config.barLook) {
+			for (const [ key, value ] of Object.entries(config.barLook)) {
+				controlsInfo.barLook[key] = value;
+			}
 		}
-		if (message.highlightLook) {
-			hues = [ ...message.highlightLook.hues ];
+		if (config.highlightLook?.hues) {
+			hues = [ ...config.highlightLook.hues ];
 		}
-		if (message.matchMode) {
-			controlsInfo.matchMode = message.matchMode;
+		if (config.matchModeDefaults) {
+			for (const [ option, on ] of Object.entries(config.matchModeDefaults)) {
+				controlsInfo.matchMode[option] = on;
+			}
 		}
-		if (message.toggleHighlightsOn !== undefined) {
-			controlsInfo.highlightsShown = message.toggleHighlightsOn;
+	};
+	const handleRequestMessage = (message: Message.TabRequest, sendResponse: (response: Message.TabResponse) => void) => {
+		switch (message.requestType) {
+		case "selectedText": {
+			const selection = getSelection();
+			sendResponse({
+				type: "selectedText",
+				selectedText: (selection && selection.anchorNode) ? selection.toString() : "",
+			});
+			return;
 		}
-		if (message.toggleBarCollapsedOn !== undefined) {
-			controlsInfo.barCollapsed = message.toggleBarCollapsedOn;
+		case "highlightsShown": {
+			sendResponse({
+				type: "highlightsShown",
+				highlightsShown: controlsInfo.highlightsShown,
+			});
+			return;
+		}}
+	};
+	const handleCommand = (command: Message.TabCommand) => {
+		if (focusedIndex !== null && focusedIndex >= termsBox.getItems().length) {
+			focusedIndex = null;
 		}
-		if (message.termsOnHold) {
-			controlsInfo.termsOnHold = message.termsOnHold;
+		switch (command.type) {
+		case "receiveExtensionCommands": {
+			commands.splice(0, commands.length, ...command.extensionCommands);
+			return;
 		}
-		if (message.deactivate) {
-			//removeTermsAndDeactivate();
+		case "useTerms": {
+			if (command.replaceExisting) {
+				// TODO: Make sure same MatchTerm objects are used for terms which are equivalent.
+				termsSyncService.updateRemoteTerms(command.terms);
+				termsBox.setItems(command.terms);
+			} else {
+				controlsInfo.termsOnHold = command.terms;
+			}
+			return;
+		}
+		case "activate": {
+			const toolbar = toolbarBox.getCreateIfNull();
+			toolbar.insertAdjacentTo(document.body, "beforebegin");
+			if (controlsInfo.pageModificationAllowed && !active) {
+				highlighter.startHighlighting(termsBox.getItems(), hues);
+			}
+			active = true;
+			return;
+		}
+		case "deactivate": {
 			highlighter.endHighlighting();
-			terms = [];
-			getToolbarOrNull()?.remove();
+			toolbarBox.get()?.remove();
+			active = false;
+			return;
 		}
-		if (message.terms) {
-			// Ensure the toolbar is set up.
-			getToolbar().insertAdjacentTo(document.body, "beforebegin");
-			// TODO make sure same MatchTerm objects are used for terms which are equivalent
-			termSetterInternal.setTerms(message.terms);
+		case "toggleHighlightsShown": {
+			controlsInfo.highlightsShown = command.enable;
+			return;
 		}
-		if (message.commands) {
-			for (const command of message.commands) {
-				respondToCommand(command);
+		case "toggleBarCollapsed": {
+			controlsInfo.barCollapsed = command.enable;
+			return;
+		}
+		case "toggleSelectMode": {
+			selectModeFocus = !selectModeFocus;
+			return;
+		}
+		case "replaceTerms": {
+			termsBox.setItems(controlsInfo.termsOnHold);
+			return;
+		}
+		case "stepGlobal": {
+			if (toolbarBox.get()?.isFocused()) {
+				// We return the document selection and do not proceed.
+				toolbarBox.get()?.returnSelectionToDocument();
+				return;
 			}
+			highlighter.stepToNextOccurrence(!command.forwards, true, null);
+			return;
 		}
-		const toolbar = getToolbarOrNull();
+		case "jumpGlobal": {
+			if (toolbarBox.get()?.isFocused()) {
+				// We return the document selection and then jump from there.
+				toolbarBox.get()?.returnSelectionToDocument();
+			}
+			const term = (selectModeFocus && focusedIndex !== null)
+				? termsBox.getItems()[focusedIndex]
+				: null;
+			highlighter.stepToNextOccurrence(!command.forwards, false, term);
+			return;
+		}
+		case "selectTerm": {
+			focusedIndex = command.termIndex;
+			if (command.termIndex >= termsBox.getItems().length) {
+				focusedIndex = null;
+				return;
+			}
+			const term = termsBox.getItems()[focusedIndex];
+			toolbarBox.get()?.indicateTerm(term);
+			if (!selectModeFocus) {
+				highlighter.stepToNextOccurrence(!command.forwards, false, term);
+			}
+			return;
+		}
+		case "focusTermInput": {
+			toolbarBox.get()?.focusTermInput(command.termIndex);
+			return;
+		}}
+	};
+	const handleMessage = (message: Message.Tab, sender: void, sendResponse: (response: Message.TabResponse) => void) => {
+		switch (message.type) {
+		case "request": {
+			handleRequestMessage(message, sendResponse);
+			break;
+		}
+		case "commands": {
+			message.commands.forEach(handleCommand);
+			break;
+		}}
+		const toolbar = toolbarBox.get();
 		if (toolbar) {
 			toolbar.updateHighlightsShownFlag();
 			toolbar.updateCollapsed();
 			toolbar.updateControlVisibility("replaceTerms");
 		}
-		})();
 	};
-	(() => {
-		type MessageInfo = {
-			message: Message.Tab,
-			sender: chrome.runtime.MessageSender,
-			sendResponse: (response: Message.TabResponse) => void,
-		}
-		const messageQueue: Array<MessageInfo> = [];
-		const messageHandleHighlightUninitialized: MessageHandler = (
-			message,
-			sender,
-			sendResponse,
-			detailsHandled?,
-		) => {
-			if (message.getDetails && !detailsHandled) {
-				sendResponse(getDetails(message.getDetails));
-			}
-			if (Object.keys(message).length === 1) {
-				// If the message only requested details, we can now discard it.
-				return;
-			}
-			messageQueue.push({ message, sender, sendResponse });
-			if (messageQueue.length === 1) {
-				sendBackgroundMessage({ initializationGet: true }).then(initMessage => {
-					if (!initMessage) {
-						assert(false, "not initialized, so highlighting remains inactive",
-							"no init response was received");
-						return;
-					}
-					const initialize = () => {
-						chrome.runtime.onMessage.removeListener(messageHandleHighlightUninitialized);
-						chrome.runtime.onMessage.addListener(messageHandleHighlight);
-						messageHandleHighlight(initMessage, sender, sendResponse);
-						let info: MessageInfo | undefined;
-						// eslint-disable-next-line no-cond-assign
-						while (info = messageQueue.shift()) {
-							messageHandleHighlight(info.message, info.sender, info.sendResponse, true);
-						}
-					};
-					if (document.body) {
-						initialize();
-					} else {
-						const observer = new MutationObserver(() => {
-							if (document.body) {
-								observer.disconnect();
-								initialize();
-							}
-						});
-						observer.observe(document.documentElement, { childList: true });
-					}
-				});
-			}
-		};
-		chrome.runtime.onMessage.addListener(messageHandleHighlightUninitialized);
-	})();
+	await applyConfig(await Config.get({
+		barControlsShown: true,
+		barLook: true,
+		highlightLook: true,
+		highlighter: true,
+		matchModeDefaults: true,
+		urlFilters: true,
+	}));
+	return handleMessage;
 })();
 
-export type {
-	TermSetter, TermReplacer, TermAppender,
-	DoPhrasesMatchTerms,
-	UpdateTermStatus,
-	ControlsInfo,
-};
+export type { ControlsInfo };

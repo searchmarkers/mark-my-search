@@ -32,14 +32,8 @@ interface HighlightingInterface {
 	 * Removes previous highlighting, then highlights the document using the terms supplied.
 	 * Disables then restarts continuous highlighting.
 	 * @param terms Terms to be continuously found and highlighted within the DOM.
-	 * @param termsToPurge Terms for which to remove previous highlights.
 	 */
-	readonly startHighlighting: (
-		terms: ReadonlyArray<MatchTerm>,
-		termsToHighlight: ReadonlyArray<MatchTerm>,
-		termsToPurge: ReadonlyArray<MatchTerm>,
-		hues: ReadonlyArray<number>,
-	) => void
+	readonly startHighlighting: (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) => void
 
 	readonly endHighlighting: () => void
 

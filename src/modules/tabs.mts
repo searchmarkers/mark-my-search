@@ -12,8 +12,8 @@ import { Bank } from "/dist/modules/storage.mjs";
  * @returns `true` if the tab is considered highlighted, `false` otherwise.
  */
 const isTabResearchPage = async (tabId: number): Promise<boolean> => {
-	const { researchInstances } = await Bank.get([ "researchInstances" ]);
-	return (tabId in researchInstances) && researchInstances[tabId].enabled;
+	const { researchRecords } = await Bank.get([ "researchRecords" ]);
+	return (tabId in researchRecords) && researchRecords[tabId].active;
 };
 
 export { isTabResearchPage };

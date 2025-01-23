@@ -5,7 +5,7 @@
  */
 
 import type { ControlButtonName } from "/dist/modules/interface/toolbar.d.mjs";
-import { type CommandInfo, parseCommand } from "/dist/modules/commands.mjs";
+import { type UserCommand, parseUserCommand } from "/dist/modules/commands.mjs";
 import type { MatchMode } from "/dist/modules/match-term.mjs";
 import { EleID as CommonEleID } from "/dist/modules/common.mjs";
 import type { ControlsInfo } from "/dist/content.mjs";
@@ -61,18 +61,20 @@ enum EleClass {
  * @param commands Commands as returned by the browser.
  * @returns An object containing the extracted command shortcut strings.
  */
-const getTermCommands = (commands: BrowserCommands): Array<Readonly<{ down: string, up: string }>> => {
-	const commandsDetail = commands.map((command): { info: CommandInfo, shortcut: string } => ({
-		info: command.name ? parseCommand(command.name) : { type: "none" },
+const getTermCommands = (commands: BrowserCommands): Array<Readonly<{ forwards: string, backwards: string }>> => {
+	const commandsDetail = commands.map((command): { userCommand: UserCommand | null, shortcut: string } => ({
+		userCommand: command.name ? parseUserCommand(command.name) : null,
 		shortcut: command.shortcut ?? "",
 	}));
-	const commandsDownDetail = commandsDetail
-		.filter(({ info }) => info.type === "selectTerm" && !info.reversed);
-	const commandsUpDetail = commandsDetail
-		.filter(({ info }) => info.type === "selectTerm" && info.reversed);
-	return commandsDownDetail.map(({ shortcut }, i) => ({
-		down: shortcut,
-		up: commandsUpDetail[i].shortcut,
+	const commandsForwards = commandsDetail.filter(({ userCommand }) =>
+		userCommand?.type === "tab_selectTerm" && userCommand.forwards
+	);
+	const commandsBackwards = commandsDetail.filter(({ userCommand }) =>
+		userCommand?.type === "tab_selectTerm" && !userCommand.forwards
+	);
+	return commandsForwards.map(({ shortcut }, i) => ({
+		forwards: shortcut,
+		backwards: commandsBackwards[i].shortcut,
 	}));
 };
 

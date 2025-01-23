@@ -11,15 +11,15 @@ import { TermOptionList } from "/dist/modules/interface/toolbar/term-control/ter
 import type { ControlFocusArea, BrowserCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { EleClass, applyMatchModeToClassList, getTermCommands } from "/dist/modules/interface/toolbar/common.mjs";
 import { type MatchMode, MatchTerm, type TermTokens } from "/dist/modules/match-term.mjs";
-import { getTermClass } from "/dist/modules/common.mjs";
+import { getTermClass, type ArrayMutator } from "/dist/modules/common.mjs";
 import type {
 	HighlighterCounterInterface, HighlighterWalkerInterface,
 } from "/dist/modules/highlight/engine-manager.d.mjs";
-import type { TermReplacer, ControlsInfo } from "/dist/content.mjs";
+import type { ControlsInfo } from "/dist/content.mjs";
 
 class TermReplaceControl implements TermAbstractControl {
 	readonly #toolbarInterface: ToolbarTermControlInterface;
-	readonly #termReplacer: TermReplacer;
+	readonly #termsMutator: ArrayMutator<MatchTerm>;
 	readonly #termTokens: TermTokens;
 	readonly #highlighter: HighlighterCounterInterface & HighlighterWalkerInterface;
 
@@ -43,12 +43,12 @@ class TermReplaceControl implements TermAbstractControl {
 		commands: BrowserCommands,
 		controlsInfo: ControlsInfo, // TODO ControlsInfo should be an observable
 		toolbarInterface: ToolbarTermControlInterface,
-		termReplacer: TermReplacer,
+		termsMutator: ArrayMutator<MatchTerm>,
 		termTokens: TermTokens,
 		highlighter: HighlighterCounterInterface & HighlighterWalkerInterface,
 	) {
 		this.#toolbarInterface = toolbarInterface;
-		this.#termReplacer = termReplacer;
+		this.#termsMutator = termsMutator;
 		this.#termTokens = termTokens;
 		this.#highlighter = highlighter;
 		this.#term = termParameter;
@@ -58,7 +58,7 @@ class TermReplaceControl implements TermAbstractControl {
 				matchMode[matchType] = checked;
 				const idx = toolbarInterface.getTermControlIndex(this);
 				if (idx !== null) {
-					termReplacer.replaceTerm(new MatchTerm(this.#term.phrase, matchMode), idx);
+					termsMutator.replaceItem(new MatchTerm(this.#term.phrase, matchMode), idx);
 				}
 			},
 			this.#term.matchMode,
@@ -178,9 +178,9 @@ class TermReplaceControl implements TermAbstractControl {
 				this.#toolbarInterface.selectTermInput(index + 1);
 				return;
 			}
-			this.#termReplacer.replaceTerm(null, index);
+			this.#termsMutator.replaceItem(null, index);
 		} else if (inputValue !== this.#term.phrase) {
-			this.#termReplacer.replaceTerm(new MatchTerm(inputValue, this.#term.matchMode), index);
+			this.#termsMutator.replaceItem(new MatchTerm(inputValue, this.#term.matchMode), index);
 		}
 	}
 
@@ -204,13 +204,13 @@ class TermReplaceControl implements TermAbstractControl {
 			return;
 		}
 		const { [index]: commandObject } = getTermCommands(commands);
-		const { down: command, up: commandReverse } = commandObject ?? { down: "", up: "" };
+		const { forwards, backwards } = commandObject ?? { forwards: "", backwards: "" };
 		const occurrenceCount = this.#highlighter.termCounter.countBetter(this.#term);
 		const matchesString = `${occurrenceCount} ${occurrenceCount === 1 ? "match" : "matches"} in page`;
-		if (occurrenceCount > 0 && command && commandReverse) {
+		if (occurrenceCount > 0 && forwards && backwards) {
 			const commandString = (occurrenceCount === 1)
-				? `Jump to: ${command} or ${commandReverse}`
-				: `Jump to next: ${command}\nJump to previous: ${commandReverse}`;
+				? `Jump to: ${forwards} or ${backwards}`
+				: `Jump to next: ${forwards}\nJump to previous: ${backwards}`;
 			this.#controlContent.title = matchesString + "\n" + commandString;
 		} else {
 			this.#controlContent.title = matchesString;
