@@ -3,7 +3,7 @@
 	"displayName": "Mark My Search",
 	"type": "module",
 	"scripts": {
-		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do inkscape icons/mms.svg -w $SIZE -h $SIZE -o icons/dist/mms-${SIZE}.png; done; SIZES=(32); for SIZE in ${SIZES[@]}; do inkscape icons/mms-off.svg -w $SIZE -h $SIZE -o icons/dist/mms-off-${SIZE}.png; done'",
+		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do npx sharp -i icons/mms.svg -o icons/dist/mms-${SIZE}.png resize $SIZE $SIZE & done; SIZES=(32); for SIZE in ${SIZES[@]}; do npx sharp -i icons/mms-off.svg -o icons/dist/mms-off-${SIZE}.png resize $SIZE $SIZE & done; wait'",
 		"scripts-build": "rm --recursive dist; tsc --project tsconfig.json",
 		"prepare-firefox": "ln --force --symbolic platform/firefox/manifest.json manifest.json",
 		"prepare-chromium": "ln --force --symbolic platform/chromium/manifest.json manifest.json",
@@ -25,12 +25,12 @@
 	},
 	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
 	"devDependencies": {
-		"@types/chrome": "0.0.253",
-		"@types/firefox-webext-browser": "120.0.0",
-		"eslint": "9.5.0",
-		"globals": "^15.6.0",
-		"inkscape": "3.1.1",
-		"typescript": "5.5.2",
-		"typescript-eslint": "8.0.1"
+		"@types/chrome": "0.0.299",
+		"@types/firefox-webext-browser": "120.0.4",
+		"eslint": "9.18.0",
+		"globals": "15.14.0",
+		"sharp-cli": "5.1.0",
+		"typescript": "5.7.3",
+		"typescript-eslint": "8.21.0"
 	}
 }
