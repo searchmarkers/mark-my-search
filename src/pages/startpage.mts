@@ -97,7 +97,7 @@ You can always activate ${Manifest.getName()} by opening its popup (from the 'ex
 								// Allow the user to try out the extension by searching for the query string, if any, they entered into the input.
 								// Prefer highlighting within the startpage, fallback to searching with their default search provider.
 								onClick: (messageText, formFields, onSuccess) => {
-									chrome.search["query"]({
+									chrome.search.query({
 										disposition: "NEW_TAB",
 										text: messageText,
 									}, onSuccess);

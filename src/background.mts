@@ -240,7 +240,7 @@ const injectIntoTabs = () => new Promise<void>(resolve => {
 	 * Registers items to selectively appear in context menus, if not present, to serve as shortcuts for managing the extension.
 	 */
 	const createContextMenuItems = () => {
-		if (compatibility.browser === "chromium" && chrome.contextMenus.onClicked["hasListeners"]()) {
+		if ("hasListeners" in chrome.contextMenus.onClicked && chrome.contextMenus.onClicked.hasListeners()) {
 			return;
 		}
 		chrome.contextMenus.removeAll();
@@ -545,8 +545,8 @@ const toggleHighlightsInTab = async (tabId: number, toggleHighlightsOn?: boolean
 };
 
 chrome.commands.onCommand.addListener(async commandString => {
-	if (commandString === "open-popup") {
-		(chrome.action["openPopup"] ?? (() => undefined))();
+	if (commandString === "open-popup" && "openPopup" in chrome.action) {
+		chrome.action.openPopup();
 	}
 	const [ tab ] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
 	const tabId = tab.id!; // `tab.id` is always defined for this case.
