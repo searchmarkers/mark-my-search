@@ -23,7 +23,7 @@ chrome.tabs.get = (compatibility.browser === "chromium")
 
 chrome.search["search"] = (compatibility.browser === "chromium")
 	? (options: { query: string, tabId: number }) =>
-		chrome.search["query"]({ text: options.query, tabId: options.tabId }, () => undefined)
+		chrome.search.query({ text: options.query, tabId: options.tabId }, () => undefined)
 	: browser.search.search
 ;
 
