@@ -6,8 +6,7 @@
 
 import { EleClass, AtRuleID } from "/dist/modules/common.mjs";
 
-abstract class Styles {
-	static readonly mainCSS = (`
+const mainCSS = `
 .${EleClass.FOCUS_CONTAINER} {
 	animation: ${AtRuleID.FLASH} 1s;
 }
@@ -15,8 +14,6 @@ abstract class Styles {
 @keyframes ${AtRuleID.FLASH} {
 	from { background-color: hsl(0 0% 65% / 0.8); } to {};
 }
-`
-	);
-}
+`;
 
-export { Styles };
+export { mainCSS };

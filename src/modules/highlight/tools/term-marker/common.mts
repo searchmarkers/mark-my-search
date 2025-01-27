@@ -7,8 +7,7 @@
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { Z_INDEX_MAX, EleID, EleClass, AtRuleID, getTermClass } from "/dist/modules/common.mjs";
 
-abstract class Styles {
-	static readonly mainCSS = (`
+const mainCSS = `
 #${EleID.MARKER_GUTTER} {
 	& {
 		display: block;
@@ -37,23 +36,21 @@ abstract class Styles {
 @keyframes ${AtRuleID.MARKER_OFF} {
 	from { padding-right: 16px; } to { padding-right: 0; };
 }
-`
-	);
+`;
 
-	static getTermCSS (
-		term: MatchTerm,
-		termIndex: number,
-		hues: ReadonlyArray<number>,
-		termTokens: TermTokens,
-	): string {
-		const hue = hues[termIndex % hues.length];
-		return `
+const getTermCSS = (
+	term: MatchTerm,
+	termIndex: number,
+	hues: ReadonlyArray<number>,
+	termTokens: TermTokens,
+): string => {
+	const hue = hues[termIndex % hues.length];
+	return `
 #${EleID.MARKER_GUTTER} .${getTermClass(term, termTokens)} {
 	background: hsl(${hue} 100% 44%);
 }
 `
-		;
-	}
-}
+	;
+};
 
-export { Styles };
+export { mainCSS, getTermCSS };

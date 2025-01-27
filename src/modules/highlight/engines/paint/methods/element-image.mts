@@ -8,7 +8,7 @@ import type { AbstractMethod } from "/dist/modules/highlight/engines/paint/metho
 import { getBoxesOwned } from "/dist/modules/highlight/engines/paint/boxes.mjs";
 import { highlightingIdAttr } from "/dist/modules/highlight/engines/paint/common.mjs";
 import type { HighlightingStyleObservable, Flow, Span, Box } from "/dist/modules/highlight/engines/paint.mjs";
-import TermCSS from "/dist/modules/highlight/common/term-css.mjs";
+import * as TermBackground from "/dist/modules/highlight/common/term-background.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
@@ -130,7 +130,7 @@ class ElementImageMethod implements AbstractMethod {
 		const selector = `#${ EleID.BAR }.${ EleClass.HIGHLIGHTS_SHOWN } ~ #${ EleID.DRAW_CONTAINER } .${
 			getTermClass(term, this.#termTokens)
 		}`;
-		const backgroundStyle = TermCSS.getHorizontalStyle(
+		const backgroundStyle = TermBackground.getHorizontalStyle(
 			`hsl(${ hue } 100% 60% / 0.4)`,
 			`hsl(${ hue } 100% 88% / 0.4)`,
 			cycle,

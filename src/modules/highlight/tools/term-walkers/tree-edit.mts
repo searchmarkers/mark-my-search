@@ -5,7 +5,7 @@
  */
 
 import type { AbstractTermWalker } from "/dist/modules/highlight/tools/term-walker.d.mjs";
-import { Styles } from "/dist/modules/highlight/tools/term-walker/common.mjs";
+import * as Styles from "/dist/modules/highlight/tools/term-walker/common.mjs";
 import { getContainerBlock } from "/dist/modules/highlight/common/container-blocks.mjs";
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
