@@ -5,7 +5,7 @@
  */
 
 import type { AbstractTermMarker } from "/dist/modules/highlight/tools/term-marker.d.mjs";
-import { Styles } from "/dist/modules/highlight/tools/term-marker/common.mjs";
+import * as Styles from "/dist/modules/highlight/tools/term-marker/common.mjs";
 import type { BaseFlow } from "/dist/modules/highlight/common/matching.d.mjs";
 import type { MatchTerm, TermTokens } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";

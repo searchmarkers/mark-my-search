@@ -8,7 +8,7 @@ import type { AbstractTreeEditEngine } from "/dist/modules/highlight/models/tree
 import { HIGHLIGHT_TAG, HIGHLIGHT_TAG_UPPER } from "/dist/modules/highlight/models/tree-edit/tags.mjs";
 import type { FlowMutationObserver } from "/dist/modules/highlight/common/flow-mutations.d.mjs";
 import { highlightTags } from "/dist/modules/highlight/common/highlight-tags.mjs";
-import TermCSS from "/dist/modules/highlight/common/term-css.mjs";
+import * as TermBackground from "/dist/modules/highlight/common/term-background.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
@@ -127,7 +127,7 @@ ${HIGHLIGHT_TAG} {
 		this.endHighlighting();
 	}
 
-	readonly getTermBackgroundStyle = TermCSS.getDiagonalStyle;
+	readonly getTermBackgroundStyle = TermBackground.getDiagonalStyle;
 
 	startHighlighting (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
 		const termsToHighlight = terms.filter(a => this.terms.current.every(b => JSON.stringify(a) !== JSON.stringify(b)));

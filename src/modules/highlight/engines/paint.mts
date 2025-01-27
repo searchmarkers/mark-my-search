@@ -11,7 +11,7 @@ import type { AbstractTreeCacheEngine } from "/dist/modules/highlight/models/tre
 import type { AbstractFlowTracker, Flow, Span } from "/dist/modules/highlight/models/tree-cache/flow-tracker.d.mjs";
 import { FlowTracker } from "/dist/modules/highlight/models/tree-cache/flow-tracker.mjs";
 import { highlightTags } from "/dist/modules/highlight/common/highlight-tags.mjs";
-import TermCSS from "/dist/modules/highlight/common/term-css.mjs";
+import * as TermBackground from "/dist/modules/highlight/common/term-background.mjs";
 import type { MatchTerm, TermTokens, TermPatterns } from "/dist/modules/match-term.mjs";
 import { StyleManager } from "/dist/modules/style-manager.mjs";
 import { HTMLStylesheet } from "/dist/modules/stylesheets/html.mjs";
@@ -230,7 +230,7 @@ class PaintEngine implements AbstractTreeCacheEngine {
 		this.#styleManager.deactivate();
 	}
 
-	readonly getTermBackgroundStyle = TermCSS.getHorizontalStyle;
+	readonly getTermBackgroundStyle = TermBackground.getHorizontalStyle;
 
 	startHighlighting (terms: ReadonlyArray<MatchTerm>, hues: ReadonlyArray<number>) {
 		const termsToHighlight = terms.filter(a => this.terms.current.every(b => JSON.stringify(a) !== JSON.stringify(b)));
