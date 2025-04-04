@@ -26,14 +26,6 @@ type ControlsInfo = {
 	matchMode: Readonly<MatchMode>
 }
 
-interface ToolbarGetter {
-	get: () => AbstractToolbar | null
-}
-
-interface ToolbarGetterCreator extends ToolbarGetter {
-	getCreateIfNull: () => AbstractToolbar
-}
-
 class TermsSyncService {
 	#remoteTerms: ReadonlyArray<MatchTerm> = [];
 
@@ -115,7 +107,7 @@ export const handleMessage = await (async () => {
 		})
 	);
 	const termsSyncService = new TermsSyncService(termsBox);
-	class ToolbarBox implements ToolbarGetterCreator {
+	const toolbarBox = new class {
 		// TODO: Remove toolbar completely when not in use. Use WeakRef?
 		#toolbar: AbstractToolbar | null = null;
 
@@ -128,8 +120,7 @@ export const handleMessage = await (async () => {
 			}
 			return this.#toolbar;
 		}
-	}
-	const toolbarBox = new ToolbarBox();
+	};
 	const applyConfig = async (config: Partial2<ConfigValues>) => {
 		if (config.urlFilters?.noPageModify) {
 			const allowed = isUrlPageModificationAllowed(location.href, config.urlFilters.noPageModify);
