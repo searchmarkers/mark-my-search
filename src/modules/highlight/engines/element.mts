@@ -62,6 +62,9 @@ ${HIGHLIGHT_TAG} {
 				}
 				periodHighlightCount += elements.size;
 				elements.clear();
+				for (const listener of this.#highlightingUpdatedListeners) {
+					listener();
+				}
 			};
 			const highlightElementsThrottled = () => {
 				const periodInterval = Date.now() - periodDateLast;
@@ -91,16 +94,17 @@ ${HIGHLIGHT_TAG} {
 						&& !this.#elementsJustHighlighted.has(element)
 						&& this.canHighlightElement(rejectSelector, element)
 					) {
+						// TODO: Should we check mutation.type?
 						elements.add(element);
 					}
 				}
 				this.#elementsJustHighlighted.clear();
 				if (elements.size > 0) {
-					// TODO improve this algorithm
+					// TODO: Improve this algorithm
 					for (const element of elements) {
 						for (const elementOther of elements) {
 							if (elementOther !== element && element.contains(elementOther)) {
-								// This may result in undefined behavior
+								// FIXME: This may result in undefined behavior
 								elements.delete(elementOther);
 							}
 						}
@@ -108,9 +112,6 @@ ${HIGHLIGHT_TAG} {
 					highlightElementsThrottled();
 				}
 				//mutationUpdates.observe();
-				for (const listener of this.#highlightingUpdatedListeners) {
-					listener();
-				}
 			});
 			this.#flowMutations = {
 				observeMutations: () => {
@@ -142,6 +143,9 @@ ${HIGHLIGHT_TAG} {
 		this.addTermStyles(terms, hues);
 		this.generateTermHighlightsUnderNode(termsToHighlight, document.body);
 		this.#flowMutations.observeMutations();
+		for (const listener of this.#highlightingUpdatedListeners) {
+			listener();
+		}
 	}
 
 	endHighlighting () {
@@ -150,6 +154,9 @@ ${HIGHLIGHT_TAG} {
 		this.removeTermStyles();
 		this.terms.assign([]);
 		this.hues.assign([]);
+		for (const listener of this.#highlightingUpdatedListeners) {
+			listener();
+		}
 	}
 
 	/**
@@ -398,9 +405,6 @@ ${HIGHLIGHT_TAG} {
 				if (nodeItems.first) {
 					highlightInBlock(terms, nodeItems);
 				}
-			}
-			for (const listener of this.#highlightingUpdatedListeners) {
-				listener();
 			}
 		};
 	})();
