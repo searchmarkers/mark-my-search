@@ -1,21 +1,21 @@
 {
-	"name": "mark-my-search",
 	"displayName": "Mark My Search",
-	"type": "module",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/searchmarkers/mark-my-search.git"
+	"name": "mark-my-search",
+	"license": "EUPL-1.2-or-later",
+	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
+	"bugs": {
+		"url": "https://github.com/searchmarkers/mark-my-search/issues"
 	},
 	"author": {
 		"name": "ator-dev",
 		"email": "ator-dev@protonmail.com",
 		"url": "https://github.com/ator-dev"
 	},
-	"license": "MIT",
-	"bugs": {
-		"url": "https://github.com/searchmarkers/mark-my-search/issues"
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/searchmarkers/mark-my-search.git"
 	},
-	"homepage": "https://github.com/searchmarkers/mark-my-search#readme",
+	"type": "module",
 	"devDependencies": {
 		"@types/chrome": "0.0.299",
 		"@types/firefox-webext-browser": "120.0.4",
