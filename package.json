@@ -2,14 +2,6 @@
 	"name": "mark-my-search",
 	"displayName": "Mark My Search",
 	"type": "module",
-	"scripts": {
-		"icons-convert": "bash -c 'mkdir -p icons/dist; SIZES=(16 32 48 64 96 128 240 300); for SIZE in ${SIZES[@]}; do npx sharp -i icons/mms.svg -o icons/dist/mms-${SIZE}.png resize $SIZE $SIZE & done; SIZES=(32); for SIZE in ${SIZES[@]}; do npx sharp -i icons/mms-off.svg -o icons/dist/mms-off-${SIZE}.png resize $SIZE $SIZE & done; wait'",
-		"scripts-build": "rm --recursive dist; tsc --project tsconfig.json",
-		"prepare-firefox": "ln --force --symbolic platform/firefox/manifest.json manifest.json",
-		"prepare-chromium": "ln --force --symbolic platform/chromium/manifest.json manifest.json",
-		"pack-firefox": "rm --force pack/mark_my_search-firefox.zip; npm run scripts-build; npm run prepare-firefox; mkdir --parents pack; zip --recurse-paths pack/mark_my_search-firefox.zip dist/ icons/ pages/ lib/ manifest.json",
-		"pack-chromium": "rm --force pack/mark_my_search-chromium.zip; npm run scripts-build; npm run prepare-chromium; mkdir --parents pack; zip --recurse-paths pack/mark_my_search-chromium.zip dist/ icons/ pages/ lib/ manifest.json"
-	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/searchmarkers/mark-my-search.git"
