@@ -7,8 +7,8 @@
 		"scripts-build": "rm --recursive dist; tsc --project tsconfig.json",
 		"prepare-firefox": "ln --force --symbolic platform/firefox/manifest.json manifest.json",
 		"prepare-chromium": "ln --force --symbolic platform/chromium/manifest.json manifest.json",
-		"pack-firefox": "rm --force pack/mark_my_search-firefox.zip; npm run scripts-build; npm run prepare-firefox; mkdir --parents pack; zip pack/mark_my_search-firefox.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json",
-		"pack-chromium": "rm --force pack/mark_my_search-chromium.zip; npm run scripts-build; npm run prepare-chromium; mkdir --parents pack; zip pack/mark_my_search-chromium.zip * -ri dist/**\\* icons/**\\* pages/**\\* lib/**\\* manifest.json"
+		"pack-firefox": "rm --force pack/mark_my_search-firefox.zip; npm run scripts-build; npm run prepare-firefox; mkdir --parents pack; zip --recurse-paths pack/mark_my_search-firefox.zip dist/ icons/ pages/ lib/ manifest.json",
+		"pack-chromium": "rm --force pack/mark_my_search-chromium.zip; npm run scripts-build; npm run prepare-chromium; mkdir --parents pack; zip --recurse-paths pack/mark_my_search-chromium.zip dist/ icons/ pages/ lib/ manifest.json"
 	},
 	"repository": {
 		"type": "git",
