@@ -23,11 +23,10 @@ jobs:
       - name: npm install, compile, build
         run: |
           npm install
-          sudo apt-get install inkscape
-          npm run icons-convert
-          npm run scripts-build
-          npm run pack-firefox
-          npm run pack-chromium
+          scripts/convert-icons.bash
+          scripts/compile.sh
+          scripts/pack.sh firefox
+          scripts/pack.sh chromium
       - name: Tag overwrite
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
