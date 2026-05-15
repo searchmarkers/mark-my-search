@@ -251,7 +251,7 @@ const injectIntoTabs = async () => {
 const updateActionIcon = (enabled?: boolean) =>
 	enabled === undefined
 		? storageGet("local", [ StorageLocal.ENABLED ]).then(local => updateActionIcon(local.enabled))
-		: chrome.action.setIcon({ path: !globalThis.browser
+		: chrome.action.setIcon({ path: (!globalThis.browser || !browser.runtime["getBrowserInfo"])
 			? enabled ? "/icons/dist/mms-32.png" : "/icons/dist/mms-off-32.png" // Chromium lacks SVG support for the icon.
 			: enabled ? "/icons/mms.svg" : "/icons/mms-off.svg"
 		})
@@ -271,7 +271,7 @@ const updateActionIcon = (enabled?: boolean) =>
 	 * Registers items to selectively appear in context menus, if not present, to serve as shortcuts for managing the extension.
 	 */
 	const createContextMenuItems = () => {
-		if (!globalThis.browser && chrome.contextMenus.onClicked["hasListeners"]()) {
+		if (chrome.contextMenus.onClicked["hasListeners"] && chrome.contextMenus.onClicked["hasListeners"]()) {
 			return;
 		}
 		chrome.contextMenus.removeAll();
@@ -426,7 +426,8 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			return;
 		}
 		if (openerTabId === undefined) {
-			if (globalThis.browser) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+			if (globalThis.browser && browser.runtime["getBrowserInfo"]) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+				// Checking the local openerTabId is sufficient for Firefox.
 				return;
 			}
 			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
@@ -444,7 +445,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	});
 
 	chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
-		if (!globalThis.browser) {
+		if (!globalThis.browser || !browser.runtime.getBrowserInfo) {
 			// Chromium emits no `tabs` event for tab reload.
 			if (changeInfo.status === "loading" || changeInfo.status === "complete") {
 				pageChangeRespondOld((await chrome.tabs.get(tabId)).url ?? "", tabId);
@@ -545,7 +546,8 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 			return;
 		}
 		if (openerTabId === undefined) {
-			if (globalThis.browser) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+			if (globalThis.browser && browser.runtime["getBrowserInfo"]) { // Must check `openerTabId` manually for Chromium, which may not define it on creation.
+				// Checking the local openerTabId is sufficient for Firefox.
 				return;
 			}
 			openerTabId = (await chrome.tabs.get(tab.id)).openerTabId;
@@ -570,7 +572,7 @@ const pageChangeRespondOld = async (urlString: string, tabId: number) => {
 	};
 
 	// Note: emitted events differ between Firefox and Chromium.
-	if (!globalThis.browser) {
+	if (!globalThis.browser || !browser.runtime.getBrowserInfo) {
 		chrome.tabs.onUpdated.addListener(pageEventListener);
 	} else {
 		browser.tabs.onUpdated.addListener(pageEventListener, { properties: [ "url", "status" ] });

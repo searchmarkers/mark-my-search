@@ -8,7 +8,7 @@ import type { MatchTerms, MatchMode } from "/dist/modules/utility.mjs";
 import { MatchTerm } from "/dist/modules/utility.mjs";
 import { Engine } from "/dist/modules/util-privileged.mjs";
 
-chrome.storage = !globalThis.browser ? chrome.storage : browser.storage as typeof chrome.storage;
+chrome.storage = (!globalThis.browser || !browser.runtime.getBrowserInfo) ? chrome.storage : browser.storage as typeof chrome.storage;
 chrome.storage.session ??= chrome.storage.local;
 
 export type ResearchInstances = Record<number, ResearchInstance>

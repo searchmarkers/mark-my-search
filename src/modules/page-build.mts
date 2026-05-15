@@ -1132,7 +1132,7 @@ textarea
 	};
 
 	return (panelsInfo: Array<PagePanelInfo>, additionalStyleText = "", shiftModifierIsRequired = true) => {
-		chrome.tabs.query = !globalThis.browser
+		chrome.tabs.query = (!globalThis.browser || !browser.runtime.getBrowserInfo)
 			? chrome.tabs.query
 			: browser.tabs.query as typeof chrome.tabs.query;
 		fillAndInsertStylesheet(additionalStyleText);

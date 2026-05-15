@@ -9,16 +9,16 @@ import { CommandType } from "/dist/modules/utility.mjs";
 import type { URLFilter } from "/dist/modules/storage.mjs";
 import { StorageSession, storageGet } from "/dist/modules/storage.mjs";
 
-chrome.tabs.query = !globalThis.browser ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
-chrome.tabs.sendMessage = !globalThis.browser
+chrome.tabs.query = (!globalThis.browser || !browser.runtime.getBrowserInfo) ? chrome.tabs.query : browser.tabs.query as typeof chrome.tabs.query;
+chrome.tabs.sendMessage = (!globalThis.browser || !browser.runtime.getBrowserInfo)
 	? chrome.tabs.sendMessage
 	: browser.tabs.sendMessage as typeof chrome.tabs.sendMessage;
-chrome.tabs.get = !globalThis.browser ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
-chrome.search["search"] = !globalThis.browser
+chrome.tabs.get = (!globalThis.browser || !browser.runtime.getBrowserInfo) ? chrome.tabs.get : browser.tabs.get as typeof chrome.tabs.get;
+chrome.search["search"] = (!globalThis.browser || !browser.runtime.getBrowserInfo)
 	? (options: { query: string, tabId: number }) =>
 		chrome.search["query"]({ text: options.query, tabId: options.tabId }, () => undefined)
 	: browser.search.search;
-chrome.commands.getAll = !globalThis.browser ? chrome.commands.getAll : browser.commands.getAll;
+chrome.commands.getAll = (!globalThis.browser || !browser.runtime.getBrowserInfo) ? chrome.commands.getAll : browser.commands.getAll;
 
 /**
  * Represents the set of URLs used by a particular search engine and how to extract the dynamic search query section.
